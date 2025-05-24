@@ -603,6 +603,30 @@ typedef int (*picoquic_autoqlog_fn)(picoquic_cnx_t * cnx);
  */
 typedef int (*picoquic_performance_log_fn)(picoquic_quic_t* quic, picoquic_cnx_t* cnx, int should_delete);
 
+/* Multicast channels 
+ */
+ typedef enum {
+    picoquic_mc_channel_type_ipv4 = 0xff3e811,
+    picoquic_mc_channel_type_ipv6 = 0xff3e812,
+} picoquic_mc_channel_type_enum;
+
+typedef struct st_picoquic_multicast_channel_t {
+    picoquic_multicast_channel_id_t channel_id;
+    void* mc_tls_ctx; // CHECK MC: Maybe not even needed?
+    picoquic_mc_channel_type_enum type;
+    uint8_t group_ip_addr[16];
+    uint16_t port;
+    uint16_t header_protection_algorithm;
+    uint16_t aead_algorithm;
+    picoquic_multicast_header_secret_t header_secret;
+    picoquic_multicast_aead_secret_t aead_secret;
+    uint16_t hash_algorithm;
+    uint64_t max_rate;
+    uint64_t max_ack_delay;
+    picoquic_cnx_t ** joined_clients;
+} picoquic_multicast_channel_t;
+
+
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */
@@ -740,6 +764,10 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_unified_logging_t* qlog_fns;
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
+
+    /* Multicast */
+    picoquic_multicast_channel_t ** mc_channels;
+    int nb_mc_channels;
 
 #ifdef BBRExperiment
     bbr_exp bbr_exp_flags;
@@ -1539,6 +1567,10 @@ typedef struct st_picoquic_cnx_t {
     char* binlog_file_name;
     void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
     void *memlog_ctx;
+
+    /* Multicast channels */
+    picoquic_multicast_channel_t ** mc_announced_channels;
+    picoquic_multicast_channel_t ** mc_joined_channels;
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {

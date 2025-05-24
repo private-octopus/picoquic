@@ -868,7 +868,7 @@ int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic,
             return -1;
         }
 
-        // CHECK MC: Review these default settings
+        // CHECK MC: Review these default settings and make them configurable
         params->ipv4_channels_allowed = 1;
         params->ipv6_channels_allowed = 0;
         params->max_aggregate_rate = (uint8_t) 20; // 20 kbits
@@ -888,6 +888,63 @@ int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic,
     }
 
     return 0;
+}
+
+int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, uint8_t* group_ipv4[4], uint16_t port_ipv4, uint8_t* group_ipv6[16], uint16_t port_ipv6) {
+    if (quic == NULL || max_clients > 0 || !((group_ipv4 != NULL && port_ipv4 != NULL) || (group_ipv6 != NULL && port_ipv6 != NULL))) {
+        fprintf(stderr, "could not create multicast channel: invalid parameters");
+        return -1;
+    }
+
+    if (group_ipv4 == NULL && port_ipv4 == NULL && group_ipv6 != NULL && port_ipv6 != NULL) {
+        fprintf(stderr, "could not create multicast channel: ipv6 not supported yet");
+        return -1;
+    }
+
+    picoquic_multicast_channel_t* new_channel = malloc(sizeof(picoquic_multicast_channel_t));
+    if (new_channel == NULL) {
+        fprintf(stderr, "could not create multicast channel: malloc failed");
+        return -1;
+    }
+
+    picoquic_create_random_mc_channel_id(quic, &new_channel->channel_id, quic->local_cnxid_length);
+
+    // Only supports ipv4 channels for now
+    new_channel->type = picoquic_mc_channel_type_ipv4;
+    memcpy(new_channel->group_ip_addr, group_ipv4, 4);
+    memcpy(new_channel->port, port_ipv4, 2);
+
+    // TODO MC: Make configurable
+    new_channel->header_protection_algorithm = PICOQUIC_AES_256_GCM_SHA384;
+    new_channel->aead_algorithm = PICOQUIC_AES_256_GCM_SHA384;
+    new_channel->hash_algorithm = PICOQUIC_SHA384;
+    new_channel->max_rate = 20;
+    new_channel->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
+
+    if (new_channel->mc_tls_ctx == NULL) {
+        /* Only initialize TLS after all parameters have been set */
+        if (picoquic_tlscontext_create_mc(quic, new_channel, 0) != 0) {
+            // TODO MC: Delete channel
+            // picoquic_delete_mc_channel(new_channel);
+            // new_channel = NULL;
+        }
+    }
+
+    picoquic_compute_multicast_secrets(quic, new_channel);
+
+    quic->mc_channels[quic->nb_mc_channels] = new_channel;
+    quic->nb_mc_channels++;
+}
+
+static void picoquic_create_random_mc_channel_id(picoquic_quic_t* quic, picoquic_multicast_channel_id_t * channel_id, uint8_t id_length)
+{
+    if (id_length > 0) {
+        picoquic_crypto_random(quic, channel_id->id, id_length);
+    }
+    if (id_length < sizeof(channel_id->id)) {
+        memset(channel_id->id + id_length, 0, sizeof(channel_id->id) - id_length);
+    }
+    channel_id->id_len = id_length;
 }
 
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)

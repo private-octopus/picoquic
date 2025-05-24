@@ -52,6 +52,8 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
 int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time);
 
+int picoquic_tlscontext_create_mc(picoquic_quic_t* quic, picoquic_multicast_channel_t* channel, unsigned int client_mode);
+
 void picoquic_tlscontext_free(void* ctx);
 
 void picoquic_tlscontext_trim_after_handshake(picoquic_cnx_t* cnx);
@@ -103,6 +105,8 @@ int picoquic_setup_initial_master_secret(
     ptls_iovec_t salt,
     picoquic_connection_id_t initial_cnxid,
     uint8_t * master_secret);
+
+static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel);
 
 int picoquic_setup_initial_secrets(
     ptls_cipher_suite_t * cipher,

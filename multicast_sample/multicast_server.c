@@ -84,12 +84,18 @@ typedef struct st_multicast_server_stream_ctx_t
     unsigned int is_stream_finished : 1;
 } multicast_server_stream_ctx_t;
 
+typedef struct st_multicast_server_channel_ctx_t
+{
+    // TODO MC: Implement things
+} multicast_server_channel_ctx_t;
+
 typedef struct st_multicast_server_ctx_t
 {
     char const *default_dir;
     size_t default_dir_len;
     multicast_server_stream_ctx_t *first_stream;
     multicast_server_stream_ctx_t *last_stream;
+    multicast_server_channel_ctx_t *ipv4_channel;
 } multicast_server_ctx_t;
 
 multicast_server_stream_ctx_t *multicast_server_create_stream_context(multicast_server_ctx_t *server_ctx, uint64_t stream_id)
@@ -446,7 +452,7 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
     /* Create the QUIC context for the server */
     current_time = picoquic_current_time();
     /* Create QUIC context */
-    quic = picoquic_create(8, server_cert, server_key, NULL, PICOQUIC_MULTICAST_ALPN,
+    quic = picoquic_create(PICOQUIC_MULTICAST_MAX_CLIENTS, server_cert, server_key, NULL, PICOQUIC_MULTICAST_ALPN,
                            multicast_server_callback, &default_context, NULL, NULL, NULL, current_time, NULL, NULL, NULL, 0);
 
     if (quic == NULL)
@@ -467,6 +473,8 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
         picoquic_enable_sslkeylog(quic, 1);
 
         picoquic_set_key_log_file_from_env(quic);
+
+        picoquic_create_multicast_channel(quic, PICOQUIC_MULTICAST_MAX_CLIENTS, PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT, NULL, NULL);
 
         // Always accept enable multicast
         picoquic_set_default_multicast_option(quic, 1);

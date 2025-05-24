@@ -1353,6 +1353,27 @@ int picoquic_setup_initial_master_secret(
     return ret;
 }
 
+int picoquic_setup_multicast_secret(
+    ptls_cipher_suite_t * cipher,
+    ptls_iovec_t salt,
+    uint8_t * random_bytes,
+    size_t random_length,
+    uint8_t * secret)
+{
+    int ret = 0;
+    ptls_iovec_t ikm;
+
+    uint8_t * rand_bytes_cpy[random_length];
+    
+    ikm.len = random_length;
+    ikm.base = memcpy(rand_bytes_cpy, random_bytes, random_length);
+
+    /* Extract the master key -- key length will be 48 per SHA384 */
+    ret = ptls_hkdf_extract(cipher->hash, secret, salt, ikm);
+
+    return ret;
+}
+
 int picoquic_setup_initial_secrets(
     ptls_cipher_suite_t * cipher,
     uint8_t * master_secret,
@@ -1397,6 +1418,54 @@ static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_
             ret = picoquic_setup_initial_secrets(*cipher, master_secret, client_secret, server_secret);
         }
     }
+    return ret;
+}
+
+static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel)
+{
+    int ret = 0;
+    ptls_iovec_t salt;
+    size_t rand_bytes_length = quic->local_cnxid_length;
+
+    // always use salt from QUIC v2 in multicast channels for now
+    int version_index = picoquic_get_version_index(PICOQUIC_V2_VERSION);
+    picoquic_setup_cleartext_aead_salt(version_index, &salt);
+    
+    uint8_t rand_bytes_header[rand_bytes_length];
+    picoquic_crypto_random(quic, &rand_bytes_header, rand_bytes_length);
+    
+    ptls_cipher_suite_t* cipher_head = picoquic_get_cipher_suite_by_id(channel->header_protection_algorithm, quic->use_low_memory);
+    ret = picoquic_setup_multicast_secret(cipher_head, salt, &rand_bytes_header, rand_bytes_length, &channel->header_secret.secret);
+   
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (channel->header_protection_algorithm == PICOQUIC_AES_256_GCM_SHA384) {
+        channel->header_secret.secret_len = 48;
+    } else if (channel->header_protection_algorithm == PICOQUIC_AES_128_GCM_SHA256) {
+        channel->header_secret.secret_len = 32;
+    }
+
+    uint8_t rand_bytes_aead[rand_bytes_length];
+    picoquic_crypto_random(quic, rand_bytes_aead, rand_bytes_length);
+
+    ptls_cipher_suite_t* cipher_aead = picoquic_get_cipher_suite_by_id(channel->aead_algorithm, quic->use_low_memory);
+    ret = picoquic_setup_master_secret_mc(cipher_aead, salt, &rand_bytes_aead, rand_bytes_length, channel->aead_secret.secret);
+
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (channel->aead_algorithm == PICOQUIC_AES_256_GCM_SHA384) {
+        channel->aead_secret.secret_len = 48;
+    } else if (channel->aead_algorithm == PICOQUIC_AES_128_GCM_SHA256) {
+        channel->aead_secret.secret_len = 32;    
+    }
+
+    channel->aead_secret.key_seq_number = 0;
+    channel->aead_secret.from_pkt_number = 0;
+
     return ret;
 }
 
@@ -1893,6 +1962,54 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     }
 
     cnx->tls_ctx = (void*)ctx;
+
+    return ret;
+}
+
+/*
+ * Creation of a TLS context for multicast
+ */
+// CHECK MC: Is this even needed?
+int picoquic_tlscontext_create_mc(picoquic_quic_t* quic, picoquic_multicast_channel_t* channel, unsigned int client_mode)
+{
+    int ret = 0;
+    /* allocate a context structure, but only if checks are correct */
+    picoquic_tls_ctx_t* ctx = NULL;
+
+    if (!client_mode && ((ptls_context_t*)quic->tls_master_ctx)->encrypt_ticket == NULL) {
+        /* A server side connection, but no cert/key where given for the master context */
+        ret = PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT;
+    }
+    else {
+        ctx = (picoquic_tls_ctx_t*)malloc(sizeof(picoquic_tls_ctx_t));
+        if (ctx == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+    }
+
+    /* Create the TLS context */
+    if (ctx != NULL) {
+        memset(ctx, 0, sizeof(picoquic_tls_ctx_t));
+        ctx->ext_data_size = PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE;
+        if (!client_mode && quic->test_large_server_flight) {
+            ctx->ext_data_size += 4096;
+        }
+        ctx->ext_data = (uint8_t*)malloc(ctx->ext_data_size);
+        ctx->alpn_vec = (ptls_iovec_t*)malloc(sizeof(ptls_iovec_t) * PICOQUIC_ALPN_NUMBER_MAX);
+        if (ctx->ext_data == NULL || ctx->alpn_vec == NULL) {
+            ret = -1;
+        }
+        else {
+            ctx->alpn_vec_size = PICOQUIC_ALPN_NUMBER_MAX;
+            ctx->client_mode = client_mode;
+        }
+    }
+
+    if (channel->mc_tls_ctx != NULL) {
+        picoquic_tlscontext_free(channel->mc_tls_ctx);
+    }
+
+    channel->mc_tls_ctx = (void*)ctx;
 
     return ret;
 }

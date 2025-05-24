@@ -245,6 +245,28 @@ typedef struct st_picoquic_connection_id_t {
     uint8_t id_len;
 } picoquic_connection_id_t;
 
+/* 
+ * Definition of the Multicast Channel ID
+ */
+#define PICOQUIC_CHANNEL_ID_MIN_SIZE 1
+#define PICOQUIC_CHANNEL_ID_MAX_SIZE 20
+
+typedef struct st_picoquic_multicast_channel_id_t {
+    uint8_t id[PICOQUIC_CHANNEL_ID_MAX_SIZE];
+    uint8_t id_len;
+} picoquic_multicast_channel_id_t;
+
+typedef struct st_picoquic_multicast_header_secret_t {
+    uint8_t secret[48]; // max support is SHA-384 (no SHA-512 for now)
+    uint8_t secret_len;
+} picoquic_multicast_header_secret_t;
+
+typedef struct st_picoquic_multicast_aead_secret_t {
+    uint8_t secret[48]; // max support is SHA-384 (no SHA-512 for now)
+    uint8_t secret_len;
+    uint64_t key_seq_number;
+    uint64_t from_pkt_number;
+} picoquic_multicast_aead_secret_t;
 
 /* forward definition to avoid full dependency on picotls.h */
 typedef struct st_ptls_iovec_t ptls_iovec_t; 
@@ -257,6 +279,7 @@ int picoquic_is_handshake_error(uint64_t error_code);
 typedef struct st_picoquic_quic_t picoquic_quic_t;
 typedef struct st_picoquic_cnx_t picoquic_cnx_t;
 typedef struct st_picoquic_path_t picoquic_path_t;
+typedef struct st_picoquic_multicast_channel_t picoquic_multicast_channel_t;
 
 typedef enum {
     picoquic_callback_stream_data = 0, /* Data received from peer on stream N */
@@ -683,6 +706,8 @@ void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_
 /* Set the multicast client params for the context */
 int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
 
+/* Create a new multicast channel within the given QUIC context */
+int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, uint8_t* group_ipv4[4], uint16_t port_ipv4, uint8_t* group_ipv6[16], uint16_t port_ipv6);
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
 
