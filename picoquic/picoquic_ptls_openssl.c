@@ -294,6 +294,38 @@ void picoquic_openssl_clear_crypto_errors()
     ERR_clear_error();
 }
 
+/* Set the certificate signature function and context using openSSL
+*/
+int openssl_keyex_from_key_file(ptls_key_exchange_context_t** p_keyex, const char* keypem)
+{
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+    *p_keyex = NULL;
+    if (bio == NULL) {
+        ret = -1;
+    }
+    else {
+        EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = ptls_openssl_create_key_exchange(p_keyex, pkey);
+            assert(ret == 0 && "failed to setup private key");
+            EVP_PKEY_free(pkey);
+        }
+        BIO_free(bio);
+    }
+    return ret;
+}
+
+void openssl_keyex_dispose(ptls_key_exchange_context_t* keyex)
+{
+    ptls_iovec_t dummy = ptls_iovec_init(NULL, 0);
+    keyex->on_exchange(&keyex, 1, NULL, dummy);
+}
+
+
 /* Register the openssl functions
  */
 void picoquic_ptls_openssl_load(int unload)
@@ -323,6 +355,7 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_explain_crypto_error_fn(picoquic_open_ssl_explain_crypto_error,
             picoquic_openssl_clear_crypto_errors);
         picoquic_register_crypto_random_provider_fn(ptls_openssl_random_bytes);
+        picoquic_register_keyex_from_key_file_fn(openssl_keyex_from_key_file, openssl_keyex_dispose);
     }
 }
 #endif

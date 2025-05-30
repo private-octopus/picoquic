@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
+    picoquic/ech.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -167,6 +168,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
+    picoquic_test/ech_test.c
     picoquictest/edge_cases.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c

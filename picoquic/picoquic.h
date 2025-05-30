@@ -1693,6 +1693,52 @@ typedef struct st_picoquic_alpn_list_t {
     size_t len;
 } picoquic_alpn_list_t;
 
+/* Set of API for ECH/ESNI */
+
+/*
+ * picoquic_ech_init:
+ * Compute the list of ECH cipher suites and key management methods
+ * available based on compile options and TLS init parameters
+ */
+void picoquic_ech_init();
+
+/* 
+ * picoquic_ech_configure_quic_ctx:
+ * Configure a QUIC context to support ECH, with parameters:
+ * - quic: the picoquic context to be configured.
+ * - ech_private_key_file_name: the key file used by the server to decrypt incoming ECH options.
+ * - ech_config_file_name: file holding the ECH configuration of the server.
+ * If the private_key_file_name is NULL, the QUIC context will not be able to process
+ * the ECH option in incoming initial packets.
+ * If the private_key_file_name is provided, the ech_config_file_name.
+ */
+int picoquic_ech_configure_quic_ctx(picoquic_quic_t* quic, char const* ech_private_key_file_name, char const* ech_config_file_name);
+
+/*
+* picoquic_release_quic_ctx:
+* The call to ech_release_quic_ctx releases the allocations done by the
+* call to ech_configure_quic_ctx. It should be used when deleting the quic context.
+* It can be safely used even if there was no call to ech_configure_quic_ctx.
+* - quic: the picoquic context to be modified.
+ */
+void picoquic_release_quic_ctx(picoquic_quic_t* quic);
+
+/* picoquic_ech_configure_client:
+ * Configure connection context to require ECH. This requires passing
+ * a list of valid ECH configuration for the target server in the
+ * client handshake properties.
+ * 
+ * This list will typically be obtained by getting the DNS HTTPS records
+ * for the hidden server. These records will provide the name of the
+ * client facing server, and its ECH configuration.
+*/
+void picoquic_ech_configure_client(picoquic_cnx_t* cnx, ptls_iovec_t configs);
+
+/* picoquic_ech_check_handshake:
+ * Return 1 is ECH was succesfully negotiated, 0 otherwise.
+ */
+int picoquic_is_ech_handshake(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif

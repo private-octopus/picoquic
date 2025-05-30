@@ -47,6 +47,8 @@ extern "C" {
     typedef void (*picoquic_clear_crypto_errors_t)();
     typedef void (*picoquic_set_random_provider_in_ctx_t)(ptls_context_t* ctx);
     typedef void (*picoquic_crypto_random_provider_t)(void *buf, size_t len);
+    typedef int (*picoquic_keyex_from_key_file_t)(ptls_key_exchange_context_t** keyex, const char* keypem);
+    typedef void (*picoquic_keyex_dispose_t)(ptls_key_exchange_context_t* keyex);
 
     void picoquic_register_tls_key_provider_fn(
         picoquic_set_private_key_from_file_t set_private_key_from_file_fn,
@@ -61,6 +63,9 @@ extern "C" {
         picoquic_clear_crypto_errors_t clear_crypto_errors_fn);
 
     void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t random_provider);
+
+    void picoquic_register_keyex_from_key_file_fn(picoquic_keyex_from_key_file_t keyex_from_key_file_fn, 
+        picoquic_keyex_dispose_t keyex_dispose_fn);
 
 /* Additional definitions required for testing and verification */
 
@@ -84,6 +89,8 @@ extern "C" {
     extern picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn;
     extern picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn;
     extern picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn;
+    extern picoquic_keyex_from_key_file_t picoquic_keyex_from_key_file_fn;
+    extern picoquic_keyex_dispose_t picoquic_keyex_dispose_fn;
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     /* Picoquic variant of the get certificate verifier API */
@@ -92,6 +99,22 @@ extern "C" {
         unsigned int* is_cert_store_not_empty,
         picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
 #endif
+
+    typedef struct st_picoquic_tls_ctx_t {
+        ptls_t* tls;
+        picoquic_cnx_t* cnx;
+        int client_mode;
+        ptls_raw_extension_t ext[2];
+        ptls_handshake_properties_t handshake_properties;
+        ptls_iovec_t* alpn_vec;
+        size_t alpn_vec_size;
+        size_t alpn_count;
+        uint8_t* ext_data;
+        size_t ext_data_size;
+        uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
+        uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
+    } picoquic_tls_ctx_t;
+
 #ifdef __cplusplus
 }
 #endif
