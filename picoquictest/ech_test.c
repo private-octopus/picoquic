@@ -53,7 +53,7 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #else
 #define PICOQUIC_TEST_ECH_PUB_KEY "certs/ech/public.pem"
 #define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs/ech/private.pem"
-#define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_rr.pem"
+#define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_rr.txt"
 #endif
 #define ECH_RR_FILE_BIN "ech_rr.bin"
 #define ECH_RR_FILE_TXT "ech_rr.txt"
