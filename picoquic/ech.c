@@ -119,6 +119,13 @@ static void ech_configure_ciphers_and_kmems()
         (ptls_hpke_kem_t*) &ech_hpke_kem_p384sha384,
         (ptls_hpke_kem_t*) &ech_hpke_kem_x25519sha256};
 
+    if (picoquic_cipher_suites[0].high_memory_suite == NULL) {
+        /* No cipher suite documenetd: this is an indication that
+        * the tls api is not initialized.
+         */
+        picoquic_tls_api_init();
+    }
+
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
         if (picoquic_cipher_suites[i].high_memory_suite == NULL ||
             picoquic_cipher_suites[i].high_memory_suite->aead == NULL ||
@@ -456,7 +463,7 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 * It can be safely used even if there was no call to ech_configure_quic_ctx.
  */
 
-void picoquic_release_quic_ctx(picoquic_quic_t* quic)
+void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
     ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)ctx->ech.server.create_opener;

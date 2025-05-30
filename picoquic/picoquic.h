@@ -1721,7 +1721,7 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t* quic, char const* ech_priva
 * It can be safely used even if there was no call to ech_configure_quic_ctx.
 * - quic: the picoquic context to be modified.
  */
-void picoquic_release_quic_ctx(picoquic_quic_t* quic);
+void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic);
 
 /* picoquic_ech_configure_client:
  * Configure connection context to require ECH. This requires passing

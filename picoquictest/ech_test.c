@@ -215,8 +215,10 @@ int ech_e2e_test()
     char ech_test_config_file[512];
     int ret;
 
+#if 0
     /* Initalize TLS API */
     picoquic_tls_api_init();
+#endif
     /* Initialize the ech context */
     picoquic_ech_init();
 
@@ -278,7 +280,15 @@ int ech_e2e_test()
             DBG_PRINTF("%s", "ECH negotiation failed!");
             ret = -1;
         }
+    }
 
+    ptls_buffer_dispose(&ech_config_buf);
+
+    if (test_ctx != NULL) {
+        picoquic_release_quic_ech_ctx(test_ctx->qserver);
+        picoquic_release_quic_ech_ctx(test_ctx->qclient);
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
     }
 
     return ret;

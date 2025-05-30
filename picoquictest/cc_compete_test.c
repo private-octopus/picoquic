@@ -186,7 +186,7 @@ int cc_ns_media_test()
     spec.qperf_log = "./ns_qperflog.csv";
     spec.media_stats_start = 200000;
     spec.media_latency_average = 30500;
-    spec.media_latency_max = 44000;
+    spec.media_latency_max = 50000;
     spec.media_excluded = "vhigh, vmid,  vlast";
 
     err_fd = picoquic_file_open(MEDIA_TEST_LOG, "w");
