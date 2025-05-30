@@ -363,6 +363,7 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
     /* Allocate an opener callback */
     ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)malloc(sizeof(ech_opener_callback_t));
     if (ech_cb == NULL) {
+        DBG_PRINTF("Cannot allocate callback memory (%zu bytes)", sizeof(ech_opener_callback_t));
         ret = PICOQUIC_ERROR_MEMORY;
     }
     else {
@@ -374,7 +375,9 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
         ech_cb->config.off = 2;
         /* Read the config bytes into the ech_cb->config buffer */
         ret = picoquic_ech_read_config(&ech_cb->config, config_file_name);
-        if (ret == 0) {
+        if (ret != 0) {
+            DBG_PRINTF("Cannot read ech configuration from %s", config_file_name);
+        } else {
             uint16_t kem_id;
             uint16_t list_of_config_length = (uint16_t)(ech_cb->config.off - 2);
             ech_cb->config.base[0] = (uint8_t)((list_of_config_length >> 8) & 0xff);
@@ -387,11 +390,19 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
                     break;
                 }
             }
-            if (ech_cb->kem == NULL || picoquic_keyex_from_key_file_fn == NULL) {
+            if (ech_cb->kem == NULL){
+                DBG_PRINTF("Cannot find hpke kwm for code 0x%04x", kem_id);
+                ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            }
+            else if (picoquic_keyex_from_key_file_fn == NULL) {
+                DBG_PRINTF("%s", "Cannot find picoquic_keyex_from_key_file_fn");
                 ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             }
             else {
                 ret = picoquic_keyex_from_key_file_fn(&ech_cb->keyex, private_key_file);
+                if (ret != 0) {
+                    DBG_PRINTF("picoquic_keyex_from_key_file_fn fails, ret= %d(0x%x)", ret, ret);
+                }
             }
         }
         if (ret != 0) {
