@@ -230,7 +230,10 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
             ret = PTLS_ERROR_INCORRECT_BASE64;
         }
         F=picoquic_file_close(F);
-        ptls_buffer__do_pushv(config, cdata.base, cdata.off);
+        if (ret == 0) {
+            DBG_PRINTF("Got %zu bytes from %s", cdata.off, config_file_name);
+            ptls_buffer__do_pushv(config, cdata.base, cdata.off);
+        }
         ptls_buffer_dispose(&cdata);
     }
     return ret;
