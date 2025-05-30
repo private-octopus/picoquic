@@ -272,7 +272,6 @@ int ech_e2e_test()
             picoquic_ech_configure_client(test_ctx->cnx_client, configs);
         }
         else {
-
             DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
         }
     }

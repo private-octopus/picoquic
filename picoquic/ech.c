@@ -215,10 +215,13 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
         ret = -1;
     }
     else {
+        uint8_t databuf[512];
+        ptls_buffer_t cdata;
         ptls_base64_decode_state_t d_state;
+        ptls_buffer_init(&cdata, databuf, sizeof(databuf));
         ptls_base64_decode_init(&d_state);
         while (fgets(buffer, sizeof(buffer), F) != NULL) {
-            ret = ptls_base64_decode(buffer, &d_state, config);
+            ret = ptls_base64_decode(buffer, &d_state, &cdata);
         }
         if (d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0)) {
             ret = 0;
@@ -227,6 +230,8 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
             ret = PTLS_ERROR_INCORRECT_BASE64;
         }
         F=picoquic_file_close(F);
+        ptls_buffer__do_pushv(config, cdata.base, cdata.off);
+        ptls_buffer_dispose(&cdata);
     }
     return ret;
 }
