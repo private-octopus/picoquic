@@ -205,8 +205,6 @@ int ech_e2e_test()
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    const uint64_t mtu_drop_latency = 100000;
-    const uint64_t picosec_1mbps = 8000000;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xec, 0x8e, 0x2e, 0, 0, 0, 0, 0}, 8 };
     ptls_buffer_t ech_config_buf = { 0 };
@@ -229,10 +227,16 @@ int ech_e2e_test()
     if (ret == 0) {
         ret = picoquic_get_input_path(ech_test_key_file, sizeof(ech_test_key_file), picoquic_solution_dir,
             PICOQUIC_TEST_ECH_PRIVATE_KEY);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+        }
     }
     if (ret == 0) {
         ret = picoquic_get_input_path(ech_test_config_file, sizeof(ech_test_config_file), picoquic_solution_dir,
             PICOQUIC_TEST_ECH_CONFIG);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_CONFIG);
+        }
     }
 
     if (ret == 0) {
@@ -240,10 +244,16 @@ int ech_e2e_test()
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         ret = picoquic_ech_configure_quic_ctx(test_ctx->qserver, ech_test_key_file, ech_test_config_file);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot configure quic server context for ECH, ret = %d (0x%x).", ret, ret);
+        }
     }
     if (ret == 0) {
         /* client side configuration */
         ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot configure quic client context for ECH, ret = %d (0x%x).", ret, ret);
+        }
     }
     if (ret == 0) {
         /* Read the ECH config from the same file used for the server */
@@ -259,6 +269,10 @@ int ech_e2e_test()
             configs.len = ech_config_buf.off;
             picoquic_ech_configure_client(test_ctx->cnx_client, configs);
         }
+        else {
+
+            DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
+        }
     }
     if (ret == 0) {
         /* start the client connection, thus creating a TLS context */
@@ -266,7 +280,7 @@ int ech_e2e_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * mtu_drop_latency, &simulated_time);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
     if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
