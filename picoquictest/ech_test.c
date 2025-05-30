@@ -257,9 +257,11 @@ int ech_e2e_test()
     }
     if (ret == 0) {
         /* Read the ECH config from the same file used for the server */
-        ptls_buffer_init(&ech_config_buf, "\x00\x00", 2);
-        ech_config_buf.off = 2;
-        ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
+        const uint8_t twozeroes[2] = { 0, 0 };
+        ptls_buffer_init(&ech_config_buf, "", 0);
+        if ((ret = ptls_buffer__do_pushv(&ech_config_buf, twozeroes, 2)) == 0) {
+            ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
+        }
         if (ret == 0) {
             ptls_iovec_t configs = { 0 };
             uint16_t list_of_config_length = (uint16_t)(ech_config_buf.off - 2);
