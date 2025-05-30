@@ -2098,6 +2098,19 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_ns_wifi_bad_cubic)
+        {
+            int ret = cc_ns_wifi_bad_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_wifi_bad_bbr)
+        {
+            int ret = cc_ns_wifi_bad_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cc_ns_varylink)
         {
             int ret = cc_ns_varylink_test();

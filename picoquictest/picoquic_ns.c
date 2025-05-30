@@ -295,6 +295,7 @@ int picoquic_ns_create_default_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_
             }
             cc_ctx->vary_link_spec[i].latency = spec->latency;
             cc_ctx->vary_link_spec[i].jitter = spec->jitter;
+            cc_ctx->vary_link_spec[i].is_wifi_jitter = spec->is_wifi_jitter;
             cc_ctx->vary_link_spec[i].queue_delay_max = spec->queue_delay_max;
             cc_ctx->vary_link_spec[i].l4s_max = spec->l4s_max;
         }
