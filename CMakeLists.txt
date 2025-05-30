@@ -168,7 +168,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
-    picoquic_test/ech_test.c
+    picoquictest/ech_test.c
     picoquictest/edge_cases.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c
