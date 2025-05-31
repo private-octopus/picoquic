@@ -355,6 +355,7 @@ static void ech_dispose_opener_callback(ech_opener_callback_t* ech_cb)
     if (picoquic_keyex_dispose_fn != NULL && ech_cb->keyex != NULL) {
         picoquic_keyex_dispose_fn(ech_cb->keyex);
     }
+    ptls_buffer_dispose(&ech_cb->config);
     memset(ech_cb, 0, sizeof(ech_opener_callback_t));
     free(ech_cb);
 }
