@@ -31,8 +31,11 @@ extern "C" {
 #define TLS_API_INIT_FLAGS_NO_MINICRYPTO 2
 #define TLS_API_INIT_FLAGS_NO_FUSION 4
 #define TLS_API_INIT_FLAGS_NO_MBEDTLS 8
+
     void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
+    void picoquic_register_hpke_cipher_suite(ptls_hpke_cipher_suite_t* hpke_cipher_suite);
+    void picoquic_register_hpke_kem(ptls_hpke_kem_t* hpke_kem);
 
     typedef int (*picoquic_set_tls_key_provider_t)(ptls_context_t* ctx, const uint8_t* data, size_t len);
     typedef uint8_t* (*picoquic_get_private_key_from_file_t)(char const* file_name, int* key_length);
@@ -80,6 +83,10 @@ extern "C" {
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
     extern ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
     extern ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+#define PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX 4
+    extern ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
+#define PICOQUIC_HPKE_KEM_NB_MAX 3
+    extern ptls_hpke_kem_t* picoquic_hpke_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1];
     extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
     extern picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn;
     extern picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn;

@@ -956,6 +956,9 @@ void picoquic_free(picoquic_quic_t* quic)
             picoquic_delete_cnx(quic->cnx_list);
         }
 
+        /* Delete ECH context if it was created */
+        picoquic_release_quic_ech_ctx(quic);
+
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 

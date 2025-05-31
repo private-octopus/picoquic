@@ -1694,14 +1694,6 @@ typedef struct st_picoquic_alpn_list_t {
 } picoquic_alpn_list_t;
 
 /* Set of API for ECH/ESNI */
-
-/*
- * picoquic_ech_init:
- * Compute the list of ECH cipher suites and key management methods
- * available based on compile options and TLS init parameters
- */
-void picoquic_ech_init();
-
 /* 
  * picoquic_ech_configure_quic_ctx:
  * Configure a QUIC context to support ECH, with parameters:

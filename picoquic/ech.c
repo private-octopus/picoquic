@@ -40,172 +40,9 @@
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 
-/* ECH Init.
-* For client side usage, we need to build up a list of supported HPKE ciphersuites
-* and key exchanges, and then document that in the QUIC context.
-* The code is written to work around the const qualifier in
-* the typedef of ptls_hpke_cipher_suite_t and ptls_hpke_kem_t
- */
-
-typedef struct st_ptls_hpke_cipher_suite_nc_t {
-    ptls_hpke_cipher_suite_id_t id;
-    const char* name; /* in form of "<kdf>/<aead>" using the sames specified in IANA HPKE registry */
-    ptls_hash_algorithm_t* hash;
-    ptls_aead_algorithm_t* aead;
-} ptls_hpke_cipher_suite_nc_t;
-
-ptls_hpke_cipher_suite_nc_t ech_hpke_aes128gcmsha256 = {
-    .id = {.kdf = PTLS_HPKE_HKDF_SHA256, .aead = PTLS_HPKE_AEAD_AES_128_GCM},
-    .name = "HKDF-SHA256/AES-128-GCM",
-    .hash = NULL /* sha256 */,
-    .aead = NULL /* aes128gcm */ };
-ptls_hpke_cipher_suite_nc_t ech_hpke_aes128gcmsha512 = {
-    .id = {.kdf = PTLS_HPKE_HKDF_SHA512, .aead = PTLS_HPKE_AEAD_AES_128_GCM},
-    .name = "HKDF-SHA512/AES-128-GCM",
-    .hash = NULL /*  sha512 */,
-    .aead = NULL /* aes128gcm */ };
-ptls_hpke_cipher_suite_nc_t ech_hpke_aes256gcmsha384 = {
-    .id = {.kdf = PTLS_HPKE_HKDF_SHA384, .aead = PTLS_HPKE_AEAD_AES_256_GCM},
-    .name = "HKDF-SHA384/AES-256-GCM",
-    .hash = NULL /* sha384 */,
-    .aead = NULL /*  aes256gcm */ };
-ptls_hpke_cipher_suite_nc_t ech_hpke_chacha20poly1305sha256 = {
-    .id = {.kdf = PTLS_HPKE_HKDF_SHA256, .aead = PTLS_HPKE_AEAD_CHACHA20POLY1305},
-    .name = "HKDF-SHA256/ChaCha20Poly1305",
-    .hash = NULL /* sha256 */,
-    .aead = NULL /* chacha20poly1305 */ };
-static ptls_hpke_cipher_suite_t *ech_hpke_cipher_suites[5] = { NULL, NULL, NULL, NULL, NULL };
-
-typedef struct st_ptls_hpke_kem_nc_t {
-    uint16_t id;
-    ptls_key_exchange_algorithm_t* keyex;
-    ptls_hash_algorithm_t* hash;
-} ptls_hpke_kem_nc_t;
-
-ptls_hpke_kem_nc_t ech_hpke_kem_p256sha256 = { PTLS_HPKE_KEM_P256_SHA256,  NULL /* secp256r1 */,  NULL /* sha256 */ };
-ptls_hpke_kem_nc_t ech_hpke_kem_p384sha384 = { PTLS_HPKE_KEM_P384_SHA384,  NULL /* secp384r1 */,  NULL /* sha384  */ };
-ptls_hpke_kem_nc_t ech_hpke_kem_x25519sha256 = { PTLS_HPKE_KEM_X25519_SHA256,  NULL /* x25519 */,  NULL /* sha256 */ };
-static ptls_hpke_kem_t* ech_hpke_kems[4] = { NULL, NULL, NULL, NULL };
-
-static void ech_configure_ciphers_and_kmems()
-{
-    /* we need to have an execution time evaluation of which aead, hash and
-    * key exchange algorithms are present, then build the tables of
-    * cipher suites and key exchange accordingly.
-     */
-    int nb_ciphers = 0;
-    int nb_kems = 0;
-    ptls_hash_algorithm_t* x_sha256 = NULL;
-    ptls_hash_algorithm_t* x_sha384 = NULL;
-    ptls_hash_algorithm_t* x_sha512 = NULL;
-    ptls_aead_algorithm_t* x_aes128gcm = NULL;
-    ptls_aead_algorithm_t* x_aes256gcm = NULL;
-    ptls_aead_algorithm_t* x_chacha_poly = NULL;
-    ptls_key_exchange_algorithm_t* x_secp256r1 = NULL;
-    ptls_key_exchange_algorithm_t* x_x25519 = NULL;
-    ptls_key_exchange_algorithm_t* x_secp384r1 = NULL;
-    size_t hash_offset = offsetof(ptls_hpke_cipher_suite_t, hash);
-    size_t aead_offset = offsetof(ptls_hpke_cipher_suite_t, aead);
-    size_t keyex_offset2 = offsetof(ptls_hpke_kem_t, keyex);
-    size_t hash_offset2 = offsetof(ptls_hpke_kem_t, hash);
-    ptls_hpke_cipher_suite_t* ech_hpke_cipher_static[4] = {
-        (ptls_hpke_cipher_suite_t*)&ech_hpke_aes128gcmsha256,
-        (ptls_hpke_cipher_suite_t*)&ech_hpke_aes128gcmsha512,
-        (ptls_hpke_cipher_suite_t*)&ech_hpke_aes256gcmsha384,
-        (ptls_hpke_cipher_suite_t*)&ech_hpke_chacha20poly1305sha256
-    };
-    ptls_hpke_kem_t* ech_hpke_kem_static[3] = { 
-        (ptls_hpke_kem_t* )&ech_hpke_kem_p256sha256,
-        (ptls_hpke_kem_t*) &ech_hpke_kem_p384sha384,
-        (ptls_hpke_kem_t*) &ech_hpke_kem_x25519sha256};
-
-    if (picoquic_cipher_suites[0].high_memory_suite == NULL) {
-        /* No cipher suite documenetd: this is an indication that
-        * the tls api is not initialized.
-         */
-        picoquic_tls_api_init();
-    }
-
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
-        if (picoquic_cipher_suites[i].high_memory_suite == NULL ||
-            picoquic_cipher_suites[i].high_memory_suite->aead == NULL ||
-            picoquic_cipher_suites[i].high_memory_suite->hash == NULL) {
-            break;
-        }
-        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->hash->name, "sha256") == 0) {
-            x_sha256 = picoquic_cipher_suites[i].high_memory_suite->hash;
-        }
-        else if (strcmp(picoquic_cipher_suites[i].high_memory_suite->hash->name, "sha384") == 0) {
-            x_sha384 = picoquic_cipher_suites[i].high_memory_suite->hash;
-        }
-        else if (strcmp(picoquic_cipher_suites[i].high_memory_suite->hash->name, "sha512") == 0) {
-            x_sha512 = picoquic_cipher_suites[i].high_memory_suite->hash;
-        }
-
-        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->name, "AES128-GCM") == 0) {
-            x_aes128gcm = picoquic_cipher_suites[i].high_memory_suite->aead;
-        }
-        else if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->name, "AES256-GCM") == 0) {
-            x_aes256gcm = picoquic_cipher_suites[i].high_memory_suite->aead;
-        }
-        else if (strcmp(picoquic_cipher_suites[i].high_memory_suite->aead->name, "CHACHA20-POLY1305") == 0) {
-            x_chacha_poly = picoquic_cipher_suites[i].high_memory_suite->aead;
-        }
-    }
-
-    for (int i = 0; i < PICOQUIC_KEY_EXCHANGES_NB_MAX; i++) {
-        if (picoquic_key_exchanges[i] == NULL) {
-            break;
-        }
-        if (strcmp(picoquic_key_exchanges[i]->name, "secp256r1") == 0) {
-            x_secp256r1 = picoquic_key_exchanges[i];
-        }
-        else if (strcmp(picoquic_key_exchanges[i]->name, "x25519") == 0) {
-            x_x25519 = picoquic_key_exchanges[i];
-        }
-        else if (strcmp(picoquic_key_exchanges[i]->name, "secp384r1") == 0) {
-            x_secp384r1 = picoquic_key_exchanges[i];
-        }
-    }
-
-    /* Using offset and recasting to work around const declaration of ptls_hpke_cipher_suite_t */
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_aes128gcmsha256) + hash_offset) = x_sha256;
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_aes128gcmsha512) + hash_offset) = x_sha512;
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_aes256gcmsha384) + hash_offset) = x_sha384;
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_chacha20poly1305sha256) + hash_offset) = x_sha256;
-    *(ptls_aead_algorithm_t**)(((uint8_t*)&ech_hpke_aes128gcmsha256) + aead_offset) = x_aes128gcm;
-    *(ptls_aead_algorithm_t**)(((uint8_t*)&ech_hpke_aes128gcmsha512) + aead_offset) = x_aes128gcm;
-    *(ptls_aead_algorithm_t**)(((uint8_t*)&ech_hpke_aes256gcmsha384) + aead_offset) = x_aes256gcm;
-    *(ptls_aead_algorithm_t**)(((uint8_t*)&ech_hpke_chacha20poly1305sha256) + aead_offset) = x_chacha_poly;
-
-    /* Using offset and recasting to work around const declaration of ptls_hpke_cipher_suite_t */
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_kem_p256sha256) + hash_offset2) = x_sha256;
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_kem_p384sha384) + hash_offset2) = x_sha384;
-    *(ptls_hash_algorithm_t**)(((uint8_t*)&ech_hpke_kem_x25519sha256) + hash_offset2) = x_sha256;
-    *(ptls_key_exchange_algorithm_t**)(((uint8_t*)&ech_hpke_kem_p256sha256) + keyex_offset2) = x_secp256r1;
-    *(ptls_key_exchange_algorithm_t**)(((uint8_t*)&ech_hpke_kem_p384sha384) + keyex_offset2) = x_secp384r1;
-    *(ptls_key_exchange_algorithm_t**)(((uint8_t*)&ech_hpke_kem_x25519sha256) + keyex_offset2) = x_x25519;
-
-    for (int i = 0; i < 4; i++) {
-        if (ech_hpke_cipher_static[i]->hash != NULL &&
-            ech_hpke_cipher_static[i]->aead != NULL) {
-            ech_hpke_cipher_suites[nb_ciphers] = ech_hpke_cipher_static[i];
-            nb_ciphers++;
-        }
-    }
-    for (int i = 0; i < 3; i++) {
-        if (ech_hpke_kem_static[i]->hash != NULL &&
-            ech_hpke_kem_static[i]->keyex != NULL) {
-            ech_hpke_kems[nb_kems] = ech_hpke_kem_static[i];
-            nb_kems++;
-        }
-    }
-}
-
 /* Read the configuration file.
-* We assume that it exactly one config, in base 64 encoding. 
+* We assume that it contains exactly one config, in base 64 encoding. 
  */
-
 int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_name)
 {
     int ret = 0;
@@ -283,21 +120,6 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
 * The callback should find a configuration that matches the config_id, then
 * perform the specified key exchange and derive the aead key used to encrypt
 * the payload.
-*
-* TODO:
- * ECH: creates the AEAD context to be used for "Open"-ing inner CH. Given `config_id`, the callback looks up the ECH config and the
- * corresponding private key, invokes `ptls_hpke_setup_base_r` with provided `cipher`, `enc`, and `info_prefix` (which will be
- * "tls ech" || 00).
- * 
- * SetupBaseR function of RFC 9180. Given `kem`, `algo`, `info`, receiver's private key (`keyex`), and the esnder's public key,
- * returns the AEAD context to be used for decrypting data.
- *
-int ptls_hpke_setup_base_r(ptls_hpke_kem_t* kem, ptls_hpke_cipher_suite_t* cipher, ptls_key_exchange_context_t* keyex,
-    ptls_aead_context_t** ctx, ptls_iovec_t pk_s, ptls_iovec_t info);
- *
-PTLS_CALLBACK_TYPE(ptls_aead_context_t*, ech_create_opener, ptls_hpke_kem_t** kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* tls,
-    uint8_t config_id, ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix);
-* 
 */
 
 typedef struct st_ech_opener_callback_t {
@@ -321,10 +143,10 @@ ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
     ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)cb;
 
     *cipher = NULL;
-    for (size_t i = 0; ech_hpke_cipher_suites[i] != NULL; ++i) {
-        if (ech_hpke_cipher_suites[i]->id.kdf == cipher_id.kdf &&
-            ech_hpke_cipher_suites[i]->id.aead == cipher_id.aead) {
-            *cipher = ech_hpke_cipher_suites[i];
+    for (size_t i = 0; picoquic_hpke_cipher_suites[i] != NULL; ++i) {
+        if (picoquic_hpke_cipher_suites[i]->id.kdf == cipher_id.kdf &&
+            picoquic_hpke_cipher_suites[i]->id.aead == cipher_id.aead) {
+            *cipher = picoquic_hpke_cipher_suites[i];
             break;
         }
     }
@@ -336,7 +158,6 @@ ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
     * In the unit test example, the binary string is preceded by a two bytes of length, with
     * an added null byte at the end.
     */
-
 
     ptls_buffer_init(&infobuf, "", 0);
     ptls_buffer_pushv(&infobuf, info_prefix.base, info_prefix.len);
@@ -351,7 +172,6 @@ Exit:
 /* Dispose of the ech callback. */
 static void ech_dispose_opener_callback(ech_opener_callback_t* ech_cb)
 {
-
     if (picoquic_keyex_dispose_fn != NULL && ech_cb->keyex != NULL) {
         picoquic_keyex_dispose_fn(ech_cb->keyex);
     }
@@ -383,9 +203,9 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
             uint16_t kem_id;
             /* Get kem-id from config, then get kem from kem_id */
             kem_id = (((uint16_t)ech_cb->config.base[7]) << 8) + ech_cb->config.base[8];
-            for (int i = 0; i < 4 && ech_hpke_kems[i] !=  NULL; i++) {
-                if (ech_hpke_kems[i]->id == kem_id) {
-                    ech_cb->kem = ech_hpke_kems[i];
+            for (int i = 0; i < 4 && picoquic_hpke_kems[i] !=  NULL; i++) {
+                if (picoquic_hpke_kems[i]->id == kem_id) {
+                    ech_cb->kem = picoquic_hpke_kems[i];
                     break;
                 }
             }
@@ -415,48 +235,27 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
 
 /* Configure a QUIC context for ECH
 *
-* For the client, document parameters in ech.client:
+* For both clients and servers, document:
 *    ech.client.ciphers: list of HPKE symmetric cipher-suites (set to NULL to disable ECH altogether)
 *    ech.client.kems: list of supported key exchanges.
+*    (these lists are initialized during the initialization of the TLS API.)
 * For the server, document:
 *    ech.server.create_opener: the ECH "opener" callback function, which
 *        does ECDH key exchange and returns the AEAD context.
 *    ech.server.retry_configs: ECHConfigList to be sent to the client when
 *        there is mismatch (or when the client sends a grease)
-
-* - On the client side, the configuration depends from the capabilities of
-*   the local crypto provider. This list is created dynamically by a call to
-*   'ech_init'.
-* - For the server, we need to document the ECH configuration and to create
-*   a callback based on the ECH private key.
 * We assume here that there will be just one ECH configuration for the server.
 * We copy this configuration in the ECH callback buffer, and we add a pointer
 * to it in ech.server.retry_configs.
 */
-
-/* Compute the list of ECH cipher suites and key management methods
- * available based on compile options and TLS init parameters
- */
-void picoquic_ech_init()
-{
-    static int is_ech_init = 0;
-
-    if (!is_ech_init) {
-        ech_configure_ciphers_and_kmems();
-        is_ech_init = 1;
-    }
-}
-
-/* Configure a QUIC context to support ECH.
- * used for ECH and the supported ECH configuration.
- */
 int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_key_file, char const* config_file_name)
 {
     int ret = 0;
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
-    ctx->ech.client.ciphers = ech_hpke_cipher_suites;
-    ctx->ech.client.kems = ech_hpke_kems;
+    picoquic_release_quic_ech_ctx(quic);
+    ctx->ech.client.ciphers = picoquic_hpke_cipher_suites;
+    ctx->ech.client.kems = picoquic_hpke_kems;
     if (private_key_file != NULL) {
         ech_opener_callback_t* ech_cb = NULL;
         if ((ret = ech_init_opener_callback(&ech_cb, private_key_file, config_file_name)) == 0) {
@@ -471,6 +270,8 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 /* The call to ech_release_quic_ctx releases the allocations done by the
 * call to ech_configure_quic_ctx. It should be used when deleting the quic context.
 * It can be safely used even if there was no call to ech_configure_quic_ctx.
+* 
+* This is performed automatically when deleting a quic context in "picoquic_free"
  */
 
 void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
@@ -504,7 +305,6 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t * config_data, si
     }
     return ret;
 }
-
 
 /* Check whether the ech handshake succeeded.
  */

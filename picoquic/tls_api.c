@@ -91,11 +91,12 @@ struct st_picoquic_log_event_t {
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1] = { 0 };
 
-#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
-ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1] = { 0 };
+ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2] = { 0 };
+ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1] = { 0 };
+ptls_hpke_kem_t* picoquic_hpke_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1] = { 0 };
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
 picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
 picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
@@ -257,6 +258,33 @@ void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key
     if (key_exchange->id == PICOQUIC_GROUP_SECP256R1) {
         /* Replace the lower priority provider if present! */
         picoquic_key_exchange_secp256r1[0] = key_exchange;
+    }
+}
+
+/* registration of HPKE cipher suites */
+void picoquic_register_hpke_cipher_suite(ptls_hpke_cipher_suite_t* hpke_cipher_suite)
+{
+    for (int i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX; i++) {
+        if (picoquic_hpke_cipher_suites[i] == NULL ||
+            (picoquic_hpke_cipher_suites[i]->id.aead == hpke_cipher_suite->id.aead &&
+                picoquic_hpke_cipher_suites[i]->id.kdf == hpke_cipher_suite->id.kdf)) {
+            /* Replace the lower priority provider if present! */
+            picoquic_hpke_cipher_suites[i] = hpke_cipher_suite;
+            break;
+        }
+    }
+}
+
+/* Registration of HPKE KEM */
+void picoquic_register_hpke_kem(ptls_hpke_kem_t* hpke_kem)
+{
+    for (int i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX; i++) {
+        if (picoquic_hpke_kems[i] == NULL ||
+            picoquic_hpke_kems[i]->id == hpke_kem->id) {
+            /* Replace the lower priority provider if present! */
+            picoquic_hpke_kems[i] = hpke_kem;
+            break;
+        }
     }
 }
 
