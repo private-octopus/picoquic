@@ -215,13 +215,10 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
         ret = -1;
     }
     else {
-        uint8_t databuf[512];
-        ptls_buffer_t cdata;
         ptls_base64_decode_state_t d_state;
-        ptls_buffer_init(&cdata, databuf, sizeof(databuf));
         ptls_base64_decode_init(&d_state);
         while (fgets(buffer, sizeof(buffer), F) != NULL) {
-            ret = ptls_base64_decode(buffer, &d_state, &cdata);
+            ret = ptls_base64_decode(buffer, &d_state, config);
         }
         if (d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0)) {
             ret = 0;
@@ -231,10 +228,8 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
         }
         F=picoquic_file_close(F);
         if (ret == 0) {
-            DBG_PRINTF("Got %zu bytes from %s", cdata.off, config_file_name);
-            ptls_buffer__do_pushv(config, cdata.base, cdata.off);
+            DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
         }
-        ptls_buffer_dispose(&cdata);
     }
     return ret;
 }
@@ -378,18 +373,13 @@ static int ech_init_opener_callback(ech_opener_callback_t** p_ech_cb, char const
         memset(ech_cb, 0, sizeof(ech_opener_callback_t));
         /* set the callback */
         ech_cb->super.cb = ech_opener_callback;
-        /* Reserve 2 bytes for length of list of config. */
-        ptls_buffer_init(&ech_cb->config, "\x00\x00", 2);
-        ech_cb->config.off = 2;
+        ptls_buffer_init(&ech_cb->config, "", 0);
         /* Read the config bytes into the ech_cb->config buffer */
         ret = picoquic_ech_read_config(&ech_cb->config, config_file_name);
         if (ret != 0) {
             DBG_PRINTF("Cannot read ech configuration from %s", config_file_name);
         } else {
             uint16_t kem_id;
-            uint16_t list_of_config_length = (uint16_t)(ech_cb->config.off - 2);
-            ech_cb->config.base[0] = (uint8_t)((list_of_config_length >> 8) & 0xff);
-            ech_cb->config.base[1] = (uint8_t)(list_of_config_length & 0xff);
             /* Get kem-id from config, then get kem from kem_id */
             kem_id = (((uint16_t)ech_cb->config.base[7]) << 8) + ech_cb->config.base[8];
             for (int i = 0; i < 4 && ech_hpke_kems[i] !=  NULL; i++) {
@@ -497,12 +487,23 @@ void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 /* Configure a tls connection context on the client side:
 * We need to document the client handshake properties
 * "ech.configs" with a list of server configurations (HTTPS records.)
+* This data will be freed when deleted the tls_ctx for the connection.
 */
-void picoquic_ech_configure_client(picoquic_cnx_t* cnx, ptls_iovec_t configs)
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t * config_data, size_t config_length)
 {
+    int ret = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    tls_ctx->handshake_properties.client.ech.configs = configs;
+    tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length);
+    if (tls_ctx->handshake_properties.client.ech.configs.base == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        memcpy(tls_ctx->handshake_properties.client.ech.configs.base, config_data, config_length);
+        tls_ctx->handshake_properties.client.ech.configs.len = config_length;
+    }
+    return ret;
 }
+
 
 /* Check whether the ech handshake succeeded.
  */

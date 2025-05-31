@@ -1995,6 +1995,20 @@ void picoquic_tlscontext_free(void* vctx)
         free(ctx->alpn_vec);
     }
 
+    if (ctx->handshake_properties.client.ech.configs.base != NULL) {
+        free(ctx->handshake_properties.client.ech.configs.base);
+    }
+    ctx->handshake_properties.client.ech.configs.base = NULL;
+    ctx->handshake_properties.client.ech.configs.len = 0;
+    if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
+        if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
+            free(ctx->handshake_properties.client.ech.retry_configs->base);
+        }
+        ctx->handshake_properties.client.ech.retry_configs->base = NULL;
+        ctx->handshake_properties.client.ech.retry_configs->len = 0;
+        free(ctx->handshake_properties.client.ech.retry_configs);
+        ctx->handshake_properties.client.ech.retry_configs = NULL;
+    }
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;

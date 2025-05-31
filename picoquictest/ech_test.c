@@ -49,13 +49,13 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #ifdef _WINDOWS
 #define PICOQUIC_TEST_ECH_PUB_KEY "certs\\ech\\public.pem"
 #define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs\\ech\\private.pem"
-#define PICOQUIC_TEST_ECH_CONFIG "certs\\ech\\ech_rr.txt"
+#define PICOQUIC_TEST_ECH_CONFIG "certs\\ech\\ech_config.txt"
 #else
 #define PICOQUIC_TEST_ECH_PUB_KEY "certs/ech/public.pem"
 #define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs/ech/private.pem"
 #define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_rr.txt"
 #endif
-#define ECH_RR_FILE_BIN "ech_rr.bin"
+#define ECH_CONFIG_FILE_TXT "ech_config.txt"
 #define ECH_RR_FILE_TXT "ech_rr.txt"
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
@@ -79,8 +79,11 @@ int ech_rr_test()
     const char* public_name = "test.example.com";
     uint8_t max_name_length = 128;
     ptls_buffer_t rr_buf;
+    ptls_buffer_t config_buf;
     uint8_t smallbuf[256];
+    uint8_t smallbuf2[256];
     ptls_buffer_init(&rr_buf, (void*)smallbuf, sizeof(smallbuf));
+    ptls_buffer_init(&config_buf, (void*)smallbuf2, sizeof(smallbuf2));
 
     ret = picoquic_get_input_path(test_server_pub_key_file, sizeof(test_server_pub_key_file), picoquic_solution_dir,
         PICOQUIC_TEST_ECH_PUB_KEY);
@@ -114,26 +117,7 @@ int ech_rr_test()
         }
     }
 
-    if (ret == 0) {
-        int last_err;
-        FILE* F = picoquic_file_open_ex(ECH_RR_FILE_BIN, "wb", &last_err);
-        if (F == NULL) {
-            DBG_PRINTF("Cannot open file <%s>, err: %x", ECH_RR_FILE_BIN, last_err);
-            ret = -1;
-        }
-        else {
-            size_t written = fwrite(rr_buf.base, 1, rr_buf.off, F);
-            if (written != rr_buf.off) {
-                DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", rr_buf.off, ECH_RR_FILE_BIN, written);
-                ret = -1;
-            }
-            else {
-                DBG_PRINTF("Wrote %d bytes on file <%s>", rr_buf.off, ECH_RR_FILE_BIN);
-            }
-            picoquic_file_close(F);
-        }
-    }
-
+    /* save an RR representation in ech_rr.txt */
     if (ret == 0) {
         int last_err;
         size_t ech_text_size = ptls_base64_howlong(rr_buf.off);
@@ -173,7 +157,57 @@ int ech_rr_test()
             free(ech_text);
         }
     }
+    /* Save a config representation in ech_config.txt */
+    if (ret == 0) {
+        int last_err;
+        size_t bin_size = rr_buf.off + 2;
+        uint8_t * bin_val = (uint8_t*)malloc(bin_size);
+        if (bin_val == NULL) {
+            DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
+            ret = -1;
+        }
+        else {
+            size_t config_text_size = ptls_base64_howlong(bin_size);
+            char* config_text = (char*)malloc(config_text_size + 1);
 
+            bin_val[0] = (uint8_t)(((rr_buf.off) >> 8) & 0xff);
+            bin_val[1] = (uint8_t)(rr_buf.off & 0xff);
+            memcpy(bin_val + 2, rr_buf.base, rr_buf.off);
+
+            if (config_text == NULL) {
+                DBG_PRINTF("Cannot allocate %d bytes for config text buffer", config_text_size + 1);
+                ret = -1;
+            }
+            else {
+                int lc = ptls_base64_encode(bin_val, bin_size, config_text);
+                if (lc != config_text_size + 1) {
+                    DBG_PRINTF("Cannot base64 encode %zu bytes into %zu", lc, config_text_size);
+                    ret = -1;
+                }
+                if (ret == 0) {
+                    FILE* F = picoquic_file_open_ex(ECH_CONFIG_FILE_TXT, "w", &last_err);
+                    if (F == NULL) {
+                        DBG_PRINTF("Cannot open file <%s>, err: %x", ECH_CONFIG_FILE_TXT, last_err);
+                        ret = -1;
+                    }
+                    else {
+                        size_t written = fwrite(config_text, 1, config_text_size, F);
+                        if (written != config_text_size) {
+                            DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", config_text_size, ECH_CONFIG_FILE_TXT, written);
+                            ret = -1;
+                        }
+                        else {
+                            (void)fprintf(F, "\n");
+                            DBG_PRINTF("Wrote %d bytes on file <%s>", config_text_size + 1, ECH_CONFIG_FILE_TXT);
+                        }
+                        picoquic_file_close(F);
+                    }
+                }
+                free(config_text);
+            }
+            free(bin_val);
+        }
+    }
     if (ret == 0) {
         ptls_buffer_t config;
         ptls_buffer_init(&config, "", 0);
@@ -257,19 +291,10 @@ int ech_e2e_test()
     }
     if (ret == 0) {
         /* Read the ECH config from the same file used for the server */
-        const uint8_t twozeroes[2] = { 0, 0 };
         ptls_buffer_init(&ech_config_buf, "", 0);
-        if ((ret = ptls_buffer__do_pushv(&ech_config_buf, twozeroes, 2)) == 0) {
-            ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
-        }
+        ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
         if (ret == 0) {
-            ptls_iovec_t configs = { 0 };
-            uint16_t list_of_config_length = (uint16_t)(ech_config_buf.off - 2);
-            ech_config_buf.base[0] = (uint8_t)((list_of_config_length >> 8) & 0xff);
-            ech_config_buf.base[1] = (uint8_t)(list_of_config_length & 0xff);
-            configs.base = ech_config_buf.base;
-            configs.len = ech_config_buf.off;
-            picoquic_ech_configure_client(test_ctx->cnx_client, configs);
+            picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
         }
         else {
             DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);

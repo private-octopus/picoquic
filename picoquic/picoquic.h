@@ -1732,7 +1732,7 @@ void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic);
  * for the hidden server. These records will provide the name of the
  * client facing server, and its ECH configuration.
 */
-void picoquic_ech_configure_client(picoquic_cnx_t* cnx, ptls_iovec_t configs);
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t* config_data, size_t config_length);
 
 /* picoquic_ech_check_handshake:
  * Return 1 is ECH was succesfully negotiated, 0 otherwise.
