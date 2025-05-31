@@ -1870,7 +1870,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
                 (ctx->client_mode) ? 0 : 1);
             if (ctx->tls == NULL) {
-                picoquic_tlscontext_free(ctx);
+                picoquic_tlscontext_free(ctx, cnx->client_mode);
                 ctx = NULL;
                 ret = PICOQUIC_ERROR_MEMORY;
             }
@@ -1889,7 +1889,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     }
 
     if (cnx->tls_ctx != NULL) {
-        picoquic_tlscontext_free(cnx->tls_ctx);
+        picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
     }
 
     cnx->tls_ctx = (void*)ctx;
@@ -1983,7 +1983,7 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
     ctx->handshake_properties.client.session_ticket.len = 0;
 }
 
-void picoquic_tlscontext_free(void* vctx)
+void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
 
@@ -1995,19 +1995,21 @@ void picoquic_tlscontext_free(void* vctx)
         free(ctx->alpn_vec);
     }
 
-    if (ctx->handshake_properties.client.ech.configs.base != NULL) {
-        free(ctx->handshake_properties.client.ech.configs.base);
-    }
-    ctx->handshake_properties.client.ech.configs.base = NULL;
-    ctx->handshake_properties.client.ech.configs.len = 0;
-    if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
-        if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
-            free(ctx->handshake_properties.client.ech.retry_configs->base);
+    if (client_mode) {
+        if (ctx->handshake_properties.client.ech.configs.base != NULL) {
+            free(ctx->handshake_properties.client.ech.configs.base);
         }
-        ctx->handshake_properties.client.ech.retry_configs->base = NULL;
-        ctx->handshake_properties.client.ech.retry_configs->len = 0;
-        free(ctx->handshake_properties.client.ech.retry_configs);
-        ctx->handshake_properties.client.ech.retry_configs = NULL;
+        ctx->handshake_properties.client.ech.configs.base = NULL;
+        ctx->handshake_properties.client.ech.configs.len = 0;
+        if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
+            if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
+                free(ctx->handshake_properties.client.ech.retry_configs->base);
+            }
+            ctx->handshake_properties.client.ech.retry_configs->base = NULL;
+            ctx->handshake_properties.client.ech.retry_configs->len = 0;
+            free(ctx->handshake_properties.client.ech.retry_configs);
+            ctx->handshake_properties.client.ech.retry_configs = NULL;
+        }
     }
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
