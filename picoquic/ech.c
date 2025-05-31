@@ -277,12 +277,14 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-    ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)ctx->ech.server.create_opener;
-    ctx->ech.server.retry_configs.base = NULL;
-    ctx->ech.server.retry_configs.len = 0;
+    if (ctx != NULL) {
+        ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)ctx->ech.server.create_opener;
+        ctx->ech.server.retry_configs.base = NULL;
+        ctx->ech.server.retry_configs.len = 0;
 
-    if (ech_cb != NULL) {
-        ech_dispose_opener_callback(ech_cb);
+        if (ech_cb != NULL) {
+            ech_dispose_opener_callback(ech_cb);
+        }
     }
 }
 
