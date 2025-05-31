@@ -513,6 +513,8 @@ int multipath_tunnel_test();
 int token_reuse_api_test();
 int get_hash_test();
 int get_tls_errors_test();
+int ech_rr_test();
+int ech_e2e_test();
 int getter_test();
 int grease_quic_bit_test();
 int grease_quic_bit_one_way_test();

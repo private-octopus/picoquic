@@ -78,21 +78,6 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1 0x39
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 2048
 
-typedef struct st_picoquic_tls_ctx_t {
-    ptls_t* tls;
-    picoquic_cnx_t* cnx;
-    int client_mode;
-    ptls_raw_extension_t ext[2];
-    ptls_handshake_properties_t handshake_properties;
-    ptls_iovec_t* alpn_vec;
-    size_t alpn_vec_size;
-    size_t alpn_count;
-    uint8_t* ext_data;
-    size_t ext_data_size;
-    uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
-    uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
-} picoquic_tls_ctx_t;
-
 struct st_picoquic_log_event_t {
     ptls_log_event_t super;
     FILE* fp;
@@ -120,6 +105,9 @@ picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NUL
 picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
 picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
 picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
+picoquic_keyex_from_key_file_t picoquic_keyex_from_key_file_fn = NULL;
+picoquic_keyex_dispose_t picoquic_keyex_dispose_fn = NULL;
+
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -302,6 +290,13 @@ void picoquic_register_explain_crypto_error_fn(picoquic_explain_crypto_error_t e
 void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t crypto_random_provider_fn)
 {
     picoquic_crypto_random_provider_fn = crypto_random_provider_fn;
+}
+
+void picoquic_register_keyex_from_key_file_fn(picoquic_keyex_from_key_file_t keyex_from_key_file_fn,
+    picoquic_keyex_dispose_t keyex_dispose_fn)
+{
+    picoquic_keyex_from_key_file_fn = keyex_from_key_file_fn;
+    picoquic_keyex_dispose_fn = keyex_dispose_fn;
 }
 
 /* List of cipher suites that are suitable for this context */
@@ -549,7 +544,7 @@ int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_n
     return set_private_key_from_file(file_name, quic->tls_master_ctx);
 }
 
-/* Clear certificate objects allocated by the crypto stack for a certficate
+/* Clear certificate objects allocated by the crypto stack for a certificate
 */
 void picoquic_dispose_sign_certificate(ptls_context_t* ctx)
 {
@@ -1875,7 +1870,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
                 (ctx->client_mode) ? 0 : 1);
             if (ctx->tls == NULL) {
-                picoquic_tlscontext_free(ctx);
+                picoquic_tlscontext_free(ctx, cnx->client_mode);
                 ctx = NULL;
                 ret = PICOQUIC_ERROR_MEMORY;
             }
@@ -1894,7 +1889,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     }
 
     if (cnx->tls_ctx != NULL) {
-        picoquic_tlscontext_free(cnx->tls_ctx);
+        picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
     }
 
     cnx->tls_ctx = (void*)ctx;
@@ -1988,7 +1983,7 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
     ctx->handshake_properties.client.session_ticket.len = 0;
 }
 
-void picoquic_tlscontext_free(void* vctx)
+void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
 
@@ -2000,6 +1995,22 @@ void picoquic_tlscontext_free(void* vctx)
         free(ctx->alpn_vec);
     }
 
+    if (client_mode) {
+        if (ctx->handshake_properties.client.ech.configs.base != NULL) {
+            free(ctx->handshake_properties.client.ech.configs.base);
+        }
+        ctx->handshake_properties.client.ech.configs.base = NULL;
+        ctx->handshake_properties.client.ech.configs.len = 0;
+        if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
+            if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
+                free(ctx->handshake_properties.client.ech.retry_configs->base);
+            }
+            ctx->handshake_properties.client.ech.retry_configs->base = NULL;
+            ctx->handshake_properties.client.ech.retry_configs->len = 0;
+            free(ctx->handshake_properties.client.ech.retry_configs);
+            ctx->handshake_properties.client.ech.retry_configs = NULL;
+        }
+    }
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
