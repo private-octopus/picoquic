@@ -78,21 +78,6 @@
 #define PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1 0x39
 #define PICOQUIC_TRANSPORT_PARAMETERS_MAX_SIZE 2048
 
-typedef struct st_picoquic_tls_ctx_t {
-    ptls_t* tls;
-    picoquic_cnx_t* cnx;
-    int client_mode;
-    ptls_raw_extension_t ext[2];
-    ptls_handshake_properties_t handshake_properties;
-    ptls_iovec_t* alpn_vec;
-    size_t alpn_vec_size;
-    size_t alpn_count;
-    uint8_t* ext_data;
-    size_t ext_data_size;
-    uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
-    uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
-} picoquic_tls_ctx_t;
-
 struct st_picoquic_log_event_t {
     ptls_log_event_t super;
     FILE* fp;
@@ -106,11 +91,12 @@ struct st_picoquic_log_event_t {
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1] = { 0 };
 
-#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
-ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
+ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1] = { 0 };
+ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2] = { 0 };
+ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1] = { 0 };
+ptls_hpke_kem_t* picoquic_hpke_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1] = { 0 };
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
 picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
 picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
@@ -120,6 +106,9 @@ picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NUL
 picoquic_explain_crypto_error_t picoquic_explain_crypto_error_fn = NULL;
 picoquic_clear_crypto_errors_t picoquic_clear_crypto_errors_fn = NULL;
 picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
+picoquic_keyex_from_key_file_t picoquic_keyex_from_key_file_fn = NULL;
+picoquic_keyex_dispose_t picoquic_keyex_dispose_fn = NULL;
+
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -272,6 +261,33 @@ void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key
     }
 }
 
+/* registration of HPKE cipher suites */
+void picoquic_register_hpke_cipher_suite(ptls_hpke_cipher_suite_t* hpke_cipher_suite)
+{
+    for (int i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX; i++) {
+        if (picoquic_hpke_cipher_suites[i] == NULL ||
+            (picoquic_hpke_cipher_suites[i]->id.aead == hpke_cipher_suite->id.aead &&
+                picoquic_hpke_cipher_suites[i]->id.kdf == hpke_cipher_suite->id.kdf)) {
+            /* Replace the lower priority provider if present! */
+            picoquic_hpke_cipher_suites[i] = hpke_cipher_suite;
+            break;
+        }
+    }
+}
+
+/* Registration of HPKE KEM */
+void picoquic_register_hpke_kem(ptls_hpke_kem_t* hpke_kem)
+{
+    for (int i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX; i++) {
+        if (picoquic_hpke_kems[i] == NULL ||
+            picoquic_hpke_kems[i]->id == hpke_kem->id) {
+            /* Replace the lower priority provider if present! */
+            picoquic_hpke_kems[i] = hpke_kem;
+            break;
+        }
+    }
+}
+
 void picoquic_register_tls_key_provider_fn(
     picoquic_set_private_key_from_file_t set_key_from_key_file_fn,
     picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
@@ -302,6 +318,13 @@ void picoquic_register_explain_crypto_error_fn(picoquic_explain_crypto_error_t e
 void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t crypto_random_provider_fn)
 {
     picoquic_crypto_random_provider_fn = crypto_random_provider_fn;
+}
+
+void picoquic_register_keyex_from_key_file_fn(picoquic_keyex_from_key_file_t keyex_from_key_file_fn,
+    picoquic_keyex_dispose_t keyex_dispose_fn)
+{
+    picoquic_keyex_from_key_file_fn = keyex_from_key_file_fn;
+    picoquic_keyex_dispose_fn = keyex_dispose_fn;
 }
 
 /* List of cipher suites that are suitable for this context */
@@ -549,7 +572,7 @@ int picoquic_set_private_key_from_file(picoquic_quic_t* quic, char const* file_n
     return set_private_key_from_file(file_name, quic->tls_master_ctx);
 }
 
-/* Clear certificate objects allocated by the crypto stack for a certficate
+/* Clear certificate objects allocated by the crypto stack for a certificate
 */
 void picoquic_dispose_sign_certificate(ptls_context_t* ctx)
 {
@@ -1875,7 +1898,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
             ctx->tls = ptls_new((ptls_context_t*)quic->tls_master_ctx,
                 (ctx->client_mode) ? 0 : 1);
             if (ctx->tls == NULL) {
-                picoquic_tlscontext_free(ctx);
+                picoquic_tlscontext_free(ctx, cnx->client_mode);
                 ctx = NULL;
                 ret = PICOQUIC_ERROR_MEMORY;
             }
@@ -1894,7 +1917,7 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
     }
 
     if (cnx->tls_ctx != NULL) {
-        picoquic_tlscontext_free(cnx->tls_ctx);
+        picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
     }
 
     cnx->tls_ctx = (void*)ctx;
@@ -1988,7 +2011,7 @@ void picoquic_tlscontext_remove_ticket(picoquic_cnx_t* cnx)
     ctx->handshake_properties.client.session_ticket.len = 0;
 }
 
-void picoquic_tlscontext_free(void* vctx)
+void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
 {
     picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)vctx;
 
@@ -2000,6 +2023,22 @@ void picoquic_tlscontext_free(void* vctx)
         free(ctx->alpn_vec);
     }
 
+    if (client_mode) {
+        if (ctx->handshake_properties.client.ech.configs.base != NULL) {
+            free(ctx->handshake_properties.client.ech.configs.base);
+        }
+        ctx->handshake_properties.client.ech.configs.base = NULL;
+        ctx->handshake_properties.client.ech.configs.len = 0;
+        if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
+            if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
+                free(ctx->handshake_properties.client.ech.retry_configs->base);
+            }
+            ctx->handshake_properties.client.ech.retry_configs->base = NULL;
+            ctx->handshake_properties.client.ech.retry_configs->len = 0;
+            free(ctx->handshake_properties.client.ech.retry_configs);
+            ctx->handshake_properties.client.ech.retry_configs = NULL;
+        }
+    }
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;

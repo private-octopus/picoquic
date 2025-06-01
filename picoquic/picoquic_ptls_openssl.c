@@ -294,6 +294,70 @@ void picoquic_openssl_clear_crypto_errors()
     ERR_clear_error();
 }
 
+/* Set the certificate signature function and context using openSSL
+*/
+int openssl_keyex_from_key_file(ptls_key_exchange_context_t** p_keyex, const char* keypem)
+{
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+    *p_keyex = NULL;
+    if (bio == NULL) {
+        ret = -1;
+    }
+    else {
+        EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = ptls_openssl_create_key_exchange(p_keyex, pkey);
+            assert(ret == 0 && "failed to setup private key");
+            EVP_PKEY_free(pkey);
+        }
+        BIO_free(bio);
+    }
+    return ret;
+}
+
+void openssl_keyex_dispose(ptls_key_exchange_context_t* keyex)
+{
+    ptls_iovec_t dummy = ptls_iovec_init(NULL, 0);
+    keyex->on_exchange(&keyex, 1, NULL, dummy);
+}
+
+/* Declare HPKE ciphersuites available with OpenSSL backend
+ */
+
+ptls_hpke_cipher_suite_t picoquic_openssl_hpke_aes128gcmsha256 = {
+    .id = {.kdf = PTLS_HPKE_HKDF_SHA256, .aead = PTLS_HPKE_AEAD_AES_128_GCM},
+    .name = "HKDF-SHA256/AES-128-GCM",
+    .hash = &ptls_openssl_sha256 /* sha256 */,
+    .aead = &ptls_openssl_aes128gcm /* aes128gcm */ };
+ptls_hpke_cipher_suite_t picoquic_openssl_hpke_aes128gcmsha512 = {
+    .id = {.kdf = PTLS_HPKE_HKDF_SHA512, .aead = PTLS_HPKE_AEAD_AES_128_GCM},
+    .name = "HKDF-SHA512/AES-128-GCM",
+    .hash = &ptls_openssl_sha512 /*  sha512 */,
+    .aead = &ptls_openssl_aes128gcm /* aes128gcm */ };
+ptls_hpke_cipher_suite_t picoquic_openssl_hpke_aes256gcmsha384 = {
+    .id = {.kdf = PTLS_HPKE_HKDF_SHA384, .aead = PTLS_HPKE_AEAD_AES_256_GCM},
+    .name = "HKDF-SHA384/AES-256-GCM",
+    .hash = &ptls_openssl_sha384 /* sha384 */,
+    .aead = &ptls_openssl_aes256gcm /*  aes256gcm */ };
+
+#ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
+ptls_hpke_cipher_suite_t picoquic_openssl_hpke_chacha20poly1305sha256 = {
+    .id = {.kdf = PTLS_HPKE_HKDF_SHA256, .aead = PTLS_HPKE_AEAD_CHACHA20POLY1305},
+    .name = "HKDF-SHA256/ChaCha20Poly1305",
+    .hash = &ptls_openssl_sha256 /* sha256 */,
+    .aead = &ptls_openssl_chacha20poly1305 /* chacha20poly1305 */ };
+#endif
+
+/* Declare HPKE KEM available with OpenSSL backend
+ */
+ptls_hpke_kem_t picoquic_openssl_hpke_kem_p256sha256 = { PTLS_HPKE_KEM_P256_SHA256,  &ptls_openssl_secp256r1 /* secp256r1 */,  &ptls_openssl_sha256 /* sha256 */ };
+ptls_hpke_kem_t picoquic_openssl_hpke_kem_p384sha384 = { PTLS_HPKE_KEM_P384_SHA384,  &ptls_openssl_secp384r1 /* secp384r1 */,  &ptls_openssl_sha384 /* sha384  */ };
+ptls_hpke_kem_t picoquic_openssl_hpke_kem_x25519sha256 = { PTLS_HPKE_KEM_X25519_SHA256,  &ptls_openssl_x25519 /* x25519 */,  &ptls_openssl_sha256 /* sha256 */ };
+
 /* Register the openssl functions
  */
 void picoquic_ptls_openssl_load(int unload)
@@ -309,9 +373,17 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1);
+        picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_aes128gcmsha256);
+        picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_aes128gcmsha512);
+        picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_aes256gcmsha384);
+        picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_p256sha256);
+        picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_p384sha384);
+
 #ifdef PTLS_OPENSSL_HAVE_CHACHA20_POLY1305
         picoquic_register_ciphersuite(&ptls_openssl_chacha20poly1305sha256, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
+        picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_chacha20poly1305sha256);
+        picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_x25519sha256);
 #endif
         picoquic_register_tls_key_provider_fn(
             set_openssl_private_key_from_key_file,
@@ -323,6 +395,8 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_explain_crypto_error_fn(picoquic_open_ssl_explain_crypto_error,
             picoquic_openssl_clear_crypto_errors);
         picoquic_register_crypto_random_provider_fn(ptls_openssl_random_bytes);
+        picoquic_register_keyex_from_key_file_fn(openssl_keyex_from_key_file, openssl_keyex_dispose);
+
     }
 }
 #endif

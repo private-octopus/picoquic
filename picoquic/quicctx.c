@@ -956,6 +956,9 @@ void picoquic_free(picoquic_quic_t* quic)
             picoquic_delete_cnx(quic->cnx_list);
         }
 
+        /* Delete ECH context if it was created */
+        picoquic_release_quic_ech_ctx(quic);
+
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
@@ -4679,7 +4682,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* Reset the TLS context, Re-initialize the tls connection */
     if (cnx->tls_ctx != NULL) {
-        picoquic_tlscontext_free(cnx->tls_ctx);
+        picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
         cnx->tls_ctx = NULL;
     }
 
@@ -4847,7 +4850,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         picosplay_empty_tree(&cnx->stream_tree);
 
         if (cnx->tls_ctx != NULL) {
-            picoquic_tlscontext_free(cnx->tls_ctx);
+            picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
             cnx->tls_ctx = NULL;
         }
 
