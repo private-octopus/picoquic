@@ -60,13 +60,23 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
 
+int picoquic_ech_parse_public_key(ptls_iovec_t public_key_asn1,
+    uint16_t* group_id,
+    ptls_iovec_t* public_key_bits);
+int picoquic_ech_get_kem_from_curve(ptls_hpke_kem_t** kem, uint16_t group_id);
+int picoquic_ech_get_ciphers_from_kem(ptls_hpke_cipher_suite_t** cipher_vec, size_t cipher_vec_nb_max, uint16_t kem_id);
+int picoquic_ech_create_config_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name);
+
 int ech_rr_test()
 {
     int ret = 0;
     uint8_t config_id = 1;
+    ptls_hpke_kem_t* kem = NULL;
     ptls_hpke_kem_t test_hpke_kem_p256sha256 = { PTLS_HPKE_KEM_P256_SHA256, &ptls_minicrypto_secp256r1, &ptls_minicrypto_sha256 };
     char test_server_pub_key_file[512];
+#if 0
     ptls_iovec_t public_key = ptls_iovec_init(NULL, 0);
+#endif
     ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
     size_t pub_key_objects = 0;
     ptls_hpke_cipher_suite_t test_hpke_aes128gcmsha256 = {
@@ -75,7 +85,10 @@ int ech_rr_test()
         .hash = &ptls_minicrypto_sha256,
         .aead = &ptls_minicrypto_aes128gcm
     };
+#if 0
     ptls_hpke_cipher_suite_t* test_hpke_cipher_vec[2] = { &test_hpke_aes128gcmsha256, NULL };
+    ptls_hpke_cipher_suite_t* cipher_vec[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
+#endif
     const char* public_name = "test.example.com";
     uint8_t max_name_length = 128;
     ptls_buffer_t rr_buf;
@@ -85,20 +98,35 @@ int ech_rr_test()
     ptls_buffer_init(&rr_buf, (void*)smallbuf, sizeof(smallbuf));
     ptls_buffer_init(&config_buf, (void*)smallbuf2, sizeof(smallbuf2));
 
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
     ret = picoquic_get_input_path(test_server_pub_key_file, sizeof(test_server_pub_key_file), picoquic_solution_dir,
         PICOQUIC_TEST_ECH_PUB_KEY);
     if (ret != 0) {
         DBG_PRINTF("Cannot find pub_key file in <%s>, err: %d (0x%x)", picoquic_solution_dir, ret, ret);
     }
     else {
+#if 0
+        ret = ptls_load_pem_objects("public-256.pem", "PUBLIC KEY", &public_key_asn1, 1, &pub_key_objects);
+#else
         ret = ptls_load_pem_objects(test_server_pub_key_file, "PUBLIC KEY", &public_key_asn1, 1, &pub_key_objects);
+#endif
         if (ret != 0) {
             DBG_PRINTF("Cannot load pubkey from <%s>, err: %x", test_server_pub_key_file, ret);
         }
         else 
         {
-            public_key.base = public_key_asn1.base + 26;
-            public_key.len = public_key_asn1.len - 26;
+#if 1
+            ret = picoquic_ech_create_config_from_binary(&rr_buf, public_key_asn1, public_name);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
+            }
+#else
+            uint16_t group_id = 0;
+            ret = picoquic_ech_parse_public_key(public_key_asn1, &group_id, &public_key);
+#if 0
             size_t p_out = 0;
             while (p_out < public_key.len) {
                 for (int i = 0; i < 15 && p_out < public_key.len; i++, p_out++) {
@@ -106,17 +134,35 @@ int ech_rr_test()
                 }
                 printf("\n");
             }
+            /* Print ASN1 key for debugging */
+            printf("ASN1 pub key\n");
+            p_out = 0;
+            while (p_out < public_key_asn1.len) {
+                for (int i = 0; i < 15 && p_out < public_key_asn1.len; i++, p_out++) {
+                    printf(":%02x", public_key_asn1.base[p_out]);
+                }
+                printf("\n");
+            }
+#endif
+            if ((ret = picoquic_ech_get_kem_from_curve(&kem, group_id)) != 0) {
+                DBG_PRINTF("Could not find KEM for group = 0x%04x", group_id);
+            }
+            else if ((ret = picoquic_ech_get_ciphers_from_kem(cipher_vec, PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1, kem->id)) != 0) {
+                DBG_PRINTF("Could not find Ciphers for kem = 0x%04x", kem->id);
+            }
+#endif
+
         }
     }
-
+#if 0
     if (ret == 0) {
-        ret = ptls_ech_encode_config(&rr_buf, config_id, &test_hpke_kem_p256sha256, public_key,
-            &test_hpke_cipher_vec[0], max_name_length, public_name);
+        ret = ptls_ech_encode_config(&rr_buf, config_id, kem, public_key,
+            cipher_vec, max_name_length, public_name);
         if (ret != 0) {
             DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
         }
     }
-
+#endif
     /* save an RR representation in ech_rr.txt */
     if (ret == 0) {
         int last_err;
