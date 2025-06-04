@@ -34,6 +34,7 @@
 #else
 #include <picotls/pembase64.h>
 #include <picotls/minicrypto.h>
+#include <picotls/asn1.h>
 #endif
 #include <stddef.h>
 #include <stdlib.h>
@@ -692,7 +693,7 @@ int picoquic_ech_encode_config(
     return ret;
 }
 
-int picoquic_ech_create_config_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
+int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
 {
     int ret = 0;
     ptls_iovec_t public_key_bits = ptls_iovec_init(NULL, 0);
@@ -725,7 +726,27 @@ int picoquic_ech_create_config_from_binary(ptls_buffer_t* config_buf, ptls_iovec
     return ret;
 }
 
-int picoquic_ech_create_config_from_public_key(ptls_buffer_t* config_buf, char const * public_key_file, char const* public_name)
+int picoquic_ech_create_config_from_rr(uint8_t ** config, size_t * config_len, const ptls_buffer_t* rr_buf)
+{
+    int ret = 0;
+    size_t bin_size = rr_buf->off + 2;
+    uint8_t* bin_val = (uint8_t*)malloc(bin_size);
+    if (bin_val == NULL) {
+        DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
+        ret = -1;
+    }
+    else {
+        bin_val[0] = (uint8_t)(((rr_buf->off) >> 8) & 0xff);
+        bin_val[1] = (uint8_t)(rr_buf->off & 0xff);
+        memcpy(bin_val + 2, rr_buf->base, rr_buf->off);
+        *config = bin_val;
+        *config_len = bin_size;
+    }
+    return ret;
+}
+
+
+int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const * public_key_file, char const* public_name)
 {
     int ret = 0;
     ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
@@ -738,15 +759,166 @@ int picoquic_ech_create_config_from_public_key(ptls_buffer_t* config_buf, char c
     }
     else
     {
-        ret = picoquic_ech_create_config_from_binary(config_buf, public_key_asn1, public_name);
+        ptls_buffer_t rr_buf;
+        ptls_buffer_init(&rr_buf, "", 0);
+        ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name);
+        if (ret == 0) {
+            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
+        }
+        ptls_buffer_dispose(&rr_buf);
     }
     return ret;
 }
 
-int picoquic_ech_create_config_from_cert(ptls_buffer_t* config_buf, char const* cert_file, char const* public_name)
+/*
+* In therory, all the information required to set up ECH is present in the
+* certificate used by the public server. The public key certainly is there.
+* 
+* The certificate has a rather simple structure (see RFC 5280):
+* 
+*  Certificate  ::=  SEQUENCE  {
+*        tbsCertificate       TBSCertificate,
+*        signatureAlgorithm   AlgorithmIdentifier,
+*        signatureValue       BIT STRING  }
+*
+*   TBSCertificate  ::=  SEQUENCE  {
+*        version         [0]  EXPLICIT Version DEFAULT v1,
+*        serialNumber         CertificateSerialNumber,
+*        signature            AlgorithmIdentifier,
+*        issuer               Name,
+*        validity             Validity,
+*        subject              Name,
+*        subjectPublicKeyInfo SubjectPublicKeyInfo,
+*        issuerUniqueID  [1]  IMPLICIT UniqueIdentifier OPTIONAL,
+*                             -- If present, version MUST be v2 or v3
+*        subjectUniqueID [2]  IMPLICIT UniqueIdentifier OPTIONAL,
+*                             -- If present, version MUST be v2 or v3
+*        extensions      [3]  EXPLICIT Extensions OPTIONAL
+*                             -- If present, version MUST be v3
+*        }
+* 
+* We need a simple parser that:
+* - opens the outside sequence,
+* - opens its first element, the TBSCertificate
+* - skip the elements version [0], serialNumber (INTEGER), 
+*   signature (AlgorithmIdentifier, SEQUENCE),
+*   issuer (Name, CHOICE, RdnSequence SEQUENCE OF),
+*   validity (SEQUENCE)
+*   subject (Name, CHOICE, RdnSequence SEQUENCE OF).
+* - return the bytes from start (Type) of subjectPublicKeyInfo(SEQUENCE)
+*   to end of that element.
+*/
+int picoquic_ech_get_public_key_from_cert(ptls_iovec_t cert, ptls_iovec_t* public_key_asn1,
+    ptls_minicrypto_log_ctx_t* log_ctx)
 {
-    int ret = -1;
-    /* Read the public key from a file. */
-    /* Encode the key config */
+    int ret = 0;
+    uint8_t* bytes = cert.base;
+    size_t bytes_max = cert.len;
+    size_t byte_index = 0;
+    uint32_t seq0_length = 0;
+    size_t last_byte0;
+    uint32_t seq1_length = 0;
+    size_t last_byte1 = 0;
+    size_t last_byte2 = 0;
+    uint32_t skipped_length;
+    size_t pubkey_info_index = 0;
+    int indefinite_length;
+    const uint8_t skipped_types[] = {
+        0xa0, /* version [0] */
+        0x02, /* serialNumber (INTEGER) */
+        0x30, /* AlgorithmIdentifier, SEQUENCE) */
+        0x30, /* issuer (Name, CHOICE, RdnSequence SEQUENCE OF) */
+        0x30, /* validity (SEQUENCE) */
+        0x30, /* subject (Name, CHOICE, RdnSequence SEQUENCE OF). */
+    };
+    /* open the outside sequence */
+
+    /* start with sequence */
+    byte_index = ptls_asn1_get_expected_type_and_length(bytes, bytes_max, byte_index, 0x30, &seq0_length, NULL, &last_byte0,
+        &ret, log_ctx);
+    if (ret == 0 && bytes_max != last_byte0) {
+        byte_index = ptls_asn1_error_message("Length larger than message", bytes_max, byte_index, 0, log_ctx);
+        ret = PTLS_ERROR_BER_EXCESSIVE_LENGTH;
+    }
+    if (ret == 0) {
+        byte_index = ptls_asn1_get_expected_type_and_length(bytes, seq0_length, byte_index, 0x30, &seq1_length, NULL, &last_byte1,
+            &ret, log_ctx);
+    }
+    /* get the first component, TBSCertificate SEQUENCE */
+    for (size_t i = 0; i < sizeof(skipped_types) && ret == 0; i++) {
+#if 0
+        if (skipped_types[i] == 0xff) {
+            int structure_bit;
+            int type_class;
+            uint32_t type_number;
+            uint32_t length;
+            size_t last_byte_x;
+            size_t type_length;
+            size_t length_length;
+
+            type_length = ptls_asn1_read_type(bytes + byte_index, last_byte1, &structure_bit, &type_class, &type_number,
+                &ret, 0, log_ctx);
+            if (ret == 0) {
+                byte_index += type_length;
+                length_length = ptls_asn1_read_length(bytes + byte_index, last_byte1, byte_index, &length, &indefinite_length,
+                    &last_byte_x, &ret, 0, log_ctx); 
+                if (ret == 0) {
+                    byte_index += length_length;
+                    byte_index += length;
+                }
+            }
+        }
+        else
+#endif
+        {
+            byte_index = ptls_asn1_get_expected_type_and_length(bytes, last_byte1, byte_index, skipped_types[i], &skipped_length,
+                &indefinite_length, &last_byte2,
+                &ret, log_ctx);
+            if (ret == 0) {
+                byte_index += skipped_length;
+            }
+        }
+    }
+    /* If all went well, this component is the public key info. */
+    if (ret == 0) {
+        pubkey_info_index = byte_index;
+        /* open embedded sequence */
+        byte_index = ptls_asn1_get_expected_type_and_length(bytes, last_byte1, byte_index, 0x30, &skipped_length, NULL, &last_byte2,
+            &ret, log_ctx);
+        if (ret == 0) {
+            public_key_asn1->base = bytes + pubkey_info_index;
+            public_key_asn1->len = byte_index + skipped_length - pubkey_info_index;
+        }
+    }
     return ret;
 }
+
+int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, char const* cert_file, char const* public_name)
+{
+    int ret = 0;
+    ptls_iovec_t cert_bytes = ptls_iovec_init(NULL, 0);
+    ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
+    size_t cert_objects = 0;
+    /* Read the cert from a file. */
+    if ((ret = ptls_load_pem_objects(cert_file, "CERTIFICATE", &cert_bytes, 1, &cert_objects)) != 0) {
+        DBG_PRINTF("Cannot read cert bytes from <%s>", cert_file);
+    }
+    /* Extract the Public Key Info */
+    if (ret == 0 && (ret = picoquic_ech_get_public_key_from_cert(cert_bytes, &public_key_asn1, NULL)) != 0) {
+        DBG_PRINTF("Cannot extract public key from cert bytes of <%s>, ret = %d (0x%x)", cert_file, ret, ret);
+    }
+    /* Obtain the configuration */
+    if (ret == 0){
+        ptls_buffer_t rr_buf;
+        ptls_buffer_init(&rr_buf, "", 0);
+        if ((ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name)) != 0) {
+            DBG_PRINTF("Cannot extract config from public key of <%s>, ret = %d (0x%x)", cert_file, ret, ret);
+        }
+        else {
+            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
+            ptls_buffer_dispose(&rr_buf);
+        }
+    }
+    return ret;
+}
+
