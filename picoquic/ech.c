@@ -848,30 +848,6 @@ int picoquic_ech_get_public_key_from_cert(ptls_iovec_t cert, ptls_iovec_t* publi
     }
     /* get the first component, TBSCertificate SEQUENCE */
     for (size_t i = 0; i < sizeof(skipped_types) && ret == 0; i++) {
-#if 0
-        if (skipped_types[i] == 0xff) {
-            int structure_bit;
-            int type_class;
-            uint32_t type_number;
-            uint32_t length;
-            size_t last_byte_x;
-            size_t type_length;
-            size_t length_length;
-
-            type_length = ptls_asn1_read_type(bytes + byte_index, last_byte1, &structure_bit, &type_class, &type_number,
-                &ret, 0, log_ctx);
-            if (ret == 0) {
-                byte_index += type_length;
-                length_length = ptls_asn1_read_length(bytes + byte_index, last_byte1, byte_index, &length, &indefinite_length,
-                    &last_byte_x, &ret, 0, log_ctx); 
-                if (ret == 0) {
-                    byte_index += length_length;
-                    byte_index += length;
-                }
-            }
-        }
-        else
-#endif
         {
             byte_index = ptls_asn1_get_expected_type_and_length(bytes, last_byte1, byte_index, skipped_types[i], &skipped_length,
                 &indefinite_length, &last_byte2,
@@ -918,8 +894,11 @@ int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, c
         }
         else {
             ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
-            ptls_buffer_dispose(&rr_buf);
         }
+        ptls_buffer_dispose(&rr_buf);
+    }
+    if (cert_bytes.base != NULL) {
+        free(cert_bytes.base);
     }
     return ret;
 }
