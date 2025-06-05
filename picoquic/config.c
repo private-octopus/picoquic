@@ -101,6 +101,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
 #endif
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
+    { picoquic_option_ECH, 'E' , "ech", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -442,6 +443,14 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_ECH: {
+        ret = config_set_string_param(&config->ech_key_file, params, nb_params, 0);
+        if (ret == 0) {
+            ret = config_set_string_param(&config->ech_config_file, params, nb_params, 1);
+        }
+        break;
+    }
+
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -899,6 +908,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_set_default_bdp_frame_option(quic, config->bdp_frame_option);
 
+        ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
+
         if (ret != 0) {
             /* Something went wrong */
             DBG_PRINTF("QUIC configuration fails, ret = %d (0x%x)", ret, ret);
@@ -994,6 +1005,14 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     if (config->root_trust_file != NULL)
     {
         free((void*)config->root_trust_file);
+    }
+    if (config->ech_key_file != NULL)
+    {
+        free((void*)config->ech_key_file);
+    }
+    if (config->ech_config_file != NULL)
+    {
+        free((void*)config->ech_config_file);
     }
     picoquic_config_init(config);
 }

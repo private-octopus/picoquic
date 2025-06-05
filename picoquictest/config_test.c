@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:h";
 #endif
 int config_option_letters_test()
 {
@@ -110,6 +110,8 @@ static picoquic_quic_config_t param1 = {
     0, /* unsigned int force_zero_share : 1; */
     0, /* unsigned int no_disk : 1; */
     0, /* unsigned int large_client_hello : 1; */
+    "ech_key.pem",
+    "ech_config.pem"
 };
 
 static char const* config_argv1[] = {
@@ -140,6 +142,7 @@ static char const* config_argv1[] = {
     "-0",
     "-i", "0N8C-000123",
     "-J", "2",
+    "-E", "ech_key.pem", "ech_config.pem",
     NULL
 };
 
@@ -197,7 +200,9 @@ static picoquic_quic_config_t param2 = {
     0x00000002, /* uint32_t desired_version; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
-    1 /* unsigned int large_client_hello : 1; */
+    1, /* unsigned int large_client_hello : 1; */
+    NULL,
+    NULL
 };
 
 static const char* config_argv2[] = {
@@ -408,6 +413,8 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
 #ifndef PICOQUIC_WITHOUT_SSLKEYLOG
     ret |= config_test_compare_int("sslkeylog", expected->enable_sslkeylog, actual->enable_sslkeylog);
 #endif
+    ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
+    ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
     
     return ret;
 }
@@ -601,6 +608,10 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     char test_server_key_file[512];
     char const* root_trust_file = NULL;
     char test_root_trust_file[512];
+    char const* root_ech_key_file = NULL;
+    char test_ech_key_file[512];
+    char const* root_ech_config_file = NULL;
+    char test_ech_config_file[512];
 
     if (ret == 0 && config->server_cert_file != NULL) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
@@ -625,7 +636,25 @@ int config_quic_test_one(picoquic_quic_config_t* config)
             PICOQUIC_TEST_FILE_CERT_STORE);
         if (ret == 0) {
             root_trust_file = config->root_trust_file;
-            config->root_trust_file = root_trust_file;
+            config->root_trust_file = test_root_trust_file;
+        }
+    }
+
+    if (ret == 0 && config->ech_key_file) {
+        ret = picoquic_get_input_path(test_ech_key_file, sizeof(test_ech_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_ECH_PRIVATE_KEY);
+        if (ret == 0) {
+            root_ech_key_file = config->ech_key_file;
+            config->ech_key_file = test_ech_key_file;
+        }
+    }
+
+    if (ret == 0 && config->ech_config_file) {
+        ret = picoquic_get_input_path(test_ech_config_file, sizeof(test_ech_config_file), picoquic_solution_dir,
+            PICOQUIC_TEST_ECH_CONFIG);
+        if (ret == 0) {
+            root_ech_config_file = config->ech_config_file;
+            config->ech_config_file = test_ech_config_file;
         }
     }
 
@@ -662,6 +691,12 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     }
     if (root_trust_file != NULL) {
         config->root_trust_file = root_trust_file;
+    }
+    if (root_ech_key_file != NULL) {
+        config->ech_key_file = root_ech_key_file;
+    }
+    if (root_ech_config_file != NULL) {
+        config->ech_config_file = root_ech_config_file;
     }
 
     return(ret);

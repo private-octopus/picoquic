@@ -354,6 +354,12 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
 #define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs\\ecdsa\\cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs\\ecdsa\\key.pem"
+#define PICOQUIC_TEST_ECH_PUB_KEY "certs\\ech\\public.pem"
+#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs\\ech\\private.pem"
+#define PICOQUIC_TEST_ECH_CONFIG "certs\\ech\\ech_config.txt"
+#define PICOQUIC_TEST_ECH_CERT "certs\\ech\\ech_cert.pem"
+#define PICOQUIC_TEST_ECH_RR_REF "certs\\ech\\ech_rr.txt"
+#define PICOQUIC_TEST_ECH_CONFIG_REF "certs\\ech\\ech_config.txt"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
@@ -361,6 +367,12 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
 #define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs/ecdsa/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs/ecdsa/key.pem"
+#define PICOQUIC_TEST_ECH_PUB_KEY "certs/ech/public.pem"
+#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs/ech/private.pem"
+#define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_config.txt"
+#define PICOQUIC_TEST_ECH_CERT "certs/ech/ech_cert.pem"
+#define PICOQUIC_TEST_ECH_RR_REF "certs/ech/ech_rr.txt"
+#define PICOQUIC_TEST_ECH_CONFIG_REF "certs/ech/ech_config.txt"
 #endif
 
  /* To set the solution directory for tests */

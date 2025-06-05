@@ -44,4 +44,5 @@ Picoquic options:
   -W bytes        Max value for CWIN. Default=UINT64_MAX
   -8              Enable SSLKEYLOG
   -J mode         provider (0), receiver (1) or both (2).
+  -E key config   ECH private key file, config file. Default= no ECH on server.
   -h              This help message
