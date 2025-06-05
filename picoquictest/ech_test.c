@@ -46,21 +46,6 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
  /* ech_rr_test:
  * Create an ech RR.
   */
-#ifdef _WINDOWS
-#define PICOQUIC_TEST_ECH_PUB_KEY "certs\\ech\\public.pem"
-#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs\\ech\\private.pem"
-#define PICOQUIC_TEST_ECH_CONFIG "certs\\ech\\ech_config.txt"
-#define PICOQUIC_TEST_ECH_CERT "certs\\ech\\ech_cert.pem"
-#define PICOQUIC_TEST_ECH_RR_REF "certs\\ech\\ech_rr.txt"
-#define PICOQUIC_TEST_ECH_CONFIG_REF "certs\\ech\\ech_config.txt"
-#else
-#define PICOQUIC_TEST_ECH_PUB_KEY "certs/ech/public.pem"
-#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs/ech/private.pem"
-#define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_config.txt"
-#define PICOQUIC_TEST_ECH_CERT "certs/ech/ech_cert.pem"
-#define PICOQUIC_TEST_ECH_RR_REF "certs/ech/ech_rr.txt"
-#define PICOQUIC_TEST_ECH_CONFIG_REF "certs/ech/ech_config.txt"
-#endif
 #define ECH_CONFIG_FILE_TXT "ech_config.txt"
 #define ECH_RR_FILE_TXT "ech_rr.txt"
 
@@ -162,11 +147,8 @@ int ech_rr_test()
     ptls_hpke_kem_t* kem = NULL;
     uint8_t max_name_length = 128;
     ptls_buffer_t rr_buf;
-    ptls_buffer_t config_buf;
     uint8_t smallbuf[256];
-    uint8_t smallbuf2[256];
     ptls_buffer_init(&rr_buf, (void*)smallbuf, sizeof(smallbuf));
-    ptls_buffer_init(&config_buf, (void*)smallbuf2, sizeof(smallbuf2));
 
     if (picoquic_hpke_kems[0] == NULL) {
         picoquic_tls_api_init();
@@ -309,6 +291,7 @@ int ech_e2e_test()
         else {
             DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
         }
+        ptls_buffer_dispose(&ech_config_buf);
     }
     if (ret == 0) {
         /* start the client connection, thus creating a TLS context */
