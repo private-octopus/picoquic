@@ -1912,6 +1912,9 @@ int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint6
                     ctx->handshake_properties.server.cookie.additional_data.base = NULL;
                     ctx->handshake_properties.server.cookie.additional_data.len = 0;
                 }
+                else {
+                    ctx->handshake_properties.client.ech.retry_configs = &ctx->retry_configs;
+                }
             }
         }
     }
@@ -2029,16 +2032,12 @@ void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
         }
         ctx->handshake_properties.client.ech.configs.base = NULL;
         ctx->handshake_properties.client.ech.configs.len = 0;
-        if (ctx->handshake_properties.client.ech.retry_configs != NULL) {
-            if (ctx->handshake_properties.client.ech.retry_configs->base != NULL) {
-                free(ctx->handshake_properties.client.ech.retry_configs->base);
-            }
-            ctx->handshake_properties.client.ech.retry_configs->base = NULL;
-            ctx->handshake_properties.client.ech.retry_configs->len = 0;
-            free(ctx->handshake_properties.client.ech.retry_configs);
-            ctx->handshake_properties.client.ech.retry_configs = NULL;
-        }
+        ctx->handshake_properties.client.ech.retry_configs = NULL;
     }
+    if (ctx->retry_configs.base != NULL) {
+        free(ctx->retry_configs.base);
+    }
+    ctx->retry_configs.len = 0;
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
