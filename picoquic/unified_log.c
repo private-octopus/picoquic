@@ -92,15 +92,18 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
 
 /* Log arrival or departure of an UDP datagram on a connection */
 void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+    uint64_t unique_path_id)
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length);
+            cnx->quic->text_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
+                unique_path_id);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length);
+            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length, 
+                unique_path_id);
         }
     }
 }

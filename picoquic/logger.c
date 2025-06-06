@@ -26,6 +26,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#endif
 #include <picotls.h>
 #include "picoquic_internal.h"
 #include "bytestream.h"
@@ -1398,7 +1403,7 @@ size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
     return byte_index;
 }
 
-size_t textlog_path_available_or_standby_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+size_t textlog_path_available_or_backup_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
     const uint8_t* bytes_end = bytes + bytes_max;
     const uint8_t* bytes0 = bytes;
@@ -1500,9 +1505,11 @@ size_t textlog_path_cid_blocked_frame(FILE* F, const uint8_t* bytes, size_t byte
     const uint8_t* bytes0 = bytes;
     uint64_t frame_id = 0;
     uint64_t path_id;
+    uint64_t next_sequence_number;
     size_t byte_index = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_end, &frame_id)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_end, &next_sequence_number)) == NULL) {
         /* log format error */
         fprintf(F, "    Malformed %s frame: ", textlog_frame_names(frame_id));
         /* log format error */
@@ -1516,9 +1523,9 @@ size_t textlog_path_cid_blocked_frame(FILE* F, const uint8_t* bytes, size_t byte
         byte_index = bytes_max;
     }
     else {
-        fprintf(F, "    %s, path_id: %" PRIu64 "\n",
+        fprintf(F, "    %s, path_id: %" PRIu64 ", next_sequence_number: %" PRIu64 "\n",
             textlog_frame_names(picoquic_frame_type_path_cid_blocked),
-            path_id);
+            path_id, next_sequence_number);
         byte_index = (bytes - bytes0);
     }
     return byte_index;
@@ -1753,7 +1760,7 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             break;
         case picoquic_frame_type_path_backup:
         case picoquic_frame_type_path_available:
-            byte_index += textlog_path_available_or_standby_frame(F, bytes + byte_index, length - byte_index);
+            byte_index += textlog_path_available_or_backup_frame(F, bytes + byte_index, length - byte_index);
             break;
         case picoquic_frame_type_max_path_id:
             byte_index += textlog_max_path_id_frame(F, bytes + byte_index, length - byte_index);
@@ -1868,7 +1875,7 @@ static void textlog_outgoing_segment(void* F_log, int log_cnxid, picoquic_cnx_t*
 
     ret = picoquic_parse_packet_header((cnx == NULL) ? NULL : cnx->quic, send_buffer, send_length,
         ((cnx == NULL || cnx->path[0] == NULL) ? (struct sockaddr *)&default_addr :
-        (struct sockaddr *)&cnx->path[0]->local_addr), &ph, &pcnx, 0);
+        (struct sockaddr *)&cnx->path[0]->first_tuple->local_addr), &ph, &pcnx, 0);
 
     ph.pn64 = sequence_number;
     ph.pn = (uint32_t)ph.pn64;
@@ -2286,10 +2293,12 @@ static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curr
 }
 
 static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+    uint64_t unique_path_id)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
+    UNREFERENCED_PARAMETER(unique_path_id);
 #endif
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_packet_address(cnx->quic->F_log,

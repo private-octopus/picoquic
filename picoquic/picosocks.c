@@ -452,13 +452,15 @@ void picoquic_socks_cmsg_parse(
                 }
             }
 #endif
+            else if ((cmsg->cmsg_type == IP_TOS
 #ifdef IP_RECVTOS
-            else if ((cmsg->cmsg_type == IP_TOS || cmsg->cmsg_type == IP_RECVTOS) && cmsg->cmsg_len > 0) {
+                || cmsg->cmsg_type == IP_RECVTOS
+#endif
+                ) && cmsg->cmsg_len > 0) {
                 if (received_ecn != NULL) {
                     *received_ecn = *((unsigned char*)CMSG_DATA(cmsg));
                 }
             }
-#endif
         }
         else if (cmsg->cmsg_level == IPPROTO_IPV6) {
 #ifdef IPV6_PKTINFO
@@ -655,8 +657,15 @@ void picoquic_socks_cmsg_format(
             }
 #else
             /* The IP_PKTINFO structure is not defined on BSD */
+            /* Some versions of freeBSD do not define IP_SENDSRCADDR, use IP_RECVDSTADDR instead. */
             struct in_addr* pktinfo = (struct in_addr*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-                &control_length, IPPROTO_IP, IP_SENDSRCADDR, sizeof(struct in_addr));
+                &control_length, IPPROTO_IP,
+#ifdef IP_SENDSRCADDR
+                IP_SENDSRCADDR
+#else
+                IP_RECVDSTADDR
+#endif
+                , sizeof(struct in_addr));
             if (pktinfo != NULL) {
                 pktinfo->s_addr = ((struct sockaddr_in*)addr_from)->sin_addr.s_addr;
             }
