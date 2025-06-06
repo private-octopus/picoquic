@@ -112,6 +112,7 @@ extern "C" {
         picoquic_cnx_t* cnx;
         int client_mode;
         ptls_raw_extension_t ext[2];
+        ptls_iovec_t retry_configs;
         ptls_handshake_properties_t handshake_properties;
         ptls_iovec_t* alpn_vec;
         size_t alpn_vec_size;

@@ -234,17 +234,26 @@ int ech_cert_test()
 * are returned.
  */
 
-int ech_e2e_test()
+typedef struct st_ech_e2e_spec_t {
+    int expect_success;
+    int expect_grease;
+} ech_e2e_spec_t;
+
+int ech_e2e_test_one(ech_e2e_spec_t * spec)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xec, 0x8e, 0x2e, 0, 0, 0, 0, 0}, 8 };
     ptls_buffer_t ech_config_buf = { 0 };
-
     char ech_test_key_file[512];
     char ech_test_config_file[512];
     int ret;
+
+    initial_cid.id[3] = (uint8_t)spec->expect_success;
+    initial_cid.id[4] = (uint8_t)spec->expect_grease;
+
+    ptls_buffer_init(&ech_config_buf, "", 0);
 
     /* Create a test context with delayed init */
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -281,9 +290,8 @@ int ech_e2e_test()
             DBG_PRINTF("Cannot configure quic client context for ECH, ret = %d (0x%x).", ret, ret);
         }
     }
-    if (ret == 0) {
+    if (ret == 0 && spec->expect_success) {
         /* Read the ECH config from the same file used for the server */
-        ptls_buffer_init(&ech_config_buf, "", 0);
         ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
         if (ret == 0) {
             picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
@@ -291,8 +299,8 @@ int ech_e2e_test()
         else {
             DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
         }
-        ptls_buffer_dispose(&ech_config_buf);
     }
+
     if (ret == 0) {
         /* start the client connection, thus creating a TLS context */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -308,9 +316,15 @@ int ech_e2e_test()
     }
 
     if (ret == 0) {
-        /* TODO: verify that ECH worked! */
-        if (!picoquic_is_ech_handshake(test_ctx->cnx_client)) {
-            DBG_PRINTF("%s", "ECH negotiation failed!");
+        if (spec->expect_success) {
+            /* TODO: verify that ECH worked! */
+            if (!picoquic_is_ech_handshake(test_ctx->cnx_client)) {
+                DBG_PRINTF("%s", "ECH negotiation failed!");
+                ret = -1;
+            }
+        }
+        else if (picoquic_is_ech_handshake(test_ctx->cnx_client)) {
+            DBG_PRINTF("%s", "ECH negotiation should have failed!");
             ret = -1;
         }
     }
@@ -323,4 +337,18 @@ int ech_e2e_test()
     }
 
     return ret;
+}
+
+int ech_e2e_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_success = 1;
+    return ech_e2e_test_one(&spec);
+}
+
+int ech_grease_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_grease = 1;
+    return ech_e2e_test_one(&spec);
 }

@@ -3216,6 +3216,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ech_grease) {
+            int ret = ech_grease_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ech_cert) {
             int ret = ech_cert_test();
 

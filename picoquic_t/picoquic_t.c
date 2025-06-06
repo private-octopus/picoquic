@@ -502,6 +502,7 @@ static const picoquic_test_def_t test_table[] = {
     { "get_tls_errors", get_tls_errors_test },
     { "ech_rr", ech_rr_test },
     { "ech_e2e", ech_e2e_test },
+    { "ech_grease", ech_grease_test },
     { "ech_cert", ech_cert_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
