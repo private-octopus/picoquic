@@ -138,6 +138,18 @@
     <ClCompile Include="pacing.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="siphash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="register_all_cc_algorithms.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="paths.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ech.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

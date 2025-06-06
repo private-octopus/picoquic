@@ -44,19 +44,21 @@ typedef struct picohash_table {
     picohash_item** hash_bin;
     size_t nb_bin;
     size_t count;
-    uint64_t (*picohash_hash)(const void*);
+    const uint8_t* hash_seed;
+    uint64_t (*picohash_hash)(const void*, const uint8_t*);
     int (*picohash_compare)(const void*, const void*);
     picohash_item* (*picohash_key_to_item)(const void*);
 } picohash_table;
 
 picohash_table* picohash_create(size_t nb_bin,
-    uint64_t (*picohash_hash)(const void*),
+    uint64_t (*picohash_hash)(const void*, const uint8_t*),
     int (*picohash_compute)(const void*, const void*));
 
 picohash_table* picohash_create_ex(size_t nb_bin,
-    uint64_t(*picohash_hash)(const void*),
+    uint64_t(*picohash_hash)(const void*, const uint8_t*),
     int (*picohash_compare)(const void*, const void*),
-    picohash_item* (*picohash_key_to_item)(const void*));
+    picohash_item* (*picohash_key_to_item)(const void*),
+    const uint8_t* hash_seed);
 
 picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key);
 
@@ -68,9 +70,9 @@ void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_t
 
 void picohash_delete(picohash_table* hash_table, int delete_key_too);
 
-uint64_t picohash_hash_mix(uint64_t hash, uint64_t h2);
+uint64_t picohash_bytes(const uint8_t* key, size_t length, const uint8_t* hash_seed);
 
-uint64_t picohash_bytes(const uint8_t* key, uint32_t length);
+uint64_t picohash_siphash(const uint8_t* bytes, size_t length, const uint8_t* hash_seed);
 
 #ifdef __cplusplus
 }

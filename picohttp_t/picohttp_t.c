@@ -110,7 +110,18 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_overflow", quicperf_overflow_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
-    { "cc_compete_d_cubic", cc_compete_d_cubic_test }
+    { "cc_compete_d_cubic", cc_compete_d_cubic_test },
+    { "cc_ns_asym", cc_ns_asym_test },
+    { "cc_ns_blackhole", cc_ns_blackhole_test },
+    { "cc_ns_drop_and_back", cc_ns_drop_and_back_test },
+    { "cc_ns_low_and_up", cc_ns_low_and_up_test },
+    { "cc_ns_wifi_fade", cc_ns_wifi_fade_test },
+    { "cc_ns_wifi_suspension", cc_ns_wifi_suspension_test },
+    { "cc_ns_wifi_bad_cubic", cc_ns_wifi_bad_cubic_test },
+    { "cc_ns_wifi_bad_bbr", cc_ns_wifi_bad_bbr_test },
+    { "cc_ns_varylink", cc_ns_varylink_test },
+    { "cc_ns_satellite", cc_ns_satellite_test },
+    { "cc_ns_media", cc_ns_media_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

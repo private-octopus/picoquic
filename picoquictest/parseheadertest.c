@@ -449,7 +449,7 @@ int parseheadertest()
             /* Remove old local CID from table and avoid leak. */
             picoquic_local_cnxid_list_t* local_cnxid_list = cnx_10->first_local_cnxid_list;
 
-            picoquic_delete_local_cnxid(cnx_10, cnx_10->path[0]->p_local_cnxid);
+            picoquic_delete_local_cnxid(cnx_10, cnx_10->path[0]->first_tuple->p_local_cnxid);
             if (local_cnxid_list->nb_local_cnxid != 0) {
                 DBG_PRINTF("Expected 0 cnxid left, got %d", local_cnxid_list->nb_local_cnxid);
             }
@@ -461,7 +461,7 @@ int parseheadertest()
                     ret = -1;
                 }
                 else {
-                    cnx_10->path[0]->p_local_cnxid = local_cnxid0;
+                    cnx_10->path[0]->first_tuple->p_local_cnxid = local_cnxid0;
                 }
             }
         }
@@ -519,13 +519,13 @@ int parseheadertest()
         memset(packet, 0xcc, sizeof(packet));
         /* Prepare the header inside the packet */
         if (i < 2) {
-            cnx_10->path[0]->p_remote_cnxid->cnx_id = picoquic_null_connection_id;
+            cnx_10->path[0]->first_tuple->p_remote_cnxid->cnx_id = picoquic_null_connection_id;
         }
         else {
-            cnx_10->path[0]->p_remote_cnxid->cnx_id = test_cnxid_r10;
+            cnx_10->path[0]->first_tuple->p_remote_cnxid->cnx_id = test_cnxid_r10;
         }
         header_length = picoquic_create_packet_header(cnx_10, test_entries[i].ph->ptype,
-            test_entries[i].ph->pn, cnx_10->path[0], 0, packet, &pn_offset, &pn_length);
+            test_entries[i].ph->pn, cnx_10->path[0], cnx_10->path[0]->first_tuple, 0, packet, &pn_offset, &pn_length);
         picoquic_update_payload_length(packet, pn_offset, pn_offset, pn_offset +
             test_entries[i].ph->payload_length);
         
@@ -692,7 +692,7 @@ int test_packet_encrypt_one(
             expected_header.dest_cnx_id = cnx_client->initial_cnxid;
         }
         else {
-            expected_header.dest_cnx_id = cnx_client->path[0]->p_remote_cnxid->cnx_id;
+            expected_header.dest_cnx_id = cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
         }
 
         if (packet->ptype == picoquic_packet_1rtt_protected) {
@@ -701,7 +701,7 @@ int test_packet_encrypt_one(
         }
         else {
             expected_header.vn = picoquic_supported_versions[cnx_client->version_index].version;
-            expected_header.srce_cnx_id = cnx_client->path[0]->p_local_cnxid->cnx_id;
+            expected_header.srce_cnx_id = cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id;
         }
 
         /* Decrypt the packet */
@@ -805,7 +805,7 @@ int packet_enc_dec_test()
             ret = -1;
         } else {
             /* Set the remote context ID for the client */
-            cnx_client->path[0]->p_remote_cnxid->cnx_id = cnx_server->path[0]->p_local_cnxid->cnx_id;
+            cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id = cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id;
         }
     }
 
@@ -830,7 +830,7 @@ int packet_enc_dec_test()
         cnx_server->crypto_context[1].pn_dec = picoquic_pn_enc_create_for_test(test_0rtt_secret, prefix_label);
 
         /* Use a null connection ID to trigger use of initial ID */
-        cnx_client->path[0]->p_remote_cnxid->cnx_id = picoquic_null_connection_id;
+        cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id = picoquic_null_connection_id;
 
         ret = test_packet_encrypt_one(
             (struct sockaddr *) &test_addr_c,
@@ -838,7 +838,7 @@ int packet_enc_dec_test()
 
 
         /* Set the remote context ID for the next test  */
-        cnx_client->path[0]->p_remote_cnxid->cnx_id = cnx_server->path[0]->p_local_cnxid->cnx_id;
+        cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id = cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id;
     }
 
     /* And try a 1 RTT packet */
@@ -1139,7 +1139,7 @@ static int header_length_test_one(header_length_case_t * hlc)
     if (ret == 0) {
         /* Compute the header length */
         header_length = picoquic_create_packet_header(cnx, hlc->ptype,
-            hlc->sequence, cnx->path[0], predicted_length, buffer, &pn_offset, &pn_length);
+            hlc->sequence, cnx->path[0], cnx->path[0]->first_tuple, predicted_length, buffer, &pn_offset, &pn_length);
         /* Check the results */
         if (header_length != predicted_length) {
             DBG_PRINTF("Error, predicted header length %zu, actual %zu", header_length, predicted_length);

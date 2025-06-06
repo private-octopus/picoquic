@@ -19,6 +19,7 @@
 #include "democlient.h"
 #include "quicwind.h"
 #include "autoqlog.h"
+#include "picoquic_cubic.h"
 
 #ifndef SOCKET_TYPE
 #define SOCKET_TYPE SOCKET
