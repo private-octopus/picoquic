@@ -239,6 +239,20 @@ typedef struct st_ech_e2e_spec_t {
     int expect_grease;
 } ech_e2e_spec_t;
 
+int ech_test_check_retry_config(picoquic_cnx_t* cnx,
+    uint8_t* config, size_t config_len)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    if (tls_ctx->retry_configs.base == NULL ||
+        tls_ctx->retry_configs.len != config_len ||
+        memcmp(tls_ctx->retry_configs.base, config, config_len) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 int ech_e2e_test_one(ech_e2e_spec_t * spec)
 {
     uint64_t simulated_time = 0;
@@ -290,10 +304,13 @@ int ech_e2e_test_one(ech_e2e_spec_t * spec)
             DBG_PRINTF("Cannot configure quic client context for ECH, ret = %d (0x%x).", ret, ret);
         }
     }
-    if (ret == 0 && spec->expect_success) {
+    if (ret == 0) {
         /* Read the ECH config from the same file used for the server */
         ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
-        if (ret == 0) {
+    }
+
+    if (ret == 0) {
+        if (spec->expect_success) {
             picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
         }
         else {
@@ -325,6 +342,10 @@ int ech_e2e_test_one(ech_e2e_spec_t * spec)
         }
         else if (picoquic_is_ech_handshake(test_ctx->cnx_client)) {
             DBG_PRINTF("%s", "ECH negotiation should have failed!");
+            ret = -1;
+        }
+        else if (ech_test_check_retry_config(test_ctx->cnx_client,
+            ech_config_buf.base, ech_config_buf.off) != 0) {
             ret = -1;
         }
     }
