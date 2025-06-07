@@ -106,7 +106,7 @@ int picoquic_setup_initial_master_secret(
     picoquic_connection_id_t initial_cnxid,
     uint8_t * master_secret);
 
-static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel);
+int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel);
 
 int picoquic_setup_initial_secrets(
     ptls_cipher_suite_t * cipher,

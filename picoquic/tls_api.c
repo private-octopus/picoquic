@@ -1421,7 +1421,7 @@ static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_
     return ret;
 }
 
-static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel)
+int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel)
 {
     int ret = 0;
     ptls_iovec_t salt;
@@ -1435,7 +1435,7 @@ static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_m
     picoquic_crypto_random(quic, &rand_bytes_header, rand_bytes_length);
     
     ptls_cipher_suite_t* cipher_head = picoquic_get_cipher_suite_by_id(channel->header_protection_algorithm, quic->use_low_memory);
-    ret = picoquic_setup_multicast_secret(cipher_head, salt, &rand_bytes_header, rand_bytes_length, &channel->header_secret.secret);
+    ret = picoquic_setup_multicast_secret(cipher_head, salt, rand_bytes_header, rand_bytes_length, channel->header_secret.secret);
    
     if (ret != 0) {
         return ret;
@@ -1451,7 +1451,7 @@ static int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_m
     picoquic_crypto_random(quic, rand_bytes_aead, rand_bytes_length);
 
     ptls_cipher_suite_t* cipher_aead = picoquic_get_cipher_suite_by_id(channel->aead_algorithm, quic->use_low_memory);
-    ret = picoquic_setup_master_secret_mc(cipher_aead, salt, &rand_bytes_aead, rand_bytes_length, channel->aead_secret.secret);
+    ret = picoquic_setup_multicast_secret(cipher_aead, salt, rand_bytes_aead, rand_bytes_length, channel->aead_secret.secret);
 
     if (ret != 0) {
         return ret;

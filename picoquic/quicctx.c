@@ -890,29 +890,56 @@ int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic,
     return 0;
 }
 
-int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, uint8_t* group_ipv4[4], uint16_t port_ipv4, uint8_t* group_ipv6[16], uint16_t port_ipv6) {
-    if (quic == NULL || max_clients > 0 || !((group_ipv4 != NULL && port_ipv4 != NULL) || (group_ipv6 != NULL && port_ipv6 != NULL))) {
-        fprintf(stderr, "could not create multicast channel: invalid parameters");
+static void picoquic_create_random_mc_channel_id(picoquic_quic_t* quic, picoquic_multicast_channel_id_t * channel_id, uint8_t id_length)
+{
+    if (id_length > 0) {
+        picoquic_crypto_random(quic, channel_id->id, id_length);
+    }
+    if (id_length < sizeof(channel_id->id)) {
+        memset(channel_id->id + id_length, 0, sizeof(channel_id->id) - id_length);
+    }
+    channel_id->id_len = id_length;
+}
+
+int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, struct sockaddr_storage* group_ipv4, struct sockaddr_storage* group_ipv6) {
+    if (quic == NULL || max_clients <= 0 || (group_ipv4 == NULL && group_ipv6 == NULL)) {
+        fprintf(stderr, "could not create multicast channel: invalid parameters\n");
         return -1;
     }
 
-    if (group_ipv4 == NULL && port_ipv4 == NULL && group_ipv6 != NULL && port_ipv6 != NULL) {
-        fprintf(stderr, "could not create multicast channel: ipv6 not supported yet");
+    if (group_ipv4 == NULL && group_ipv6 != NULL) {
+        fprintf(stderr, "could not create multicast channel: ipv6 not supported yet\n");
         return -1;
     }
 
     picoquic_multicast_channel_t* new_channel = malloc(sizeof(picoquic_multicast_channel_t));
     if (new_channel == NULL) {
-        fprintf(stderr, "could not create multicast channel: malloc failed");
+        fprintf(stderr, "could not create multicast channel: malloc failed\n");
         return -1;
+    }
+
+    // alloc space for one new pointer in quic->mc_channels
+    picoquic_multicast_channel_t ** new_channel_list = (picoquic_multicast_channel_t **)malloc((quic->nb_mc_channels + 1) * sizeof(picoquic_multicast_channel_t *));
+
+    if (new_channel_list != NULL)
+    {
+        if (quic->mc_channels != NULL)
+        {
+            memset (new_channel_list, 0, sizeof(picoquic_multicast_channel_t*));
+            if (quic->nb_mc_channels > 0)
+            {
+                memcpy(new_channel_list, quic->mc_channels, quic->nb_mc_channels * sizeof(picoquic_multicast_channel_t *));
+            }
+            free(quic->mc_channels);
+        }
+        quic->mc_channels = new_channel_list;
     }
 
     picoquic_create_random_mc_channel_id(quic, &new_channel->channel_id, quic->local_cnxid_length);
 
     // Only supports ipv4 channels for now
     new_channel->type = picoquic_mc_channel_type_ipv4;
-    memcpy(new_channel->group_ip_addr, group_ipv4, 4);
-    memcpy(new_channel->port, port_ipv4, 2);
+    new_channel->group_ip = *group_ipv4;
 
     // TODO MC: Make configurable
     new_channel->header_protection_algorithm = PICOQUIC_AES_256_GCM_SHA384;
@@ -934,17 +961,8 @@ int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, ui
 
     quic->mc_channels[quic->nb_mc_channels] = new_channel;
     quic->nb_mc_channels++;
-}
 
-static void picoquic_create_random_mc_channel_id(picoquic_quic_t* quic, picoquic_multicast_channel_id_t * channel_id, uint8_t id_length)
-{
-    if (id_length > 0) {
-        picoquic_crypto_random(quic, channel_id->id, id_length);
-    }
-    if (id_length < sizeof(channel_id->id)) {
-        memset(channel_id->id + id_length, 0, sizeof(channel_id->id) - id_length);
-    }
-    channel_id->id_len = id_length;
+    return 0;
 }
 
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)

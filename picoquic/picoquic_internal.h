@@ -614,8 +614,7 @@ typedef struct st_picoquic_multicast_channel_t {
     picoquic_multicast_channel_id_t channel_id;
     void* mc_tls_ctx; // CHECK MC: Maybe not even needed?
     picoquic_mc_channel_type_enum type;
-    uint8_t group_ip_addr[16];
-    uint16_t port;
+    struct sockaddr_storage group_ip;
     uint16_t header_protection_algorithm;
     uint16_t aead_algorithm;
     picoquic_multicast_header_secret_t header_secret;

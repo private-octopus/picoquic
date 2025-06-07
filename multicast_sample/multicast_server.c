@@ -473,12 +473,15 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
         picoquic_enable_sslkeylog(quic, 1);
 
         picoquic_set_key_log_file_from_env(quic);
-
-        picoquic_create_multicast_channel(quic, PICOQUIC_MULTICAST_MAX_CLIENTS, PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT, NULL, NULL);
-
+        
         // Always accept enable multicast
         picoquic_set_default_multicast_option(quic, 1);
         printf("Accept enable multicast: %s.\n", (quic->default_multicast_option) ? "Yes" : "No");
+
+        struct sockaddr_storage group_ip;
+        picoquic_store_text_addr(&group_ip, PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT);
+
+        picoquic_create_multicast_channel(quic, PICOQUIC_MULTICAST_MAX_CLIENTS, &group_ip, NULL);
     }
 
     /* Wait for packets using the wait loop provided in the library.

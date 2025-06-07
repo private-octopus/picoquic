@@ -88,7 +88,6 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/logger.c
     picoquic/logwriter.c
     picoquic/loss_recovery.c
-    picoquic/multicast_channel.c
     picoquic/newreno.c
     picoquic/pacing.c
     picoquic/packet.c
