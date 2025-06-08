@@ -47,7 +47,6 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
  * Create an ech configuration list, i.e., the content of an HTTPS "ech=" parameter.
   */
 #define ECH_CONFIG_FILE_TXT "ech_config.txt"
-#define ECH_RR_FILE_TXT "ech_rr.txt"
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const* public_key_file, char const* public_name);
