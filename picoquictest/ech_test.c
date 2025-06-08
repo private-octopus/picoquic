@@ -43,21 +43,13 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 #include "picoquic_binlog.h"
 
- /* ech_rr_test:
- * Create an ech RR.
+ /* ech_config_test:
+ * Create an ech configuration list, i.e., the content of an HTTPS "ech=" parameter.
   */
 #define ECH_CONFIG_FILE_TXT "ech_config.txt"
 #define ECH_RR_FILE_TXT "ech_rr.txt"
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
-
-int picoquic_ech_parse_public_key(ptls_iovec_t public_key_asn1,
-    uint16_t* group_id,
-    ptls_iovec_t* public_key_bits);
-int picoquic_ech_get_kem_from_curve(ptls_hpke_kem_t** kem, uint16_t group_id);
-int picoquic_ech_get_ciphers_from_kem(ptls_hpke_cipher_suite_t** cipher_vec, size_t cipher_vec_nb_max, uint16_t kem_id); 
-int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name);
-int picoquic_ech_create_config_from_rr(uint8_t** config, size_t* config_len, const ptls_buffer_t* rr_buf);
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const* public_key_file, char const* public_name);
 int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, char const* cert_file, char const* public_name);
 
@@ -136,19 +128,17 @@ int ech_test_check_buf(ptls_iovec_t io_buf, char const* ref_file_name)
     return ret;
 }
 
-int ech_rr_test()
+int ech_config_test()
 {
     int ret = 0;
     char test_server_pub_key_file[512];
-    ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
     size_t pub_key_objects = 0;
     const char* public_name = "test.example.com";
     uint8_t config_id = 1;
     ptls_hpke_kem_t* kem = NULL;
     uint8_t max_name_length = 128;
-    ptls_buffer_t rr_buf;
-    uint8_t smallbuf[256];
-    ptls_buffer_init(&rr_buf, (void*)smallbuf, sizeof(smallbuf));
+    uint8_t* config = NULL;
+    size_t config_len = 0;
 
     if (picoquic_hpke_kems[0] == NULL) {
         picoquic_tls_api_init();
@@ -159,46 +149,22 @@ int ech_rr_test()
     if (ret != 0) {
         DBG_PRINTF("Cannot find pub_key file in <%s>, err: %d (0x%x)", picoquic_solution_dir, ret, ret);
     }
-    else {
-        ret = ptls_load_pem_objects(test_server_pub_key_file, "PUBLIC KEY", &public_key_asn1, 1, &pub_key_objects);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot load pubkey from <%s>, err: %x", test_server_pub_key_file, ret);
-        }
-        else 
-        {
-            ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
-            }
-        }
-    }
-    /* save an RR representation in ech_rr.txt */
-    if (ret == 0) {
-        ptls_iovec_t io_rr_buf = { .base = rr_buf.base, .len = rr_buf.off };
-        ret = ech_test_save_buf(io_rr_buf, ECH_RR_FILE_TXT);
-        if (ret == 0) {
-            ret = ech_test_check_buf(io_rr_buf, PICOQUIC_TEST_ECH_RR_REF);
-        }
+    else if ((ret = picoquic_ech_create_config_from_public_key(&config, &config_len, test_server_pub_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
     }
     /* Save a config representation in ech_config.txt */
     if (ret == 0) {
-        uint8_t* config = NULL;
-        size_t config_len = 0;
-        if ((ret = picoquic_ech_create_config_from_rr(&config, &config_len, &rr_buf)) != 0) {
-            DBG_PRINTF("Cannot create config from rr_buf size %zu", rr_buf.off);
-        }
-        else {
-            ptls_iovec_t io_config = { .base = config, .len = config_len };
+        ptls_iovec_t io_config = { .base = config, .len = config_len };
 
-            ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
-            if (ret == 0) {
-                ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
-            }
-            free(config);
+        ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
         }
     }
-    ptls_buffer_dispose(&rr_buf);
-    free(public_key_asn1.base);
+
+    if (config != NULL) {
+        free(config);
+    }
 
     return ret;
 }

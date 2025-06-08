@@ -681,21 +681,7 @@ static uint8_t ech_config_id_from_config(ptls_iovec_t public_key_bits, ptls_hpke
 * and a configuration ID computed as combination of these local
 * parameters.
 */
-int picoquic_ech_encode_config(
-    ptls_buffer_t* config_buf,
-    uint8_t config_id,
-    ptls_hpke_kem_t* kem,
-    ptls_iovec_t public_key,
-    ptls_hpke_cipher_suite_t** ciphers,
-    uint8_t max_name_length,
-    char const* public_name
-) {
-    int ret = ptls_ech_encode_config(config_buf, config_id, kem, public_key,
-        ciphers, max_name_length, public_name);
-    return ret;
-}
-
-int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
+static int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
 {
     int ret = 0;
     ptls_iovec_t public_key_bits = ptls_iovec_init(NULL, 0);
@@ -728,25 +714,30 @@ int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t p
     return ret;
 }
 
-int picoquic_ech_create_config_from_rr(uint8_t ** config, size_t * config_len, const ptls_buffer_t* rr_buf)
+int picoquic_ech_create_config_from_binary(uint8_t ** config, size_t * config_len, ptls_iovec_t public_key_asn1, char const* public_name)
 {
     int ret = 0;
-    size_t bin_size = rr_buf->off + 2;
-    uint8_t* bin_val = (uint8_t*)malloc(bin_size);
-    if (bin_val == NULL) {
-        DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
-        ret = -1;
+    ptls_buffer_t config_buf;
+    ptls_buffer_init(&config_buf, "", 0);
+
+    if ((ret = picoquic_ech_create_rr_from_binary(&config_buf, public_key_asn1, public_name)) == 0) {
+        size_t bin_size = config_buf.off + 2;
+        uint8_t* bin_val = (uint8_t*)malloc(bin_size);
+        if (bin_val == NULL) {
+            DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
+            ret = -1;
+        }
+        else {
+            bin_val[0] = (uint8_t)(((config_buf.off) >> 8) & 0xff);
+            bin_val[1] = (uint8_t)(config_buf.off & 0xff);
+            memcpy(bin_val + 2, config_buf.base, config_buf.off);
+            *config = bin_val;
+            *config_len = bin_size;
+        }
     }
-    else {
-        bin_val[0] = (uint8_t)(((rr_buf->off) >> 8) & 0xff);
-        bin_val[1] = (uint8_t)(rr_buf->off & 0xff);
-        memcpy(bin_val + 2, rr_buf->base, rr_buf->off);
-        *config = bin_val;
-        *config_len = bin_size;
-    }
+    ptls_buffer_dispose(&config_buf);
     return ret;
 }
-
 
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const * public_key_file, char const* public_name)
 {
@@ -761,19 +752,13 @@ int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_
     }
     else
     {
-        ptls_buffer_t rr_buf;
-        ptls_buffer_init(&rr_buf, "", 0);
-        ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name);
-        if (ret == 0) {
-            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
-        }
-        ptls_buffer_dispose(&rr_buf);
+        ret = picoquic_ech_create_config_from_binary(config, config_len, public_key_asn1, public_name);
     }
     return ret;
 }
 
 /*
-* In therory, all the information required to set up ECH is present in the
+* In theory, all the information required to set up ECH is present in the
 * certificate used by the public server. The public key certainly is there.
 * 
 * The certificate has a rather simple structure (see RFC 5280):
@@ -887,15 +872,7 @@ int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, c
     }
     /* Obtain the configuration */
     if (ret == 0){
-        ptls_buffer_t rr_buf;
-        ptls_buffer_init(&rr_buf, "", 0);
-        if ((ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name)) != 0) {
-            DBG_PRINTF("Cannot extract config from public key of <%s>, ret = %d (0x%x)", cert_file, ret, ret);
-        }
-        else {
-            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
-        }
-        ptls_buffer_dispose(&rr_buf);
+        ret = picoquic_ech_create_config_from_binary(config, config_len, public_key_asn1, public_name);
     }
     if (cert_bytes.base != NULL) {
         free(cert_bytes.base);

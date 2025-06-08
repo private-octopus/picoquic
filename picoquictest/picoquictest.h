@@ -513,7 +513,7 @@ int multipath_tunnel_test();
 int token_reuse_api_test();
 int get_hash_test();
 int get_tls_errors_test();
-int ech_rr_test();
+int ech_config_test();
 int ech_e2e_test();
 int ech_grease_test();
 int ech_cert_test();
