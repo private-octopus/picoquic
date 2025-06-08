@@ -754,6 +754,9 @@ int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_
     {
         ret = picoquic_ech_create_config_from_binary(config, config_len, public_key_asn1, public_name);
     }
+    if (public_key_asn1.base != NULL) {
+        free(public_key_asn1.base);
+    }
     return ret;
 }
 
