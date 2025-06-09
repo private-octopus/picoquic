@@ -42,7 +42,54 @@
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 
+/* Decode a base64 string. This is not strictly ECH related, 
+* but applications cannot easily access the base64 implementation in
+* picotls.
+*/
+int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt)
+{
+    int ret = 0;
+    ptls_buffer_t config;
+    uint8_t short_buf[256];
+    ptls_base64_decode_state_t d_state;
+    *v = NULL;
+    *v_len = 0;
+    ptls_buffer_init(&config, short_buf, sizeof(short_buf));
+    ptls_base64_decode_init(&d_state);
+    ret = ptls_base64_decode(b64_txt, &d_state, &config);
+    if (ret == 0 && d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0)) {
+        ret = 0;
+        if (config.off > 0) {
+            if ((*v = (uint8_t*)malloc(config.off)) == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                memcpy(*v, config.base, config.off);
+                *v_len = config.off;
+            }
+        }
+    }
+    ptls_buffer_dispose(&config);
+    return ret;
+}
+/* Encode a base64 string. This is not strictly ECH related,
+* but applications cannot easily access the base64 implementation in
+* picotls.
+*/
+int picoquic_base64_encode(const uint8_t* v, size_t v_len, char* b64, size_t b64_size, size_t* b64_len)
+{
 
+    int ret = 0;
+    size_t len = ptls_base64_howlong(v_len);
+    *b64_len = len;
+    if (len + 1 > b64_size) {
+        ret = -1;
+    }
+    else {
+        (void)ptls_base64_encode(v, v_len, b64);
+    }
+    return ret;
+}
 
 /* Read the configuration file.
 * We assume that it contains exactly one config, in base 64 encoding. 
@@ -297,7 +344,7 @@ void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 * "ech.configs" with a list of server configurations (HTTPS records.)
 * This data will be freed when deleted the tls_ctx for the connection.
 */
-int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t * config_data, size_t config_length)
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_data, size_t config_length)
 {
     int ret = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
@@ -883,3 +930,12 @@ int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, c
     return ret;
 }
 
+
+void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
+    uint8_t** retry_config, size_t* retry_config_len)
+{
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    *retry_config = tls_ctx->retry_configs.base;
+    *retry_config_len = tls_ctx->retry_configs.len;
+}

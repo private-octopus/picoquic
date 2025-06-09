@@ -975,6 +975,10 @@ int quic_client(const char* ip_address_text, int server_port,
                 (int)cnx_client->max_stream_id_bidir_remote,
                 (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
 
+            if (config->ech_target != NULL) {
+                picoquic_ech_configure_client(cnx_client, config->ech_target, config->ech_target_len);
+            }
+
             if (ret == 0) {
                 ret = picoquic_start_client_cnx(cnx_client);
 
@@ -1213,6 +1217,34 @@ int quic_client(const char* ip_address_text, int server_port,
                 printf("System call duration max: %"PRIu64 "\n", loop_cb.sc_duration.scd_max);
                 printf("System call duration smoothed: %"PRIu64 "\n", loop_cb.sc_duration.scd_smoothed);
                 printf("System call duration deviation: %"PRIu64 "\n", loop_cb.sc_duration.scd_dev);
+            }
+        }
+        
+        if (picoquic_is_ech_handshake(cnx_client)) {
+            fprintf(stdout, "ECH handshake was successful.\n");
+        } else {
+            uint8_t* retry_config;
+            size_t retry_config_len;
+
+            if (config->ech_target != NULL) {
+                fprintf(stdout, "ECH handshake was NOT successful.\n");
+            }
+            picoquic_ech_get_retry_config(cnx_client, &retry_config, &retry_config_len);
+            if (retry_config_len > 0) {
+                char b64[1024];
+                size_t b64_len = 0;
+                size_t printed_len = 0;
+                ret = picoquic_base64_encode(retry_config, retry_config_len, b64, sizeof(b64), &b64_len);
+                fprintf(stdout, "ECH retry config:\n");
+                while (printed_len < b64_len) {
+                    size_t line_len = 72;
+                    if (b64_len < printed_len + line_len) {
+                        line_len = b64_len - printed_len;
+                    }
+                    (void)fwrite(b64 + printed_len, 1, line_len, stdout);
+                    fprintf(stdout, "\n");
+                    printed_len += line_len;
+                }
             }
         }
     }

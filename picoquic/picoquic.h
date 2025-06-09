@@ -1724,12 +1724,20 @@ void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic);
  * for the hidden server. These records will provide the name of the
  * client facing server, and its ECH configuration.
 */
-int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t* config_data, size_t config_length);
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t* config_data, size_t config_length);
 
 /* picoquic_ech_check_handshake:
  * Return 1 is ECH was succesfully negotiated, 0 otherwise.
  */
 int picoquic_is_ech_handshake(picoquic_cnx_t* cnx);
+
+/* Get the retry config parameter returned after the handshake */
+void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
+    uint8_t** retry_config, size_t* retry_config_len);
+
+/* utility function. */
+int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt);
+int picoquic_base64_encode(const uint8_t* v, size_t v_len, char* b64, size_t b64_size, size_t* b64_len);
 
 #ifdef __cplusplus
 }

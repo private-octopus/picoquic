@@ -101,7 +101,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
 #endif
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
-    { picoquic_option_ECH, 'E' , "ech", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
+    { picoquic_option_ECH_server, 'E' , "ech_s", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
+    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded,"},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -443,10 +444,23 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
-    case picoquic_option_ECH: {
+    case picoquic_option_ECH_server: {
         ret = config_set_string_param(&config->ech_key_file, params, nb_params, 0);
         if (ret == 0) {
             ret = config_set_string_param(&config->ech_config_file, params, nb_params, 1);
+        }
+        break;
+    }
+    case picoquic_option_ECH_client: {
+        if (nb_params != 1) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_base64_decode(&config->ech_target, &config->ech_target_len, params[0].param);
+        }
+        if (ret != 0) {
+            fprintf(stderr, "Incorrect base64 format: %s\n", params[0].param);
+            ret = (ret == 0) ? -1 : ret;
         }
         break;
     }
@@ -1013,6 +1027,10 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     if (config->ech_config_file != NULL)
     {
         free((void*)config->ech_config_file);
+    }
+    if (config->ech_target != NULL)
+    {
+        free((void*)config->ech_target);
     }
     picoquic_config_init(config);
 }

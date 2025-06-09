@@ -7,6 +7,27 @@ The implementation relies on the support for ECH in
 Picoquic only support the "shared mode" configuration of ECH, in which the same server
 hosts both the "client facing" and "backend" servers.
 
+# Domain Name Configuration
+
+The operation of ECH depends on the DNS -- although alternatives may be developed at some point.
+The client follows a simple model. If the client application wants to connect to the domain "backend.example.com",
+it retrieves the HTTPS records for that domain from the DNS (or the SVCB record if not using HTTPS).
+There may be several such records, each documenting a priority, a target name and a set of parameters.
+The client selects one of these HTTPS records. The target name of the selected record is the "client facing server".
+That record may also provide the alternate port on which the server is running, and
+the ECH Configuration of the server. The client will then:
+
+* prepare a QUIC connection to the IP address and selected port of the client facing server,
+  using the port number if one was specified in the HTTPS record -- or 443 if none was specified.
+* add an ECH parameter to the TLS "Client Hello" specifying the SNI of the "backend" server,
+  and possibly other parameters like the ALPN.
+* establish the QUIC connection.
+
+Once the connection is complete, the client will check whether the ECH negotiation
+was successful. If may fail, for example if the client used an outdate version of the
+ECH configuration. In that case, the server will provide an updated version in its
+"ech-retry" parameters.
+
 # Server Side Support
 
 The ECH support on the server is controlled by the API:
@@ -27,6 +48,11 @@ The public key in the ECH configuration must match the selected private key.
 
 Once configured, ECH operation is transparent to the server.
 
+## Implementation in the demo program
+
+When using "picoquicdemo", the `ech_private_key_file_name` and `ech_config_file_name`
+parameters can be set using the command line argument `-K`.
+
 ## Creating the ECH Configuration
 
 (TODO)
@@ -38,61 +64,71 @@ the same QUIC context in server mode and in client mode. If the application only
 not need to provide a private key or a configuration file. they could for example do
 something like:
 ~~~
-int ret = picoquic_ech_configure_quic_ctx(quic, NULL, NULL);
+ret = picoquic_ech_configure_quic_ctx(quic, NULL, NULL);
 ~~~
-If ECH is configured, picoquic will either attempt ECH if it has access to a designated server
-configuration, or "grease" the ECH extension as define in Section 6.2 of
-[the ECH/ESNi draft](https://datatracker.ietf.org/doc/draft-ietf-tls-esni/).
+When starting a connection, an endpoint that knows the value of the ECH option can configure
+can configure a connection context by using the API:
+~~~
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t* config_data, size_t config_length);
+~~~
+This API must be used before the connection is "started". A typical sequence would be:
+~~~
+/* Create a QUIC context */
+picquic_quic_t * quic = picoquic_create(...);
+if (quic != NULL){
+    /* Set additional context parameters if needed, e.g. logging options */
+    ...
+    /* Configure ECH for the QUIC context */
+    ret = picoquic_ech_configure_quic_ctx(quic, NULL, NULL);
+    if (ret == 0){
+        /* Create a client connection
+        * The "server_addr" parameter is set to the address of the "facing" server.
+        * The "sni" parameter is set to the name of the "backend" server.
+        */
+        picoquic-cnx_t * cnx = picoquic_create_cnx(quic,
+                    initial_cid,
+                    picoquic_null_connection_id,
+                    (struct sockaddr*)server_addr,
+                    current_time,
+                    proposed_version, sni, alpn, 1);
+        if (cnx != NULL){
+            /* Set connection parameters as required */
+            ...
+            /* Set ECH configuration of the connection */
+            ret = picoquic_ech_configure_client(cnx, config_data, config_length);
+            if (ret == 0){
+                /* Start the connection */
+                ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+            }
+        }
+    }
+}
+~~~
+Note that if ECH is configured in the QUIC context using `picoquic_ech_configure_quic_ctx`
+but the code does not configure ECH for the connection using `picoquic_ech_configure_client`,
+picoquic will use a "Grease" version of the ECH parameter in the outgoing "Client Hello".
 
-## Learning the ECH configuration
+## Implementation in the demo program
 
-Picoquic has not yet implemented the capacity to query and parse HTTPS records. Instead,
-we keep a cache of previously acquired records in the picoquic context. The typical
-scenario would be:
+The client side ECH option is configured by using the "-K" configuration
+option, which takes as parameter a base64 encoded ECH configuration.
+One possible way to use that would be:
 
-1. Client attempts a connection to backend.example.com, ECH parameter is greased.
+1. Use a program such as `dig` to obtain the HTTPS record for the backend service,
+2. Use a shell script to extract the `ech` configuration from the selected
+   HTTPS record and the IP address of the client facing server,
+3. Document the parameters in the command line arguments:
+   - Set the IP address and port number to the IP address of the client facing server,
+     and to the port number documented in the HTTPS record (or 443 by default).
+   - Document the name of the backend server in the "-n" option.
+   - Document the ECH configuration in the "-K" option.
 
-2. The connection is established. A call to `picoquic_is_ech_handshake(cnx)` returns 0
-   (False), indicating that the ECH parameters were not processed. (Indeed, the were greased.)
+If the configuration is wrong, the picoquicdemo program will print out the
+base64 encoded value of the "retry" configuration provided by the server.
 
-3. The server ECH config, if any, is returned by the server in the ECH parameter, and cached
-   in the picoquic context.
 
-4. Some time later, the client creates a new connection to backend.example.com. The
-   ECH parameters are retrieved, and the SNI is encrypted. A call to
-   `picoquic_is_ech_handshake(cnx)` returns 1 (True).
 
-This configuration is frowned upon in the draft, because it enables servers to
-provide different values of the ECH configuration ID to different clients, and
-thus use the ECh configuration ID to track the client across multiple connections.
-This tracking is not possible if the ECH Configuration is retrieved from the
-DNS for each connection, but then doing more DNS transaction also opens the
-door to more tracking.
 
-## SNI, IP address and client facing server
-
-Picoquic server code assumes that the client "facing" and "backend" servers are located at the same IP
-address. However, other QUIC implementations may not have that restriction. They may be
-be supporting the "Split Mode" of ECH, in which the servers run at separate IP addresses.
-Connecting directly to the backend server using ECH may not work, and in any case if
-it did work the IP address would be specific to the backend server and would disclose
-that server identity, defeating the purpose of ECH.
-
-It is thus important that if an ECH configuration is present, the client retrieves the
-"public server name" specified in the configuration, and connects to the address
-of that server.
-
-We note that there is some ambiguity in the spec. The ECH configuration specifies
-the name of the client facing server, but it does not specify what port to use, or
-what ALPN. To keep our implementation simple, we use some simplifications:
-
-1. The ALPN in the outerClient hello will be set to H3.
-2. The port number will be kept the same as the value specified in the command
-   line.
-3. Per spec, the outer SNI will be set to "public server name" value.
-   
-For example, if a test server is deployed on port 4433, we will assume that the client
-facing server is running in the same process and listening on the same port.
 
 
 

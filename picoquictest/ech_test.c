@@ -55,21 +55,21 @@ int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, c
 int ech_test_save_buf(ptls_iovec_t io_buf, char const * file_name)
 {
     int ret = 0;
-
     int last_err;
-    size_t ech_text_size = ptls_base64_howlong(io_buf.len);
-    char* ech_text = (char*)malloc(ech_text_size + 1);
+    size_t ech_text_size = 0;
+    size_t ech_text_len = 0;
+    char* ech_text = NULL;
+
+    (void)picoquic_base64_encode(io_buf.base, io_buf.len, ech_text, ech_text_size, &ech_text_len);
+    ech_text_size = ech_text_len + 1;
+    ech_text = (char*)malloc(ech_text_size);
 
     if (ech_text == NULL) {
         DBG_PRINTF("Cannot allocate %d bytes for text buffer", ech_text_size);
         ret = -1;
     }
     else {
-        int lt = ptls_base64_encode(io_buf.base, io_buf.len, ech_text);
-        if (lt != ech_text_size + 1) {
-            DBG_PRINTF("Cannot base64 encode %zu bytes into %zu", io_buf.len, ech_text_size);
-            ret = -1;
-        }
+        ret = picoquic_base64_encode(io_buf.base, io_buf.len, ech_text, ech_text_size , &ech_text_len);
     }
     if (ret == 0) {
         FILE* F = picoquic_file_open_ex(file_name, "w", &last_err);
@@ -208,11 +208,14 @@ int ech_test_check_retry_config(picoquic_cnx_t* cnx,
     uint8_t* config, size_t config_len)
 {
     int ret = 0;
-    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    uint8_t* retry_config;
+    size_t retry_config_len;
 
-    if (tls_ctx->retry_configs.base == NULL ||
-        tls_ctx->retry_configs.len != config_len ||
-        memcmp(tls_ctx->retry_configs.base, config, config_len) != 0) {
+    picoquic_ech_get_retry_config(cnx, &retry_config, &retry_config_len);
+
+    if (retry_config == NULL ||
+        retry_config_len != config_len ||
+        memcmp(retry_config, config, config_len) != 0) {
         ret = -1;
     }
     return ret;
