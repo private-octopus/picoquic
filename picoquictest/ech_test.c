@@ -168,6 +168,49 @@ int ech_config_test()
     return ret;
 }
 
+int ech_config_p_test()
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    size_t pub_key_objects = 0;
+    const char* public_name = "test.example.com";
+    uint8_t config_id = 1;
+    ptls_hpke_kem_t* kem = NULL;
+    uint8_t max_name_length = 128;
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    }
+    else if ((ret = picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_key_file, ret, ret);
+    }
+
+    /* Save a config representation in ech_config.txt */
+    if (ret == 0) {
+        ptls_iovec_t io_config = { .base = config, .len = config_len };
+
+        ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
+        }
+    }
+
+    if (config != NULL) {
+        free(config);
+    }
+
+    return ret;
+}
+
+#if 0
 /* ECH test of config from CERT */
 int ech_cert_test()
 {
@@ -194,7 +237,7 @@ int ech_cert_test()
 
     return ret;
 }
-
+#endif
 /* ECH end to end test. Create a connection, verify that the proper files
 * are returned.
  */

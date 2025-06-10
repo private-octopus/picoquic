@@ -100,6 +100,7 @@ ptls_hpke_kem_t* picoquic_hpke_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1] = { 0 };
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
 picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn = NULL;
 picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn = NULL;
+picoquic_get_public_key_from_private_t picoquic_get_public_key_from_private_fn = NULL;
 picoquic_get_certificate_verifier_t picoquic_get_certificate_verifier_fn = NULL;
 picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn = NULL;
 picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn = NULL;
@@ -185,6 +186,7 @@ static void picoquic_tls_api_zero()
     picoquic_set_private_key_from_file_fn = NULL;
     picoquic_dispose_sign_certificate_fn = NULL;
     picoquic_get_certs_from_file_fn = NULL;
+    picoquic_get_public_key_from_private_fn = NULL;
 
     picoquic_get_certificate_verifier_fn = NULL;
     picoquic_dispose_certificate_verifier_fn = NULL;
@@ -291,12 +293,19 @@ void picoquic_register_hpke_kem(ptls_hpke_kem_t* hpke_kem)
 void picoquic_register_tls_key_provider_fn(
     picoquic_set_private_key_from_file_t set_key_from_key_file_fn,
     picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
-    picoquic_get_certs_from_file_t get_certs_from_file_fn)
+    picoquic_get_certs_from_file_t get_certs_from_file_fn,
+    picoquic_get_public_key_from_private_t get_public_key_from_private_fn)
 {
     DBG_PRINTF("%s", "Loading set key functions.");
-    picoquic_set_private_key_from_file_fn = set_key_from_key_file_fn;
-    picoquic_dispose_sign_certificate_fn = dispose_sign_certificate_fn;
-    picoquic_get_certs_from_file_fn = get_certs_from_file_fn;
+    if (set_key_from_key_file_fn != NULL) {
+        picoquic_set_private_key_from_file_fn = set_key_from_key_file_fn;
+        picoquic_dispose_sign_certificate_fn = dispose_sign_certificate_fn;
+        picoquic_get_certs_from_file_fn = get_certs_from_file_fn;
+    }
+
+    if (get_public_key_from_private_fn != NULL) {
+        picoquic_get_public_key_from_private_fn = get_public_key_from_private_fn;
+    }
 }
 
 void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t certificate_verifier_fn,
