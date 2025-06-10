@@ -861,6 +861,7 @@ int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config
             if (ret == 0) {
                 ret = picoquic_ech_create_config_list_from_config(&config_buf, config, config_len);
             }
+            ptls_buffer_dispose(&config_buf);
         }
         if (public_key_bits.base != NULL) {
             free(public_key_bits.base);
