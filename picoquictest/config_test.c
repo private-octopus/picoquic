@@ -158,6 +158,7 @@ static char const* config_argv1[] = {
     "-i", "0N8C-000123",
     "-J", "2",
     "-E", "ech_key.pem", "ech_config.pem",
+    "-y", "test.example.com",
     NULL
 };
 
@@ -435,7 +436,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
 #endif
     ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
-    ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_config_file);
+    ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
 
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
