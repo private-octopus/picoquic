@@ -50,12 +50,39 @@ Once configured, ECH operation is transparent to the server.
 
 ## Implementation in the demo program
 
-When using "picoquicdemo", the `ech_private_key_file_name` and `ech_config_file_name`
-parameters can be set using the command line argument `-K`.
+When using the "picoquicdemo" server, the `ech_private_key_file_name` and `ech_config_file_name`
+parameters can be set using the command line argument `-E`, as in for example:
+~~~
+picoquicdemo -k private_key.pem -c cert.pem -E ech_key.pem ech_config.txt -p 443
+~~~
+We see here two private keys:
+
+1. The key use to sign the TLS handshake (`private_key.pem` in the example),
+2. The key used to negoatiate the ECH encryption (`ech_key.pem` in the example).
+
+It is possible to use the same key (and the same file) for both functions, but only if it is using
+an Elliptic Curve like `secp256r1`, `secp384r1` or `x25519`.
+
+The ECH configuration includes the description of the private key associated
+with the ECH encryption key, and is paired with it, much like the TLS key is paired with
+the certificate.
 
 ## Creating the ECH Configuration
 
-(TODO)
+The ECH configuration may be created on the first use of ECH by providing a "public name" using
+the `-y` parameter, as is for example:
+~~~
+picoquicdemo -k private_key.pem -c cert.pem -y test.example.com -E ech_key.pem ech_config.txt -p 443
+~~~
+In that example, picoquic will create an ECH configuration in which:
+
+1. The HPKE parameters are derived from the type of the ECH key,
+2. The public key is the public key corresponding to the ECH key,
+3. The public name is the value specified (`test.example.com` in the example).
+
+Picoquic will compose the ECH configuration, encode it in base64, and then save it in the
+ECH configuration file (`ech_config.txt` in the example). That base64 string should be
+set as the value of the `ech=` parameter in the HTTPS parameter published by the server.
 
 # Client side support
 
