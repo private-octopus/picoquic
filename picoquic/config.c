@@ -962,89 +962,70 @@ void picoquic_config_init(picoquic_quic_config_t* config)
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
 {
-    if (config->solution_dir != NULL)
-    {
+    if (config->solution_dir != NULL) {
         free((void*)config->solution_dir);
     }
-    if (config->server_cert_file != NULL)
-    {
+    if (config->server_cert_file != NULL) {
         free((void*)config->server_cert_file);
     }
-    if (config->server_key_file != NULL)
-    {
+    if (config->server_key_file != NULL) {
         free((void*)config->server_key_file);
     }
-    if (config->log_file != NULL)
-    {
+    if (config->log_file != NULL) {
         free((void*)config->log_file);
     }
-    if (config->bin_dir != NULL)
-    {
+    if (config->bin_dir != NULL) {
         free((void*)config->bin_dir);
     }
-    if (config->qlog_dir != NULL)
-    {
+    if (config->qlog_dir != NULL) {
         free((void*)config->qlog_dir);
     }
-    if (config->performance_log != NULL)
-    {
+    if (config->performance_log != NULL) {
         free((void*)config->performance_log);
     }
-    if (config->cc_algo_id != NULL)
-    {
+    if (config->cc_algo_id != NULL) {
         free((void*)config->cc_algo_id);
     }
-    if (config->cc_algo_option_string != NULL)
-    {
+    if (config->cc_algo_option_string != NULL) {
         free((void*)config->cc_algo_option_string);
     }
-    if (config->cnx_id_cbdata != NULL)
-    {
+    if (config->cnx_id_cbdata != NULL) {
         free((void*)config->cnx_id_cbdata);
     }
-    if (config->multipath_alt_config != NULL)
-    {
+    if (config->multipath_alt_config != NULL) {
         free((void*)config->multipath_alt_config);
     }
-    if (config->www_dir != NULL)
-    {
+    if (config->www_dir != NULL) {
         free((void*)config->www_dir);
     }
-    /* TODO:  const uint8_t* ticket_encryption_key; Or maybe consider this a PEM file */
-    if (config->ticket_file_name != NULL)
-    {
+    if (config->ticket_file_name != NULL) {
         free((void*)config->ticket_file_name);
     }
-    if (config->token_file_name != NULL)
-    {
+    if (config->token_file_name != NULL) {
         free((void*)config->token_file_name);
     }
-    if (config->sni != NULL)
-    {
+    if (config->sni != NULL) {
         free((void*)config->sni);
     }
-    if (config->alpn != NULL)
-    {
+    if (config->alpn != NULL) {
         free((void*)config->alpn);
     }
-    if (config->out_dir != NULL)
-    {
+    if (config->out_dir != NULL) {
         free((void*)config->out_dir);
     }
-    if (config->root_trust_file != NULL)
-    {
+    if (config->root_trust_file != NULL) {
         free((void*)config->root_trust_file);
     }
-    if (config->ech_key_file != NULL)
-    {
+    if (config->ech_key_file != NULL) {
         free((void*)config->ech_key_file);
     }
-    if (config->ech_config_file != NULL)
-    {
+    if (config->ech_config_file != NULL) {
         free((void*)config->ech_config_file);
     }
-    if (config->ech_target != NULL)
-    {
+    if (config->ech_public_name != NULL) {
+        free((void*)config->ech_public_name);
+    }
+    if (config->ech_target != NULL) {
         free((void*)config->ech_target);
     }
     picoquic_config_init(config);
