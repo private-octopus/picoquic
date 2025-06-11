@@ -46,6 +46,7 @@ void picoquic_openssl_load(int unload)
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
+#include <openssl/evp.h>
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/provider.h>
 #endif
@@ -133,7 +134,6 @@ static int set_openssl_sign_certificate_from_key(EVP_PKEY* pkey, ptls_context_t*
 
 /* Set the certificate signature function and context using openSSL
 */
-
 static int set_openssl_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
     int ret = 0;
@@ -153,6 +153,48 @@ static int set_openssl_private_key_from_key_file(char const* keypem, ptls_contex
     }
     return ret;
 }
+
+/* Get the public key descriptor from a private key
+ */
+static int picoquic_openssl_get_public_key_from_key_file(char const* keypem, uint8_t ** pubkey, size_t * pubkey_length)
+{
+    int ret = 0;
+    BIO* bio = BIO_new_file(keypem, "rb");
+
+    *pubkey = NULL;
+    *pubkey_length = 0;
+
+    if (bio == NULL) {
+        ret = -1;
+    }
+    else {
+        EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (pkey == NULL) {
+            ret = -1;
+        }
+        else {
+            int pk_len = i2d_PublicKey(pkey, NULL);
+            if (pk_len <= 0 || (*pubkey = (uint8_t*)malloc(pk_len)) == NULL) {
+                ret = -1;
+            }
+            else {
+                unsigned char* pk_peek = *pubkey;
+                pk_len = (size_t)i2d_PublicKey(pkey, &pk_peek);
+                if (pk_len <= 0 || pk_peek != *pubkey + pk_len) {
+                    free(*pubkey);
+                    ret = -1;
+                }
+                else {
+                    *pubkey_length = (size_t)pk_len;
+                }
+            }
+            EVP_PKEY_free(pkey);
+        }
+        BIO_free(bio);
+    }
+    return ret;
+}
+
 
 /* Clear certificate objects allocated via openssl for a certificate
 */
@@ -388,7 +430,8 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_tls_key_provider_fn(
             set_openssl_private_key_from_key_file,
             picoquic_openssl_dispose_sign_certificate,
-            picoquic_openssl_get_certs_from_file);
+            picoquic_openssl_get_certs_from_file,
+            picoquic_openssl_get_public_key_from_key_file);
         picoquic_register_verify_certificate_fn(picoquic_openssl_get_certificate_verifier,
             picoquic_openssl_dispose_certificate_verifier,
             picoquic_openssl_set_tls_root_certificates);
