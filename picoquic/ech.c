@@ -122,6 +122,51 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
     return ret;
 }
 
+
+int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name)
+{
+    int ret = 0;
+    int last_err;
+    size_t ech_text_size = 0;
+    size_t ech_text_len = 0;
+    char* ech_text = NULL;
+
+    (void)picoquic_base64_encode(config, config_len, ech_text, ech_text_size, &ech_text_len);
+    ech_text_size = ech_text_len + 1;
+    ech_text = (char*)malloc(ech_text_size);
+
+    if (ech_text == NULL) {
+        DBG_PRINTF("Cannot allocate %d bytes for text buffer", ech_text_size);
+        ret = -1;
+    }
+    else {
+        ret = picoquic_base64_encode(config, config_len, ech_text, ech_text_size, &ech_text_len);
+    }
+    if (ret == 0) {
+        FILE* F = picoquic_file_open_ex(file_name, "w", &last_err);
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open file <%s>, err: %x", file_name, last_err);
+            ret = -1;
+        }
+        else {
+            size_t written = fwrite(ech_text, 1, ech_text_size, F);
+            if (written != ech_text_size) {
+                DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", ech_text, file_name, written);
+                ret = -1;
+            }
+            else {
+                (void)fprintf(F, "\n");
+                DBG_PRINTF("Wrote %d bytes on file <%s>", ech_text_size + 1, file_name);
+            }
+            picoquic_file_close(F);
+        }
+    }
+    if (ech_text != NULL) {
+        free(ech_text);
+    }
+    return ret;
+}
+
 /*
 * The ECH extension in TLS is defined as:
 *       enum { outer(0), inner(1) } ECHClientHelloType;
@@ -870,6 +915,20 @@ int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config
     return ret;
 }
 
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file)
+{
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+    int ret = picoquic_ech_create_config_from_private_key(&config, &config_len, private_key_file, public_name);
+
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ech_config_file);
+    }
+    if (config != NULL) {
+        free(config);
+    }
+    return ret;
+}
 
 #if 0
 /*

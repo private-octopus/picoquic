@@ -102,6 +102,7 @@ static option_table_line_t option_table[] = {
 #endif
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
     { picoquic_option_ECH_server, 'E' , "ech_s", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
+    { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
     { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded,"},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
@@ -449,6 +450,10 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         if (ret == 0) {
             ret = config_set_string_param(&config->ech_config_file, params, nb_params, 1);
         }
+        break;
+    }
+    case picoquic_option_ECH_init: {
+        ret = config_set_string_param(&config->ech_public_name, params, nb_params, 0);
         break;
     }
     case picoquic_option_ECH_client: {
@@ -922,7 +927,17 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_set_default_bdp_frame_option(quic, config->bdp_frame_option);
 
-        ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
+        if (config->ech_public_name != NULL) {
+            if (config->ech_key_file == NULL || config->ech_config_file) {
+                fprintf(stderr, "Cannot create a configuration if key and config file are not specified.\n");
+            } else {
+                ret = picoquic_ech_create_config_file(config->ech_public_name, config->ech_key_file, config->ech_config_file);
+            }
+        }
+
+        if (ret == 0) {
+            ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
+        }
 
         if (ret != 0) {
             /* Something went wrong */

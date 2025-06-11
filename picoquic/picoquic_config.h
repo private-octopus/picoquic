@@ -77,6 +77,7 @@ typedef enum {
     picoquic_option_AddressDiscovery,
     picoquic_option_ECH_server,
     picoquic_option_ECH_client,
+    picoquic_option_ECH_init,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -140,6 +141,7 @@ typedef struct st_picoquic_quic_config_t {
     /* ECH parameters for server */
     char const* ech_key_file;
     char const* ech_config_file;
+    char const* ech_public_name;
     /* ECH parameter for the client, base64 encoded */
     uint8_t * ech_target;
     size_t ech_target_len;

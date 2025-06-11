@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:K:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:K:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:h";
 #endif
 int config_option_letters_test()
 {
@@ -124,6 +124,7 @@ static picoquic_quic_config_t param1 = {
     0, /* unsigned int large_client_hello : 1; */
     "ech_key.pem",
     "ech_config.pem",
+    "test.example.com",
     NULL, /* ech_target */
     0 /* ech_target_len */
 };
@@ -217,6 +218,7 @@ static picoquic_quic_config_t param2 = {
     1, /* unsigned int large_client_hello : 1; */
     NULL,
     NULL,
+    NULL, /* ECH public name */
     (uint8_t *)ech_test_config_bin, /* ech_target */
     sizeof(ech_test_config_bin) /* ech_target_len */
 };
@@ -433,6 +435,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
 #endif
     ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
+    ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_config_file);
 
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {

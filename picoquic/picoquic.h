@@ -1736,7 +1736,7 @@ void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
     uint8_t** retry_config, size_t* retry_config_len);
 
 /* Create an ECH configuration from a private key */
-int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name);
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file);
 
 /* utility function. */
 int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt);

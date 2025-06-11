@@ -50,53 +50,10 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const* public_key_file, char const* public_name);
-int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, char const* cert_file, char const* public_name);
+int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name);
+int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name);
 
-int ech_test_save_buf(ptls_iovec_t io_buf, char const * file_name)
-{
-    int ret = 0;
-    int last_err;
-    size_t ech_text_size = 0;
-    size_t ech_text_len = 0;
-    char* ech_text = NULL;
-
-    (void)picoquic_base64_encode(io_buf.base, io_buf.len, ech_text, ech_text_size, &ech_text_len);
-    ech_text_size = ech_text_len + 1;
-    ech_text = (char*)malloc(ech_text_size);
-
-    if (ech_text == NULL) {
-        DBG_PRINTF("Cannot allocate %d bytes for text buffer", ech_text_size);
-        ret = -1;
-    }
-    else {
-        ret = picoquic_base64_encode(io_buf.base, io_buf.len, ech_text, ech_text_size , &ech_text_len);
-    }
-    if (ret == 0) {
-        FILE* F = picoquic_file_open_ex(file_name, "w", &last_err);
-        if (F == NULL) {
-            DBG_PRINTF("Cannot open file <%s>, err: %x", file_name, last_err);
-            ret = -1;
-        }
-        else {
-            size_t written = fwrite(ech_text, 1, ech_text_size, F);
-            if (written != ech_text_size) {
-                DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", ech_text, file_name, written);
-                ret = -1;
-            }
-            else {
-                (void)fprintf(F, "\n");
-                DBG_PRINTF("Wrote %d bytes on file <%s>", ech_text_size + 1, file_name);
-            }
-            picoquic_file_close(F);
-        }
-    }
-    if (ech_text != NULL) {
-        free(ech_text);
-    }
-    return ret;
-}
-
-int ech_test_check_buf(ptls_iovec_t io_buf, char const* ref_file_name)
+int ech_test_check_buf(uint8_t* config, size_t config_len, char const* ref_file_name)
 {
     int ret = 0;
     char test_ref_file[512];
@@ -108,21 +65,21 @@ int ech_test_check_buf(ptls_iovec_t io_buf, char const* ref_file_name)
         DBG_PRINTF("Cannot find <%s> file in <%s>, err: %d (0x%x)", ref_file_name, picoquic_solution_dir, ret, ret);
     }
     else {
-        ptls_buffer_t config;
-        ptls_buffer_init(&config, "", 0);
-        ret = picoquic_ech_read_config(&config, test_ref_file);
+        ptls_buffer_t config_buffer;
+        ptls_buffer_init(&config_buffer, "", 0);
+        ret = picoquic_ech_read_config(&config_buffer, test_ref_file);
         if (ret != 0) {
             DBG_PRINTF("Cannot read reference for <%s> from <%s>, err: %d (0x%x)", ref_file_name, test_ref_file, ret, ret);
         }
         else {
-            if (config.off != io_buf.len ||
-                memcmp(config.base, io_buf.base, io_buf.len) != 0) {
+            if (config_buffer.off != config_len ||
+                memcmp(config_buffer.base, config, config_len) != 0) {
                 DBG_PRINTF("Data does not match reference for <%s> from <%s>, len = %zu vs %zu",
-                    ref_file_name, test_ref_file, io_buf.len, config.off);
+                    ref_file_name, test_ref_file, config_len, config_buffer.off);
                 ret = -1;
             }
         }
-        ptls_buffer_dispose(&config);
+        ptls_buffer_dispose(&config_buffer);
     }
     return ret;
 }
@@ -153,11 +110,9 @@ int ech_config_test()
     }
     /* Save a config representation in ech_config.txt */
     if (ret == 0) {
-        ptls_iovec_t io_config = { .base = config, .len = config_len };
-
-        ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_FILE_TXT);
         if (ret == 0) {
-            ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
+            ret = ech_test_check_buf(config, config_len, PICOQUIC_TEST_ECH_CONFIG_REF);
         }
     }
 
@@ -195,11 +150,9 @@ int ech_config_p_test()
 
     /* Save a config representation in ech_config.txt */
     if (ret == 0) {
-        ptls_iovec_t io_config = { .base = config, .len = config_len };
-
-        ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_FILE_TXT);
         if (ret == 0) {
-            ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
+            ret = ech_test_check_buf(config, config_len, PICOQUIC_TEST_ECH_CONFIG_REF);
         }
     }
 
