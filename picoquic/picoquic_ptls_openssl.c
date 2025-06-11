@@ -173,49 +173,21 @@ static int picoquic_openssl_get_public_key_from_key_file(char const* keypem, uin
             ret = -1;
         }
         else {
-#if 0
-            EC_KEY* eckey = EVP_PKEY_get1_EC_KEY(pkey);
-            if (EVP_PKEY_is_a(pkey, "secp256r1")) {
-                print("Secp256r1!");
-            }
-            if (eckey == NULL) {
+            int pk_len = i2d_PublicKey(pkey, NULL);
+            if (pk_len <= 0 || (*pubkey = (uint8_t*)malloc(pk_len)) == NULL) {
                 ret = -1;
             }
             else {
-                *pubkey_length = i2o_ECPublicKey(eckey, NULL);
-                if (*pubkey_length == 0) {
-                    ret = -1;
-                }
-                *pubkey = (uint8_t*)malloc(*pubkey_length);
-                if (*pubkey == NULL) {
-                    *pubkey_length = 0;
+                unsigned char* pk_peek = *pubkey;
+                pk_len = (size_t)i2d_PublicKey(pkey, &pk_peek);
+                if (pk_len <= 0 || pk_peek != *pubkey + pk_len) {
+                    free(*pubkey);
                     ret = -1;
                 }
                 else {
-                    uint8_t* pk = *pubkey;
-                    if (i2o_ECPublicKey(eckey, &pk) != *pubkey_length) {
-                        free(*pubkey);
-                        *pubkey = NULL;
-                        *pubkey_length = 0;
-                        ret = -1;
-                    }
+                    *pubkey_length = (size_t)pk_len;
                 }
             }
-#else
-            unsigned char* pk_peek = NULL;
-            int pk_len = 0;
-            pk_len = (size_t)i2d_PublicKey(pkey, &pk_peek);
-            if (pk_len == 0 || pk_peek == NULL) {
-                ret = -1;
-            }
-            else if ((*pubkey = (uint8_t*)malloc(pk_len)) == NULL) {
-                ret = -1;
-            }
-            else {
-                memcpy(*pubkey, pk_peek, pk_len);
-                *pubkey_length = (size_t)pk_len;
-            }
-#endif
             EVP_PKEY_free(pkey);
         }
         BIO_free(bio);
