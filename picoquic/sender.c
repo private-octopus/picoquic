@@ -2869,6 +2869,49 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
     return bytes_next;
 }
 
+uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    uint8_t * bytes, uint8_t * bytes_max, 
+    int * more_data, int* is_pure_ack,
+    uint64_t current_time, uint64_t * next_wake_time)
+{
+    if (cnx->mc_channels == NULL || cnx->nb_mc_channels == 0) {
+        return bytes;
+    }
+
+    for (int i = 0; i < cnx->nb_mc_channels; i++) {
+        picoquic_mc_channel_in_cnx_t* ch = cnx->mc_channels[i];
+
+        // if in state "announce_scheduled"
+        if (ch->state < 2 && !cnx->client_mode) {
+            uint8_t *bytes_next = picoquic_format_mc_announce_frame(bytes, bytes_max, ch->channel, path_x, more_data);
+            if (bytes_next > bytes) {
+                *is_pure_ack = 0;
+                bytes = bytes_next;
+                ch->state = 2; // "announced"
+            }
+        }
+        // TODO MC: Implement Format MC_KEY and MC_JOIN frame
+        // if (ch->key_available == 0) {
+        //     uint8_t *bytes_next = picoquic_format_mc_key_frame(bytes, bytes_max, ch->channel, more_data);
+        //     if (bytes_next > bytes) {
+        //         *is_pure_ack = 0;
+        //         bytes = bytes_next;
+        //         ch->key_available = 1;
+        //     }
+        // }
+        // if (ch->state < 5) {
+        //     uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, more_data);
+        //     if (bytes_next > bytes) {
+        //         *is_pure_ack = 0;
+        //         bytes = bytes_next;
+        //         ch->state = 5; // "join_pending"
+        //     }
+        // }
+    }
+
+    return bytes;
+}
+
 /* sending of datagrams */
 static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
@@ -3602,6 +3645,14 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         /* If a new address was learned, prepare an observed address frame */
                         bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
                             path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
+                    }
+
+                    // TODO MC: Maybe also include this in almost_ready
+                    if (cnx->is_multicast_enabled) {
+                        /* If required, prepare multicast announce, key and join frames. */
+                        bytes_next = picoquic_prepare_multicast_init_frames(cnx, path_x,
+                        bytes_next, bytes_max, &more_data, &is_pure_ack,
+                        current_time, next_wake_time);
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||

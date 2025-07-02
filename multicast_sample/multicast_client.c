@@ -285,12 +285,14 @@ int multicast_client_create_additional_path(picoquic_cnx_t *cnx, multicast_clien
         }
         else
         {
-            fprintf(stdout, "crpth: Probe new path failed with exit code %d\n", ret);
+            // CLEAN MC: Remove debug logs
+            // fprintf(stdout, "crpth: Probe new path failed with exit code %d\n", ret);
         }
     }
     else
     {
-        fprintf(stdout, "crpth: New path added, total paths available: %d\n", cb_ctx->cnx->nb_paths);
+        // CLEAN MC: Remove debug logs
+        // fprintf(stdout, "crpth: New path added, total paths available: %d\n", cb_ctx->cnx->nb_paths);
     }
 
     if (!need_to_wait)
@@ -324,8 +326,9 @@ int multicast_client_callback(picoquic_cnx_t *cnx,
         case picoquic_callback_path_available:
             client_ctx->second_path_unique_id = stream_id; /* stream id is used as unique path id here */
 
-            fprintf(stdout, "app: NEW PATH AVAILABLE, total number of paths: %i", cnx->nb_paths);
-            fprintf(stdout, ", unique path id: %i\n", client_ctx->second_path_unique_id);
+            // CLEAN MC: Remove debug logs
+            // fprintf(stdout, "app: NEW PATH AVAILABLE, total number of paths: %i", cnx->nb_paths);
+            // fprintf(stdout, ", unique path id: %i\n", client_ctx->second_path_unique_id);
 
             /* Create a stream context for all the files that should be downloaded */
             for (int i = 0; ret == 0 && i < client_ctx->nb_files; i++)
@@ -590,8 +593,6 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
             }
             else
             {
-                // CHECK MC: The code below is adapted from picoquicdemo, currently not executed.
-                // It seems that the state is never be reached
                 if (picoquic_get_cnx_state(cb_ctx->cnx) == picoquic_state_client_almost_ready && cb_ctx->notified_ready == 0)
                 {
                     // CHECK MC: Check if handshake check below is needed
@@ -603,7 +604,7 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
                                                  "%s", "netloop: The session was properly resumed!");
                     }
 
-                    // CHECK MC: The following is copied from picoquicdemo, check if 0-RTT should be supported
+                    // CHECK MC: Check if 0-RTT should be supported
                     if (cb_ctx->cnx->zero_rtt_data_accepted)
                     {
                         fprintf(stdout, "netloop: Zero RTT data is accepted!\n");
@@ -619,40 +620,6 @@ static int multicast_client_loop_cb(picoquic_quic_t *quic, picoquic_packet_loop_
                         cb_ctx->saved_alpn = picoquic_string_duplicate(cb_ctx->cnx->alpn);
                     }
                     cb_ctx->notified_ready = 1;
-                }
-
-                // CHECK MC: Check conditions here (in which state the new path will be opened?)
-                if (picoquic_get_cnx_state(cb_ctx->cnx) >= picoquic_state_server_almost_ready && cb_ctx->multipath_initiated == 0)
-                {
-                    int is_already_allowed = 0;
-                    if ((ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx, &is_already_allowed)) == 0)
-                    {
-                        if (is_already_allowed)
-                        {
-                            ret = multicast_client_create_additional_path(cb_ctx->cnx, cb_ctx);
-                            if (ret == 0)
-                            {
-                                fprintf(stdout, "netloop: New path for multicast successfully opened with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
-                            }
-                            else
-                            {
-                                fprintf(stdout, "netloop: Failed to open additional path with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
-                            }
-                            cb_ctx->multipath_initiated = 1;
-                        }
-                        else
-                        {
-                            if (cb_ctx->cnx->is_subscribed_to_path_allowed)
-                            {
-                                fprintf(stdout, "netloop: Multipath not allowed: Transient error with cnx_state %d\n", picoquic_get_cnx_state(cb_ctx->cnx));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        cb_ctx->multipath_initiated = 1;
-                        fprintf(stdout, "netloop: Multipath permission check failed\n");
-                    }
                 }
             }
 

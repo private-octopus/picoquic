@@ -258,15 +258,32 @@ typedef struct st_picoquic_multicast_channel_id_t {
 
 typedef struct st_picoquic_multicast_header_secret_t {
     uint8_t secret[48]; // max support is SHA-384 (no SHA-512 for now)
-    uint8_t secret_len;
+    uint64_t secret_len;
 } picoquic_multicast_header_secret_t;
 
 typedef struct st_picoquic_multicast_aead_secret_t {
     uint8_t secret[48]; // max support is SHA-384 (no SHA-512 for now)
-    uint8_t secret_len;
+    uint64_t secret_len;
     uint64_t key_seq_number;
     uint64_t from_pkt_number;
 } picoquic_multicast_aead_secret_t;
+
+// per draft-jholland-quic-multicast-06
+typedef enum {
+    picoquic_mc_state_reason_other = 0x0,
+    picoquic_mc_state_reason_requested_by_server = 0x1,
+    picoquic_mc_state_reason_administrative_block = 0x2,
+    picoquic_mc_state_reason_protocol_error = 0x3,
+    picoquic_mc_state_reason_property_violation = 0x4,
+    picoquic_mc_state_reason_unsynchronized_properties = 0x5,
+    picoquic_mc_state_reason_id_collision = 0x6,
+    picoquic_mc_state_reason_held_down = 0x10,
+    picoquic_mc_state_reason_max_rate_exceeded = 0x12,
+    picoquic_mc_state_reason_high_loss = 0x13,
+    picoquic_mc_state_reason_excessive_spurious_traffic = 0x14,
+    picoquic_mc_state_reason_max_streams_exceeded = 0x15,
+    picoquic_mc_state_reason_limit_violation = 0x16,
+} picoquic_mc_state_reason_enum;
 
 /* forward definition to avoid full dependency on picotls.h */
 typedef struct st_ptls_iovec_t ptls_iovec_t; 
@@ -707,7 +724,11 @@ void picoquic_set_default_multicast_option(picoquic_quic_t* quic, int multicast_
 int picoquic_set_default_multicast_client_params(picoquic_quic_t* quic, picoquic_tp_multicast_client_params_t* params);
 
 /* Create a new multicast channel within the given QUIC context */
-int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, struct sockaddr_storage* group_ipv4, struct sockaddr_storage* group_ipv6);
+int picoquic_create_multicast_channel(picoquic_quic_t* quic, picoquic_multicast_channel_t** mc_channel, int max_clients, struct sockaddr_storage* group_ipv4, struct sockaddr_storage* group_ipv6);
+
+/* Prepare MC_ANNOUNCE, MC_KEY and MC_JOIN frame and queue sending to client */
+int picoquic_schedule_mc_announce_and_join(picoquic_cnx_t* cnx, picoquic_multicast_channel_t* channel);
+
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);
 

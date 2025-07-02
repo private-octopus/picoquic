@@ -631,11 +631,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         if (extension_mode == 1) {
             bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_multicast_server_support);
         } else {
-            // CLEAN MC: Debug prints
-            uint8_t* bytes_before = bytes;
             bytes = picoquic_encode_transport_param_multicast_client_params(bytes, bytes_max, &cnx->local_parameters.multicast_client_params);
-            int length = bytes - bytes_before;
-            print_bits(bytes_before, length);
+            // CLEAN MC: Debug prints
+            // uint8_t* bytes_before = bytes;
+            // int length = bytes - bytes_before;
+            // print_bits(bytes_before, length);
         }
     }
 
@@ -1021,7 +1021,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     } 
 
                     // CLEAN MC: Debug prints
-                    fprintf(stdout, "Received: IPv4: %i, IPv6: %i, Max Aggr: %lu, Max Channels: %lu, Hash Algos supported: %lu, Encr Algos supported: %lu\n", 
+                    fprintf(stdout, "Received multicast_client_params: IPv4: %i, IPv6: %i, Max Aggr: %lu, Max Channels: %lu, Hash Algos supported: %lu, Encr Algos supported: %lu\n", 
                         cnx->remote_parameters.multicast_client_params.ipv4_channels_allowed, 
                         cnx->remote_parameters.multicast_client_params.ipv6_channels_allowed, 
                         cnx->remote_parameters.multicast_client_params.max_aggregate_rate,
@@ -1029,12 +1029,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.multicast_client_params.hash_algorithms_supported,
                         cnx->remote_parameters.multicast_client_params.encryption_algorithms_supported
                     );
-
-                    fprintf(stdout, "Hash Algos supported: ");
-                    print_bits_16(cnx->remote_parameters.multicast_client_params.hash_algorithms_list, cnx->remote_parameters.multicast_client_params.hash_algorithms_supported);
-
-                    fprintf(stdout, "Encr Algos supported: ");
-                    print_bits_16(cnx->remote_parameters.multicast_client_params.encryption_algorithms_list, cnx->remote_parameters.multicast_client_params.encryption_algorithms_supported);
 
                     break;
                 }

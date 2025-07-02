@@ -88,6 +88,9 @@ int picoquic_sprintf(char* buf, size_t buf_len, size_t * nb_chars, const char* f
 extern const picoquic_connection_id_t picoquic_null_connection_id;
 uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic_connection_id_t cnx_id);
 uint8_t picoquic_parse_connection_id(const uint8_t* bytes, uint8_t len, picoquic_connection_id_t *cnx_id);
+uint8_t picoquic_format_multicast_channel_id(uint8_t* bytes, size_t bytes_max, picoquic_multicast_channel_id_t ch_id);
+uint8_t picoquic_parse_multicast_channel_id(const uint8_t * bytes, uint8_t len, picoquic_multicast_channel_id_t * ch_id);
+int picoquic_multicast_channel_id_exists_in_cnx(picoquic_multicast_channel_id_t * ch_id, picoquic_cnx_t* cnx);
 int picoquic_is_connection_id_null(const picoquic_connection_id_t * cnx_id);
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2);
 uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed);
@@ -107,6 +110,7 @@ int picoquic_addr_length(const struct sockaddr* addr);
 void picoquic_store_addr(struct sockaddr_storage * stored_addr, const struct sockaddr * addr);
 void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * ip_addr_len);
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
+int picoquic_store_byte_addr(struct sockaddr_storage* stored_addr, int addr_family, const uint8_t* addr_bytes, uint16_t port);
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
 
@@ -173,6 +177,7 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t *
 // CLEAN MC: Remove debugging functions
 void print_bits(const uint8_t* array, size_t length);
 void print_bits_16(const uint16_t* array, size_t length);
+void print_hex_bytes(const uint8_t *data, size_t len);
 
 #define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 #define VARINT_LEN_T(bytes, t_len) (((t_len)1) << ((bytes[0] >> 6)&3))

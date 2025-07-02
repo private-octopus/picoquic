@@ -408,6 +408,44 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
     return val64;
 }
 
+uint8_t picoquic_format_multicast_channel_id(uint8_t* bytes, size_t bytes_max, picoquic_multicast_channel_id_t ch_id)
+{
+    uint8_t copied = ch_id.id_len;
+    if (copied > bytes_max || copied == 0) {
+        copied = 0;
+    } else {
+        memcpy(bytes, ch_id.id, copied);
+    }
+
+    return copied;
+}
+
+uint8_t picoquic_parse_multicast_channel_id(const uint8_t * bytes, uint8_t len, picoquic_multicast_channel_id_t * ch_id)
+{
+    if (len <= PICOQUIC_CONNECTION_ID_MAX_SIZE) {
+        ch_id->id_len = len;
+        memcpy(ch_id->id, bytes, len);
+    } else {
+        len = 0;
+        ch_id->id_len = 0;
+    }
+    return len;
+}
+
+int picoquic_multicast_channel_id_exists_in_cnx(picoquic_multicast_channel_id_t * ch_id, picoquic_cnx_t* cnx)
+{
+    for (int i = 0; i < cnx->nb_mc_channels; i++) {
+        picoquic_mc_channel_in_cnx_t* channel = cnx->mc_channels[i];
+        int len = (int) channel->channel->channel_id.id_len < (int) ch_id->id_len ? (int) channel->channel->channel_id.id_len : (int) ch_id->id_len;
+        
+        if (memcmp(channel->channel->channel_id.id, ch_id->id, len) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /* Hash function for addresses. */
 
 size_t picoquic_hash_addr_bytes(const struct sockaddr* addr, uint8_t* bytes)
@@ -631,6 +669,31 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
     }
     return ret;
+}
+
+int picoquic_store_byte_addr(struct sockaddr_storage* stored_addr, int addr_family, const uint8_t* addr_bytes, uint16_t port) {
+    memset(stored_addr, 0, sizeof(*stored_addr));
+    
+    // hint: in picoquic, sin_port/sin6_port is always in host byte format, so no ntohs() is needed
+    // see: https://github.com/private-octopus/picoquic/pull/1808
+
+    if (addr_family == AF_INET) { 
+        struct sockaddr_in *addr4 = (struct sockaddr_in *)stored_addr;
+        addr4->sin_family = addr_family;
+        addr4->sin_port = port; 
+        memcpy(&addr4->sin_addr, addr_bytes, 4);
+    } 
+    else if (addr_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)stored_addr;
+        addr6->sin6_family = addr_family;
+        addr6->sin6_port = port;
+        memcpy(&addr6->sin6_addr, addr_bytes, 16);
+    }
+    else {
+        return -1;
+    }
+
+    return 0;
 }
 
 /* Return a directory path based on solution dir and file name */
@@ -1365,4 +1428,10 @@ void print_bits_16(const uint16_t* array, size_t length) {
         printf(", ");
     }
     printf("\n");
+}
+
+void print_hex_bytes(const uint8_t *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        printf("%02X ", data[i]);
+    }
 }

@@ -6159,6 +6159,239 @@ int picoquic_process_ack_of_observed_address_frame(picoquic_cnx_t* cnx, picoquic
     return ret;
 }
 
+uint8_t* picoquic_format_mc_announce_frame(uint8_t* bytes, const uint8_t* bytes_max, picoquic_multicast_channel_t* channel, picoquic_path_t* path_x, int * more_data)
+{
+    uint64_t ftype = 0;
+
+    if (channel->group_ip.ss_family == AF_INET6) {
+        ftype = picoquic_frame_type_mc_announce_v6;
+    }
+    else {
+        ftype = picoquic_frame_type_mc_announce_v4;
+    }
+
+    uint8_t* bytes0 = bytes;
+
+    // Frame type
+    // Channel ID Length
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ftype)) == NULL
+        || (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, channel->channel_id.id_len)) == NULL) {
+        *more_data = 1;
+        return bytes0;
+    } 
+
+    // CLEAN MC: Refactor event/error logging to qlog    
+    fprintf(stdout, "Announce MC Channel with ID: ");
+    print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);
+    fprintf(stdout, "\n");
+    
+    // Channel ID
+    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    if (bytes_copied == 0) {
+        *more_data = 1;
+        return bytes0;
+    } else {
+        bytes += bytes_copied;
+    }
+
+    // Source IP
+    // TODO MC: Make source address configurable
+    struct sockaddr_storage* src_addr = &path_x->local_addr;
+    uint8_t* src_addr_text;
+    uint8_t src_addr_text_len;
+    picoquic_get_ip_addr((struct sockaddr*) src_addr, &src_addr_text, &src_addr_text_len);
+
+    for (int i = 0; i < src_addr_text_len; i++) {
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, src_addr_text[i])) == NULL) {
+            *more_data = 1;
+            return bytes0;
+        }
+    }
+
+    // Group IP
+    uint8_t* group_addr_text;
+    uint8_t group_addr_text_len;
+    picoquic_get_ip_addr((struct sockaddr*) &channel->group_ip, &group_addr_text, &group_addr_text_len);
+
+    for (int i = 0; i < group_addr_text_len; i++) {
+        if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, group_addr_text[i])) == NULL) {
+            *more_data = 1;
+            return bytes0;
+        }
+    }
+
+    uint16_t port = picoquic_get_addr_port((struct sockaddr*) &channel->group_ip);
+
+    // UDP Port
+    // Header Protection Algorithm
+    // Header Secret Length
+    if ((bytes = picoquic_frames_uint16_encode(bytes, bytes_max, port)) == NULL
+    || (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->header_protection_algorithm)) == NULL
+    || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, channel->header_secret.secret_len)) == NULL) {
+        *more_data = 1;
+        return bytes0;
+    }
+
+    // Header Secret
+    if (bytes + channel->header_secret.secret_len < bytes_max) {
+        memcpy(bytes, channel->header_secret.secret, channel->header_secret.secret_len);
+        bytes += channel->header_secret.secret_len;
+    } else {
+        *more_data = 1;
+        return bytes0;
+    }
+
+    // AEAD Algorithm
+    // Hash Algorithm
+    // Max Rate
+    // Max ACK delay
+    if ((bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->aead_algorithm)) == NULL
+        || (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->hash_algorithm)) == NULL
+        || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, channel->max_rate)) == NULL
+        || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (channel->max_ack_delay / (uint64_t) 1000))) == NULL
+    ) {
+        *more_data = 1;
+        return bytes0;
+    }
+
+    return bytes;
+}
+
+const uint8_t* picoquic_decode_mc_announce_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_id64) {
+    if (!cnx->is_multicast_enabled || !cnx->client_mode) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64, "received unexpected MC_ANNOUNCE frame");
+        return NULL;
+    }
+
+    int addr_family;
+    if (frame_id64 == picoquic_frame_type_mc_announce_v4) {
+        addr_family = AF_INET;
+    } 
+    else if (frame_id64 == picoquic_frame_type_mc_announce_v6) {
+        addr_family = AF_INET6;
+    } 
+    else {
+        return NULL;
+    }
+
+    picoquic_multicast_channel_t* channel = malloc(sizeof(picoquic_multicast_channel_t));
+    if (channel == NULL) {
+        fprintf(stderr, "could not create multicast channel: malloc failed\n");
+        return NULL;
+    }
+
+    uint8_t id_len;
+
+    // Channel ID Length
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
+        return NULL;
+    }
+
+    // Channel ID
+    uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel->channel_id);
+    if (bytes_copied == 0) {
+        return NULL;
+    } else {
+        if (picoquic_multicast_channel_id_exists_in_cnx(&channel->channel_id, cnx) != 0) {
+            fprintf(stderr, "Received a duplicate MC_ANNOUNCE for channel\n");
+            return NULL;
+        }
+
+        bytes += bytes_copied;
+    }
+
+    // if not enough bytes received for two addresses (src and group), then error
+    if ((addr_family == AF_INET && bytes + 8 > bytes_max)
+    || (addr_family == AF_INET6 && bytes + 32 > bytes_max)) 
+    {
+        return NULL;
+    }
+    
+    // Source IP
+    if (picoquic_store_byte_addr(&channel->source_ip, addr_family, bytes, 0) != 0) {
+        return NULL;
+    }
+
+    if (addr_family == AF_INET) {
+        bytes += 4;
+    }
+    else {
+        bytes += 16;
+    }
+
+    // UDP Port
+    uint16_t udp_port;
+    const uint8_t *bytes_after_port;
+
+    if ((addr_family == AF_INET && (bytes_after_port = picoquic_frames_uint16_decode(bytes + 4, bytes_max, &udp_port)) == NULL)
+        || (addr_family == AF_INET6 && (bytes_after_port = picoquic_frames_uint16_decode(bytes + 16, bytes_max, &udp_port)) == NULL)
+    ) {
+        return NULL;
+    }
+    // Group Addr
+    if (picoquic_store_byte_addr(&channel->group_ip, addr_family, bytes, udp_port) != 0) {
+        return NULL;
+    }
+
+    bytes = bytes_after_port;
+
+    // Header Protection Algo
+    // Header Secret Length
+    if ((bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->header_protection_algorithm)) == NULL
+    || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->header_secret.secret_len)) == NULL)  {
+        return NULL;
+    }
+
+    // Header Secret
+    if ((bytes + channel->header_secret.secret_len) > bytes_max) {
+        return NULL;
+    } else {
+        memcpy(channel->header_secret.secret, bytes, channel->header_secret.secret_len);
+        bytes += channel->header_secret.secret_len;
+    }
+
+    // AEAD Algo
+    // Integrity Hash Algo
+    if ((bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->aead_algorithm)) == NULL
+    || (bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->hash_algorithm)) == NULL) {
+        return NULL;
+    }
+
+    // Max Rate
+    // Max ACK delay
+    if((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->max_rate)) == NULL
+    || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->max_ack_delay)) == NULL)  {
+        return NULL;
+    }
+
+    picoquic_mc_channel_in_cnx_t* new_channel_in_cnx = malloc(sizeof(picoquic_mc_channel_in_cnx_t));
+    if (new_channel_in_cnx == NULL) {
+        fprintf(stderr, "could not create picoquic_mc_channel_in_cnx_t: malloc failed\n");
+        return NULL;
+    }
+
+    picoquic_mc_channel_in_cnx_t** new_channel_list = (picoquic_mc_channel_in_cnx_t **)malloc((cnx->nb_mc_channels + 1) * sizeof(picoquic_mc_channel_in_cnx_t *));
+
+    if (new_channel_list != NULL) {
+        if (cnx->mc_channels != NULL) {
+            memset(new_channel_list, 0, sizeof(picoquic_mc_channel_in_cnx_t*));
+            if (cnx->nb_mc_channels > 0) {
+                memcpy(new_channel_list, cnx->mc_channels, cnx->nb_mc_channels * sizeof(picoquic_mc_channel_in_cnx_t *));
+            }
+            free(cnx->mc_channels);
+        }
+        cnx->mc_channels = new_channel_list;
+    }
+
+    memset(new_channel_in_cnx, 0, sizeof(picoquic_mc_channel_in_cnx_t));
+    new_channel_in_cnx->channel = channel;
+    new_channel_in_cnx->state = 2; // "announced"
+
+    cnx->mc_channels[cnx->nb_mc_channels] = new_channel_in_cnx;
+    cnx->nb_mc_channels++;
+
+    return bytes;
+}
 
 /* BDP frames as defined in https://tools.ietf.org/html/draft-kuhn-quic-0rtt-bdp-09
 */
@@ -6556,6 +6789,39 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             is_path_probing_frame = 1;
                             ack_needed = 1;
                             bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
+                            break;
+
+                        case picoquic_frame_type_mc_announce_v4:
+                        case picoquic_frame_type_mc_announce_v6:
+                            bytes = picoquic_decode_mc_announce_frame(cnx, bytes, bytes_max, frame_id64); 
+                            ack_needed = 1;
+
+                            // CLEAN MC: Refactor event/error logging to qlog
+                            if (bytes != NULL) {
+                                picoquic_multicast_channel_t* channel = cnx->mc_channels[0]->channel;
+                                fprintf(stdout, "Got MC_ANNOUNCE frame for channel id ");
+                                print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);
+
+                                char src_ip[128];
+                                picoquic_addr_text((struct sockaddr*) &channel->source_ip, src_ip, sizeof(src_ip));
+                                fprintf(stdout, "\n -- Source IP: %s\n", src_ip);
+                                
+                                char group_ip[128];
+                                picoquic_addr_text((struct sockaddr*) &channel->group_ip, group_ip, sizeof(group_ip));
+                                fprintf(stdout, " -- Group IP: %s\n", group_ip);
+
+                                fprintf(stdout, " -- Header Algo: 0x%04X\n", channel->header_protection_algorithm);
+                                fprintf(stdout, " -- Header Secret length: %lu\n", channel->header_secret.secret_len);
+                                fprintf(stdout, " -- AEAD Algo: 0x%04X\n", channel->aead_algorithm);
+                                fprintf(stdout, " -- Hash Algo: ID %u\n", channel->hash_algorithm);
+                                fprintf(stdout, " -- Max rate: %li\n", channel->max_rate);
+                                fprintf(stdout, " -- Max ACK delay: %li\n", channel->max_ack_delay);
+                            }
+
+                            if (bytes == NULL) {
+                                fprintf(stdout, "ERROR: bytes == NULL after decoding MC_ANNOUNCE frame\n");
+                            }
+
                             break;
                         default:
                             /* Not implemented yet! */

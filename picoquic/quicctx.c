@@ -901,7 +901,9 @@ static void picoquic_create_random_mc_channel_id(picoquic_quic_t* quic, picoquic
     channel_id->id_len = id_length;
 }
 
-int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, struct sockaddr_storage* group_ipv4, struct sockaddr_storage* group_ipv6) {
+int picoquic_create_multicast_channel(picoquic_quic_t* quic, picoquic_multicast_channel_t** mc_channel, int max_clients, 
+    struct sockaddr_storage* group_ipv4, struct sockaddr_storage* group_ipv6) 
+{
     if (quic == NULL || max_clients <= 0 || (group_ipv4 == NULL && group_ipv6 == NULL)) {
         fprintf(stderr, "could not create multicast channel: invalid parameters\n");
         return -1;
@@ -938,7 +940,6 @@ int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, st
     picoquic_create_random_mc_channel_id(quic, &new_channel->channel_id, quic->local_cnxid_length);
 
     // Only supports ipv4 channels for now
-    new_channel->type = picoquic_mc_channel_type_ipv4;
     new_channel->group_ip = *group_ipv4;
 
     // TODO MC: Make configurable
@@ -948,19 +949,67 @@ int picoquic_create_multicast_channel(picoquic_quic_t* quic, int max_clients, st
     new_channel->max_rate = 20;
     new_channel->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
 
-    if (new_channel->mc_tls_ctx == NULL) {
-        /* Only initialize TLS after all parameters have been set */
-        if (picoquic_tlscontext_create_mc(quic, new_channel, 0) != 0) {
-            // TODO MC: Delete channel
-            // picoquic_delete_mc_channel(new_channel);
-            // new_channel = NULL;
-        }
-    }
+    // CLEAN MC: Remove if not needed
+    // if (new_channel->mc_tls_ctx == NULL) {
+    //     /* Only initialize TLS after all parameters have been set */
+    //     if (picoquic_tlscontext_create_mc(quic, new_channel, 0) != 0) {
+    //         // TODO MC: Delete channel
+    //         // picoquic_delete_mc_channel(new_channel);
+    //         // new_channel = NULL;
+    //     }
+    // }
 
     picoquic_compute_multicast_secrets(quic, new_channel);
 
     quic->mc_channels[quic->nb_mc_channels] = new_channel;
     quic->nb_mc_channels++;
+
+    *mc_channel = new_channel;
+
+    return 0;
+}
+
+// Schedule MC_ANNOUNCE, MC_KEY and MC_JOIN frames for sending to client implicitly by adding it to cnx->mc_channels
+int picoquic_schedule_mc_announce_and_join(picoquic_cnx_t* cnx, picoquic_multicast_channel_t* channel) 
+{
+    if (cnx->is_multicast_enabled == 0) {
+        fprintf(stderr, "Could not initiate multicast join: Multicast not enabled on cnx\n");
+        return -1;
+    }
+
+    picoquic_mc_channel_in_cnx_t* new_channel_in_cnx = malloc(sizeof(picoquic_mc_channel_in_cnx_t));
+    if (new_channel_in_cnx == NULL) {
+        fprintf(stderr, "could not create picoquic_mc_channel_in_cnx_t: malloc failed\n");
+        return -1;
+    }
+
+    if (picoquic_multicast_channel_id_exists_in_cnx(&channel->channel_id, cnx) != 0) {
+        fprintf(stderr, "could not schedule multicast announce and join: channel was already added to connection\n");
+        return -1;
+    }
+
+    // alloc space for one new pointer in cnx->mc_channels
+    picoquic_mc_channel_in_cnx_t** new_channel_list = (picoquic_mc_channel_in_cnx_t **)malloc((cnx->nb_mc_channels + 1) * sizeof(picoquic_mc_channel_in_cnx_t *));
+
+    if (new_channel_list != NULL)
+    {
+        if (cnx->mc_channels != NULL)
+        {
+            memset(new_channel_list, 0, sizeof(picoquic_mc_channel_in_cnx_t*));
+            if (cnx->nb_mc_channels > 0)
+            {
+                memcpy(new_channel_list, cnx->mc_channels, cnx->nb_mc_channels * sizeof(picoquic_mc_channel_in_cnx_t *));
+            }
+            free(cnx->mc_channels);
+        }
+        cnx->mc_channels = new_channel_list;
+    }
+
+    memset(new_channel_in_cnx, 0, sizeof(picoquic_mc_channel_in_cnx_t));
+    new_channel_in_cnx->channel = channel;
+
+    cnx->mc_channels[cnx->nb_mc_channels] = new_channel_in_cnx;
+    cnx->nb_mc_channels++;
 
     return 0;
 }
@@ -2649,7 +2698,6 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
         int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
         if (path_id >= 0) {
             stream->affinity_path = cnx->path[path_id];
-            fprintf(stdout, "Affinity path set to Path ID %i for Stream ID %li\n", path_id, stream_id);
         }
         else {
             ret = -1;

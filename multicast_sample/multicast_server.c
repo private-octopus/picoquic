@@ -96,6 +96,8 @@ typedef struct st_multicast_server_ctx_t
     multicast_server_stream_ctx_t *first_stream;
     multicast_server_stream_ctx_t *last_stream;
     multicast_server_channel_ctx_t *ipv4_channel;
+    picoquic_multicast_channel_t *mc_channel;
+    int multicast_initialized;
 } multicast_server_ctx_t;
 
 multicast_server_stream_ctx_t *multicast_server_create_stream_context(multicast_server_ctx_t *server_ctx, uint64_t stream_id)
@@ -328,7 +330,6 @@ int multicast_server_callback(picoquic_cnx_t *cnx,
                         {
                             /* If data needs to be sent, set the context as active */
                             ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
-                            picoquic_set_stream_path_affinity(cnx, stream_id, 1);
                         }
                         else
                         {
@@ -412,6 +413,11 @@ int multicast_server_callback(picoquic_cnx_t *cnx,
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
             /* Check that the transport parameters are what the multicast expects */
+            if (cnx->is_multicast_enabled == 1 && server_ctx->mc_channel != NULL && server_ctx->multicast_initialized != 1) {
+                // send announce, key and join frame to client
+                picoquic_schedule_mc_announce_and_join(cnx, server_ctx->mc_channel);
+                server_ctx->multicast_initialized = 1;
+            }
             break;
         default:
             /* unexpected */
@@ -481,7 +487,7 @@ int picoquic_multicast_server(int server_port, const char *server_cert, const ch
         struct sockaddr_storage group_ip;
         picoquic_store_text_addr(&group_ip, PICOQUIC_MULTICAST_GROUP_IP, PICOQUIC_MULTICAST_GROUP_PORT);
 
-        picoquic_create_multicast_channel(quic, PICOQUIC_MULTICAST_MAX_CLIENTS, &group_ip, NULL);
+        picoquic_create_multicast_channel(quic, &default_context.mc_channel, PICOQUIC_MULTICAST_MAX_CLIENTS, &group_ip, NULL);
     }
 
     /* Wait for packets using the wait loop provided in the library.
