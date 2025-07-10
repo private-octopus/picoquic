@@ -3204,8 +3204,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(ech_rr) {
-            int ret = ech_rr_test();
+        TEST_METHOD(ech_config) {
+            int ret = ech_config_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_config_p) {
+            int ret = ech_config_p_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3216,8 +3222,8 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(ech_cert) {
-            int ret = ech_cert_test();
+        TEST_METHOD(ech_grease) {
+            int ret = ech_grease_test();
 
             Assert::AreEqual(ret, 0);
         }

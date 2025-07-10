@@ -958,12 +958,18 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
+        fprintf(err_fd, "Cannot allocate simulation context.\n");
         ret = -1;
     }
-
     while (ret == 0) {
         int is_active = 0;
-        ret = picoquic_ns_step(cc_ctx, &is_active);
+
+        if ((ret = picoquic_ns_step(cc_ctx, &is_active)) != 0) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Simulation fails at simulated time %" PRIu64 " after %d inactive steps, ret = %d(0x%x)\n",
+                    cc_ctx->simulated_time, nb_inactive, ret, ret);
+            }
+        }
 
         if (is_active) {
             nb_inactive = 0;
@@ -971,6 +977,10 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
         else {
             nb_inactive++;
             if (nb_inactive > 512) {
+                if (err_fd != NULL) {
+                    fprintf(err_fd, "Simulation stalls at simulated time %" PRIu64 " after %d inactive steps\n",
+                        cc_ctx->simulated_time, nb_inactive);
+                }
                 ret = -1;
                 break;
             }
@@ -980,12 +990,26 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
             break;
         }
     }
+    if (err_fd != NULL && ret != 0) {
+        fprintf(err_fd, "Simulated time %" PRIu64 ", ret = %d(0x%x)\n",
+            cc_ctx->simulated_time, ret, ret);
+    }
 
     if (ret == 0 &&
         (cc_ctx->client_ctx[0]->cnx == NULL ||
         (cc_ctx->client_ctx[0]->cnx->cnx_state == picoquic_state_disconnected &&
             (cc_ctx->client_ctx[0]->cnx->local_error != 0 ||
                 cc_ctx->client_ctx[0]->cnx->remote_error != 0)))) {
+        if (err_fd != NULL) {
+            if (cc_ctx->client_ctx[0]->cnx == NULL) {
+                fprintf(err_fd, "Connection was deleted before simulated time %" PRIu64 "\n",
+                    cc_ctx->simulated_time);
+            }
+            else {
+                fprintf(err_fd, "Connection was disconnected before simulated time %" PRIu64 ", local err: %" PRIu64", remote err: %" PRIu64 "\n",
+                    cc_ctx->simulated_time, cc_ctx->client_ctx[0]->cnx->local_error, cc_ctx->client_ctx[0]->cnx->remote_error);
+            }
+        }
         ret = -1;
     }
 

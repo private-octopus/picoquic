@@ -1667,9 +1667,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             path_x->cnx = cnx;
             picoquic_tuple_t* tuple = picoquic_create_tuple(path_x, local_addr, peer_addr, if_index);
 
-            if (tuple == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            } else {
+            if (tuple != NULL) {
                 /* Initialize per path time measurement */
                 path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
                 path_x->rtt_variant = 0;
