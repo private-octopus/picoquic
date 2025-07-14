@@ -310,7 +310,8 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
         else if (tuple->challenge_required && !tuple->challenge_verified) {
             uint64_t next_challenge_time = picoquic_tuple_challenge_time(path_x, tuple, current_time);
             if (current_time >= next_challenge_time) {
-                break;
+                // TODO: Figure out what should really happen here, but break; causes constant path challenging.
+                // break;
             }
             else if (next_challenge_time < *next_wake_time) {
                 *next_wake_time = next_challenge_time;
