@@ -40,6 +40,7 @@ extern "C" {
     typedef int (*picoquic_set_tls_key_provider_t)(ptls_context_t* ctx, const uint8_t* data, size_t len);
     typedef uint8_t* (*picoquic_get_private_key_from_file_t)(char const* file_name, int* key_length);
     typedef int (*picoquic_set_private_key_from_file_t)(char const* keypem, ptls_context_t* ctx);
+    typedef int (*picoquic_get_public_key_from_private_t)(char const* keypem, uint8_t ** pubkey, size_t * pubkey_len);
     typedef void (*picoquic_dispose_sign_certificate_t)(ptls_sign_certificate_t* cert);
     typedef ptls_iovec_t* (*picoquic_get_certs_from_file_t)(char const* file_name, size_t* count);
     typedef void (*picoquic_dispose_certificate_verifier_t)(ptls_verify_certificate_t* verifier);
@@ -56,7 +57,8 @@ extern "C" {
     void picoquic_register_tls_key_provider_fn(
         picoquic_set_private_key_from_file_t set_private_key_from_file_fn,
         picoquic_dispose_sign_certificate_t dispose_sign_certificate_fn,
-        picoquic_get_certs_from_file_t get_certs_from_file_fn);
+        picoquic_get_certs_from_file_t get_certs_from_file_fn,
+        picoquic_get_public_key_from_private_t get_public_key_from_private_fn);
 
     void picoquic_register_verify_certificate_fn(picoquic_get_certificate_verifier_t certificate_verifier_fn,
         picoquic_dispose_certificate_verifier_t dispose_certificate_verifier_fn,
@@ -90,6 +92,7 @@ extern "C" {
     extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
     extern picoquic_dispose_sign_certificate_t picoquic_dispose_sign_certificate_fn;
     extern picoquic_get_certs_from_file_t picoquic_get_certs_from_file_fn;
+    extern picoquic_get_public_key_from_private_t picoquic_get_public_key_from_private_fn;
     extern picoquic_get_certificate_verifier_t picoquic_get_certificate_verifier_fn;
     extern picoquic_dispose_certificate_verifier_t picoquic_dispose_certificate_verifier_fn;
     extern picoquic_set_tls_root_certificates_t picoquic_set_tls_root_certificates_fn;
@@ -112,6 +115,7 @@ extern "C" {
         picoquic_cnx_t* cnx;
         int client_mode;
         ptls_raw_extension_t ext[2];
+        ptls_iovec_t retry_configs;
         ptls_handshake_properties_t handshake_properties;
         ptls_iovec_t* alpn_vec;
         size_t alpn_vec_size;

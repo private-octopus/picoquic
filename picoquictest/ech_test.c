@@ -43,69 +43,17 @@ typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 #include "picoquic_binlog.h"
 
- /* ech_rr_test:
- * Create an ech RR.
+ /* ech_config_test:
+ * Create an ech configuration list, i.e., the content of an HTTPS "ech=" parameter.
   */
 #define ECH_CONFIG_FILE_TXT "ech_config.txt"
-#define ECH_RR_FILE_TXT "ech_rr.txt"
 
 int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
-
-int picoquic_ech_parse_public_key(ptls_iovec_t public_key_asn1,
-    uint16_t* group_id,
-    ptls_iovec_t* public_key_bits);
-int picoquic_ech_get_kem_from_curve(ptls_hpke_kem_t** kem, uint16_t group_id);
-int picoquic_ech_get_ciphers_from_kem(ptls_hpke_cipher_suite_t** cipher_vec, size_t cipher_vec_nb_max, uint16_t kem_id); 
-int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name);
-int picoquic_ech_create_config_from_rr(uint8_t** config, size_t* config_len, const ptls_buffer_t* rr_buf);
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const* public_key_file, char const* public_name);
-int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, char const* cert_file, char const* public_name);
+int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name);
+int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name);
 
-int ech_test_save_buf(ptls_iovec_t io_buf, char const * file_name)
-{
-    int ret = 0;
-
-    int last_err;
-    size_t ech_text_size = ptls_base64_howlong(io_buf.len);
-    char* ech_text = (char*)malloc(ech_text_size + 1);
-
-    if (ech_text == NULL) {
-        DBG_PRINTF("Cannot allocate %d bytes for text buffer", ech_text_size);
-        ret = -1;
-    }
-    else {
-        int lt = ptls_base64_encode(io_buf.base, io_buf.len, ech_text);
-        if (lt != ech_text_size + 1) {
-            DBG_PRINTF("Cannot base64 encode %zu bytes into %zu", io_buf.len, ech_text_size);
-            ret = -1;
-        }
-    }
-    if (ret == 0) {
-        FILE* F = picoquic_file_open_ex(file_name, "w", &last_err);
-        if (F == NULL) {
-            DBG_PRINTF("Cannot open file <%s>, err: %x", file_name, last_err);
-            ret = -1;
-        }
-        else {
-            size_t written = fwrite(ech_text, 1, ech_text_size, F);
-            if (written != ech_text_size) {
-                DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", ech_text, file_name, written);
-                ret = -1;
-            }
-            else {
-                (void)fprintf(F, "\n");
-                DBG_PRINTF("Wrote %d bytes on file <%s>", ech_text_size + 1, file_name);
-            }
-            picoquic_file_close(F);
-        }
-    }
-    if (ech_text != NULL) {
-        free(ech_text);
-    }
-    return ret;
-}
-
-int ech_test_check_buf(ptls_iovec_t io_buf, char const* ref_file_name)
+int ech_test_check_buf(uint8_t* config, size_t config_len, char const* ref_file_name)
 {
     int ret = 0;
     char test_ref_file[512];
@@ -117,38 +65,36 @@ int ech_test_check_buf(ptls_iovec_t io_buf, char const* ref_file_name)
         DBG_PRINTF("Cannot find <%s> file in <%s>, err: %d (0x%x)", ref_file_name, picoquic_solution_dir, ret, ret);
     }
     else {
-        ptls_buffer_t config;
-        ptls_buffer_init(&config, "", 0);
-        ret = picoquic_ech_read_config(&config, test_ref_file);
+        ptls_buffer_t config_buffer;
+        ptls_buffer_init(&config_buffer, "", 0);
+        ret = picoquic_ech_read_config(&config_buffer, test_ref_file);
         if (ret != 0) {
             DBG_PRINTF("Cannot read reference for <%s> from <%s>, err: %d (0x%x)", ref_file_name, test_ref_file, ret, ret);
         }
         else {
-            if (config.off != io_buf.len ||
-                memcmp(config.base, io_buf.base, io_buf.len) != 0) {
+            if (config_buffer.off != config_len ||
+                memcmp(config_buffer.base, config, config_len) != 0) {
                 DBG_PRINTF("Data does not match reference for <%s> from <%s>, len = %zu vs %zu",
-                    ref_file_name, test_ref_file, io_buf.len, config.off);
+                    ref_file_name, test_ref_file, config_len, config_buffer.off);
                 ret = -1;
             }
         }
-        ptls_buffer_dispose(&config);
+        ptls_buffer_dispose(&config_buffer);
     }
     return ret;
 }
 
-int ech_rr_test()
+int ech_config_test()
 {
     int ret = 0;
     char test_server_pub_key_file[512];
-    ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
     size_t pub_key_objects = 0;
     const char* public_name = "test.example.com";
     uint8_t config_id = 1;
     ptls_hpke_kem_t* kem = NULL;
     uint8_t max_name_length = 128;
-    ptls_buffer_t rr_buf;
-    uint8_t smallbuf[256];
-    ptls_buffer_init(&rr_buf, (void*)smallbuf, sizeof(smallbuf));
+    uint8_t* config = NULL;
+    size_t config_len = 0;
 
     if (picoquic_hpke_kems[0] == NULL) {
         picoquic_tls_api_init();
@@ -159,50 +105,65 @@ int ech_rr_test()
     if (ret != 0) {
         DBG_PRINTF("Cannot find pub_key file in <%s>, err: %d (0x%x)", picoquic_solution_dir, ret, ret);
     }
-    else {
-        ret = ptls_load_pem_objects(test_server_pub_key_file, "PUBLIC KEY", &public_key_asn1, 1, &pub_key_objects);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot load pubkey from <%s>, err: %x", test_server_pub_key_file, ret);
-        }
-        else 
-        {
-            ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
-            }
-        }
-    }
-    /* save an RR representation in ech_rr.txt */
-    if (ret == 0) {
-        ptls_iovec_t io_rr_buf = { .base = rr_buf.base, .len = rr_buf.off };
-        ret = ech_test_save_buf(io_rr_buf, ECH_RR_FILE_TXT);
-        if (ret == 0) {
-            ret = ech_test_check_buf(io_rr_buf, PICOQUIC_TEST_ECH_RR_REF);
-        }
+    else if ((ret = picoquic_ech_create_config_from_public_key(&config, &config_len, test_server_pub_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
     }
     /* Save a config representation in ech_config.txt */
     if (ret == 0) {
-        uint8_t* config = NULL;
-        size_t config_len = 0;
-        if ((ret = picoquic_ech_create_config_from_rr(&config, &config_len, &rr_buf)) != 0) {
-            DBG_PRINTF("Cannot create config from rr_buf size %zu", rr_buf.off);
-        }
-        else {
-            ptls_iovec_t io_config = { .base = config, .len = config_len };
-
-            ret = ech_test_save_buf(io_config, ECH_CONFIG_FILE_TXT);
-            if (ret == 0) {
-                ret = ech_test_check_buf(io_config, PICOQUIC_TEST_ECH_CONFIG_REF);
-            }
-            free(config);
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_FILE_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(config, config_len, PICOQUIC_TEST_ECH_CONFIG_REF);
         }
     }
-    ptls_buffer_dispose(&rr_buf);
-    free(public_key_asn1.base);
+
+    if (config != NULL) {
+        free(config);
+    }
 
     return ret;
 }
 
+int ech_config_p_test()
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    size_t pub_key_objects = 0;
+    const char* public_name = "test.example.com";
+    uint8_t config_id = 1;
+    ptls_hpke_kem_t* kem = NULL;
+    uint8_t max_name_length = 128;
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    }
+    else if ((ret = picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_key_file, ret, ret);
+    }
+
+    /* Save a config representation in ech_config.txt */
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_FILE_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(config, config_len, PICOQUIC_TEST_ECH_CONFIG_REF);
+        }
+    }
+
+    if (config != NULL) {
+        free(config);
+    }
+
+    return ret;
+}
+
+#if 0
 /* ECH test of config from CERT */
 int ech_cert_test()
 {
@@ -229,22 +190,48 @@ int ech_cert_test()
 
     return ret;
 }
-
+#endif
 /* ECH end to end test. Create a connection, verify that the proper files
 * are returned.
  */
 
-int ech_e2e_test()
+typedef struct st_ech_e2e_spec_t {
+    int expect_success;
+    int expect_grease;
+} ech_e2e_spec_t;
+
+int ech_test_check_retry_config(picoquic_cnx_t* cnx,
+    uint8_t* config, size_t config_len)
+{
+    int ret = 0;
+    uint8_t* retry_config;
+    size_t retry_config_len;
+
+    picoquic_ech_get_retry_config(cnx, &retry_config, &retry_config_len);
+
+    if (retry_config == NULL ||
+        retry_config_len != config_len ||
+        memcmp(retry_config, config, config_len) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int ech_e2e_test_one(ech_e2e_spec_t * spec)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xec, 0x8e, 0x2e, 0, 0, 0, 0, 0}, 8 };
     ptls_buffer_t ech_config_buf = { 0 };
-
     char ech_test_key_file[512];
     char ech_test_config_file[512];
     int ret;
+
+    initial_cid.id[3] = (uint8_t)spec->expect_success;
+    initial_cid.id[4] = (uint8_t)spec->expect_grease;
+
+    ptls_buffer_init(&ech_config_buf, "", 0);
 
     /* Create a test context with delayed init */
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -283,16 +270,18 @@ int ech_e2e_test()
     }
     if (ret == 0) {
         /* Read the ECH config from the same file used for the server */
-        ptls_buffer_init(&ech_config_buf, "", 0);
         ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
-        if (ret == 0) {
+    }
+
+    if (ret == 0) {
+        if (spec->expect_success) {
             picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
         }
         else {
             DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
         }
-        ptls_buffer_dispose(&ech_config_buf);
     }
+
     if (ret == 0) {
         /* start the client connection, thus creating a TLS context */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -308,9 +297,19 @@ int ech_e2e_test()
     }
 
     if (ret == 0) {
-        /* TODO: verify that ECH worked! */
-        if (!picoquic_is_ech_handshake(test_ctx->cnx_client)) {
-            DBG_PRINTF("%s", "ECH negotiation failed!");
+        if (spec->expect_success) {
+            /* TODO: verify that ECH worked! */
+            if (!picoquic_is_ech_handshake(test_ctx->cnx_client)) {
+                DBG_PRINTF("%s", "ECH negotiation failed!");
+                ret = -1;
+            }
+        }
+        else if (picoquic_is_ech_handshake(test_ctx->cnx_client)) {
+            DBG_PRINTF("%s", "ECH negotiation should have failed!");
+            ret = -1;
+        }
+        else if (ech_test_check_retry_config(test_ctx->cnx_client,
+            ech_config_buf.base, ech_config_buf.off) != 0) {
             ret = -1;
         }
     }
@@ -323,4 +322,18 @@ int ech_e2e_test()
     }
 
     return ret;
+}
+
+int ech_e2e_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_success = 1;
+    return ech_e2e_test_one(&spec);
+}
+
+int ech_grease_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_grease = 1;
+    return ech_e2e_test_one(&spec);
 }

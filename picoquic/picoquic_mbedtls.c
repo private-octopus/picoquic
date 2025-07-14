@@ -100,7 +100,8 @@ void picoquic_mbedtls_load(int unload)
         picoquic_register_tls_key_provider_fn(
             ptls_mbedtls_load_private_key,
             ptls_mbedtls_dispose_sign_certificate,
-            picoquic_mbedtls_get_certs_from_file);
+            picoquic_mbedtls_get_certs_from_file,
+            NULL);
 
         picoquic_register_verify_certificate_fn(
             picoquic_mbedtls_get_certificate_verifier,

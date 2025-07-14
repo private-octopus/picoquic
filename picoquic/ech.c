@@ -42,7 +42,54 @@
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 
+/* Decode a base64 string. This is not strictly ECH related, 
+* but applications cannot easily access the base64 implementation in
+* picotls.
+*/
+int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt)
+{
+    int ret = 0;
+    ptls_buffer_t config;
+    uint8_t short_buf[256];
+    ptls_base64_decode_state_t d_state;
+    *v = NULL;
+    *v_len = 0;
+    ptls_buffer_init(&config, short_buf, sizeof(short_buf));
+    ptls_base64_decode_init(&d_state);
+    ret = ptls_base64_decode(b64_txt, &d_state, &config);
+    if (ret == 0 && d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0)) {
+        ret = 0;
+        if (config.off > 0) {
+            if ((*v = (uint8_t*)malloc(config.off)) == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                memcpy(*v, config.base, config.off);
+                *v_len = config.off;
+            }
+        }
+    }
+    ptls_buffer_dispose(&config);
+    return ret;
+}
+/* Encode a base64 string. This is not strictly ECH related,
+* but applications cannot easily access the base64 implementation in
+* picotls.
+*/
+int picoquic_base64_encode(const uint8_t* v, size_t v_len, char* b64, size_t b64_size, size_t* b64_len)
+{
 
+    int ret = 0;
+    size_t len = ptls_base64_howlong(v_len);
+    *b64_len = len;
+    if (len + 1 > b64_size) {
+        ret = -1;
+    }
+    else {
+        (void)ptls_base64_encode(v, v_len, b64);
+    }
+    return ret;
+}
 
 /* Read the configuration file.
 * We assume that it contains exactly one config, in base 64 encoding. 
@@ -71,6 +118,51 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
         if (ret == 0) {
             DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
         }
+    }
+    return ret;
+}
+
+
+int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name)
+{
+    int ret = 0;
+    int last_err;
+    size_t ech_text_size = 0;
+    size_t ech_text_len = 0;
+    char* ech_text = NULL;
+
+    (void)picoquic_base64_encode(config, config_len, ech_text, ech_text_size, &ech_text_len);
+    ech_text_size = ech_text_len + 1;
+    ech_text = (char*)malloc(ech_text_size);
+
+    if (ech_text == NULL) {
+        DBG_PRINTF("Cannot allocate %d bytes for text buffer", ech_text_size);
+        ret = -1;
+    }
+    else {
+        ret = picoquic_base64_encode(config, config_len, ech_text, ech_text_size, &ech_text_len);
+    }
+    if (ret == 0) {
+        FILE* F = picoquic_file_open_ex(file_name, "w", &last_err);
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open file <%s>, err: %x", file_name, last_err);
+            ret = -1;
+        }
+        else {
+            size_t written = fwrite(ech_text, 1, ech_text_size, F);
+            if (written != ech_text_size) {
+                DBG_PRINTF("Cannot write %d bytes on file <%s>, err= %zu", ech_text, file_name, written);
+                ret = -1;
+            }
+            else {
+                (void)fprintf(F, "\n");
+                DBG_PRINTF("Wrote %d bytes on file <%s>", ech_text_size + 1, file_name);
+            }
+            picoquic_file_close(F);
+        }
+    }
+    if (ech_text != NULL) {
+        free(ech_text);
     }
     return ret;
 }
@@ -297,7 +389,7 @@ void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 * "ech.configs" with a list of server configurations (HTTPS records.)
 * This data will be freed when deleted the tls_ctx for the connection.
 */
-int picoquic_ech_configure_client(picoquic_cnx_t* cnx, uint8_t * config_data, size_t config_length)
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_data, size_t config_length)
 {
     int ret = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
@@ -397,8 +489,6 @@ int picoquic_is_ech_handshake(picoquic_cnx_t* cnx)
 * From RFC 8410:
 * id-X25519    OBJECT IDENTIFIER ::= { 1 3 101 110 }
 */
-
-
 
 size_t picoquic_parse_public_key_asn1(ptls_iovec_t public_key_asn1,
     ptls_iovec_t* public_key_algo, ptls_iovec_t* public_key_param,
@@ -681,35 +771,32 @@ static uint8_t ech_config_id_from_config(ptls_iovec_t public_key_bits, ptls_hpke
 * and a configuration ID computed as combination of these local
 * parameters.
 */
-int picoquic_ech_encode_config(
-    ptls_buffer_t* config_buf,
-    uint8_t config_id,
-    ptls_hpke_kem_t* kem,
-    ptls_iovec_t public_key,
-    ptls_hpke_cipher_suite_t** ciphers,
-    uint8_t max_name_length,
-    char const* public_name
-) {
-    int ret = ptls_ech_encode_config(config_buf, config_id, kem, public_key,
-        ciphers, max_name_length, public_name);
+static int picoquic_ech_create_config_list_from_config(ptls_buffer_t* config_buf, uint8_t** config_list, size_t* config_list_len)
+{
+    int ret = 0;
+    size_t bin_size = config_buf->off + 2;
+    uint8_t* bin_val = (uint8_t*)malloc(bin_size);
+    if (bin_val == NULL) {
+        DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
+        ret = -1;
+    }
+    else {
+        bin_val[0] = (uint8_t)(((config_buf->off) >> 8) & 0xff);
+        bin_val[1] = (uint8_t)(config_buf->off & 0xff);
+        memcpy(bin_val + 2, config_buf->base, config_buf->off);
+        *config_list = bin_val;
+        *config_list_len = bin_size;
+    }
     return ret;
 }
 
-int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
+static int picoquic_ech_create_config_from_pk(ptls_buffer_t* config_buf, uint16_t group_id, ptls_iovec_t public_key_bits, char const* public_name)
 {
     int ret = 0;
-    ptls_iovec_t public_key_bits = ptls_iovec_init(NULL, 0);
-    uint16_t group_id = 0;
     ptls_hpke_kem_t* kem = NULL;
     ptls_hpke_cipher_suite_t* cipher_vec[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
-    uint8_t config_id = 0;
 
-    /* Parse the ASN1 public key to extract the key type and the key bytes */
-    if ((ret = picoquic_ech_parse_public_key(public_key_asn1, &group_id, &public_key_bits)) != 0) {
-        DBG_PRINTF("Cannot get group and pubkey from ASN1, err: %x", ret);
-    }
-    /* Find a compatible KEM */
-    else if ((ret = picoquic_ech_get_kem_from_curve(&kem, group_id)) != 0) {
+    if ((ret = picoquic_ech_get_kem_from_curve(&kem, group_id)) != 0) {
         DBG_PRINTF("Could not find KEM for group = 0x%04x", group_id);
     }
     /* Find the list of locally supported cipher suites, retaining only the most common */
@@ -718,7 +805,7 @@ int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t p
     }
     else {
         /* Compute a config ID from public key bytes, kem-id, cipher-suite IDs and public name */
-        config_id = ech_config_id_from_config(public_key_bits, kem, cipher_vec, public_name);
+        uint8_t config_id = ech_config_id_from_config(public_key_bits, kem, cipher_vec, public_name);
         /* Encode the key config */
         if ((ret = ptls_ech_encode_config(config_buf, config_id, kem, public_key_bits,
             cipher_vec, 255, public_name)) != 0) {
@@ -728,25 +815,35 @@ int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t p
     return ret;
 }
 
-int picoquic_ech_create_config_from_rr(uint8_t ** config, size_t * config_len, const ptls_buffer_t* rr_buf)
+static int picoquic_ech_create_rr_from_binary(ptls_buffer_t* config_buf, ptls_iovec_t public_key_asn1, char const* public_name)
 {
     int ret = 0;
-    size_t bin_size = rr_buf->off + 2;
-    uint8_t* bin_val = (uint8_t*)malloc(bin_size);
-    if (bin_val == NULL) {
-        DBG_PRINTF("Cannot allocate %d bytes for config bin buffer", bin_size);
-        ret = -1;
+    ptls_iovec_t public_key_bits = ptls_iovec_init(NULL, 0);
+    uint16_t group_id = 0;
+
+    /* Parse the ASN1 public key to extract the key type and the key bytes */
+    if ((ret = picoquic_ech_parse_public_key(public_key_asn1, &group_id, &public_key_bits)) != 0) {
+        DBG_PRINTF("Cannot get group and pubkey from ASN1, err: %x", ret);
     }
+    /* Build config from group id and key bits */
     else {
-        bin_val[0] = (uint8_t)(((rr_buf->off) >> 8) & 0xff);
-        bin_val[1] = (uint8_t)(rr_buf->off & 0xff);
-        memcpy(bin_val + 2, rr_buf->base, rr_buf->off);
-        *config = bin_val;
-        *config_len = bin_size;
+        ret = picoquic_ech_create_config_from_pk(config_buf, group_id, public_key_bits, public_name);
     }
     return ret;
 }
 
+int picoquic_ech_create_config_from_binary(uint8_t ** config, size_t * config_len, ptls_iovec_t public_key_asn1, char const* public_name)
+{
+    int ret = 0;
+    ptls_buffer_t config_buf;
+    ptls_buffer_init(&config_buf, "", 0);
+
+    if ((ret = picoquic_ech_create_rr_from_binary(&config_buf, public_key_asn1, public_name)) == 0) {
+        ret = picoquic_ech_create_config_list_from_config(&config_buf, config, config_len);
+    }
+    ptls_buffer_dispose(&config_buf);
+    return ret;
+}
 
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const * public_key_file, char const* public_name)
 {
@@ -761,19 +858,81 @@ int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_
     }
     else
     {
-        ptls_buffer_t rr_buf;
-        ptls_buffer_init(&rr_buf, "", 0);
-        ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name);
-        if (ret == 0) {
-            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
-        }
-        ptls_buffer_dispose(&rr_buf);
+        ret = picoquic_ech_create_config_from_binary(config, config_len, public_key_asn1, public_name);
+    }
+    if (public_key_asn1.base != NULL) {
+        free(public_key_asn1.base);
     }
     return ret;
 }
 
+
+int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name)
+{
+    int ret = 0;
+
+    *config = NULL;
+    *config_len = 0;
+
+    if (picoquic_get_public_key_from_private_fn != NULL) {
+        uint16_t group_id = 0;
+        ptls_iovec_t public_key_bits = ptls_iovec_init(NULL, 0);
+
+        ret = picoquic_get_public_key_from_private_fn(private_key_file, &public_key_bits.base, &public_key_bits.len);
+
+        if (ret == 0) {
+            switch (public_key_bits.len) {
+            case 0x21: /* x25519 */
+                group_id = 0x001d;
+                break;
+            case 0x41: /* secp265r1 */
+                group_id = 0x0017;
+                break;
+            case 0x61: /* x25519 */
+                group_id = 0x0018;
+                break;
+            default:
+                DBG_PRINTF("Cannot find group ID from pubkey length 0x%02x from %s",
+                    public_key_bits.len, private_key_file);
+                ret = -1;
+                break;
+            }
+        }
+
+        if (ret == 0) {
+            ptls_buffer_t config_buf;
+            ptls_buffer_init(&config_buf, "", 0);
+            ret = picoquic_ech_create_config_from_pk(&config_buf, group_id, public_key_bits, public_name);
+            if (ret == 0) {
+                ret = picoquic_ech_create_config_list_from_config(&config_buf, config, config_len);
+            }
+            ptls_buffer_dispose(&config_buf);
+        }
+        if (public_key_bits.base != NULL) {
+            free(public_key_bits.base);
+        }
+    }
+    return ret;
+}
+
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file)
+{
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+    int ret = picoquic_ech_create_config_from_private_key(&config, &config_len, private_key_file, public_name);
+
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ech_config_file);
+    }
+    if (config != NULL) {
+        free(config);
+    }
+    return ret;
+}
+
+#if 0
 /*
-* In therory, all the information required to set up ECH is present in the
+* In theory, all the information required to set up ECH is present in the
 * certificate used by the public server. The public key certainly is there.
 * 
 * The certificate has a rather simple structure (see RFC 5280):
@@ -887,19 +1046,20 @@ int picoquic_ech_create_config_from_cert(uint8_t** config, size_t* config_len, c
     }
     /* Obtain the configuration */
     if (ret == 0){
-        ptls_buffer_t rr_buf;
-        ptls_buffer_init(&rr_buf, "", 0);
-        if ((ret = picoquic_ech_create_rr_from_binary(&rr_buf, public_key_asn1, public_name)) != 0) {
-            DBG_PRINTF("Cannot extract config from public key of <%s>, ret = %d (0x%x)", cert_file, ret, ret);
-        }
-        else {
-            ret = picoquic_ech_create_config_from_rr(config, config_len, &rr_buf);
-        }
-        ptls_buffer_dispose(&rr_buf);
+        ret = picoquic_ech_create_config_from_binary(config, config_len, public_key_asn1, public_name);
     }
     if (cert_bytes.base != NULL) {
         free(cert_bytes.base);
     }
     return ret;
 }
+#endif
 
+void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
+    uint8_t** retry_config, size_t* retry_config_len)
+{
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    *retry_config = tls_ctx->retry_configs.base;
+    *retry_config_len = tls_ctx->retry_configs.len;
+}
