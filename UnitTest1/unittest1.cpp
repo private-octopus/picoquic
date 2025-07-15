@@ -2420,6 +2420,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(af_undef) {
+            int ret = af_undef_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_limit_cc) {
             int ret = app_limit_cc_test();
 

@@ -475,7 +475,10 @@ int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct socka
     int ret = -1;
 
     if (expected->sa_family == actual->sa_family) {
-        if (expected->sa_family == AF_INET6) {
+        if (expected->sa_family == AF_UNSPEC) {
+            ret = 0;
+        }
+        else if (expected->sa_family == AF_INET6) {
             struct sockaddr_in6* ex = (struct sockaddr_in6*)expected;
             struct sockaddr_in6* ac = (struct sockaddr_in6*)actual;
 
@@ -504,7 +507,7 @@ uint16_t picoquic_get_addr_port(const struct sockaddr* addr)
 int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual)
 {
     int ret = picoquic_compare_ip_addr(expected, actual);
-    if (ret == 0 &&
+    if (ret == 0 && expected->sa_family != AF_UNSPEC &&
         picoquic_get_addr_port(expected) != picoquic_get_addr_port(actual)) {
         ret = -1;
     }
