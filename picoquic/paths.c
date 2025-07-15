@@ -653,11 +653,6 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     }
     else
     {
-#if 1
-        if (cnx->client_mode) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         path_x = cnx->path[path_id];
         tuple = path_x->first_tuple;
 
