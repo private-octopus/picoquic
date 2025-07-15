@@ -1280,9 +1280,14 @@ static int tls_api_one_endpoint_dequeue(picoquic_test_endpoint_t *endpoint,
         }
 
         if (packet->length > 16) {
+            struct sockaddr* addr_to = (struct sockaddr*)&packet->addr_to;
+            struct sockaddr unspec;
+            if (endpoint->addr_to_unspec) {
+                unspec.sa_family = AF_UNSPEC;
+                addr_to = &unspec;
+            }
             ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
-                (struct sockaddr*)&packet->addr_from,
-                (struct sockaddr*)&packet->addr_to, 0, recv_ecn, simulated_time);
+                (struct sockaddr*)&packet->addr_from, addr_to, 0, recv_ecn, simulated_time);
             *was_active |= 1;
 
             endpoint->next_time_ready = simulated_time +
@@ -11449,8 +11454,6 @@ int pn_random_init_test()
     return ret;
 }
 
-
-
 /* Test the stateless reset blowback control mechanism
  */
 int test_stateless_blowback_one(picoquic_quic_t* quic, uint64_t * simulated_time, int * was_sent)
@@ -12305,6 +12308,56 @@ int get_tls_errors_test()
         ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
         /* Reinit the TLS API */
         picoquic_tls_api_init();
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+* Test what happens if a client stack cannot read the "destination address"
+* in the incoming packets and leaves it undef.
+*/
+
+int af_undef_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xaf, 0x0d, 0xef, 0, 0, 0, 0, 0}, 8 };
+    uint64_t target_time = 1000000;
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        test_ctx->client_endpoint.addr_to_unspec = 1;
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
     }
 
     if (test_ctx != NULL) {

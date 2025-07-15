@@ -162,6 +162,8 @@ typedef struct st_picoquic_test_endpoint_t {
     uint64_t prepare_cpu_time;
     uint64_t incoming_cpu_time;
     size_t packet_queue_max;
+    /* flag to mark use of AF_UNSPEC for receiving "addr_to" */
+    int addr_to_unspec;
     /* next time endpoint ready */
     uint64_t next_time_ready;
     /* last time client sent something */
