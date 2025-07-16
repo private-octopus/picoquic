@@ -109,10 +109,14 @@ int picomask_callback(picoquic_cnx_t* cnx,
     void* path_app_ctx);
 
 /* UDP context retrieval functions */
-static uint64_t table_udp_hash(const void * key)
+static uint64_t table_udp_hash(const void * key, const uint8_t* hash_seed)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(hash_seed);
+#endif
     /* the key is a unique 64 bit number, so we keep this simple. */
-    return *((uint64_t*)key);
+    uint64_t h = picohash_siphash((uint8_t*)&key, (uint32_t)sizeof(void*), hash_seed);
+    return h;
 }
 
 static int table_udp_compare(const void* key1, const void* key2)
@@ -150,7 +154,7 @@ int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp)
     int ret = 0;
 
     if ((ctx->table_udp_ctx = picohash_create_ex(max_nb_udp,
-        table_udp_hash, table_udp_compare, table_udp_to_item)) == NULL) {
+        table_udp_hash, table_udp_compare, table_udp_to_item, NULL)) == NULL) {
         ret = -1;
     }
 
