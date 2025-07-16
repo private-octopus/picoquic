@@ -47,10 +47,71 @@ packets.
 
 ## Proxying API
 
-We want to enable proxying as an optional component, without extending the
-code size and the attack surface of the applications that do not support
-proxying. We do that by adding a "proxying extension" in Picoquic, which
-defines 4 functions prototypes:
+The proxying API enables the deployment of a variety of Masque protocols.
+
+When a Masque protocol is used, the packets are forwarded to the proxy
+as datagrams, using a datagram prefix negotiated by the proxy protocol.
+The sending flow should be:
+
+- If there is something to send by the proxy, the "intercept" API
+  will be used to call the "proxy prepare a packet" API instead
+  of asking the stack to prepare the next quic packet.
+- The proxy code will prepare the set of bytes needed for the
+  next proxied data. If a QUIC connection is being proxied, that
+  may involve asking the QUIc code to prepare the next packet
+  for that connection.
+- The packet will be encapsulated in a datagram on the
+  QUIC connection between the QUIC stack and the proxy.
+- The proxy decapsulates the packet, processes the
+  incoming datagram, and forwards the content of the datagram
+  according to proxying rules -- for example, forward the
+  content as a payload through the specified UDP port.
+
+The receiving flow should be:
+
+- Data arrives to the proxy. For example, if proxying UDP, a new
+  datagram is received.
+- The data is queued until the proxying connection can process
+  it. It is then sent as a QUIC datagram to the selected client.
+- Client receives a QUIC datagram, decapsulates it,
+  and submits it as "incoming data" to the proxy context. If
+  proxying QUIC connection, the packet is processed as
+  an incoming packet.
+
+This requires a set of APIs:
+
+- On the client, if the proxy connection is ready to send a
+  datagram, it asks the proxy code to produce it. This is
+  similar to the "prepare next packet" API, but only called
+  from within the "prepare datagram" module. It should return
+  length and timer.
+- On the client, upon receiving a proxy datagram, it should
+  be passed to the "incoming data" API of the proxy. Same on
+  the proxy.
+- On the proxy, if the proxy connection is ready to send
+  datagrams, it should check the various proxy contexts
+  and pick the next one.
+
+Issues specific to UDP proxying:
+
+Proxying UDP implies listening to the UDP socket that's being proxied,
+differentiating the packets bound to a proxy service from other QUIC packets,
+and forwarding the content according to proxy rule. That implies
+filtering the "incoming packet" API to detect whether it should
+be managed by the proxy. We thus need:
+
+- managing a filter on the proxy side to check whether the
+  proxy wants this packet
+
+Issues specific to QUIC proxying:
+
+A QUIC connection may use a proxy for one of its paths. If a path
+is managed by a proxy, the connection should inform the proxy when
+data is ready to send on that path, and wait for the "prepare packet"
+call from the proxy to send data on that path. This could be
+done by considering the proxy as a special interface.
+
+
 
 ```
 typedef int (*picoquic_proxy_intercept_fn)(void* proxy_ctx, uint64_t current_time,
