@@ -21,7 +21,10 @@
 #ifndef H3ZERO_COMMON_H
 #define H3ZERO_COMMON_H
 
+#include <stdint.h>
+#include <stdio.h>
 #include "picosplay.h"
+#include "picoquic.h"
 #include "h3zero.h"
 
 #ifdef __cplusplus
@@ -50,7 +53,8 @@ extern "C" {
 
     struct st_h3zero_stream_ctx_t;
 
-    typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
+    typedef int (*picohttp_post_data_cb_fn)(
+        picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
         picohttp_call_back_event_t fin_or_event,
         struct st_h3zero_stream_ctx_t* stream_ctx,

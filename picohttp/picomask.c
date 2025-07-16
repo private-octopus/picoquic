@@ -93,20 +93,107 @@
 */
 
 #include <stdlib.h>
-#include "picomask.h"
+#include <string.h>
+#include <stdint.h>
 #include "h3zero.h"
 #include "h3zero_common.h"
-#include "string.h"
 #include "picoquic_utils.h"
+#include "picoquic.h"
 #include "picosocks.h"
 #include "h3zero_url_template.h"
 #include "h3zero_uri.h"
+#include "picomask.h"
 
+#if 0
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t wt_event,
     struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx);
+#endif
+
+#if 0
+uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string)
+{
+    if (bytes == NULL || bytes + 2 > bytes_max) {
+        return NULL;
+    }
+    /* Push 2 NULL bytes for request header: base, and delta */
+    *bytes++ = 0;
+    *bytes++ = 0;
+    /* Method */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_CONNECT);
+    /* Scheme: HTTPS */
+    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
+    /* Path: doc_name. Use literal plus reference format */
+    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
+    /* Protocol. Use literal plus name format */
+    if (protocol != NULL) {
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, (uint8_t*)":protocol", 9, (uint8_t*)protocol, strlen(protocol));
+    }
+    /* Authority. Use literal plus reference format */
+    if (authority != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const*)authority, strlen(authority));
+    }
+    /* Origin. Use literal plus ref format */
+    if (origin != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ORIGIN, (uint8_t*)origin, strlen(origin));
+    }
+    /* User Agent */
+    if (ua_string != NULL) {
+        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
+    return bytes;
+}
+
+#endif
+
+int h3zero_queue_connect_header_frame(
+    picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(origin);
+#endif
+
+    /* Format and send the connect frame. */
+    int ret = 0;
+    uint8_t buffer[1024];
+    uint8_t* bytes = buffer;
+    uint8_t* bytes_max = bytes + 1024;
+
+    *bytes++ = h3zero_frame_header;
+    bytes += 2; /* reserve two bytes for frame length */
+
+    bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, path, path_length, protocol, NULL,
+        ua_string);
+
+    if (bytes == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Encode the header length */
+        size_t header_length = bytes - &buffer[3];
+        if (header_length < 64) {
+            buffer[1] = (uint8_t)(header_length);
+            memmove(&buffer[2], &buffer[3], header_length);
+            bytes--;
+        }
+        else {
+            buffer[1] = (uint8_t)((header_length >> 8) | 0x40);
+            buffer[2] = (uint8_t)(header_length & 0xFF);
+        }
+        size_t connect_length = bytes - buffer;
+        stream_ctx->ps.stream_state.is_upgrade_requested = 1;
+        ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
+            0, stream_ctx);
+    }
+
+    return ret;
+}
 
 /* UDP context retrieval functions */
 static uint64_t table_udp_hash(const void * key, const uint8_t* hash_seed)
@@ -231,8 +318,9 @@ int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_
             ret = -1;
         }
         else {
+            int is_name = 0;
             ip_address_text[ip_address_length] = 0;
-            ret = picoquic_get_server_address(ip_address_text, (uint16_t)server_port, addr, NULL);
+            ret = picoquic_get_server_address(ip_address_text, (uint16_t)server_port, addr, &is_name);
             /* TODO: 
             * Verify that the path is OK: the UDP proxy disallows UDP proxying requests
             * to vulnerable targets, such as the UDP proxy's own addresses and localhost,

@@ -1,5 +1,15 @@
 # Picomask, implementation of Masque in Picoquic
 
+## Warning: work in progress
+
+This is an implementation in progress. There not yet any real support for
+"Masque" in picoquic. The work is too big to handle as one big PR,
+due to the high risk of merge conflicts with other PRs.
+A set of PR are defining elements of this
+functionality, with minimum impact on existing services.
+
+## Motivation
+
 The Masque working group has defined a series of protocols for tunneling
 various types of packets into QUIC, including for example Ethernet frames
 of IP packets. The implementation of tunneling inside Picoquic

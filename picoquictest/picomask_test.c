@@ -21,13 +21,15 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "picomask.h"
+#include <stdint.h>
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picosocks.h"
 #include "h3zero_url_template.h"
+#include "picomask.h"
+
 
 typedef struct st_picomask_test_ctx_t {
     uint64_t simulated_time;
@@ -522,41 +524,6 @@ int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
     }
     return ret;
 }
-/* 
-* First test: verify that the UDP Connect context can be established.
-*/
-int picomask_udp_test()
-{
-    int ret = 0;
-    picomask_test_ctx_t* pt_ctx = picomask_test_config();
-
-    if (pt_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        /* Create a client connection to the server, and a UDP context */
-        ret = picomask_test_cnx_create(pt_ctx);
-    }
-
-    if (ret == 0) {
-        /* Establish the QUIC connection between client and proxy */
-        picoquic_start_client_cnx(pt_ctx->cnx_to_proxy);
-        ret = picomask_test_loop(pt_ctx, picomask_proxy_ready);
-    }
-
-    if (ret == 0) {
-        /* Establish the control stream */
-        ret = picomask_test_loop(pt_ctx, picomask_proxy_available);
-    }
-
-    /* TODO: start a connection to the target */
-
-    if (pt_ctx != NULL){
-        /* Clear the context */
-        picomask_test_delete(pt_ctx);
-    }
-    return ret;
-}
 
 /* Test the formatting of the UDP path 
  */
@@ -595,6 +562,42 @@ int picomask_udp_path_test()
                 ret = -1;
             }
         }
+    }
+    return ret;
+}
+
+/*
+* First test: verify that the UDP Connect context can be established.
+*/
+int picomask_udp_test()
+{
+    int ret = 0;
+    picomask_test_ctx_t* pt_ctx = picomask_test_config();
+
+    if (pt_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Create a client connection to the server, and a UDP context */
+        ret = picomask_test_cnx_create(pt_ctx);
+    }
+
+    if (ret == 0) {
+        /* Establish the QUIC connection between client and proxy */
+        picoquic_start_client_cnx(pt_ctx->cnx_to_proxy);
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_ready);
+    }
+
+    if (ret == 0) {
+        /* Establish the control stream */
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_available);
+    }
+
+    /* TODO: start a connection to the target */
+
+    if (pt_ctx != NULL) {
+        /* Clear the context */
+        picomask_test_delete(pt_ctx);
     }
     return ret;
 }
