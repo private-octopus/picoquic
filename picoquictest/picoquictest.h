@@ -150,7 +150,6 @@ int virtual_time_test();
 int tls_different_params_test();
 int tls_quant_params_test();
 int set_certificate_and_key_test();
-int transport_param_stream_id_test();
 int vn_tp_test();
 int vn_compat_test();
 int request_client_authentication_test();
