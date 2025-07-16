@@ -960,6 +960,9 @@ void picoquic_free(picoquic_quic_t* quic)
             quic->proxy_free_fn(quic->proxy_ctx);
         }
 
+        /* Delete ECH context if it was created */
+        picoquic_release_quic_ech_ctx(quic);
+
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
@@ -1662,9 +1665,7 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
             path_x->cnx = cnx;
             picoquic_tuple_t* tuple = picoquic_create_tuple(path_x, local_addr, peer_addr, if_index);
 
-            if (tuple == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            } else {
+            if (tuple != NULL) {
                 /* Initialize per path time measurement */
                 path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
                 path_x->rtt_variant = 0;
@@ -3905,7 +3906,10 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             for (int i = 0; i < 4; i++) {
                 cnx->next_stream_id[i] = i;
             }
+#if 1
+#else
             picoquic_pacing_init(&cnx->priority_bypass_pacing, start_time);
+#endif
             picoquic_register_path(cnx, cnx->path[0]);
         }
     }
@@ -4680,7 +4684,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* Reset the TLS context, Re-initialize the tls connection */
     if (cnx->tls_ctx != NULL) {
-        picoquic_tlscontext_free(cnx->tls_ctx);
+        picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
         cnx->tls_ctx = NULL;
     }
 
@@ -4848,7 +4852,7 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         picosplay_empty_tree(&cnx->stream_tree);
 
         if (cnx->tls_ctx != NULL) {
-            picoquic_tlscontext_free(cnx->tls_ctx);
+            picoquic_tlscontext_free(cnx->tls_ctx, cnx->client_mode);
             cnx->tls_ctx = NULL;
         }
 
@@ -5092,11 +5096,14 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
     cnx->priority_limit_for_bypass = priority_limit;
+#if 1
+#else
     if (priority_limit > 0) {
         picoquic_update_pacing_parameters(&cnx->priority_bypass_pacing,
             PICOQUIC_PRIORITY_BYPASS_MAX_RATE, PICOQUIC_PRIORITY_BYPASS_QUANTUM,
             cnx->path[0]->send_mtu, cnx->path[0]->smoothed_rtt, NULL);
     }
+#endif
 }
 
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)

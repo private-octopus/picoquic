@@ -841,6 +841,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         loop_immediate = 0;
         /* Remember the time before the select call, so it duration be monitored */
         previous_time = current_time;
+        /* Initialize the dest addr family to UNSPEC yo handle systems that cannot set it. */
+        addr_to.ss_family = AF_UNSPEC;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,

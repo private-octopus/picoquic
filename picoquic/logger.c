@@ -2293,10 +2293,12 @@ static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curr
 }
 
 static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+    uint64_t unique_path_id)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
+    UNREFERENCED_PARAMETER(unique_path_id);
 #endif
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_packet_address(cnx->quic->F_log,

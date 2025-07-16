@@ -245,6 +245,9 @@ uint64_t picoquic_test_random(uint64_t* random_context);
 void picoquic_test_random_bytes(uint64_t* random_context, uint8_t* bytes, size_t bytes_max);
 uint64_t picoquic_test_uniform_random(uint64_t* random_context, uint64_t rnd_max);
 double picoquic_test_gauss_random(uint64_t* random_context); /* random gaussian of variance 1.0, average 0 */
+/* picoquic_test_poisson_random: Poisson distribution lambda 
+* parameter exp_minus_lambda_2_30 = (uint64_t)(exp(-lambda)*0x40000000) */
+uint64_t picoquic_test_poisson_random(uint64_t* random_context, uint64_t exp_minus_lambda_2_30); 
 
 /* Convert text carried in uint8_t arrays to text string
  * suitable for logs */
@@ -269,6 +272,11 @@ typedef struct st_picoquictest_sim_packet_t {
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
+typedef enum {
+    jitter_gauss = 0,
+    jitter_wifi
+} picoquic_jitter_mode;
+
 typedef struct st_picoquictest_sim_link_t {
     uint64_t next_send_time;
     uint64_t queue_time;
@@ -276,14 +284,21 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t queue_delay_max;
     uint64_t picosec_per_byte;
     uint64_t microsec_latency;
-    uint64_t* loss_mask;
     uint64_t packets_dropped;
     uint64_t packets_sent;
     uint64_t jitter;
+    picoquic_jitter_mode jitter_mode;
     uint64_t jitter_seed;
     size_t path_mtu;
     picoquictest_sim_packet_t* first_packet;
     picoquictest_sim_packet_t* last_packet;
+    /* variables for inserting packet loss */
+    uint64_t* loss_mask; /* 64 bit error mask used in unit tests */
+    uint64_t nb_loss_in_burst; /* Size of the error burst in picoquic_ns */
+    uint64_t packets_between_losses; /* Bursts will happen every N packets */
+    uint64_t packets_sent_next_burst; /* Next burst starts when this many packets are sent. */
+    uint64_t nb_losses_this_burst; /* Number of packets still to lose in this burst */
+    uint64_t end_of_burst_time; /* Bursts are limited in time to avoid silly effects */
     /* Variables for random early drop simulation */
     uint64_t red_drop_mask;
     uint64_t red_queue_max;
@@ -339,6 +354,12 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs\\test-ca.crt"
 #define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs\\ecdsa\\cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs\\ecdsa\\key.pem"
+#define PICOQUIC_TEST_ECH_PUB_KEY "certs\\ech\\public.pem"
+#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs\\ech\\private.pem"
+#define PICOQUIC_TEST_ECH_CONFIG "certs\\ech\\ech_config.txt"
+#define PICOQUIC_TEST_ECH_CERT "certs\\ech\\ech_cert.pem"
+#define PICOQUIC_TEST_ECH_RR_REF "certs\\ech\\ech_rr.txt"
+#define PICOQUIC_TEST_ECH_CONFIG_REF "certs\\ech\\ech_config.txt"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
@@ -346,6 +367,12 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_FILE_CERT_STORE "certs/test-ca.crt"
 #define PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA "certs/ecdsa/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA "certs/ecdsa/key.pem"
+#define PICOQUIC_TEST_ECH_PUB_KEY "certs/ech/public.pem"
+#define PICOQUIC_TEST_ECH_PRIVATE_KEY "certs/ech/private.pem"
+#define PICOQUIC_TEST_ECH_CONFIG "certs/ech/ech_config.txt"
+#define PICOQUIC_TEST_ECH_CERT "certs/ech/ech_cert.pem"
+#define PICOQUIC_TEST_ECH_RR_REF "certs/ech/ech_rr.txt"
+#define PICOQUIC_TEST_ECH_CONFIG_REF "certs/ech/ech_config.txt"
 #endif
 
  /* To set the solution directory for tests */

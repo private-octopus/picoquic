@@ -2812,7 +2812,10 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
         picoquic_packet_t* first_repeat = picoquic_first_data_repeat_packet(cnx);
         uint64_t current_priority = UINT64_MAX;
         uint64_t stream_priority = UINT64_MAX;
+#if 1
+#else
         uint8_t* bytes_before_iteration = bytes_next;
+#endif
         int something_sent = 0;
         int conflict_found = 0;
 
@@ -2893,11 +2896,13 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
                 more_data, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
-
+#if 1
+#else
         if (current_priority < cnx->priority_limit_for_bypass && bytes_next > bytes_before_iteration) {
             picoquic_update_pacing_data_after_send(&cnx->priority_bypass_pacing, bytes_next - bytes_before_iteration,
                 cnx->path[0]->send_mtu, current_time);
         }
+#endif
 
         if (is_first_round) {
             *no_data_to_send = ((first_stream == NULL && first_repeat == NULL) || stream_tried_and_failed) &&
@@ -3408,31 +3413,39 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 length = bytes_next - bytes;
 
                 if ((path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit)
-                    &&!path_x->is_pto_required) {
-                        /* Implementation of experimental API, picoquic_set_priority_limit_for_bypass */
-                        uint8_t* bytes_next_before_bypass = bytes_next;
-                        int no_data_to_send = 0;
-                        if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1 &&
-                            picoquic_is_authorized_by_pacing(&cnx->priority_bypass_pacing, current_time, next_wake_time,
-                                cnx->quic->packet_train_mode, cnx->quic)) {
-                            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                cnx->priority_limit_for_bypass, current_time,
-                                &more_data, &is_pure_ack, &no_data_to_send, &ret);
-                        }
-                        if (bytes_next != bytes_next_before_bypass) {
-                            length = bytes_next - bytes;
-                        }
-                        else {
-                            cnx->cwin_blocked = 1;
-                            path_x->last_cwin_blocked_time = current_time;
-                            if (cnx->congestion_alg != NULL) {
-                                picoquic_per_ack_state_t ack_state = { 0 };
+                    && !path_x->is_pto_required) {
+                    /* Implementation of experimental API, picoquic_set_priority_limit_for_bypass */
+                    uint8_t* bytes_next_before_bypass = bytes_next;
+                    int no_data_to_send = 0;
+#if 1
+                    if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                        bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                            cnx->priority_limit_for_bypass, current_time,
+                            &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                    }
+#else
+                    if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1 &&
+                        picoquic_is_authorized_by_pacing(&cnx->priority_bypass_pacing, current_time, next_wake_time,
+                            cnx->quic->packet_train_mode, cnx->quic)) {
+                        bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                            cnx->priority_limit_for_bypass, current_time,
+                            &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                    }
+#endif
+                    if (bytes_next != bytes_next_before_bypass) {
+                        length = bytes_next - bytes;
+                    }
+                    else {
+                        cnx->cwin_blocked = 1;
+                        path_x->last_cwin_blocked_time = current_time;
+                        if (cnx->congestion_alg != NULL) {
+                            picoquic_per_ack_state_t ack_state = { 0 };
 
-                                cnx->congestion_alg->alg_notify(cnx, path_x,
-                                    picoquic_congestion_notification_cwin_blocked,
-                                    &ack_state, current_time);
-                            }
+                            cnx->congestion_alg->alg_notify(cnx, path_x,
+                                picoquic_congestion_notification_cwin_blocked,
+                                &ack_state, current_time);
                         }
+                    }
                 }
                 else {
                     /* Send here the frames that are subject to both congestion and pacing control.
@@ -3555,6 +3568,18 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
                 } /* end of CC */
             } /* End of pacing */
+#if 1
+            else if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                /* If congestion bypass is implemented, also consider pacing bypass */
+                int no_data_to_send = 0;
+
+                if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                    cnx->priority_limit_for_bypass, current_time,
+                    &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
+                    length = bytes_next - bytes;
+                }
+            }
+#else
             else if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1 &&
                 picoquic_is_authorized_by_pacing(&cnx->priority_bypass_pacing, current_time, next_wake_time,
                     cnx->quic->packet_train_mode, cnx->quic)) {
@@ -3567,6 +3592,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     length = bytes_next - bytes;
                 }
             }
+#endif
         } /* End of challenge verified */
     }
 
@@ -4021,7 +4047,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 /* if needed, log that the packet is sent */
                 if (p_addr_to != NULL && p_addr_from != NULL) {
                     picoquic_log_pdu(cnx, 0, current_time,
-                        (struct sockaddr*)p_addr_to, (struct sockaddr*)p_addr_from, packet_size);
+                        (struct sockaddr*)p_addr_to, (struct sockaddr*)p_addr_from, packet_size,
+                        path_x->unique_path_id);
                 }
             }
 

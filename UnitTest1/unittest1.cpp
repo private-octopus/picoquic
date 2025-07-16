@@ -2098,9 +2098,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_ns_wifi_bad_cubic)
+        {
+            int ret = cc_ns_wifi_bad_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_wifi_bad_bbr)
+        {
+            int ret = cc_ns_wifi_bad_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cc_ns_varylink)
         {
             int ret = cc_ns_varylink_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_satellite)
+        {
+            int ret = cc_ns_satellite_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_media)
+        {
+            int ret = cc_ns_media_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2389,6 +2416,12 @@ namespace UnitTest1
 
         TEST_METHOD(address_discovery) {
             int ret = address_discovery_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(af_undef) {
+            int ret = af_undef_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3182,6 +3215,31 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(ech_config) {
+            int ret = ech_config_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_config_p) {
+            int ret = ech_config_p_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_e2e) {
+            int ret = ech_e2e_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_grease) {
+            int ret = ech_grease_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(getter) {
             int ret = getter_test();
 

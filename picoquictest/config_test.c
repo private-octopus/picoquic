@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:h";
 #endif
 int config_option_letters_test()
 {
@@ -53,6 +53,18 @@ int config_option_letters_test()
 }
 
 const uint8_t null_key[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+#define ECH_TEST_CONFIG "AGT+DQBgAgAQAEEE2silQFS6M9oYqUF/SVPfYOamPbaOUzqf3RkUXqsDz7z7NpgWJI8HKW0V2E8w6Alk+xT8hnzUBsL9neiZP0iMKwAEAAEAAf8QdGVzdC5leGFtcGxlLmNvbQAA"
+
+const uint8_t ech_test_config_bin[102] = {
+0x00, 0x64, 0xfe, 0x0d, 0x00, 0x60, 0x02, 0x00, 0x10, 0x00, 0x41, 0x04, 0xda, 0xc8, 0xa5, 0x40,
+0x54, 0xba, 0x33, 0xda, 0x18, 0xa9, 0x41, 0x7f, 0x49, 0x53, 0xdf, 0x60, 0xe6, 0xa6, 0x3d, 0xb6,
+0x8e, 0x53, 0x3a, 0x9f, 0xdd, 0x19, 0x14, 0x5e, 0xab, 0x03, 0xcf, 0xbc, 0xfb, 0x36, 0x98, 0x16,
+0x24, 0x8f, 0x07, 0x29, 0x6d, 0x15, 0xd8, 0x4f, 0x30, 0xe8, 0x09, 0x64, 0xfb, 0x14, 0xfc, 0x86,
+0x7c, 0xd4, 0x06, 0xc2, 0xfd, 0x9d, 0xe8, 0x99, 0x3f, 0x48, 0x8c, 0x2b, 0x00, 0x04, 0x00, 0x01,
+0x00, 0x01, 0xff, 0x10, 0x74, 0x65, 0x73, 0x74, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65,
+0x2e, 0x63, 0x6f, 0x6d, 0x00, 0x00 };
+
 
 static picoquic_quic_config_t param1 = {
     1024, /*uint32_t nb_connections; */
@@ -110,6 +122,11 @@ static picoquic_quic_config_t param1 = {
     0, /* unsigned int force_zero_share : 1; */
     0, /* unsigned int no_disk : 1; */
     0, /* unsigned int large_client_hello : 1; */
+    "ech_key.pem",
+    "ech_config.pem",
+    "test.example.com",
+    NULL, /* ech_target */
+    0 /* ech_target_len */
 };
 
 static char const* config_argv1[] = {
@@ -140,6 +157,8 @@ static char const* config_argv1[] = {
     "-0",
     "-i", "0N8C-000123",
     "-J", "2",
+    "-E", "ech_key.pem", "ech_config.pem",
+    "-y", "test.example.com",
     NULL
 };
 
@@ -197,7 +216,12 @@ static picoquic_quic_config_t param2 = {
     0x00000002, /* uint32_t desired_version; */
     1,/* unsigned int force_zero_share : 1; */
     1, /* unsigned int no_disk : 1; */
-    1 /* unsigned int large_client_hello : 1; */
+    1, /* unsigned int large_client_hello : 1; */
+    NULL,
+    NULL,
+    NULL, /* ECH public name */
+    (uint8_t *)ech_test_config_bin, /* ech_target */
+    sizeof(ech_test_config_bin) /* ech_target_len */
 };
 
 static const char* config_argv2[] = {
@@ -220,6 +244,7 @@ static const char* config_argv2[] = {
     "-N", "/data/tokens.bin",
     "-U", "00000002",
     "-W", "1000000",
+    "-K", ECH_TEST_CONFIG,
     NULL
 };
 
@@ -243,6 +268,7 @@ static const char * config_two[] = {
     "--token_file", "/data/tokens.bin",
     "--version_upgrade", "00000002",
     "--cwin_max", "1000000",
+    "--ech_c", ECH_TEST_CONFIG,
     NULL
 };
 
@@ -408,6 +434,22 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
 #ifndef PICOQUIC_WITHOUT_SSLKEYLOG
     ret |= config_test_compare_int("sslkeylog", expected->enable_sslkeylog, actual->enable_sslkeylog);
 #endif
+    ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
+    ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
+    ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
+
+    if (expected->ech_target == NULL) {
+        if (actual->ech_target != NULL || actual->ech_target_len != 0) {
+            ret = -1;
+        }
+    }
+    else {
+        if (actual->ech_target == NULL ||
+            actual->ech_target_len != expected->ech_target_len ||
+            memcmp(actual->ech_target, expected->ech_target, expected->ech_target_len) != 0) {
+            ret = -1;
+        }
+    }
     
     return ret;
 }
@@ -601,6 +643,10 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     char test_server_key_file[512];
     char const* root_trust_file = NULL;
     char test_root_trust_file[512];
+    char const* root_ech_key_file = NULL;
+    char test_ech_key_file[512];
+    char const* root_ech_config_file = NULL;
+    char test_ech_config_file[512];
 
     if (ret == 0 && config->server_cert_file != NULL) {
         ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
@@ -625,7 +671,25 @@ int config_quic_test_one(picoquic_quic_config_t* config)
             PICOQUIC_TEST_FILE_CERT_STORE);
         if (ret == 0) {
             root_trust_file = config->root_trust_file;
-            config->root_trust_file = root_trust_file;
+            config->root_trust_file = test_root_trust_file;
+        }
+    }
+
+    if (ret == 0 && config->ech_key_file) {
+        ret = picoquic_get_input_path(test_ech_key_file, sizeof(test_ech_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_ECH_PRIVATE_KEY);
+        if (ret == 0) {
+            root_ech_key_file = config->ech_key_file;
+            config->ech_key_file = test_ech_key_file;
+        }
+    }
+
+    if (ret == 0 && config->ech_config_file) {
+        ret = picoquic_get_input_path(test_ech_config_file, sizeof(test_ech_config_file), picoquic_solution_dir,
+            PICOQUIC_TEST_ECH_CONFIG);
+        if (ret == 0) {
+            root_ech_config_file = config->ech_config_file;
+            config->ech_config_file = test_ech_config_file;
         }
     }
 
@@ -662,6 +726,12 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     }
     if (root_trust_file != NULL) {
         config->root_trust_file = root_trust_file;
+    }
+    if (root_ech_key_file != NULL) {
+        config->ech_key_file = root_ech_key_file;
+    }
+    if (root_ech_config_file != NULL) {
+        config->ech_config_file = root_ech_config_file;
     }
 
     return(ret);

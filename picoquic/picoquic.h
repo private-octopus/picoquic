@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.33.1"
+#define PICOQUIC_VERSION "1.1.33.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1641,13 +1641,17 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
 * will bypass congestion control.
 * 
 * This experimental feature will not be activated in a multipath
-* environment, i.e., if more that 1 path is activated.
+* environment, i.e., if more that 1 path is activated.*/
+#if 1
+#else
+* 
 * 
 * To protect against potential abuse, the code includes a rate limiter,
 * ensuring that if congestion control is blocking transmission, 
 * the "bypass" will not result in more than 1 Mbps of
 * traffic.
  */
+#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
 
 /* The experimental API `picoquic_set_feedback_loss_notification` allow applications
@@ -1729,6 +1733,55 @@ typedef struct st_picoquic_alpn_list_t {
     char const* alpn_val;
     size_t len;
 } picoquic_alpn_list_t;
+
+/* Set of API for ECH/ESNI */
+/* 
+ * picoquic_ech_configure_quic_ctx:
+ * Configure a QUIC context to support ECH, with parameters:
+ * - quic: the picoquic context to be configured.
+ * - ech_private_key_file_name: the key file used by the server to decrypt incoming ECH options.
+ * - ech_config_file_name: file holding the ECH configuration of the server.
+ * If the private_key_file_name is NULL, the QUIC context will not be able to process
+ * the ECH option in incoming initial packets.
+ * If the private_key_file_name is provided, the ech_config_file_name.
+ */
+int picoquic_ech_configure_quic_ctx(picoquic_quic_t* quic, char const* ech_private_key_file_name, char const* ech_config_file_name);
+
+/*
+* picoquic_release_quic_ctx:
+* The call to ech_release_quic_ctx releases the allocations done by the
+* call to ech_configure_quic_ctx. It should be used when deleting the quic context.
+* It can be safely used even if there was no call to ech_configure_quic_ctx.
+* - quic: the picoquic context to be modified.
+ */
+void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic);
+
+/* picoquic_ech_configure_client:
+ * Configure connection context to require ECH. This requires passing
+ * a list of valid ECH configuration for the target server in the
+ * client handshake properties.
+ * 
+ * This list will typically be obtained by getting the DNS HTTPS records
+ * for the hidden server. These records will provide the name of the
+ * client facing server, and its ECH configuration.
+*/
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t* config_data, size_t config_length);
+
+/* picoquic_ech_check_handshake:
+ * Return 1 is ECH was succesfully negotiated, 0 otherwise.
+ */
+int picoquic_is_ech_handshake(picoquic_cnx_t* cnx);
+
+/* Get the retry config parameter returned after the handshake */
+void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
+    uint8_t** retry_config, size_t* retry_config_len);
+
+/* Create an ECH configuration from a private key */
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file);
+
+/* utility function. */
+int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt);
+int picoquic_base64_encode(const uint8_t* v, size_t v_len, char* b64, size_t b64_size, size_t* b64_len);
 
 #ifdef __cplusplus
 }

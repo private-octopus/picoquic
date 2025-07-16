@@ -63,7 +63,8 @@ typedef enum {
 
 /* Log PDU arrival or departure */
 void binlog_pdu(FILE * f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+    uint64_t unique_path_id);
 
 /* binary alternative to picoquic_log_decrypted_segment() */
 void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
