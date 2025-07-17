@@ -3251,6 +3251,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picomask_udp) {
+            int ret = picomask_udp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_udp_path) {
+            int ret = picomask_udp_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_basic) {
             int ret = picowt_baton_basic_test();
 

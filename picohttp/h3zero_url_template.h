@@ -40,4 +40,4 @@ int h3zero_expand_template(char* buffer, size_t buffer_size, size_t* write_index
 }
 #endif
 
-#endif H3ZERO_URL_TEMPLATE_H
+#endif /* H3ZERO_URL_TEMPLATE_H */
