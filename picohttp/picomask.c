@@ -266,6 +266,7 @@ picomask_udp_ctx_t* picomask_udp_ctx_create(picomask_ctx_t* picomask_ctx)
     if (udp_ctx != NULL) {
         memset(udp_ctx, 0, sizeof(picomask_udp_ctx_t));
         udp_ctx->picomask_number = picomask_ctx->picomask_number_next++;
+        udp_ctx->picomask_ctx = picomask_ctx;
         /* register in table of contexts */
         picohash_insert(picomask_ctx->table_udp_ctx, udp_ctx);
     }
@@ -329,6 +330,17 @@ int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_
     }
 
     return ret;
+}
+
+/* Release data and memory associated with a stream context */
+void picomask_release_stream(h3zero_stream_ctx_t* stream_ctx)
+{
+    picomask_udp_ctx_t* udp_ctx = stream_ctx->path_callback_ctx;
+    if (udp_ctx != NULL) {
+        picomask_udp_ctx_delete(udp_ctx->picomask_ctx, udp_ctx);
+        stream_ctx->path_callback_ctx = NULL;
+    }
+    stream_ctx->path_callback = NULL;
 }
 
 /* Accept an incoming connection */
@@ -731,7 +743,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
     h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
-    int ret = 0;
+     int ret = 0;
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)path_app_ctx;
 
     DBG_PRINTF("picomask_callback: %d, %" PRIi64 "\n", (int)wt_event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);
@@ -775,11 +787,12 @@ int picomask_callback(picoquic_cnx_t* cnx,
         ret = picomask_provide_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
         break;
     case picohttp_callback_reset: 
-        /* Control stream has been abandoned. Abandon the whole connection. */
-        /* ret = picomask_stream_reset(cnx, stream_ctx, path_app_ctx); */
+        /* Control stream has been abandoned. */
+        picomask_release_stream(stream_ctx);
         break;
     case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
                                  /* Free the memory attached to the stream */
+        picomask_release_stream(stream_ctx);
         break;
     case picohttp_callback_deregister:
         /* The app context has been removed from the registry.

@@ -81,6 +81,7 @@ typedef struct st_picomask_h3_ctx_t {
 typedef struct st_picomask_udp_ctx_t {
     picohash_item hash_item;
     uint64_t picomask_number;
+    picomask_ctx_t* picomask_ctx;
     picoquic_cnx_t* cnx;
     uint64_t stream_id;
     struct sockaddr_storage target_addr;

@@ -43,6 +43,7 @@ typedef struct st_picomask_test_ctx_t {
     struct sockaddr_storage addr[3];
     picohttp_server_parameters_t server_context;
     picohttp_server_parameters_t target_context;
+    h3zero_callback_ctx_t* client_h3_ctx;
     picomask_ctx_t client_app_ctx;
     picomask_ctx_t* proxy_app_ctx;
     picoquic_cnx_t* cnx_to_proxy;
@@ -238,8 +239,6 @@ int picomask_test_step(picomask_test_ctx_t* pt_ctx, int* is_active)
     return ret;
 }
 
-
-
 /* Connection loop. Run the simulation loop step by step until
  * the connection is ready. */
 
@@ -316,9 +315,31 @@ int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test
 /*
 * Delete the configuration
 */
+
+void picomask_test_release_server_ctx(picomask_test_ctx_t* pt_ctx)
+{
+    picohttp_server_path_item_t* path_item = (picohttp_server_path_item_t*)pt_ctx->server_context.path_table;
+
+    if (path_item != NULL) {
+        picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)path_item->path_app_ctx;
+        if (picomask_ctx != NULL) {
+            picomask_ctx_release(picomask_ctx);
+            free(picomask_ctx);
+        }
+        free(path_item);
+    }
+}
+
 void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
 {
+
+    if (pt_ctx->client_h3_ctx != NULL && pt_ctx->cnx_to_proxy != NULL) {
+        h3zero_callback_delete_context(pt_ctx->cnx_to_proxy, pt_ctx->client_h3_ctx);
+        pt_ctx->client_h3_ctx = NULL;
+        picoquic_set_callback(pt_ctx->cnx_to_proxy, NULL, NULL);
+    }
     picomask_ctx_release(&pt_ctx->client_app_ctx);
+    picomask_test_release_server_ctx(pt_ctx);
 
     for (int i = 0; i < 3; i++) {
         if (pt_ctx->quic[i] != NULL) {
@@ -333,7 +354,6 @@ void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
             pt_ctx->link[i] = NULL;
         }
     }
-
     free(pt_ctx);
 }
 
@@ -351,13 +371,13 @@ void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
 * - link[3]: from proxy to target
 */
 
+
 int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
     picohttp_server_path_item_t* path_item = (picohttp_server_path_item_t*)malloc(sizeof(picohttp_server_path_item_t));
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
 
-    path_item = (picohttp_server_path_item_t*)malloc(sizeof(picohttp_server_path_item_t));
     if (path_item == NULL || picomask_ctx == NULL ||
         picomask_ctx_init(picomask_ctx, 4) != 0){
         ret = -1;
@@ -505,6 +525,7 @@ int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
     else
     {
         pt_ctx->cnx_to_proxy = cnx;
+        pt_ctx->client_h3_ctx = h3_ctx;
         /* TODO: Set transport parameters? */
         picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
         /* Perform the initialization, settings and QPACK streams
