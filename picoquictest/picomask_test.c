@@ -493,7 +493,6 @@ int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    h3zero_stream_ctx_t** p_stream_ctx = NULL;
     char path[256];
 
     /* use the generic H3 callback */

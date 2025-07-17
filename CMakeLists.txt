@@ -186,7 +186,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pacing_test.c
     picoquictest/parseheadertest.c
     picoquictest/picolog_test.c
-    picoquictest/picomask_test.c
     picoquictest/picoquic_lb_test.c
     picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
@@ -237,6 +236,7 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
