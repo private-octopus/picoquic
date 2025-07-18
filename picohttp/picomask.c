@@ -104,52 +104,6 @@
 #include "h3zero_uri.h"
 #include "picomask.h"
 
-#if 0
-int picomask_callback(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t wt_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
-    void* path_app_ctx);
-#endif
-
-#if 0
-uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
-    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const* origin, char const* ua_string)
-{
-    if (bytes == NULL || bytes + 2 > bytes_max) {
-        return NULL;
-    }
-    /* Push 2 NULL bytes for request header: base, and delta */
-    *bytes++ = 0;
-    *bytes++ = 0;
-    /* Method */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_CODE_CONNECT);
-    /* Scheme: HTTPS */
-    bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0xC0, 0x3F, H3ZERO_QPACK_SCHEME_HTTPS);
-    /* Path: doc_name. Use literal plus reference format */
-    bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_CODE_PATH, path, path_length);
-    /* Protocol. Use literal plus name format */
-    if (protocol != NULL) {
-        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, (uint8_t*)":protocol", 9, (uint8_t*)protocol, strlen(protocol));
-    }
-    /* Authority. Use literal plus reference format */
-    if (authority != NULL) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_AUTHORITY, (uint8_t const*)authority, strlen(authority));
-    }
-    /* Origin. Use literal plus ref format */
-    if (origin != NULL) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_ORIGIN, (uint8_t*)origin, strlen(origin));
-    }
-    /* User Agent */
-    if (ua_string != NULL) {
-        bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
-    }
-    return bytes;
-}
-
-#endif
-
 int h3zero_queue_connect_header_frame(
     picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
     char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
@@ -202,15 +156,17 @@ static uint64_t table_udp_hash(const void * key, const uint8_t* hash_seed)
     UNREFERENCED_PARAMETER(hash_seed);
 #endif
     /* the key is a unique 64 bit number, so we keep this simple. */
-    uint64_t h = picohash_siphash((uint8_t*)&key, (uint32_t)sizeof(void*), hash_seed);
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)key;
+    uint64_t h = picohash_siphash((uint8_t*)&udp_ctx->picomask_number, (uint32_t)sizeof(uint64_t), hash_seed);
     return h;
 }
 
 static int table_udp_compare(const void* key1, const void* key2)
 {
-    return (*((uint64_t*)key1) == *((uint64_t*)key2)) ? 0 : -1;
+    picomask_udp_ctx_t* udp_ctx1 = (picomask_udp_ctx_t*)key1;
+    picomask_udp_ctx_t* udp_ctx2 = (picomask_udp_ctx_t*)key2;
+    return((udp_ctx1->picomask_number == udp_ctx2->picomask_number) ? 0 : -1);
 }
-
 
 static picohash_item * table_udp_to_item(const void* key)
 {
@@ -283,18 +239,6 @@ picomask_udp_ctx_t* picomask_udp_ctx_delete(picomask_ctx_t* picomask_ctx, picoma
     return udp_ctx;
 }
 
-#if 0
-/* Update context when sending a connect request */
-int picomask_connecting(picoquic_cnx_t* cnx,
-    h3zero_stream_ctx_t* stream_ctx, void * v_masque_ctx)
-{
-    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)v_masque_ctx;
-
-    picoquic_log_app_message(cnx, "Outgoing connect udp on stream: %"PRIu64, stream_ctx->stream_id);
-
-    return 0;
-}
-#endif
 int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_storage* addr)
 {
     int ret = 0;
@@ -743,7 +687,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
     h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx)
 {
-     int ret = 0;
+    int ret = 0;
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)path_app_ctx;
 
     DBG_PRINTF("picomask_callback: %d, %" PRIi64 "\n", (int)wt_event, (stream_ctx == NULL)?(int64_t)-1:(int64_t)stream_ctx->stream_id);

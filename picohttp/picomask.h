@@ -96,6 +96,8 @@ typedef struct st_picomask_udp_ctx_t {
 int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp);
 void picomask_ctx_release(picomask_ctx_t* ctx);
 
+picomask_udp_ctx_t* picomask_udp_ctx_by_number(picomask_ctx_t* ctx, uint64_t picomask_number);
+
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t wt_event,
