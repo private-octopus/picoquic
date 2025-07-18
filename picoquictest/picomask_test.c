@@ -183,10 +183,6 @@ int picomask_test_step(picomask_test_ctx_t* pt_ctx, int* is_active)
     int arrival_index = -1;
     uint64_t next_departure_time = UINT64_MAX;
     int departure_index = -1;
-#if 0
-    int need_frame_departure = 0;
-    uint64_t next_frame_time = UINT64_MAX;
-#endif
     uint64_t next_time = UINT64_MAX;
 
     /* Check earliest packet arrival */
@@ -239,11 +235,30 @@ int picomask_test_step(picomask_test_ctx_t* pt_ctx, int* is_active)
     return ret;
 }
 
-/* Connection loop. Run the simulation loop step by step until
- * the connection is ready. */
+/* Find the UDP context for the proxy connection. In our tests,
+* we only have one control stream, so we do not differentiate
+* between contexts. TODO: maybe support multiple steams.
+ */
+picomask_udp_ctx_t* picoquic_test_get_udp_ctx(picomask_test_ctx_t* pt_ctx)
+{
+    picomask_udp_ctx_t* udp_ctx = NULL;
+    picomask_ctx_t* pm_ctx = &pt_ctx->client_app_ctx;
+    if (pm_ctx->table_udp_ctx != NULL) {
+        /* get the first context */
+        udp_ctx = picomask_udp_ctx_by_number(pm_ctx, 0);
+    }
+    return udp_ctx;
+}
+
+/* The generic test loop executes until the test function "loop_test_fn"
+* returns a non zero value. That value will be positive if the test is
+* successful, negative if something broke. */
 
 typedef int(*picomask_loop_test)(picomask_test_ctx_t* pt_ctx);
 
+/* The picomask_proxy_ready test returns 1 if the connection to the
+* proxy is established properly.
+ */
 int picomask_proxy_ready(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
@@ -261,20 +276,32 @@ int picomask_proxy_broken(picomask_test_ctx_t* pt_ctx)
 
     if (pt_ctx->cnx_to_proxy == NULL ||
         picoquic_get_cnx_state(pt_ctx->cnx_to_proxy) > picoquic_state_ready) {
-        ret = 1;
+        ret = -1;
     }
     return ret;
 }
-
+/* The picomask_proxy_available test returns 1 if the connection to the
+* proxy is validated by the server, -1 if something breaks before that.
+ */
 int picomask_proxy_available(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
 
-    if (picomask_proxy_broken(pt_ctx)){
-        ret = 1;
-    }
-    else {
+    if ((ret = picomask_proxy_broken(pt_ctx)) == 0){
         /* find the client side stream context, verify that it is upgraded */
+        if (pt_ctx->client_h3_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            picomask_udp_ctx_t* udp_ctx = picoquic_test_get_udp_ctx(pt_ctx);
+
+            if (udp_ctx != NULL) {
+                h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(pt_ctx->client_h3_ctx, udp_ctx->stream_id);
+                if (stream_ctx != NULL && stream_ctx->is_upgraded) {
+                    ret = 1;
+                }
+            }
+        }
     }
     return ret;
 }
@@ -293,8 +320,7 @@ int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test
 
         ret = picomask_test_step(pt_ctx, &is_active);
 
-        if (loop_test_fn(pt_ctx)) {
-            is_complete = 1;
+        if ((is_complete = loop_test_fn(pt_ctx)) != 0) {
             break;
         }
 
@@ -306,7 +332,7 @@ int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test
         }
     }
 
-    if (!is_complete) {
+    if (!is_complete || is_complete < 0) {
         ret = -1;
     }
 
@@ -338,15 +364,14 @@ void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
         pt_ctx->client_h3_ctx = NULL;
         picoquic_set_callback(pt_ctx->cnx_to_proxy, NULL, NULL);
     }
-    picomask_ctx_release(&pt_ctx->client_app_ctx);
-    picomask_test_release_server_ctx(pt_ctx);
-
     for (int i = 0; i < 3; i++) {
         if (pt_ctx->quic[i] != NULL) {
             picoquic_free(pt_ctx->quic[i]);
             pt_ctx->quic[i] = NULL;
         }
     }
+    picomask_ctx_release(&pt_ctx->client_app_ctx);
+    picomask_test_release_server_ctx(pt_ctx);
 
     for (int i = 0; i < 4; i++) {
         if (pt_ctx->link[i] != NULL) {
@@ -614,6 +639,9 @@ int picomask_udp_test()
     }
 
     /* TODO: start a connection to the target */
+    if (ret == 0) {
+
+    }
 
     if (pt_ctx != NULL) {
         /* Clear the context */

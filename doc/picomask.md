@@ -188,9 +188,9 @@ packet arrives from a peer:
   normal incoming code run, in which case it returns 0.
 
 These packets will then be forwarded as QUIC datagrams
-* on the connection to the proxy, or as obfuscated datagrams if the proxying is
-* QUIC aware. The intercept function returns 1 if the packet was intercepted,
-* 0 if it wasn't.
+on the connection to the proxy, or as obfuscated datagrams if the proxying is
+QUIC aware. The intercept function returns 1 if the packet was intercepted,
+0 if it wasn't.
 
 ### Freeing the resource
 
@@ -250,19 +250,37 @@ This forwarding can happen in Listen mode just as it happens in Connect mode.
 
 ### Triaging incoming packets
 
-How about:
+The implementation of `picoquic_proxy_forwarding_fn` requires filtering
+the packets that are bound for the proxy server itself from those that
+are to be forwarded to the proxy's clients. The rule differ depending on
+which of the CONNECT-UDP variant is used:
 
-* if CID is known, derive connection from CID
-    - for connect UDP or listen UDP, the QUIC context already has a list of expected CID
-    - if the QUIC aware extension is negotiated, more will be known
-* if CID is not known:
-    - if QUIC aware, this can be an initial packet. Route based on SNI.
-    - it could also be a race condition. But then drop is acceptable.
-    - Else, derive context from target address for port (but what if just one port?)
+- UDP-Connect: destination address must match the assigned socket;
+               source address must match the specified target.
+- UDP-AWARE: destination address must match the assigned socket;
+             CID must match a reserved value.
+- UDP-Listen: destination address must match the assigned socket;
+- UDP-Listen+aware: destination address must match the assigned socket;
+              CID should match a reserved value -- but we need
+              exceptions for "initial" packets.
 
-Look at special CID cases, e.g., RETRY packets
-Look at handling of stateless reset.
+Demultiplexing per CID works, except for the first flight of initial
+packets sent to a server. In that case, we need to collect the first
+packets, extract the client HELLO, examine the SNI, and then forward the
+Initial packets either to the local server or to a selected server.
+This suggests:
 
-Can we start with the table quic->table_cnx_by_id?
+- First, examine the CID. If it matches a registered value, forward
+  accordingly. 
+- If not, check whether the 4-tuple matches a UDP-Connect client,
+  and if yes forward to it.
+- If not check whether this is an Initial packet, and apply the
+  Initial forwarding rules.
+  
+For that, we will need two tables:
+
+- Table for registered CID and associated connections.
+- Table of registered first tuples.
+
 
 
