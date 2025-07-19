@@ -3942,23 +3942,25 @@ void picoquic_handle_send_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint
     }
 }
 
-void picoquic_handle_send_train_statistics(picoquic_cnx_t* cnx, picoquic_path_t * path_x, size_t coalesced_packet_size,
+void picoquic_handle_send_train_statistics(picoquic_cnx_t* cnx, picoquic_path_t* path_x, size_t coalesced_packet_size,
     size_t* send_length, size_t* send_msg_size)
 {
-    if (coalesced_packet_size == 0 && *send_length < 8 * (*send_msg_size)) {
-        if (path_x->cwin <= path_x->bytes_in_transit) {
-            cnx->nb_trains_blocked_cwin++;
+    cnx->nb_trains_sent++;
+    if (send_msg_size != NULL) {
+        if (coalesced_packet_size == 0 && *send_length < 8 * (*send_msg_size)) {
+            if (path_x->cwin <= path_x->bytes_in_transit) {
+                cnx->nb_trains_blocked_cwin++;
+            }
+            else if (picoquic_is_pacing_blocked(&path_x->pacing)) {
+                cnx->nb_trains_blocked_pacing++;
+            }
+            else {
+                cnx->nb_trains_blocked_others++;
+            }
         }
-        else if (picoquic_is_pacing_blocked(&path_x->pacing)) {
-            cnx->nb_trains_blocked_pacing++;
-        }
-
         else {
-            cnx->nb_trains_blocked_others++;
+            cnx->nb_trains_short++;
         }
-    }
-    else {
-        cnx->nb_trains_short++;
     }
 }
 
@@ -3980,6 +3982,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         picoquic_path_t* path_x = NULL;
         picoquic_tuple_t* tuple = NULL;
         uint64_t initial_next_time;
+        size_t coalesced_packet_size = 0;
 
         picoquic_handle_send_paths(cnx, current_time, &next_wake_time,
             &path_x, &tuple, p_addr_to, p_addr_from, if_index,
@@ -3990,10 +3993,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         {
             /* Create a new packet, which may include several segments */
             int is_initial_sent = 0;
-            size_t coalesced_packet_size = 0;
             size_t packet_max = send_buffer_max - *send_length;
             uint8_t* packet_buffer = send_buffer + *send_length;
 
+            coalesced_packet_size = 0;
 #if TODO
             if (if_index == PICOQUIC_RESERVED_IF_INDEX && quic->proxy_ctx) {
                 /* Reset the max packet size to what can be absorbed by the proxy connection. */
@@ -4057,16 +4060,13 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                             /* Cannot coalesce packets after 1 rtt packet */
                             break;
                         }
-                        else if (segment_length == 0 && tuple == path_x->first_tuple) {
+                        else if (segment_length == 0) {
                             DBG_PRINTF("Send bug: segment length = %zu, packet length = %zu\n", segment_length, packet->length);
                             break;
                         }
                     }
                     else {
                         picoquic_recycle_packet(cnx->quic, packet);
-#if 0
-                        packet = NULL;
-#endif
                         if (coalesced_packet_size != 0) {
                             ret = 0;
                         }
@@ -4122,9 +4122,6 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 *send_msg_size = coalesced_packet_size;
             }
             else if (coalesced_packet_size != *send_msg_size) {
-                if (*send_length > 0) {
-                    picoquic_handle_send_train_statistics(cnx, path_x, coalesced_packet_size, send_length, send_msg_size);
-                }
                 break;
             }
             else if (*send_length + *send_msg_size > send_buffer_max) {
@@ -4132,7 +4129,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             }
         }
         if (*send_length > 0) {
-            cnx->nb_trains_sent++;
+            picoquic_handle_send_train_statistics(cnx, path_x, coalesced_packet_size, send_length, send_msg_size);
         }
     }
 
