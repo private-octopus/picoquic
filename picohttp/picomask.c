@@ -557,7 +557,6 @@ int picomask_provide_datagram(picoquic_cnx_t* cnx,
     return ret;
 }
 
-
 /*
 * Implementation of the picoquic "proxy intercept" API.
 * This will be called when the picoquic stack has prepared a packet.
@@ -565,6 +564,12 @@ int picomask_provide_datagram(picoquic_cnx_t* cnx,
 * If the packet shall be proxied, a copy shall be added to
 * the proxy context.
 */
+#if 0
+int picomask_should_intercept(int if_index, size_t * max_length)
+{
+
+}
+#endif
 
 int picomask_intercept(void* proxy_ctx, uint64_t current_time,
     uint8_t* send_buffer, size_t send_length, size_t send_msg_size,
