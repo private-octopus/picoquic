@@ -64,6 +64,9 @@ typedef struct st_picomask_packet_t {
 } picomask_packet_t;
 
 typedef struct st_picomask_ctx_t {
+    picoquic_cnx_t* cnx; /* Null on server. On client, the connection to the proxy */
+    h3zero_callback_ctx_t* h3_ctx; /* Null on server. On client, the H3 context of the proxy connection */
+    char const* path_template; /* Null on server */
     picohash_table* table_udp_ctx;
     uint64_t picomask_number_next;
     picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
