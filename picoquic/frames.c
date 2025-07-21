@@ -1,3 +1,4 @@
+
 #include "picoquic.h"
 /*
 * Author: Christian Huitema
@@ -765,7 +766,8 @@ int picoquic_process_ack_of_retire_connection_id_frame(picoquic_cnx_t* cnx, cons
     int ret = 0;
     uint64_t sequence = 0;
     uint64_t unique_path_id = 0;
-    const uint8_t* bytes_next = picoquic_parse_retire_connection_id_frame(bytes + 1, bytes + bytes_size, &unique_path_id, &sequence, is_mp);
+    const uint8_t* bytes_first = picoquic_frames_varint_skip(bytes, bytes + bytes_size);
+    const uint8_t* bytes_next = (bytes_first == NULL) ? NULL : picoquic_parse_retire_connection_id_frame(bytes_first, bytes + bytes_size, &unique_path_id, &sequence, is_mp);
 
     if (bytes_next != NULL) {
         /* Check whether the retired CID is still in the stash.
