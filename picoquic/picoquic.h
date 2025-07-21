@@ -1607,16 +1607,6 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
 * 
 * This experimental feature will not be activated in a multipath
 * environment, i.e., if more that 1 path is activated.*/
-#if 1
-#else
-* 
-* 
-* To protect against potential abuse, the code includes a rate limiter,
-* ensuring that if congestion control is blocking transmission, 
-* the "bypass" will not result in more than 1 Mbps of
-* traffic.
- */
-#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
 
 /* The experimental API `picoquic_set_feedback_loss_notification` allow applications

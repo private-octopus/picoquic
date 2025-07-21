@@ -321,12 +321,6 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
     is_probably_lost = cnx->initial_repeat_needed || old_p->send_path == NULL ||
         picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time, &is_timer_expired);
 
-#if 1
-    if (is_timer_expired && old_p->sequence_number >= 152 && old_p->send_path->unique_path_id == 1) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
-
     if (is_probably_lost && (old_p->ptype == picoquic_packet_initial || old_p->ptype == picoquic_packet_handshake)) {
         /* Need to verify that there is no coalescing issue! */
         if (old_p->length > send_buffer_max) {
@@ -549,12 +543,6 @@ static int picoquic_is_packet_probably_lost(picoquic_cnx_t* cnx,
     int is_probably_lost = 0;
 
     *is_timer_expired = 0;
-
-#if 1
-    if (old_p->sequence_number >= 152 && old_p->send_path->unique_path_id == 1) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
 
     if (old_p->ptype == picoquic_packet_0rtt_protected && !cnx->zero_rtt_data_accepted) {
         /* Zero RTT data was not accepted by the peer, the packets are considered lost */
@@ -888,11 +876,6 @@ static void picoquic_check_path_mtu_on_losses(
     if (old_p->send_path != NULL &&
         ((old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu || timer_based_retransmit) &&
         cnx->cnx_state >= picoquic_state_ready) {
-#if 1
-        if (old_p->sequence_number >= 152 && old_p->send_path->unique_path_id == 1) {
-            DBG_PRINTF("%s", "bug");
-        }
-#endif
         old_p->send_path->nb_mtu_losses++;
         if (old_p->send_path->nb_mtu_losses > PICOQUIC_MTU_LOSS_THRESHOLD || timer_based_retransmit) {
             size_t old_mtu = old_p->send_path->send_mtu;
