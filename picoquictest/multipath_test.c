@@ -452,7 +452,8 @@ typedef enum {
     multipath_test_tunnel,
     multipath_test_fail,
     multipath_test_ab1,
-    multipath_test_discovery
+    multipath_test_discovery,
+    multipath_test_keep_alive
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -1013,6 +1014,36 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    if (ret == 0 && test_id == multipath_test_keep_alive) {
+        uint8_t ping_frame[1] = { (uint8_t)picoquic_frame_type_ping };
+
+        while (ret == 0 && simulated_time < 200000000) {
+            uint64_t previous_time = simulated_time;
+            if (ret == 0) {
+                ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0, picoquic_packet_context_application);
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot queue ping frame, ret = 0x%x", ret);
+                    break;
+                }
+            }
+
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 10000000);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot wait 10 seconds, ret = 0x%x", ret);
+                break;
+            }
+
+            if (!(TEST_CLIENT_READY && TEST_SERVER_READY) || simulated_time < previous_time + 1000000) {
+                DBG_PRINTF("Connection stalled at t=%" PRIu64, simulated_time);
+                ret = -1;
+                break;
+            }
+        }
+        if (ret != 0) {
+            DBG_PRINTF("Keep awake test fails at t=%" PRIu64 ", ret = 0x%x", simulated_time, ret);
+        }
+    }
+
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
@@ -1399,6 +1430,14 @@ int multipath_discovery_test()
 
     return multipath_test_one(max_completion_microsec, multipath_test_discovery);
 }
+
+int multipath_keep_alive_test()
+{
+    uint64_t max_completion_microsec = 210000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_keep_alive);
+}
+
 
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The gal of the tests is to verify that

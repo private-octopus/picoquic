@@ -509,6 +509,7 @@ int multipath_dg_af_test();
 int multipath_backup_test();
 int multipath_standup_test();
 int multipath_discovery_test();
+int multipath_keep_alive_test();
 int multipath_qlog_test();
 int multipath_tunnel_test();
 int token_reuse_api_test();
