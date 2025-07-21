@@ -167,6 +167,55 @@ architecture document). The logic is as follow:
   and try to prepare the next packet. Otherwise, the function
   returns 0 and the packet train is sent normally, without proxying.
 
+Basic interception:
+
+1. the sender loop proceeds as normal.
+2. the path selection determines that this is a proxied path.
+3. the application is asked to prepare a packet in an adhoc buffer.
+4. the packet content is queued as a datagram in the proxy app.
+5. the datagram is sent when the sender loop later calls the
+   proxy connection.
+
+Better interception: it should be possible to minimize interrupts and
+possibly reduce the number of copies if we accept a "packet per packet"
+implementation, such as:
+
+1. the sender loop proceeds as normal.
+2. the path selection determines that this is a proxied path.
+3. the application is asked to prepare a packet in an adhoc buffer.
+4. the adhoc buffer starts with a prefix (QUIC, Datagram, H3),
+   so that the whole is a datagram packet, as if produced by
+   the proxy app. 
+5. the packet is finalized into the network buffer.
+
+Advantage: single loop, single end to end congestion control.
+Issue: impacts the congestion control of the proxy connection.
+
+Fast interception:
+If we can send the datagrams as packets, the loop becomes:
+
+1. the sender loop proceeds as normal.
+2. the path selection determines that this is a proxied path.
+3. the application is asked to prepare a packet in an adhoc buffer.
+4. the ad-hoc buffer is encrypted/obsfuscated into the network
+   buffer.
+
+At the beginning of the client connection, the proxy connection and the
+stream that matches the IP address of the target may not be
+ready yet. Only the "datagram queuing" method is available.
+We need to keep using that until the stream is ready and the
+datagram queue has been emptied.
+
+Long header packets can only be sent as datagrams.
+
+After interception, the if_index should be set to the value for the
+connection to the proxy. Keep it simple: there should be just one
+path for the connection to the proxy? Or pass it as a parameter
+of the API.
+
+Should interception allow for packet trains? That would be neat,
+but it makes PMTUD management a bit more complex.
+
 ### Forwarding
 
 The forwarding function `picoquic_proxy_forwarding_fn` is also called from

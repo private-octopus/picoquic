@@ -25,6 +25,7 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "picoquic.h"
+#include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picosocks.h"
 #include "h3zero_url_template.h"
@@ -44,9 +45,11 @@ typedef struct st_picomask_test_ctx_t {
     picohttp_server_parameters_t server_context;
     picohttp_server_parameters_t target_context;
     h3zero_callback_ctx_t* client_h3_ctx;
-    picomask_ctx_t client_app_ctx;
+    picomask_ctx_t* client_app_ctx;
     picomask_ctx_t* proxy_app_ctx;
     picoquic_cnx_t* cnx_to_proxy;
+    picoquic_cnx_t* cnx_to_target;
+    h3zero_callback_ctx_t* client_target_h3_ctx;
     /* Four links: server->client[0], client->server[1], server->target[2], target->server[3],
      */
     picoquictest_sim_link_t* link[4];
@@ -242,7 +245,7 @@ int picomask_test_step(picomask_test_ctx_t* pt_ctx, int* is_active)
 picomask_udp_ctx_t* picoquic_test_get_udp_ctx(picomask_test_ctx_t* pt_ctx)
 {
     picomask_udp_ctx_t* udp_ctx = NULL;
-    picomask_ctx_t* pm_ctx = &pt_ctx->client_app_ctx;
+    picomask_ctx_t* pm_ctx = pt_ctx->client_app_ctx;
     if (pm_ctx->table_udp_ctx != NULL) {
         /* get the first context */
         udp_ctx = picomask_udp_ctx_by_number(pm_ctx, 0);
@@ -370,7 +373,8 @@ void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
             pt_ctx->quic[i] = NULL;
         }
     }
-    picomask_ctx_release(&pt_ctx->client_app_ctx);
+    picomask_ctx_release(pt_ctx->client_app_ctx);
+    free(pt_ctx->client_app_ctx);
     picomask_test_release_server_ctx(pt_ctx);
 
     for (int i = 0; i < 4; i++) {
@@ -512,10 +516,6 @@ picomask_test_ctx_t* picomask_test_config()
         if (pt_ctx->quic[0] == NULL || pt_ctx->quic[1] == NULL || pt_ctx->quic[1] == NULL) {
             ret = -1;
         }
-        else {
-            /* initialise client app context */
-            ret = picomask_ctx_init(&pt_ctx->client_app_ctx, 8);
-        }
         /* Create links */
         for (int i = 0; ret == 0 && i < 4; i++) {
             if ((pt_ctx->link[i] = picoquictest_sim_link_create(0.01, 10000, NULL, 0, pt_ctx->simulated_time)) == NULL) {
@@ -535,36 +535,52 @@ picomask_test_ctx_t* picomask_test_config()
 /* Create a client connection to a specified address */
 int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
 {
+    int ret = picomask_register_proxy(pt_ctx->quic[0], pt_ctx->proxy_sni, 8,
+        (struct sockaddr*)&pt_ctx->addr[1], pt_ctx->simulated_time, pt_ctx->path_template);
+
+    if (ret == 0) {
+        ret = picomask_connect_udp(pt_ctx->quic[0], NULL, (struct sockaddr*)&pt_ctx->addr[2]);
+    }
+
+    if (ret == 0) {
+        pt_ctx->client_app_ctx = pt_ctx->quic[0]->picomask_ctx;
+        pt_ctx->cnx_to_proxy = pt_ctx->client_app_ctx->cnx;
+        pt_ctx->client_h3_ctx = pt_ctx->client_app_ctx->h3_ctx;
+    }
+
+    return ret;
+}
+
+/* Create a connection from client to target. */
+int picomask_test_target_cnx_create(picomask_test_ctx_t* pt_ctx)
+{
     int ret = 0;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    char path[256];
 
     /* use the generic H3 callback */
     /* Set the client callback context */
     if ((h3_ctx = h3zero_callback_create_context(NULL)) == NULL ||
         (cnx = picoquic_create_cnx(pt_ctx->quic[0], picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&pt_ctx->addr[1], pt_ctx->simulated_time, 0, pt_ctx->proxy_sni, pt_ctx->alpn, 1)) == NULL) {
+            (struct sockaddr*)&pt_ctx->addr[2], pt_ctx->simulated_time, 0, pt_ctx->target_sni, pt_ctx->alpn, 1)) == NULL) {
         ret = -1;
     }
-    else
+    if (ret == 0)
     {
-        pt_ctx->cnx_to_proxy = cnx;
-        pt_ctx->client_h3_ctx = h3_ctx;
+        pt_ctx->cnx_to_target = cnx;
+        pt_ctx->client_target_h3_ctx = h3_ctx;
+        /* set default interface to force use of proxy */
+        ret = picoquic_set_first_if_index(cnx, PICOQUIC_RESERVED_IF_INDEX);
+        if (ret == 0)
         /* TODO: Set transport parameters? */
         picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
         /* Perform the initialization, settings and QPACK streams
          */
         ret = h3zero_protocol_init(cnx);
-
+        /* TODO: Request a simple file */
+        /* start */
         if (ret == 0) {
-            size_t path_length;
-            ret = picomask_expand_udp_path(path, sizeof(path), &path_length, pt_ctx->path_template, (struct sockaddr*)&pt_ctx->addr[2]);
-        }
-
-        if (ret == 0){
-            /* TODO: missing authority and template!*/
-            ret = picomask_connect(cnx, &pt_ctx->client_app_ctx, NULL, path, h3_ctx);
+            ret = picoquic_start_client_cnx(cnx);
         }
     }
     return ret;

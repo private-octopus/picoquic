@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.34.2"
+#define PICOQUIC_VERSION "1.1.34.3"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -157,6 +157,9 @@ extern "C" {
 #define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
 
 #define PICOQUIC_GROUP_SECP256R1 23
+
+#define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -970,6 +973,9 @@ int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_pat
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int* is_already_allowed);
+
+/* Just after a connection context is created, set the if_index for the connection */
+int picoquic_set_first_if_index(picoquic_cnx_t* cnx, unsigned long if_index);
 
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address

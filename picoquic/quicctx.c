@@ -1,3 +1,4 @@
+#include "picoquic_internal.h"
 
 /*
 * Author: Christian Huitema
@@ -1618,6 +1619,17 @@ void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
         }
     }
     free(tuple);
+}
+
+/* Set default interface -- to call just after creating a connection context */
+int picoquic_set_first_if_index(picoquic_cnx_t* cnx, unsigned long if_index)
+{
+    int ret = 0;
+
+    if (cnx->cnx_state == picoquic_state_client_init) {
+        cnx->path[0]->first_tuple->if_index = if_index;
+    }
+    return ret;
 }
 
 /* Path management -- returns the index of the path that was created. */

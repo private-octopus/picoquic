@@ -64,6 +64,9 @@ typedef struct st_picomask_packet_t {
 } picomask_packet_t;
 
 typedef struct st_picomask_ctx_t {
+    picoquic_cnx_t* cnx; /* Null on server. On client, the connection to the proxy */
+    h3zero_callback_ctx_t* h3_ctx; /* Null on server. On client, the H3 context of the proxy connection */
+    char const* path_template; /* Null on server */
     picohash_table* table_udp_ctx;
     uint64_t picomask_number_next;
     picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
@@ -104,9 +107,10 @@ int picomask_callback(picoquic_cnx_t* cnx,
     struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx);
 
-int picomask_connect(picoquic_cnx_t* cnx, picomask_ctx_t* picomask_ctx,
-    const char* authority, char const* path,
-    h3zero_callback_ctx_t* h3_ctx);
+int picomask_register_proxy(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
+    struct sockaddr* proxy_addr, uint64_t current_time, const char* path_template);
+
+int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr);
 
 int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, char const* path_template, struct sockaddr* addr);
 
