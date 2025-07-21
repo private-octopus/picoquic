@@ -3914,10 +3914,6 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
             for (int i = 0; i < 4; i++) {
                 cnx->next_stream_id[i] = i;
             }
-#if 1
-#else
-            picoquic_pacing_init(&cnx->priority_bypass_pacing, start_time);
-#endif
             picoquic_register_path(cnx, cnx->path[0]);
         }
     }
@@ -5104,14 +5100,6 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
     cnx->priority_limit_for_bypass = priority_limit;
-#if 1
-#else
-    if (priority_limit > 0) {
-        picoquic_update_pacing_parameters(&cnx->priority_bypass_pacing,
-            PICOQUIC_PRIORITY_BYPASS_MAX_RATE, PICOQUIC_PRIORITY_BYPASS_QUANTUM,
-            cnx->path[0]->send_mtu, cnx->path[0]->smoothed_rtt, NULL);
-    }
-#endif
 }
 
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)
