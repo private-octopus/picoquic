@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.34.3"
+#define PICOQUIC_VERSION "1.1.35.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1379,6 +1379,11 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
+
+/* Indicate that the flow control window can only be extended by the application.
+* If use_app_flow_control == 0, then automatic increases will resume.
+*/
+int picoquic_set_app_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, int use_app_flow_control);
 
 /* Obtain the next available stream ID in the local category */
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);

@@ -374,6 +374,7 @@ int stream_ack_test();
 int queue_network_input_test();
 int fastcc_test();
 int fastcc_jitter_test();
+int flow_control_test();
 int bbr_test();
 int bbr_jitter_test();
 int bbr_long_test();
