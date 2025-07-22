@@ -844,6 +844,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int is_output_stream : 1; /* If stream is listed in the output list */
     unsigned int is_closed : 1; /* Stream is closed, closure is accouted for */
     unsigned int is_discarded : 1; /* There should be no more callback for that stream, the application has discarded it */
+    unsigned int use_app_flow_control : 1; /* Do not automatically increment the flow control window, wait for app calls. */
 } picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)

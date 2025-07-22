@@ -278,6 +278,20 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return picoquic_add_to_stream_with_ctx(cnx, stream_id, data, length, set_fin, NULL);
 }
 
+int picoquic_set_app_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, int use_app_flow_control)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+
+    if (stream == NULL) {
+        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+    }
+    else {
+        stream->use_app_flow_control = use_app_flow_control;
+    }
+    return ret;
+}
+
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size)
 {
     int ret = 0;

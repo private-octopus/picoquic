@@ -335,6 +335,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cubic_jitter", cubic_jitter_test },
     { "fastcc", fastcc_test },
     { "fastcc_jitter", fastcc_jitter_test },
+    { "flow_control", flow_control_test },
     { "bbr", bbr_test },
     { "bbr_jitter", bbr_jitter_test },
     { "bbr_long", bbr_long_test },

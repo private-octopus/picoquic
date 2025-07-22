@@ -4357,7 +4357,7 @@ uint8_t * picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx,
     picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
 
     while (stream != NULL) {
-        if (!stream->fin_received) {
+        if (!stream->fin_received && !stream->use_app_flow_control) {
             uint64_t new_window = picoquic_cc_increased_window(cnx, stream->maxdata_local);
 
             if (!stream->reset_received && 2 * stream->consumed_offset > stream->maxdata_local) {
