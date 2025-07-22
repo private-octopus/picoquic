@@ -170,6 +170,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/delay_tolerant_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
+    picoquictest/flow_control_test.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
