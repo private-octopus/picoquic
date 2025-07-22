@@ -701,7 +701,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
  * 405, with header "allow GET"
  */
 
-static uint8_t * h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
+uint8_t * h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t prefix, uint8_t mask, uint64_t code) 
 {
     if (bytes != NULL) {
@@ -717,7 +717,7 @@ static uint8_t * h3zero_qpack_code_encode(uint8_t * bytes, uint8_t * bytes_max,
     return bytes;
 }
 
-static uint8_t * h3zero_qpack_literal_plus_ref_encode(uint8_t * bytes, uint8_t * bytes_max,
+uint8_t * h3zero_qpack_literal_plus_ref_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint64_t code, uint8_t const * val, size_t val_length)
 {
     bytes = h3zero_qpack_code_encode(bytes, bytes_max, 0x50, 0x0F, code);
@@ -777,7 +777,7 @@ static uint8_t * h3zero_qpack_name_encode(uint8_t * bytes, uint8_t * bytes_max,
     return bytes;
 }
 
-static uint8_t * h3zero_qpack_literal_plus_name_encode(uint8_t * bytes, uint8_t * bytes_max,
+uint8_t * h3zero_qpack_literal_plus_name_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * name, size_t name_length, uint8_t const * val, size_t val_length)
 {
 

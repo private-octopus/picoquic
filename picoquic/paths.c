@@ -669,7 +669,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
 
         /* Treat the special case of the unkown local address, which should only happen
          * for clients and for the first tuple. */
-        if (path_x->first_tuple->local_addr.ss_family == AF_UNSPEC) {
+        if (path_x->first_tuple->local_addr.ss_family == AF_UNSPEC && addr_to->sa_family != AF_UNSPEC) {
             picoquic_store_addr(&cnx->path[path_id]->first_tuple->local_addr, addr_to);
         }
 
@@ -703,7 +703,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
             /* TODO: clean up in case of failure. */
         }
         else {
-            /* If the addresses do match, but the CID do not, we have a case of NAT rebinding.
+            /* If the addresses do match, but the CID do not, we have a case of CID migration.
              */
             if (tuple == path_x->first_tuple &&
                 picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {

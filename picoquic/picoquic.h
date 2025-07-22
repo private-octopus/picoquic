@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.33.2"
+#define PICOQUIC_VERSION "1.1.35.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -157,6 +157,9 @@ extern "C" {
 #define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
 
 #define PICOQUIC_GROUP_SECP256R1 23
+
+#define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -982,6 +985,9 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int* is_already_allowed);
 
+/* Just after a connection context is created, set the if_index for the connection */
+int picoquic_set_first_if_index(picoquic_cnx_t* cnx, unsigned long if_index);
+
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
 * (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
@@ -1385,6 +1391,11 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
 
+/* Indicate that the flow control window can only be extended by the application.
+* If use_app_flow_control == 0, then automatic increases will resume.
+*/
+int picoquic_set_app_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, int use_app_flow_control);
+
 /* Obtain the next available stream ID in the local category */
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
 
@@ -1612,16 +1623,6 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
 * 
 * This experimental feature will not be activated in a multipath
 * environment, i.e., if more that 1 path is activated.*/
-#if 1
-#else
-* 
-* 
-* To protect against potential abuse, the code includes a rate limiter,
-* ensuring that if congestion control is blocking transmission, 
-* the "bypass" will not result in more than 1 Mbps of
-* traffic.
- */
-#endif
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
 
 /* The experimental API `picoquic_set_feedback_loss_notification` allow applications

@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.33.2
+        VERSION 1.1.35.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -170,6 +170,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/delay_tolerant_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
+    picoquictest/flow_control_test.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
@@ -215,6 +216,8 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
+    picohttp/h3zero_url_template.c
+    picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
@@ -223,15 +226,18 @@ set(PICOHTTP_HEADERS
      picohttp/h3zero.h
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
+     picohttp/h3zero_url_template.h
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picomask.h
      picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
@@ -240,7 +246,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             5a4461d8a3948d9d26bf861e7d90cb80d8093515)
+        GIT_TAG             f350eab60742138ac62b42ee444adf04c7898b0d)
     FetchContent_MakeAvailable(picotls)
 endif()
 

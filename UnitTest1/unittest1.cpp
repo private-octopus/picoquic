@@ -2146,6 +2146,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(flow_control)
+        {
+            int ret = flow_control_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr)
         {
             int ret = bbr_test();
@@ -2416,6 +2423,12 @@ namespace UnitTest1
 
         TEST_METHOD(address_discovery) {
             int ret = address_discovery_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(af_undef) {
+            int ret = af_undef_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2886,6 +2899,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_keep_alive) {
+            int ret = multipath_keep_alive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
@@ -2996,6 +3015,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_uri) {
             int ret = h3zero_uri_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_url_template) {
+            int ret = h3zero_url_template_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3235,6 +3260,18 @@ namespace UnitTest1
         }
         TEST_METHOD(grease_quic_bit) {
             int ret = grease_quic_bit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_udp) {
+            int ret = picomask_udp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_udp_path) {
+            int ret = picomask_udp_path_test();
 
             Assert::AreEqual(ret, 0);
         }
