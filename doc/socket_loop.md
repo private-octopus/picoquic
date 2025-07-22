@@ -75,7 +75,7 @@ The `param` argument contains data to parameterize the packet loop:
   will be created, one for `AF_INET` (IPv4), and one for `AF_INET6` (IPv6).
 
 * `prefer_extra_socket`: if the source address and source port are set,
-  outgoing packets will be sent on a socket with matching
+  outgoing packets will be sent on a socket with matching bindings.
 
 * `simulate_eio`: simulate an EIO socket error. This error happens when
   the socket does not support UDP GSO. The simulation enables us to
