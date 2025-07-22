@@ -55,7 +55,7 @@ The `param` argument contains data to parameterize the packet loop:
 
 * `local_af`: the value of the Address Family that should be selected for
   the local socket. If the value is left to `AF_UNSPEC`, two sockets
-  will be created, one for `AF_INET` (IPv6), and one for `AF_INET6` (IPv6).
+  will be created, one for `AF_INET` (IPv4), and one for `AF_INET6` (IPv6).
 
 * `dest_if`: the interface identifier that should be associated with the local
   socket, or 0.
@@ -72,10 +72,10 @@ The `param` argument contains data to parameterize the packet loop:
   for example to test or simulate migration or multipath functions.
   That socket will be set to a random port number, chosen by the
   systems. If the parameter `local_af` is left to `AF_UNSPEC`, two sockets
-  will be created, one for `AF_INET` (IPv6), and one for `AF_INET6` (IPv6).
+  will be created, one for `AF_INET` (IPv4), and one for `AF_INET6` (IPv6).
 
 * `prefer_extra_socket`: if the source address and source port are set,
-  ouitgoing packets will be sent on a socket with matching
+  outgoing packets will be sent on a socket with matching
 
 * `simulate_eio`: simulate an EIO socket error. This error happens when
   the socket does not support UDP GSO. The simulation enables us to
