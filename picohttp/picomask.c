@@ -259,6 +259,7 @@ int picomask_udp_ctx_create(picomask_ctx_t* picomask_ctx, struct sockaddr* targe
         else {
             udp_ctx->picomask_ctx = picomask_ctx;
             udp_ctx->h3_stream = h3_stream;
+            h3_stream->path_callback_ctx = udp_ctx;
             picosplay_insert(&picomask_ctx->udp_tree, udp_ctx);
             *p_udp_ctx = udp_ctx;
         }
@@ -307,7 +308,7 @@ int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_
 /* Release data and memory associated with a stream context */
 void picomask_release_stream(h3zero_stream_ctx_t* stream_ctx)
 {
-    picomask_udp_ctx_t* udp_ctx = stream_ctx->path_callback_ctx;
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t * )stream_ctx->path_callback_ctx;
     if (udp_ctx != NULL) {
         picomask_udp_ctx_delete(udp_ctx->picomask_ctx, udp_ctx);
         stream_ctx->path_callback_ctx = NULL;
@@ -723,14 +724,6 @@ int picomask_proxying(
     return -1;
 }
 
-/* Freeing of the proxy context.
- *
-* typedef void(*picoquic_proxying_free_fn)(void* proxy_ctx);
-*
-* TODO: compare that to the current release code.
-*/
-
-
 /* picomask callback. This will be called from the web server
 * when the path points to a picomask callback.
 */
@@ -793,11 +786,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
         picomask_release_stream(stream_ctx);
         break;
     case picohttp_callback_deregister:
-        /* The app context has been removed from the registry.
-        * Its references should be removed from streams belonging to this session.
-        * On the client, the memory should be freed.
-        */
-        /* picomask_unlink_context(cnx, stream_ctx, path_app_ctx); */
+        picomask_release_stream(stream_ctx);
         break;
     default:
         /* protocol error */
