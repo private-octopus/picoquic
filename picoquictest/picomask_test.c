@@ -246,10 +246,8 @@ picomask_udp_ctx_t* picoquic_test_get_udp_ctx(picomask_test_ctx_t* pt_ctx)
 {
     picomask_udp_ctx_t* udp_ctx = NULL;
     picomask_ctx_t* pm_ctx = pt_ctx->client_app_ctx;
-    if (pm_ctx->table_udp_ctx != NULL) {
-        /* get the first context */
-        udp_ctx = picomask_udp_ctx_by_number(pm_ctx, 0);
-    }
+    /* get the context associated with the requested IP and port */
+    udp_ctx = picomask_udp_ctx_find(pm_ctx, (struct sockaddr*)&pt_ctx->addr[2]);
     return udp_ctx;
 }
 
@@ -299,7 +297,7 @@ int picomask_proxy_available(picomask_test_ctx_t* pt_ctx)
             picomask_udp_ctx_t* udp_ctx = picoquic_test_get_udp_ctx(pt_ctx);
 
             if (udp_ctx != NULL) {
-                h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(pt_ctx->client_h3_ctx, udp_ctx->stream_id);
+                h3zero_stream_ctx_t* stream_ctx = udp_ctx->h3_stream;
                 if (stream_ctx != NULL && stream_ctx->is_upgraded) {
                     ret = 1;
                 }
@@ -408,7 +406,7 @@ int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
 
     if (path_item == NULL || picomask_ctx == NULL ||
-        picomask_ctx_init(picomask_ctx, 4) != 0){
+        picomask_ctx_init(picomask_ctx) != 0){
         ret = -1;
         if (path_item != NULL) {
             free(path_item);

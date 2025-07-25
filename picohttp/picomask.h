@@ -23,6 +23,7 @@
 #define PICOMASK_H
 
 #include "picohash.h"
+#include "picosplay.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "h3zero.h"
@@ -67,6 +68,7 @@ typedef struct st_picomask_ctx_t {
     picoquic_cnx_t* cnx; /* Null on server. On client, the connection to the proxy */
     h3zero_callback_ctx_t* h3_ctx; /* Null on server. On client, the H3 context of the proxy connection */
     char const* path_template; /* Null on server */
+    picosplay_tree_t udp_tree;
     picohash_table* table_udp_ctx;
     uint64_t picomask_number_next;
     picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
@@ -83,12 +85,11 @@ typedef struct st_picomask_h3_ctx_t {
 
 typedef struct st_picomask_udp_ctx_t {
     picohash_item hash_item;
-    uint64_t picomask_number;
-    picomask_ctx_t* picomask_ctx;
-    picoquic_cnx_t* cnx;
-    uint64_t stream_id;
+    picosplay_node_t node;
     struct sockaddr_storage target_addr;
     struct sockaddr_storage local_addr;
+    picomask_ctx_t* picomask_ctx;
+    h3zero_stream_ctx_t* h3_stream;
     /* Management of capsule protocol on control stream */
     /* Management of datagram queue -- incoming packets
      * that have to be processed locally */
@@ -96,7 +97,7 @@ typedef struct st_picomask_udp_ctx_t {
     picomask_packet_t* outgoing_last;
 } picomask_udp_ctx_t;
 
-int picomask_ctx_init(picomask_ctx_t* ctx, size_t max_nb_udp);
+int picomask_ctx_init(picomask_ctx_t* ctx);
 void picomask_ctx_release(picomask_ctx_t* ctx);
 
 picomask_udp_ctx_t* picomask_udp_ctx_by_number(picomask_ctx_t* ctx, uint64_t picomask_number);
@@ -109,6 +110,8 @@ int picomask_callback(picoquic_cnx_t* cnx,
 
 int picomask_register_proxy(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
     struct sockaddr* proxy_addr, uint64_t current_time, const char* path_template);
+
+picomask_udp_ctx_t* picomask_udp_ctx_find(picomask_ctx_t* picomask_ctx, struct sockaddr* target_addr);
 
 int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr);
 
