@@ -1123,7 +1123,7 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
  * i.e., must fit in the minimum packet length supported by Quic. Trying to
  * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
  */
-#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
+#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1253
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 

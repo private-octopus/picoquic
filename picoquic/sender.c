@@ -4081,15 +4081,25 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 next_wake_time = current_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
-#if TODO
-            if (if_index == PICOQUIC_RESERVED_IF_INDEX && quic->proxy_ctx) {
+
+            /* Account for the bytes in the packet. */
+            *send_length += coalesced_packet_size;
+
+            if (*if_index == PICOQUIC_RESERVED_IF_INDEX &&  *send_length > 0 && cnx->quic->picomask_ctx != NULL && cnx->quic->picomask_fns != NULL) {
                 /* Ask the proxy to handle the packet */
                 /* if we queue it as a datagram, set packet_size to 0 */
                 /* If we can do some short cut, rewrite the packet in place per shortcut spec. */
+                ret = (cnx->quic->picomask_fns->picomask_intercept_fn)
+                    (cnx->quic->picomask_ctx, current_time, send_buffer, send_length, send_msg_size,
+                    p_addr_to, p_addr_from, if_index);
+                if (ret == 0) {
+
+                }
+
+                if (ret < 0 || *send_length == 0) {
+                    break;
+                }
             }
-#endif
-            /* Account for the bytes in the packet. */
-            *send_length += coalesced_packet_size;
 
             /* Check whether to keep coalescing multiple packets in the send buffer */
             if (send_msg_size == NULL) {

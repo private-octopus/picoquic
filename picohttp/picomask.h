@@ -53,7 +53,9 @@ extern "C" {
 * 2798c62715dd8ce6e2c6dd92a37a8276f16c029e
 */
 #define picomask_interface_id 0x2798c627
+#define PICOMASK_MTU_MIN 1300
 
+#if 0
 typedef struct st_picomask_packet_t {
     struct st_picomask_packet_t* next_packet;
     uint64_t arrival_time;
@@ -63,6 +65,7 @@ typedef struct st_picomask_packet_t {
     uint8_t ecn_mark;
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picomask_packet_t;
+#endif
 
 typedef struct st_picomask_ctx_t {
     picoquic_cnx_t* cnx; /* Null on server. On client, the connection to the proxy */
@@ -70,12 +73,11 @@ typedef struct st_picomask_ctx_t {
     char const* path_template; /* Null on server */
     picosplay_tree_t udp_tree;
     picohash_table* table_udp_ctx;
-    uint64_t picomask_number_next;
+#if 0
     picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
     picomask_packet_t* intercepted_last;
-    picomask_packet_t* forwarding_first; /* queue of packets waiting to be sent to network */
-    picomask_packet_t* forwarding_last;
     picomask_packet_t* packet_heap;
+#endif
 } picomask_ctx_t;
 
 typedef struct st_picomask_h3_ctx_t {
@@ -90,17 +92,17 @@ typedef struct st_picomask_udp_ctx_t {
     struct sockaddr_storage local_addr;
     picomask_ctx_t* picomask_ctx;
     h3zero_stream_ctx_t* h3_stream;
+#if 0
     /* Management of capsule protocol on control stream */
     /* Management of datagram queue -- incoming packets
      * that have to be processed locally */
     picomask_packet_t* outgoing_first;
     picomask_packet_t* outgoing_last;
+#endif
 } picomask_udp_ctx_t;
 
 int picomask_ctx_init(picomask_ctx_t* ctx);
 void picomask_ctx_release(picomask_ctx_t* ctx);
-
-picomask_udp_ctx_t* picomask_udp_ctx_by_number(picomask_ctx_t* ctx, uint64_t picomask_number);
 
 int picomask_callback(picoquic_cnx_t* cnx,
     uint8_t* bytes, size_t length,

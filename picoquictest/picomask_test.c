@@ -281,6 +281,7 @@ int picomask_proxy_broken(picomask_test_ctx_t* pt_ctx)
     }
     return ret;
 }
+
 /* The picomask_proxy_available test returns 1 if the connection to the
 * proxy is validated by the server, -1 if something breaks before that.
  */
@@ -306,6 +307,34 @@ int picomask_proxy_available(picomask_test_ctx_t* pt_ctx)
     }
     return ret;
 }
+
+
+/* The picomask_target_started test returns 1 if the first packet has been
+* received by the proxy and queued.
+ */
+int picomask_target_broken(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+    if (pt_ctx->cnx_to_target == NULL ||
+        pt_ctx->cnx_to_target->cnx_state > picoquic_state_ready) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int picomask_target_started(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+
+    if ((ret = picomask_proxy_broken(pt_ctx)) == 0 &&
+        (ret = picomask_target_broken(pt_ctx)) == 0) {
+        if (pt_ctx->quic[1]->pending_stateless_packet != NULL) {
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
 
 int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test_fn)
 {
@@ -359,20 +388,28 @@ void picomask_test_release_server_ctx(picomask_test_ctx_t* pt_ctx)
 
 void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
 {
-
     if (pt_ctx->client_h3_ctx != NULL && pt_ctx->cnx_to_proxy != NULL) {
         h3zero_callback_delete_context(pt_ctx->cnx_to_proxy, pt_ctx->client_h3_ctx);
         pt_ctx->client_h3_ctx = NULL;
         picoquic_set_callback(pt_ctx->cnx_to_proxy, NULL, NULL);
     }
+
+    if (pt_ctx->client_target_h3_ctx != NULL && pt_ctx->cnx_to_target != NULL) {
+        h3zero_callback_delete_context(pt_ctx->cnx_to_target, pt_ctx->client_target_h3_ctx);
+        pt_ctx->client_target_h3_ctx = NULL;
+        picoquic_set_callback(pt_ctx->cnx_to_target, NULL, NULL);
+    }
+
     for (int i = 0; i < 3; i++) {
         if (pt_ctx->quic[i] != NULL) {
             picoquic_free(pt_ctx->quic[i]);
             pt_ctx->quic[i] = NULL;
         }
     }
-    picomask_ctx_release(pt_ctx->client_app_ctx);
-    free(pt_ctx->client_app_ctx);
+    if (pt_ctx->client_app_ctx != NULL) {
+        picomask_ctx_release(pt_ctx->client_app_ctx);
+        free(pt_ctx->client_app_ctx);
+    }
     picomask_test_release_server_ctx(pt_ctx);
 
     for (int i = 0; i < 4; i++) {
@@ -652,9 +689,14 @@ int picomask_udp_test()
         ret = picomask_test_loop(pt_ctx, picomask_proxy_available);
     }
 
-    /* TODO: start a connection to the target */
     if (ret == 0) {
+        /* start a connection to the target */
+        ret = picomask_test_target_cnx_create(pt_ctx);
+    }
 
+    if (ret == 0) {
+        /* Queue first packet from client to target */
+        ret = picomask_test_loop(pt_ctx, picomask_target_started);
     }
 
     if (pt_ctx != NULL) {
