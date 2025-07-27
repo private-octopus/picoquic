@@ -648,7 +648,7 @@ int picomask_intercept(void* proxy_ctx, uint64_t current_time,
 #endif
     return ret;
 }
-
+#if 0
 /*
 * Implementation of the picoquic "proxy forwarding" API.
 * This is an opportunity to prepare outgoing datagrams, which will
@@ -688,7 +688,9 @@ void picomask_forwarding(void* proxy_ctx,
 
     /* recycle the packet */
 }
+#endif
 
+#if 0
 /*
 * Implementation of the picoquic "proxying" API.
 * This is an opportunity to capture incoming datagrams
@@ -722,6 +724,7 @@ int picomask_proxying(
     */
     return -1;
 }
+#endif
 
 /* picomask callback. This will be called from the web server
 * when the path points to a picomask callback.
