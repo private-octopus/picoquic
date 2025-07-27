@@ -328,7 +328,7 @@ int picomask_target_started(picomask_test_ctx_t* pt_ctx)
 
     if ((ret = picomask_proxy_broken(pt_ctx)) == 0 &&
         (ret = picomask_target_broken(pt_ctx)) == 0) {
-        if (pt_ctx->quic[1]->cnx_list->first_datagram != NULL) {
+        if (pt_ctx->cnx_to_target->cnx_state == picoquic_state_client_almost_ready) {
             ret = 1;
         }
     }

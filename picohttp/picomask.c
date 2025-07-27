@@ -477,11 +477,12 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
     picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)stream_ctx->path_callback_ctx;
     picoquic_quic_t* quic = picoquic_get_quic_ctx(cnx);
     uint64_t current_time = picoquic_get_quic_time(quic);
+    picoquic_cnx_t* first_cnx = NULL;
 
     if (picoquic_is_client(cnx)) {
         ret = picoquic_incoming_packet_ex(quic, bytes, length,
             (struct sockaddr*)&udp_ctx->local_addr, (struct sockaddr*)&udp_ctx->target_addr,
-            picomask_interface_id, 0, NULL, current_time);
+            picomask_interface_id, 0, &first_cnx, current_time);
     }
     else {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
