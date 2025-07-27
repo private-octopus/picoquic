@@ -549,6 +549,7 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
     return ret;
 }
 
+#if 0
 /* Prepare datagram. 
 * Take the next packet in the "intercept" queue and copy it to the content of the
 * datagram. 
@@ -581,6 +582,7 @@ int picomask_provide_datagram(picoquic_cnx_t* cnx,
 
     return ret;
 }
+#endif
 
 /*
 * Implementation of the picoquic "proxy intercept" API.
@@ -603,14 +605,6 @@ int picomask_intercept(void* proxy_ctx, uint64_t current_time,
     int ret = 0;
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)proxy_ctx;
     picomask_udp_ctx_t* udp_ctx;
-    picomask_ctx;
-    current_time;
-    send_buffer;
-    send_length;
-    send_msg_size;
-    p_addr_to;
-    p_addr_from;
-    if_index;
 
     /* Check whether there is a context associated with the 4-tuple */
     udp_ctx = picomask_udp_ctx_find(picomask_ctx, (struct sockaddr*)p_addr_to);
@@ -778,9 +772,8 @@ int picomask_callback(picoquic_cnx_t* cnx,
         ret = picomask_receive_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
         break;
     case picohttp_callback_provide_datagram: 
-        /* callback to provide data. This will translate to a "prepare data" call
-        * on the next available connection context and path context */
-        ret = picomask_provide_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
+        /* callback to provide a datagram. Not used in the current code. */
+        ret = -1;
         break;
     case picohttp_callback_reset: 
         /* Control stream has been abandoned. */
