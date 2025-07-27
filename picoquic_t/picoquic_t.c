@@ -146,6 +146,7 @@ static const picoquic_test_def_t test_table[] = {
     { "datagram_small", datagram_small_test },
     { "datagram_small_new", datagram_small_new_test },
     { "datagram_small_packet", datagram_small_packet_test },
+    { "datagram_too_long_test", datagram_too_long_test },
     { "datagram_wifi", datagram_wifi_test },
     { "ddos_amplification", ddos_amplification_test },
     { "ddos_amplification_0rtt", ddos_amplification_0rtt_test },

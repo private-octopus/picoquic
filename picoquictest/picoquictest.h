@@ -408,6 +408,7 @@ int datagram_size_test();
 int datagram_small_test();
 int datagram_small_new_test();
 int datagram_small_packet_test();
+int datagram_too_long_test();
 int datagram_wifi_test();
 int ddos_amplification_test();
 int ddos_amplification_0rtt_test();

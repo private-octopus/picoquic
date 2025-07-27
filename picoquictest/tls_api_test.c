@@ -1420,12 +1420,13 @@ static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     picoquictest_sim_link_t** target_link, uint64_t simulated_time)
 {
     int ret = 0;
+    int if_index;
 
     test_ctx->server_endpoint.last_send_time = simulated_time;
 
     ret = picoquic_prepare_packet_ex(test_ctx->cnx_server, simulated_time,
         test_ctx->send_buffer, test_ctx->send_buffer_size, send_length,
-        addr_to, addr_from, NULL, p_segment_size);
+        addr_to, addr_from, &if_index, p_segment_size);
     test_ctx->server_endpoint.next_time_ready = simulated_time +
         test_ctx->server_endpoint.prepare_cpu_time;
     if (ret == PICOQUIC_ERROR_DISCONNECTED) {
@@ -1477,6 +1478,7 @@ static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     /* check whether the client has something to send */
     size_t coalesced_length = 0;
     size_t send_buffer_size = test_ctx->send_buffer_size;
+    int if_index;
 
     test_ctx->client_endpoint.last_send_time = simulated_time;
 
@@ -1488,7 +1490,7 @@ static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
 
     ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
         test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, send_length,
-        addr_to, addr_from, NULL, p_segment_size);
+        addr_to, addr_from, &if_index, p_segment_size);
 
     test_ctx->client_endpoint.next_time_ready = simulated_time +
         test_ctx->client_endpoint.prepare_cpu_time;
@@ -10030,6 +10032,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
         while (ret == 0 && nb_trials < 1024 && nb_inactive < 512) {
             struct sockaddr_storage a_from;
             struct sockaddr_storage a_to;
+            int if_index;
             uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
             size_t length = 0;
 
@@ -10042,7 +10045,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
             }
 
             ret = picoquic_prepare_packet(target_cnx, simulated_time, packet, PICOQUIC_MAX_PACKET_SIZE,
-                &length, &a_to, &a_from, NULL);
+                &length, &a_to, &a_from, &if_index);
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;

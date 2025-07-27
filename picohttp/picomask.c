@@ -810,31 +810,6 @@ int picomask_callback(picoquic_cnx_t* cnx,
  * a client.
  */
 
-
-
-/* management of outgoing packets at the client */
-int picomask_outgoing()
-{
-    /* Is there an established context for these addresses? 
-     * if yes, queue it there.
-     */
-
-    /* If not, is there yet an established H3 connection for
-     * the source address?
-     */
-
-    /* If not, establish the h3 connection. 
-    * TODO: provide credentials.
-     */
-
-    /* is there now an established H3 connection for
-     * the source address?*/
-
-    /* if not, return an error */
-    /* if yes, create a Connect UDP context, queue the packet to it */
-    return -1;
-}
-
 struct st_picomask_fns_t picomask_fns = {
     picomask_intercept
 };
