@@ -598,12 +598,11 @@ int picomask_should_intercept(int if_index, size_t * max_length)
 }
 #endif
 
-int picomask_intercept(void* proxy_ctx, uint64_t current_time,
+int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
     uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int *if_index)
 {
     int ret = 0;
-    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)proxy_ctx;
     picomask_udp_ctx_t* udp_ctx;
 
     /* Check whether there is a context associated with the 4-tuple */
