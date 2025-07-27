@@ -791,10 +791,11 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
             size_t send_length = 0;
             struct sockaddr_storage addr_to;
             struct sockaddr_storage addr_from;
+            int if_index;
 
             ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
                 send_buffer, sizeof(send_buffer), &send_length,
-                &addr_to, &addr_from, 0, NULL);
+                &addr_to, &addr_from, &if_index, NULL);
             if (ret != 0) {
                 break;
             }

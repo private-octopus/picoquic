@@ -608,6 +608,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     struct st_picomask_ctx_t* picomask_ctx;
+    struct st_picomask_fns_t* picomask_fns;
     char const* default_alpn;
     picoquic_alpn_select_fn alpn_select_fn;
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
@@ -2050,7 +2051,7 @@ void picoquic_delete_misc_or_dg(picoquic_misc_frame_header_t** first, picoquic_m
 void picoquic_clear_ack_ctx(picoquic_ack_context_t* ack_ctx);
 void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx);
 int picoquic_queue_handshake_done_frame(picoquic_cnx_t* cnx);
-uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int is_first_in_packet, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* ret);
 uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* bytes_max,
     uint8_t* frame_id, uint64_t* length);
@@ -2120,6 +2121,16 @@ picoquic_misc_frame_header_t* picoquic_create_misc_frame(const uint8_t* bytes, s
  * upgrade is possible, -1 if it is not.
  */
 int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index, int new_version_index);
+
+
+/* Support for the proxy function.
+* We use a function table, so that we do not have to link the picomask code 
+* for servers or clients that do not use the Masque proxy. */
+typedef struct st_picomask_fns_t {
+    int (*picomask_intercept_fn)(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+        uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
+        struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
+} picomask_fns_t;
 
 #ifdef __cplusplus
 }

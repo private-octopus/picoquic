@@ -1119,11 +1119,16 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
- * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
- * i.e., must fit in the minimum packet length supported by Quic. Trying to
- * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
+* The datagram frame must fit into the path MTU, not be larger than
+* the locally specified maximum, and if the connection is complete
+* not be larger than the max allowed by the peer.
+* 
+* We cannot estimate all that at the time of queuing, because the path MTU
+* may change between the time the datagram is queued and the time it is
+* sent. The test at queuing time are based on the current path MTU. If
+* that changes, datagrams that are too long will be dropped.
  */
-#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
+#define PICOQUIC_DATAGRAM_QUEUE_CAUTIOUS_LENGTH PICOQUIC_ENFORCED_INITIAL_MTU
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 

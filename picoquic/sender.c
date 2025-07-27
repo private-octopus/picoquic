@@ -2737,12 +2737,12 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 
 /* sending of datagrams */
 static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
+    int is_first_in_packet, int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int * ret)
 {
     uint8_t* bytes0 = bytes_next;
 
     if (cnx->first_datagram != NULL) {
-        bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, more_data, is_pure_ack);
+        bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, is_first_in_packet, more_data, is_pure_ack);
         *more_data |= (cnx->first_datagram != NULL);
     }
     else {
@@ -2807,7 +2807,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
 */
 
 static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    uint64_t max_priority_allowed, uint64_t current_time,
+    int is_first_in_packet, uint64_t max_priority_allowed, uint64_t current_time,
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
 {
     int datagram_sent = 0;
@@ -2856,7 +2856,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
         if (datagram_present &&
             cnx->datagram_priority == current_priority &&
             (cnx->datagram_priority < stream_priority || datagram_first)) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
                 &more_data_this_round, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
@@ -2902,7 +2902,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
             cnx->datagram_priority == current_priority &&
             cnx->datagram_priority <= stream_priority &&
             !datagram_first) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
                 more_data, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
@@ -3124,7 +3124,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
                             if (ret == 0) {
                                 bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                    UINT64_MAX, current_time,
+                                    (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time,
                                     &more_data, &is_pure_ack, &no_data_to_send, &ret);
                             }
                             /* TODO: replace this by posting of frame when CWIN estimated */
@@ -3422,7 +3422,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     int no_data_to_send = 0;
                     if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
                         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                            cnx->priority_limit_for_bypass, current_time,
+                            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
                             &more_data, &is_pure_ack, &no_data_to_send, &ret);
                     }
                     if (bytes_next != bytes_next_before_bypass) {
@@ -3477,7 +3477,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
                         if (ret == 0) {
                             bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                UINT64_MAX, current_time, &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time, &more_data, &is_pure_ack, &no_data_to_send, &ret);
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
@@ -3566,7 +3566,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 int no_data_to_send = 0;
 
                 if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                    cnx->priority_limit_for_bypass, current_time,
+                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
                     &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
                     length = bytes_next - bytes;
                 }
@@ -4081,15 +4081,25 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 next_wake_time = current_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
-#if TODO
-            if (if_index == PICOQUIC_RESERVED_IF_INDEX && quic->proxy_ctx) {
+
+            /* Account for the bytes in the packet. */
+            *send_length += coalesced_packet_size;
+
+            if (*if_index == PICOQUIC_RESERVED_IF_INDEX && *send_length > 0 && cnx->quic->picomask_ctx != NULL && cnx->quic->picomask_fns != NULL) {
                 /* Ask the proxy to handle the packet */
                 /* if we queue it as a datagram, set packet_size to 0 */
                 /* If we can do some short cut, rewrite the packet in place per shortcut spec. */
+                ret = (cnx->quic->picomask_fns->picomask_intercept_fn)
+                    (cnx->quic->picomask_ctx, current_time, send_buffer, send_length, send_msg_size,
+                    p_addr_to, p_addr_from, if_index);
+                if (ret == 0) {
+
+                }
+
+                if (ret < 0 || *send_length == 0) {
+                    break;
+                }
             }
-#endif
-            /* Account for the bytes in the packet. */
-            *send_length += coalesced_packet_size;
 
             /* Check whether to keep coalescing multiple packets in the send buffer */
             if (send_msg_size == NULL) {
@@ -4124,6 +4134,11 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index)
 {
+    int if_index_null;
+    if (if_index == NULL) {
+        if_index = &if_index_null;
+    }
+
     return picoquic_prepare_packet_ex(cnx, current_time, send_buffer, send_buffer_max, send_length,
         p_addr_to, p_addr_from, if_index, NULL);
 }

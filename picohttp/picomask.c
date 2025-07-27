@@ -229,6 +229,7 @@ int picomask_ctx_init(picomask_ctx_t* ctx)
 {
     int ret = 0;
 
+    memset(ctx, 0, sizeof(picomask_ctx_t));
     picomask_udp_init_tree(&ctx->udp_tree);
 
     return ret;
@@ -334,6 +335,11 @@ int picomask_accept(picoquic_cnx_t* cnx,
     if (ret == 0) {
         ret = picomask_udp_ctx_create(picomask_ctx, (struct sockaddr*)&target_addr, stream_ctx, &udp_ctx);
     }
+    if (ret == 0) {
+        h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)cnx->callback_ctx;
+        ret = h3zero_declare_stream_prefix(h3_ctx, stream_ctx->stream_id,
+            picomask_callback, picomask_ctx);
+    }
     /* TODO: should provide return parameters such as local address */
     return ret;
 }
@@ -392,47 +398,6 @@ int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, 
     return ret;
 }
 
-/* Connect proxy declares a proxy for use as a proxy service for connections that
-* need it. 
-*/
-int picomask_register_proxy(picoquic_quic_t * quic, char const * proxy_sni, size_t max_nb_udp,
-    struct sockaddr* proxy_addr,  uint64_t current_time, const char * path_template)
-{
-    int ret = 0;
-    picomask_ctx_t* picomask_ctx = quic->picomask_ctx;
-
-    if (picomask_ctx == NULL) {
-        picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
-        if (picomask_ctx == NULL) {
-            ret = -1;
-        }
-        else {
-            memset(picomask_ctx, 0, sizeof(picomask_ctx_t));
-            quic->picomask_ctx = picomask_ctx;
-            picomask_ctx->path_template = path_template;
-            ret = picomask_ctx_init(picomask_ctx);
-        }
-    }
-
-    if (ret == 0 && picomask_ctx->cnx == NULL &&
-        (picomask_ctx->cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
-            proxy_addr, current_time, 0, proxy_sni, "h3", 1)) == NULL) {
-        ret = -1;
-    }
-
-    if (ret == 0 && picomask_ctx->h3_ctx == NULL) {
-        if ((picomask_ctx->h3_ctx = h3zero_callback_create_context(NULL)) == NULL) {
-            ret = -1;
-        }
-        else {
-            picoquic_set_callback(picomask_ctx->cnx, h3zero_callback, picomask_ctx->h3_ctx);
-            ret = h3zero_protocol_init(picomask_ctx->cnx);
-        }
-    }
-    /* TODO: release picomask_ctx on error */
-    return ret;
-}
-
 int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr)
 {
     int ret = 0;
@@ -485,7 +450,7 @@ int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct so
     return ret;
 }
 
-
+#if 0
 /* Get an empty packet */
 picomask_packet_t* picomask_get_packet(picomask_ctx_t* picomask_ctx)
 {
@@ -510,8 +475,10 @@ void picomask_recycle_packet(picomask_ctx_t* picomask_ctx, picomask_packet_t* pa
     picomask_ctx->packet_heap = packet;
 }
 
+
 /* add packet to queue in picomask context */
-int picomask_add_to_queue(picomask_ctx_t* picomask_ctx, picomask_packet_t** pp_last_packet,
+int picomask_add_to_queue(picomask_ctx_t* picomask_ctx, 
+    picomask_packet_t** pp_first_packet, picomask_packet_t** pp_last_packet,
     uint8_t* bytes, size_t length, struct sockaddr* addr_from, struct sockaddr* addr_to,
     uint8_t ecn_recv, uint64_t current_time)
 {
@@ -528,13 +495,17 @@ int picomask_add_to_queue(picomask_ctx_t* picomask_ctx, picomask_packet_t** pp_l
         packet->ecn_mark = ecn_recv;
         packet->next_packet = NULL;
         packet->arrival_time = current_time;
-        if (*pp_last_packet != NULL) {
+
+        if (*pp_last_packet == NULL) {
+            *pp_first_packet = packet;
+        } else {
             (*pp_last_packet)->next_packet = packet;
         }
         *pp_last_packet = packet;
     }
     return ret;
 }
+#endif
 
 /* Receive datagram.
 * The datagram contains an encapsulated QUIC packet, in which the quarter stream ID 
@@ -561,13 +532,24 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
             picomask_interface_id, 0, NULL, current_time);
     }
     else {
-        ret = picomask_add_to_queue(picomask_ctx, &picomask_ctx->forwarding_last,
-            bytes, length, (struct sockaddr*)&udp_ctx->target_addr, (struct sockaddr*)&udp_ctx->local_addr,
-            0, current_time);
+        picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);
+        if (sp != NULL) {
+            sp->length = length;
+            memcpy(sp->bytes, bytes, length);
+            /* Fill up control fields */
+            sp->ptype = picoquic_packet_1rtt_protected;
+            picoquic_store_addr(&sp->addr_to, (struct sockaddr*)&udp_ctx->target_addr);
+            picoquic_store_addr(&sp->addr_local, (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr);
+            sp->if_index_local = cnx->path[0]->first_tuple->if_index;
+            sp->cnxid_log64 = picoquic_val64_connection_id(cnx->path[0]->first_tuple->p_local_cnxid->cnx_id);
+            picoquic_queue_stateless_packet(quic, sp);
+        }
+        /* No action if memory allocation fails, because this indicates congestion. */
     }
     return ret;
 }
 
+#if 0
 /* Prepare datagram. 
 * Take the next packet in the "intercept" queue and copy it to the content of the
 * datagram. 
@@ -600,6 +582,7 @@ int picomask_provide_datagram(picoquic_cnx_t* cnx,
 
     return ret;
 }
+#endif
 
 /*
 * Implementation of the picoquic "proxy intercept" API.
@@ -615,27 +598,42 @@ int picomask_should_intercept(int if_index, size_t * max_length)
 }
 #endif
 
-int picomask_intercept(void* proxy_ctx, uint64_t current_time,
-    uint8_t* send_buffer, size_t send_length, size_t send_msg_size,
-    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int if_index)
+int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+    uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int *if_index)
 {
     int ret = 0;
-    picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)proxy_ctx;
-    picomask_ctx;
-    current_time;
-    send_buffer;
-    send_length;
-    send_msg_size;
-    p_addr_to;
-    p_addr_from;
-    if_index;
+    picomask_udp_ctx_t* udp_ctx;
 
     /* Check whether there is a context associated with the 4-tuple */
-
-    /* If not, create a local context and queue a context request */
+    udp_ctx = picomask_udp_ctx_find(picomask_ctx, (struct sockaddr*)p_addr_to);
+    if (udp_ctx == NULL) {
+        /* TODO: create a UDP CTX, and if needed create a connection */
+    }
 
     /* Queue a datagram in the context */
+    if (udp_ctx != NULL) {
+        /* TODO: this code is horrific, we need a way to bypass the datagram queue */
+        uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+        size_t v_ll = picoquic_varint_encode(buffer, PICOQUIC_MAX_PACKET_SIZE, udp_ctx->h3_stream->stream_id / 4);
 
+        if (v_ll + *send_length > PICOQUIC_MAX_PACKET_SIZE) {
+            ret = -1;
+        }
+        else {
+            memcpy(buffer + v_ll, send_buffer, *send_length);
+
+            if (picomask_ctx->cnx->path[0]->send_mtu < PICOMASK_MTU_MIN) {
+                picomask_ctx->cnx->path[0]->send_mtu = PICOMASK_MTU_MIN;
+            }
+            ret = picoquic_queue_datagram_frame(picomask_ctx->cnx, v_ll + *send_length, buffer);
+        }
+    }
+    else {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    /* Confirm the interception */
+    *send_length = 0;
 #if 0
     if (if_index == picomask_interface_id) {
         /* TODO: queue packet to destination */
@@ -649,7 +647,7 @@ int picomask_intercept(void* proxy_ctx, uint64_t current_time,
 #endif
     return ret;
 }
-
+#if 0
 /*
 * Implementation of the picoquic "proxy forwarding" API.
 * This is an opportunity to prepare outgoing datagrams, which will
@@ -689,7 +687,9 @@ void picomask_forwarding(void* proxy_ctx,
 
     /* recycle the packet */
 }
+#endif
 
+#if 0
 /*
 * Implementation of the picoquic "proxying" API.
 * This is an opportunity to capture incoming datagrams
@@ -723,6 +723,7 @@ int picomask_proxying(
     */
     return -1;
 }
+#endif
 
 /* picomask callback. This will be called from the web server
 * when the path points to a picomask callback.
@@ -773,9 +774,8 @@ int picomask_callback(picoquic_cnx_t* cnx,
         ret = picomask_receive_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
         break;
     case picohttp_callback_provide_datagram: 
-        /* callback to provide data. This will translate to a "prepare data" call
-        * on the next available connection context and path context */
-        ret = picomask_provide_datagram(cnx, bytes, length, stream_ctx, picomask_ctx);
+        /* callback to provide a datagram. Not used in the current code. */
+        ret = -1;
         break;
     case picohttp_callback_reset: 
         /* Control stream has been abandoned. */
@@ -796,11 +796,6 @@ int picomask_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-
-/* Init of the proxy context.
-* Allocate the memory, and then 
- */
-
 /* Creation of an outer connection.
  * On client, this is done explicitly: create a connection to
  * a proxy, get a unique UDP connection ID. This requires
@@ -810,27 +805,48 @@ int picomask_callback(picoquic_cnx_t* cnx,
  * a client.
  */
 
+struct st_picomask_fns_t picomask_fns = {
+    picomask_intercept
+};
 
-
-/* management of outgoing packets at the client */
-int picomask_outgoing()
+/* Connect proxy declares a proxy for use as a proxy service for connections that
+* need it.
+*/
+int picomask_register_proxy(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
+    struct sockaddr* proxy_addr, uint64_t current_time, const char* path_template)
 {
-    /* Is there an established context for these addresses? 
-     * if yes, queue it there.
-     */
+    int ret = 0;
+    picomask_ctx_t* picomask_ctx = quic->picomask_ctx;
 
-    /* If not, is there yet an established H3 connection for
-     * the source address?
-     */
+    if (picomask_ctx == NULL) {
+        picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
+        if (picomask_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = picomask_ctx_init(picomask_ctx);
+            picomask_ctx->path_template = path_template;
+            quic->picomask_ctx = picomask_ctx;
+            quic->picomask_fns = &picomask_fns;
+        }
+    }
 
-    /* If not, establish the h3 connection. 
-    * TODO: provide credentials.
-     */
+    if (ret == 0 && picomask_ctx->cnx == NULL &&
+        (picomask_ctx->cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+            proxy_addr, current_time, 0, proxy_sni, "h3", 1)) == NULL) {
+        ret = -1;
+    }
 
-    /* is there now an established H3 connection for
-     * the source address?*/
-
-    /* if not, return an error */
-    /* if yes, create a Connect UDP context, queue the packet to it */
-    return -1;
+    if (ret == 0 && picomask_ctx->h3_ctx == NULL) {
+        picomask_ctx->cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+        if ((picomask_ctx->h3_ctx = h3zero_callback_create_context(NULL)) == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_callback(picomask_ctx->cnx, h3zero_callback, picomask_ctx->h3_ctx);
+            ret = h3zero_protocol_init(picomask_ctx->cnx);
+        }
+    }
+    /* TODO: release picomask_ctx on error */
+    return ret;
 }

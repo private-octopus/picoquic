@@ -5023,11 +5023,15 @@ uint8_t * picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int
 
 int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * src)
 {
-    int ret;
-    if (length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
-        ret = PICOQUIC_ERROR_DATAGRAM_TOO_LONG;
+    int ret = 0;
+    if (length > PICOQUIC_DATAGRAM_QUEUE_CAUTIOUS_LENGTH) {
+        if (length > cnx->local_parameters.max_datagram_frame_size ||
+            length > cnx->remote_parameters.max_datagram_frame_size ||
+            length + 21 + cnx->quic->local_cnxid_length > cnx->path[0]->send_mtu) {
+            ret = PICOQUIC_ERROR_DATAGRAM_TOO_LONG;
+        }
     }
-    else {
+    if (ret == 0) {
         size_t consumed = 0;
         uint8_t frame_buffer[PICOQUIC_MAX_PACKET_SIZE];
         int more_data = 0;
@@ -5045,15 +5049,45 @@ int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uin
     return ret;
 }
 
+/* TODO: this overly complicated because of the decision to store
+* datagram frames instead of datagram content in the datagram queue.
+* also, the datagram queue is abused to sent "handshake done"
+*/
+
 uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
-    uint8_t *bytes_max, int * more_data, int * is_pure_ack)
+    uint8_t *bytes_max, int is_first_in_packet, int * more_data, int * is_pure_ack)
 {
-    if (bytes + cnx->first_datagram->length > bytes_max) {
-        *more_data = 1;
-    }
-    else {
-        bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack, 
+    if (bytes + cnx->first_datagram->length <= bytes_max) {
+        bytes = picoquic_format_first_misc_or_dg_frame(bytes, bytes_max, more_data, is_pure_ack,
             cnx->first_datagram, &cnx->first_datagram, &cnx->last_datagram);
+    } else {
+        int is_sent = 0;
+        uint8_t* frame_content = ((uint8_t*)cnx->first_datagram) + sizeof(picoquic_misc_frame_header_t);
+
+        if (frame_content[0] == picoquic_frame_type_datagram_l) {
+            /* It might be possible to squeeze the size by removing the length */
+            size_t header_length = picoquic_varint_skip(frame_content + 1);
+            size_t data_length = cnx->first_datagram->length - header_length - 1;
+            size_t min_length = data_length + 1;
+
+            if (bytes + min_length <= bytes_max) {
+                while (bytes + min_length < bytes_max) {
+                    *bytes++ = picoquic_frame_type_padding;
+                }
+                *bytes++ = picoquic_frame_type_datagram;
+                memcpy(bytes, frame_content + header_length, data_length);
+                bytes += data_length;
+                picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+                is_sent= 1;
+            }
+        }
+        if (!is_sent && is_first_in_packet) {
+            picoquic_log_app_message(cnx, "Deleting datagram length %zu, larger than %zu, MTU %zu",
+                cnx->first_datagram->length, bytes_max - bytes, cnx->path[0]->send_mtu);
+            picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+        }
+
+        *more_data |= (cnx->first_datagram != NULL);
     }
 
     return bytes;

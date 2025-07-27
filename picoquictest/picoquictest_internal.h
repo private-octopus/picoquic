@@ -84,6 +84,7 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     unsigned int is_skipping[2];
     unsigned int test_affinity;
     unsigned int test_wifi;
+    unsigned int test_too_long;
     unsigned int one_datagram_per_packet;
 
 } test_datagram_send_recv_ctx_t;
