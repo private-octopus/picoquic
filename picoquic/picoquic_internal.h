@@ -2130,6 +2130,12 @@ typedef struct st_picomask_fns_t {
     int (*picomask_intercept_fn)(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
         uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
         struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
+    int (*picomask_redirect_fn)(struct st_picomask_ctx_t* picomask_ctx,
+        const uint8_t* bytes,
+        size_t packet_length,
+        const struct sockaddr* addr_from,
+        size_t* consumed);
+
 } picomask_fns_t;
 
 #ifdef __cplusplus

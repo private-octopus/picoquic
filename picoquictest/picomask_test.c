@@ -328,7 +328,7 @@ int picomask_target_started(picomask_test_ctx_t* pt_ctx)
 
     if ((ret = picomask_proxy_broken(pt_ctx)) == 0 &&
         (ret = picomask_target_broken(pt_ctx)) == 0) {
-        if (pt_ctx->quic[1]->pending_stateless_packet != NULL) {
+        if (pt_ctx->quic[1]->cnx_list->first_datagram != NULL) {
             ret = 1;
         }
     }
@@ -457,6 +457,7 @@ int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
         path_item->path = pt_ctx->path;
         path_item->path_length = strlen(pt_ctx->path);
         path_item->path_callback = picomask_callback;
+        picomask_ctx->is_proxy_server = 1;
         path_item->path_app_ctx = (void*)picomask_ctx;
 
         pt_ctx->server_context.path_table = path_item;
@@ -570,7 +571,7 @@ picomask_test_ctx_t* picomask_test_config()
 /* Create a client connection to a specified address */
 int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx)
 {
-    int ret = picomask_register_proxy(pt_ctx->quic[0], pt_ctx->proxy_sni, 8,
+    int ret = picomask_register_proxy_client(pt_ctx->quic[0], pt_ctx->proxy_sni, 8,
         (struct sockaddr*)&pt_ctx->addr[1], pt_ctx->simulated_time, pt_ctx->path_template);
 
     if (ret == 0) {
