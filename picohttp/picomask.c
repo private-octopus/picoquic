@@ -412,7 +412,7 @@ int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, 
     return ret;
 }
 
-int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr)
+int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr, picomask_udp_ctx_t** udp_ctx)
 {
     int ret = 0;
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)quic->picomask_ctx;
@@ -422,20 +422,20 @@ int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct so
     }
     else {
         h3zero_stream_ctx_t* stream_ctx = picomask_set_control_stream(picomask_ctx->cnx, picomask_ctx->h3_ctx);
-        picomask_udp_ctx_t* udp_ctx = NULL;
 
         if (stream_ctx == NULL) {
             ret = -1;
         }
         /* Create the connection context for the UDP connect */
-        else if ((ret = picomask_udp_ctx_create(picomask_ctx, target_addr, stream_ctx, &udp_ctx)) != 0) {
+        else if (*udp_ctx == NULL &&
+            (ret = picomask_udp_ctx_create(picomask_ctx, target_addr, stream_ctx, udp_ctx)) != 0) {
             DBG_PRINTF("Could not create UDP Connect context for stream %"PRIu64, stream_ctx->stream_id);
             ret = -1;
         }
         /* Register for the prefix in the H3 context. */
         else if ((ret = h3zero_declare_stream_prefix(picomask_ctx->h3_ctx, stream_ctx->stream_id,
-            picomask_callback, udp_ctx)) != 0) {
-            /* This can only if the stream prefix is already declared */
+            picomask_callback, *udp_ctx)) != 0) {
+            /* This can only fail if the stream prefix is already declared */
             DBG_PRINTF("Duplicate stream prefix %"PRIu64, stream_ctx->stream_id);
             ret = -1;
         }
@@ -454,7 +454,7 @@ int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct so
             }
         }
 
-        if (ret != 0 && udp_ctx != NULL) {
+        if (ret != 0 && *udp_ctx != NULL) {
             /* remove the stream prefix */
             h3zero_delete_stream_prefix(picomask_ctx->cnx, picomask_ctx->h3_ctx, stream_ctx->stream_id);
             /* TODO: verify that UDP context is deleted. */
@@ -532,7 +532,7 @@ int picomask_queue_datagram_to_context(picoquic_cnx_t * cnx, picomask_udp_ctx_t*
     return ret;
 }
 
-int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+int picomask_intercept(picoquic_quic_t * quic, struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
     uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int *if_index)
 {
@@ -542,7 +542,8 @@ int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_
     /* Check whether there is a context associated with the 4-tuple */
     udp_ctx = picomask_udp_ctx_find(picomask_ctx, (struct sockaddr*)p_addr_to);
     if (udp_ctx == NULL) {
-        /* TODO: create a UDP CTX, and if needed create a connection */
+        /* create a UDP CTX, and if needed create a connection */
+        ret = picomask_connect_udp(quic, NULL, (struct sockaddr*)p_addr_to, &udp_ctx);
     }
 
     /* Queue a datagram in the context */

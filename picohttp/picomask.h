@@ -103,11 +103,11 @@ int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni,
 
 picomask_udp_ctx_t* picomask_udp_ctx_find(picomask_ctx_t* picomask_ctx, const struct sockaddr* target_addr);
 
-int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr);
+int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr, picomask_udp_ctx_t** udp_ctx);
 
 int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, char const* path_template, struct sockaddr* addr);
 
-int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+int picomask_intercept(picoquic_quic_t * quic, struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
     uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
 
