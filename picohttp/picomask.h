@@ -45,14 +45,6 @@ extern "C" {
 * service.
 */
 
-/* We need to reserve an interface ID that does not collude with
-* values likely used by the operating system. This excludes
-* small numbers, and special numbers like 0 or -1. We pick
-* a random 31 bit number, derived from the SHA1 hash of
-* "Picomask UDP interface":
-* 2798c62715dd8ce6e2c6dd92a37a8276f16c029e
-*/
-#define picomask_interface_id 0x2798c627
 #define PICOMASK_MTU_MIN 1300
 
 #if 0
@@ -73,11 +65,7 @@ typedef struct st_picomask_ctx_t {
     char const* path_template; /* Null on server */
     picosplay_tree_t udp_tree;
     picohash_table* table_udp_ctx;
-#if 0
-    picomask_packet_t* intercepted_first; /* queue of packets waitting to be sent to peer */
-    picomask_packet_t* intercepted_last;
-    picomask_packet_t* packet_heap;
-#endif
+    int is_proxy_server;
 } picomask_ctx_t;
 
 typedef struct st_picomask_h3_ctx_t {
@@ -110,18 +98,24 @@ int picomask_callback(picoquic_cnx_t* cnx,
     struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx);
 
-int picomask_register_proxy(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
+int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
     struct sockaddr* proxy_addr, uint64_t current_time, const char* path_template);
 
-picomask_udp_ctx_t* picomask_udp_ctx_find(picomask_ctx_t* picomask_ctx, struct sockaddr* target_addr);
+picomask_udp_ctx_t* picomask_udp_ctx_find(picomask_ctx_t* picomask_ctx, const struct sockaddr* target_addr);
 
-int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr);
+int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct sockaddr* target_addr, picomask_udp_ctx_t** udp_ctx);
 
 int picomask_expand_udp_path(char* text, size_t text_size, size_t* text_length, char const* path_template, struct sockaddr* addr);
 
-int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+int picomask_intercept(picoquic_quic_t * quic, struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
     uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
+
+int picomask_redirect(struct st_picomask_ctx_t* picomask_ctx,
+    const uint8_t* bytes,
+    size_t packet_length,
+    const struct sockaddr* addr_from,
+    size_t* consumed);
 
 #ifdef __cplusplus
 }

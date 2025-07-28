@@ -4090,7 +4090,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 /* if we queue it as a datagram, set packet_size to 0 */
                 /* If we can do some short cut, rewrite the packet in place per shortcut spec. */
                 ret = (cnx->quic->picomask_fns->picomask_intercept_fn)
-                    (cnx->quic->picomask_ctx, current_time, send_buffer, send_length, send_msg_size,
+                    (cnx->quic, cnx->quic->picomask_ctx, current_time, send_buffer, send_length, send_msg_size,
                     p_addr_to, p_addr_from, if_index);
                 if (ret == 0) {
 

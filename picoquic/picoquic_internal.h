@@ -2127,9 +2127,15 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
 * We use a function table, so that we do not have to link the picomask code 
 * for servers or clients that do not use the Masque proxy. */
 typedef struct st_picomask_fns_t {
-    int (*picomask_intercept_fn)(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
+    int (*picomask_intercept_fn)(picoquic_quic_t* quic, struct st_picomask_ctx_t* picomask_ctx, uint64_t current_time,
         uint8_t* send_buffer, size_t* send_length, size_t* send_msg_size,
         struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index);
+    int (*picomask_redirect_fn)(struct st_picomask_ctx_t* picomask_ctx,
+        const uint8_t* bytes,
+        size_t packet_length,
+        const struct sockaddr* addr_from,
+        size_t* consumed);
+
 } picomask_fns_t;
 
 #ifdef __cplusplus
