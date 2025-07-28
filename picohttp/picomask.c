@@ -482,7 +482,7 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
     if (picoquic_is_client(cnx)) {
         ret = picoquic_incoming_packet_ex(quic, bytes, length,
             (struct sockaddr*)&udp_ctx->local_addr, (struct sockaddr*)&udp_ctx->target_addr,
-            picomask_interface_id, 0, &first_cnx, current_time);
+            PICOQUIC_RESERVED_IF_INDEX, 0, &first_cnx, current_time);
     }
     else {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(cnx->quic);

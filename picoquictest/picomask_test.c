@@ -335,6 +335,31 @@ int picomask_target_started(picomask_test_ctx_t* pt_ctx)
     return ret;
 }
 
+int picomask_target_ready(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+
+    if ((ret = picomask_proxy_broken(pt_ctx)) == 0 &&
+        (ret = picomask_target_broken(pt_ctx)) == 0) {
+        if (pt_ctx->cnx_to_target->cnx_state == picoquic_state_ready) {
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
+
+int picomask_target_disconnected(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = 0;
+
+    if ((ret = picomask_proxy_broken(pt_ctx)) == 0) {
+        if (pt_ctx->cnx_to_target->cnx_state == picoquic_state_disconnected) {
+            ret = 1;
+        }
+    }
+    return ret;
+}
 
 int picomask_test_loop(picomask_test_ctx_t* pt_ctx, picomask_loop_test loop_test_fn)
 {
@@ -699,6 +724,21 @@ int picomask_udp_test()
         /* Queue first packet from client to target */
         ret = picomask_test_loop(pt_ctx, picomask_target_started);
     }
+
+    if (ret == 0) {
+        /* Finish establishing the client to target connection */
+        ret = picomask_test_loop(pt_ctx, picomask_target_ready);
+    }
+
+    if (ret == 0) {
+        /* Close the client to target connection */
+        ret = picoquic_close(pt_ctx->cnx_to_target, 0);
+    }
+
+    if (ret == 0) {
+        ret = picomask_test_loop(pt_ctx, picomask_target_disconnected);
+    }
+    
 
     if (pt_ctx != NULL) {
         /* Clear the context */

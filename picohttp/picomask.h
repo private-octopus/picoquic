@@ -45,14 +45,6 @@ extern "C" {
 * service.
 */
 
-/* We need to reserve an interface ID that does not collude with
-* values likely used by the operating system. This excludes
-* small numbers, and special numbers like 0 or -1. We pick
-* a random 31 bit number, derived from the SHA1 hash of
-* "Picomask UDP interface":
-* 2798c62715dd8ce6e2c6dd92a37a8276f16c029e
-*/
-#define picomask_interface_id 0x2798c627
 #define PICOMASK_MTU_MIN 1300
 
 #if 0
