@@ -251,6 +251,7 @@ int picomask_udp_ctx_create(picomask_ctx_t* picomask_ctx, struct sockaddr* targe
         picosplay_node_t* node;
         memset(udp_ctx, 0, sizeof(picomask_udp_ctx_t));
         picoquic_store_addr(&udp_ctx->target_addr, target_addr);
+        udp_ctx->local_addr.ss_family = AF_UNSPEC;
         node = picosplay_find(&picomask_ctx->udp_tree, (void*)udp_ctx);
         if (node != NULL) {
             ret = PICOQUIC_ERROR_DUPLICATE;
@@ -344,6 +345,10 @@ int picomask_accept(picoquic_cnx_t* cnx,
         h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)cnx->callback_ctx;
         ret = h3zero_declare_stream_prefix(h3_ctx, stream_ctx->stream_id,
             picomask_callback, picomask_ctx);
+        /* Force the MTU to be large enough to carry initial packets as datagrams. */
+        if (udp_ctx->h3_stream->cnx->path[0]->send_mtu < PICOMASK_MTU_MIN) {
+            udp_ctx->h3_stream->cnx->path[0]->send_mtu = PICOMASK_MTU_MIN;
+        }
         if (cnx->quic->picomask_ctx == NULL) {
             cnx->quic->picomask_ctx = picomask_ctx;
             cnx->quic->picomask_fns = &picomask_fns;
@@ -481,7 +486,7 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
 
     if (picoquic_is_client(cnx)) {
         ret = picoquic_incoming_packet_ex(quic, bytes, length,
-            (struct sockaddr*)&udp_ctx->local_addr, (struct sockaddr*)&udp_ctx->target_addr,
+            (struct sockaddr*)&udp_ctx->target_addr, (struct sockaddr*)&udp_ctx->local_addr,
             PICOQUIC_RESERVED_IF_INDEX, 0, &first_cnx, current_time);
     }
     else {
@@ -542,11 +547,15 @@ int picomask_intercept(struct st_picomask_ctx_t* picomask_ctx, uint64_t current_
 
     /* Queue a datagram in the context */
     if (udp_ctx != NULL) {
-        /* TODO: move this check to connect/accept. */
+        /* Force the path MTU so min length packets can be forwarded as datagrams */
         if (picomask_ctx->cnx->path[0]->send_mtu < PICOMASK_MTU_MIN) {
             picomask_ctx->cnx->path[0]->send_mtu = PICOMASK_MTU_MIN;
         }
         ret = picomask_queue_datagram_to_context(picomask_ctx->cnx, udp_ctx, send_buffer, *send_length);
+        if (ret == PICOQUIC_ERROR_DATAGRAM_TOO_LONG) {
+            /* Not really an error: packets larger than the tunnel PMTU should be dropped. */
+            ret = 0;
+        }
     }
     else {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -570,11 +579,12 @@ int picomask_redirect(struct st_picomask_ctx_t* picomask_ctx,
     udp_ctx = picomask_udp_ctx_find(picomask_ctx, addr_from);
 
     if (udp_ctx != NULL) {
-        /* TODO: move this check to connect/accept. */
+        /* Force the path MTU so min length packets can be forwarded as datagrams */
         if (udp_ctx->h3_stream->cnx->path[0]->send_mtu < PICOMASK_MTU_MIN) {
             udp_ctx->h3_stream->cnx->path[0]->send_mtu = PICOMASK_MTU_MIN;
         }
-        if ((ret = picomask_queue_datagram_to_context(udp_ctx->h3_stream->cnx, udp_ctx, bytes, packet_length)) == 0) {
+        ret = picomask_queue_datagram_to_context(udp_ctx->h3_stream->cnx, udp_ctx, bytes, packet_length);
+        if (ret == 0 || ret == PICOQUIC_ERROR_DATAGRAM_TOO_LONG){
             ret = PICOQUIC_ERROR_REDIRECTED;
             *consumed = packet_length;
         }
