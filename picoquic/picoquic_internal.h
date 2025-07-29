@@ -846,6 +846,7 @@ typedef struct st_picoquic_stream_head_t {
     unsigned int is_closed : 1; /* Stream is closed, closure is accouted for */
     unsigned int is_discarded : 1; /* There should be no more callback for that stream, the application has discarded it */
     unsigned int use_app_flow_control : 1; /* Do not automatically increment the flow control window, wait for app calls. */
+    unsigned int is_not_coalesced : 1; /* do not mix data for this stream with data from other stream in same packet */
 } picoquic_stream_head_t;
 
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
@@ -1914,7 +1915,7 @@ picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream);
 picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
-picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_coalesced);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,

@@ -2576,6 +2576,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mediatest_no_coal) {
+            int ret = mediatest_no_coal_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(mediatest_suspension) {
             int ret = mediatest_suspension_test();
 

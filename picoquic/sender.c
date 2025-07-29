@@ -163,6 +163,18 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx, uint64_t stream_id, int is_not_coalesced)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+
+    if (ret == 0) {
+        stream->is_not_coalesced = is_not_coalesced;
+    }
+
+    return ret;
+}
+
 
 void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t default_datagram_priority)
 {
@@ -2822,7 +2834,7 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
         * packet is full or there is nothing more to send. */
         uint64_t datagram_present = cnx->first_datagram != NULL || cnx->is_datagram_ready || path_x->is_datagram_ready;
         picoquic_stream_head_t* first_stream = picoquic_find_ready_stream_path(cnx,
-            (cnx->is_multipath_enabled) ? path_x : NULL);
+            (cnx->is_multipath_enabled) ? path_x : NULL, 0);
         picoquic_packet_t* first_repeat = picoquic_first_data_repeat_packet(cnx);
         uint64_t current_priority = UINT64_MAX;
         uint64_t stream_priority = UINT64_MAX;
@@ -2877,7 +2889,8 @@ static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoq
             }
         }
 
-        if (first_stream != NULL && first_stream->stream_priority == current_priority) {
+        if (first_stream != NULL && first_stream->stream_priority == current_priority &&
+            (!first_stream->is_not_coalesced || !something_sent)) {
             /* Encode the stream frame, or frames */
             uint8_t* bytes_first = bytes_next;
             if (bytes_next + 8 < bytes_max) {

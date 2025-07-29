@@ -1343,7 +1343,7 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     return bytes;
 }
 
-picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
+picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int is_coalesced)
 {
     picoquic_stream_head_t* first_stream = cnx->first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
@@ -1354,6 +1354,11 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
     while (stream != NULL) {
         int has_data = 0;
         picoquic_stream_head_t* next_stream = stream->next_output_stream;
+
+        if (next_stream != NULL && is_coalesced && next_stream->is_not_coalesced) {
+            stream = next_stream->next_output_stream;
+            continue;
+        }
 
         if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
             /* All the streams at that priority level have been examined,
@@ -1419,7 +1424,7 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
 
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
-    return picoquic_find_ready_stream_path(cnx, NULL);
+    return picoquic_find_ready_stream_path(cnx, NULL, 0);
 }
 
 /* Management of BLOCKED signals
@@ -1834,16 +1839,17 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
 {
     uint8_t* bytes_previous = bytes_next;
     picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
-        (cnx->is_multipath_enabled)?path_x: NULL);
+        (cnx->is_multipath_enabled)?path_x: NULL, 0);
     int more_stream_data = 0;
 
     while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
         int is_still_active = 0;
         bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
 
-        if (*ret == 0) {
+        /* TODO: if stream is marked "no_coal", do not add anything */
+        if (*ret == 0 && !stream->is_not_coalesced) {
             stream = picoquic_find_ready_stream_path(cnx,
-                (cnx->is_multipath_enabled)?path_x: NULL);
+                (cnx->is_multipath_enabled)?path_x: NULL, 1);
             if (stream != NULL && bytes_next + 17 >= bytes_max) {
                 more_stream_data = 1;
                 break;
@@ -1857,7 +1863,7 @@ uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_p
     *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
 
     if (!more_stream_data && current_priority != UINT64_MAX) {
-        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL) != NULL);
+        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
     }
 
     *more_data |= more_stream_data;
