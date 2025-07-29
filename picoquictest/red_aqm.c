@@ -29,6 +29,7 @@
 #include "picosocks.h"
 #include <stdlib.h>
 #include <string.h>
+#include "picoquictest_red.h"
 
 typedef struct st_red_aqm_state_t {
     struct st_picoquictest_aqm_t super;
@@ -67,6 +68,14 @@ void red_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     link->aqm_state = NULL;
 }
 
+void red_aqm_reset(picoquictest_aqm_t* self, uint64_t current_time)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(self);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
+}
+
 int red_aqm_configure(picoquictest_sim_link_t* link, uint64_t red_threshold, uint64_t red_queue_max)
 {
     int ret = 0;
@@ -80,6 +89,7 @@ int red_aqm_configure(picoquictest_sim_link_t* link, uint64_t red_threshold, uin
         memset(red_state, 0, sizeof(red_aqm_state_t));
         red_state->super.submit = red_aqm_submit;
         red_state->super.release = red_aqm_release;
+        red_state->super.reset = red_aqm_reset;
         red_state->red_threshold = red_threshold;
         red_state->red_queue_max = red_queue_max;
         red_state->red_drop_mask = 0x5555555555555555ull;

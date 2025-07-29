@@ -56,10 +56,12 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
         link->jitter_seed = 0xDEADBEEFBABAC001ull;
         link->jitter = 0;
         link->path_mtu = PICOQUIC_MAX_PACKET_SIZE;
+#if 0
         link->bucket_increase_per_microsec = 0;
         link->bucket_max = 0;
         link->bucket_current = 0;
         link->bucket_arrival_last = current_time;
+#endif
     }
 
     return link;
@@ -249,7 +251,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
         link->last_packet = packet;
         return;
     }
-    
+#if 0
     if (link->bucket_increase_per_microsec > 0) {
         /* Simulate a rate limiter based on classic leaky bucket algorithm */
         uint64_t delta_microsec = current_time - link->bucket_arrival_last;
@@ -265,7 +267,9 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             should_drop = 1;
         }
     }
-    else if (link->aqm_state != NULL) {
+    else 
+#endif
+    if (link->aqm_state != NULL) {
         link->aqm_state->submit(link->aqm_state, link, packet, current_time, &should_drop, &should_mark_ce);
     }
     else if (link->queue_delay_max > 0 && queue_delay >= link->queue_delay_max) {

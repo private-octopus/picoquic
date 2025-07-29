@@ -717,9 +717,15 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     /* Requeue the other packets:
      * reset the queue time to current_time, i.e., after packets in transit are delivered.*/
     link->queue_time = current_time;
-    /* reset the leaky bucket, so it starts working from the current time. */
+    /* reset the AQM, so it starts working from the current time. */
+#if 1
+    if (link->aqm_state != NULL) {
+        link->aqm_state->reset(link->aqm_state, current_time);
+    }
+#else
     link->bucket_arrival_last = current_time;
     link->bucket_current = (double)link->bucket_max;
+#endif
     /* reset the value of the link parameters */
     pico_d *= (1.024 * 1.024); /* account for binary units */
     link->next_send_time = current_time;
