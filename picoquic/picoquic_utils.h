@@ -272,6 +272,16 @@ typedef struct st_picoquictest_sim_packet_t {
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
+
+typedef struct st_picoquictest_sim_link_t picoquictest_sim_link_t;
+typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
+
+typedef struct st_picoquictest_aqm_t {
+    void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
+        picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop, int* should_mark_ce);
+    void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+} picoquctest_aqm_t;
+
 typedef enum {
     jitter_gauss = 0,
     jitter_wifi
@@ -299,9 +309,8 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t packets_sent_next_burst; /* Next burst starts when this many packets are sent. */
     uint64_t nb_losses_this_burst; /* Number of packets still to lose in this burst */
     uint64_t end_of_burst_time; /* Bursts are limited in time to avoid silly effects */
-    /* Variables for random early drop simulation */
-    uint64_t red_drop_mask;
-    uint64_t red_queue_max;
+    /* Active queue management */
+    struct st_picoquictest_aqm_t* aqm_state;
     /* L4S MAX sets the ECN mark threshold if doing L4S or DCTCP style ECN marking. */
     uint64_t l4s_max;
     /* Variables for rate limiter simulation */

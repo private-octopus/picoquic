@@ -10562,13 +10562,13 @@ int grease_quic_bit_one_way_test()
 
 /* Test effects of random early drop active queue management
  */
+#include "picoquictest_red.h"
 
 static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t target_time, uint64_t loss_target)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     const uint64_t latency_target = 7500;
-    const uint64_t red_drop_mask = 0x5555555555555555ull;
     const uint64_t queue_max_red = 40000;
     const uint64_t picosec_per_byte = (1000000ull * 8) /100;
     uint64_t observed_loss = 0;
@@ -10585,17 +10585,17 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     if (ret == 0) {
         /* Set parameters to simulate random early drop */
         test_ctx->c_to_s_link->microsec_latency = latency_target;
-        test_ctx->c_to_s_link->red_drop_mask = red_drop_mask;
-        test_ctx->c_to_s_link->red_queue_max = queue_max_red;
         test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
         test_ctx->s_to_c_link->microsec_latency = latency_target;
-        test_ctx->s_to_c_link->red_drop_mask = red_drop_mask;
-        test_ctx->s_to_c_link->red_queue_max = queue_max_red;
         test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
+        /* Setting the RED threshold to the latency target, for simplification. */
+        if ((ret = red_aqm_configure(test_ctx->c_to_s_link, latency_target, queue_max_red)) == 0) {
+            ret = red_aqm_configure(test_ctx->s_to_c_link, latency_target, queue_max_red);
+        }
     }
 
     if (ret == 0) {

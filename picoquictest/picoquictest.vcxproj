@@ -191,6 +191,7 @@
     <ClCompile Include="qlog_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
+    <ClCompile Include="red_aqm.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="satellite_test.c" />
     <ClCompile Include="skip_frame_test.c" />
