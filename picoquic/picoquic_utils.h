@@ -278,8 +278,9 @@ typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
 
 typedef struct st_picoquictest_aqm_t {
     void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-        picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop, int* should_mark_ce);
+        picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop);
     void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+    void (*reset) (picoquictest_aqm_t* self, uint64_t current_time);
 } picoquctest_aqm_t;
 
 typedef enum {
@@ -311,13 +312,10 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t end_of_burst_time; /* Bursts are limited in time to avoid silly effects */
     /* Active queue management */
     struct st_picoquictest_aqm_t* aqm_state;
+#if 0
     /* L4S MAX sets the ECN mark threshold if doing L4S or DCTCP style ECN marking. */
     uint64_t l4s_max;
-    /* Variables for rate limiter simulation */
-    double bucket_increase_per_microsec;
-    uint64_t bucket_max;
-    double bucket_current;
-    uint64_t bucket_arrival_last;
+#endif
     /* Variable for multipath simulation */
     int is_switched_off;
     int is_unreachable;
