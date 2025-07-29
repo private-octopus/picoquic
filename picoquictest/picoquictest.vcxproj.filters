@@ -210,6 +210,9 @@
     <ClCompile Include="flow_control_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="red_aqm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
