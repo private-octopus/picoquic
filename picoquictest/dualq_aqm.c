@@ -21,7 +21,7 @@
 
 /*
 * Implementation of the RED algorithm as a basic active queue management
-* for picoquic_ns. 
+* for picoquic_ns.
  */
 
 #include "picoquic_internal.h"
@@ -29,45 +29,46 @@
 #include "picosocks.h"
 #include <stdlib.h>
 #include <string.h>
-#include "picoquictest_red.h"
+#include "picoquictest_dualq.h"
 
-typedef struct st_red_aqm_state_t {
+/* This implementation is a very rough place holder for the dualq AQM defined for L4S 
+*/
+
+typedef struct st_dualq_aqm_state_t {
     struct st_picoquictest_aqm_t super;
-    uint64_t red_threshold; /* threshold for starting to drop packets */
-    uint64_t red_queue_max; /* all packets above that are dropped. */
-    uint64_t red_drop_mask; /* kinda randomize the drops. */
-} red_aqm_state_t;
+    uint64_t dualq_threshold;
+} dualq_aqm_state_t;
 
-void red_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
+void dualq_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
 {
-    red_aqm_state_t* red_state = (red_aqm_state_t*)self;
+    dualq_aqm_state_t* dualq_state = (dualq_aqm_state_t*)self;
     uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
 
     *should_drop = 0;
 
-    if (queue_delay >= red_state->red_threshold)
-    {
-        if (red_state->red_drop_mask == 0 || queue_delay >= red_state->red_queue_max) {
-            *should_drop = 1;
-        }
-        else {
-            /* (poor) simulation of a 50% random drop */
-            uint64_t mask_bit = red_state->red_drop_mask & 1;
-            red_state->red_drop_mask >>= 1;
-            red_state->red_drop_mask |= (mask_bit << 63);
-            *should_drop = (int)mask_bit;
+    if (link->queue_delay_max > 0 && queue_delay >= link->queue_delay_max) {
+        *should_drop = 1;
+    }
+    else {
+        if (queue_delay > dualq_state->dualq_threshold) {
+            if (packet->ecn_mark == PICOQUIC_ECN_ECT_1) {
+                packet->ecn_mark = PICOQUIC_ECN_CE;
+            }
+            else {
+                *should_drop = 1;
+            }
         }
     }
 }
 
-void red_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
+void dualq_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
 {
     free(self);
     link->aqm_state = NULL;
 }
 
-void red_aqm_reset(picoquictest_aqm_t* self, uint64_t current_time)
+void dualq_aqm_reset(picoquictest_aqm_t* self, uint64_t current_time)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(self);
@@ -75,25 +76,24 @@ void red_aqm_reset(picoquictest_aqm_t* self, uint64_t current_time)
 #endif
 }
 
-int red_aqm_configure(picoquictest_sim_link_t* link, uint64_t red_threshold, uint64_t red_queue_max)
+int dualq_aqm_configure(picoquictest_sim_link_t* link, uint64_t dualq_threshold)
 {
     int ret = 0;
     /* Create a configuration */
-    red_aqm_state_t * red_state = (red_aqm_state_t*)malloc(sizeof(red_aqm_state_t));
+    dualq_aqm_state_t* dualq_state = (dualq_aqm_state_t*)malloc(sizeof(dualq_aqm_state_t));
 
-    if (red_state == NULL) {
+    if (dualq_state == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
     else {
-        memset(red_state, 0, sizeof(red_aqm_state_t));
-        red_state->super.submit = red_aqm_submit;
-        red_state->super.release = red_aqm_release;
-        red_state->super.reset = red_aqm_reset;
-        red_state->red_threshold = red_threshold;
-        red_state->red_queue_max = red_queue_max;
-        red_state->red_drop_mask = 0x5555555555555555ull;
+        memset(dualq_state, 0, sizeof(dualq_aqm_state_t));
+        dualq_state->super.submit = dualq_aqm_submit;
+        dualq_state->super.release = dualq_aqm_release;
+        dualq_state->super.reset = dualq_aqm_reset;
 
-        link->aqm_state = &red_state->super;
+        dualq_state->dualq_threshold = dualq_threshold;
+
+        link->aqm_state = &dualq_state->super;
     }
     return ret;
 }

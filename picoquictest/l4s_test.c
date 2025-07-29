@@ -35,6 +35,8 @@
 #include "picoquic_bbr.h"
 #include "picoquic_prague.h"
 
+#include "picoquictest_dualq.h"
+
 static test_api_stream_desc_t test_scenario_l4s[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 257, 1000000 },
@@ -79,14 +81,18 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 
 
         if (do_l4s) {
-            test_ctx->c_to_s_link->l4s_max = l4s_max;
-            test_ctx->s_to_c_link->l4s_max = l4s_max;
             test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
+            if ((ret = dualq_aqm_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
+                ret = dualq_aqm_configure(test_ctx->s_to_c_link, l4s_max);
+            }
         }
-        picoquic_set_binlog(test_ctx->qserver, ".");
 
-        ret = tls_api_one_scenario_body_ex(test_ctx, &simulated_time,
-            test_scenario_l4s, sizeof(test_scenario_l4s), 0, 0, 0, queue_delay_max, max_completion_time, nb_link_states, link_state);
+        if (ret == 0) {
+            picoquic_set_binlog(test_ctx->qserver, ".");
+
+            ret = tls_api_one_scenario_body_ex(test_ctx, &simulated_time,
+                test_scenario_l4s, sizeof(test_scenario_l4s), 0, 0, 0, queue_delay_max, max_completion_time, nb_link_states, link_state);
+        }
     }
 
     /* Verify that L4S ECN feedback was received properly */

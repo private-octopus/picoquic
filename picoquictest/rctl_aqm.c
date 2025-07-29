@@ -40,12 +40,11 @@ typedef struct st_rctl_state_t {
 } rctl_state_t;
 
 void rctl_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-    picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop, int* should_mark_ce)
+    picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
 {
     rctl_state_t* rctl_state = (rctl_state_t*)self;
 
     *should_drop = 0;
-    *should_mark_ce = 0;
 
     if (rctl_state->bucket_increase_per_microsec > 0) {
         /* Simulate a rate limiter based on classic leaky bucket algorithm */

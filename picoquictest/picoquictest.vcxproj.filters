@@ -216,6 +216,9 @@
     <ClCompile Include="rctl_aqm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="dualq_aqm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">
