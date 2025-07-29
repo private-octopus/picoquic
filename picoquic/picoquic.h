@@ -1266,6 +1266,27 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
 
+/* Handling of stream packetisation and head-of-line blocking:
+* 
+* When preparing a packet, if a stream is available, picoquic will fill the
+* content of a packet with bytes from that stream. In some cases,
+* there are not enough bytes from completely fill the packet.
+* By default, picoquic will then fill the reminder of the packet with data from
+* other available streams. This default behavior minimizes per packet
+* overhead, but it can reintroduce a form of "head of line blocking":
+* if a packet containing data from multiple streams is lost, all of
+* these streams will be blocked until the missing data is resent.
+* This is less-than-ideal for some real-time applications.
+* 
+* The default behavior can be controlled by setting a stream as "not-coalesced".
+* If that property is set, packets that contain data for the stream will
+* not be contain data for any other stream. Setting the is_not_coalesced
+* flag to zero (default) reverts to the default behavior.
+*/
+
+int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_not_coalesced);
+
 /* Handling of stream priority. 
  * 
  * Picoquic handles priority as an 8 bit unsigned integer.

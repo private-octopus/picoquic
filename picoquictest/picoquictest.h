@@ -449,6 +449,7 @@ int mediatest_wifi_test();
 int mediatest_suspension_test();
 int mediatest_suspension2_test();
 int mediatest_worst_test();
+int mediatest_no_coal_test();
 int warptest_video_test();
 int warptest_video_audio_test();
 int warptest_video_data_audio_test();
