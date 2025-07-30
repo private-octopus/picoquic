@@ -613,7 +613,8 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
  default path.
  */
 
-int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
+int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
+    picoquic_stream_data_node_t* decrypted_data, picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
@@ -688,14 +689,42 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         if (tuple == NULL) {
             /* If the addresses do not match, we have two possibilities:
             * either the creation of a new tuple, or a NAT rebinding on an existing tuple.
-            * In all cases, we need to create a new tuple. In the NAt rebinding cases, we
-            * may be a bit more agressive, i.e., immediately promote the new tuple
-            * as the default.
+            * In all cases, we need to create a new tuple. In the NAT rebinding cases, we
+            * need to be a bit more agressive, i.e., immediately promote the new tuple
+            * as the default. In fact, we MUST do that if the CID also changed, otherwise
+            * we will stumble on a bug if the packet asks to retire the CID.
+            *
+            * We thus need to distinguish the NAT rebinding case from the non-multipath
+            * path-migration. This is bound to be ambiguous, but we can use a simple heuristic:
+            *
+            * - if multipath is enabled, the old style path migration is supported but
+            *   discouraged. It is mostly there to support "migration to a prefered
+            *   address", and there is no much harm to always treat that as a NAT
+            *   rebinding. Maybe make an exception if the destination address is
+            *   one of the preferred addresses.
+            * - if multipath is not enabled, check whether this looks like a challenge
+            *   for a new address, i.e., it contains a PATH CHALLENGE frame and only
+            *   non-path validating packets. If true, treat it as a path migration challenge.
+            *   else, treat it as a NAT rebinding.
             */
 
             if (picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0 &&
-                (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL) {
-                if (picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
+                (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL &&
+                picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
+                if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
+                    (cnx->is_multipath_enabled ||
+                        !picoquic_is_path_challenging_packet(decrypted_data->data + decrypted_data->offset,
+                            decrypted_data->length - (size_t)decrypted_data->offset))) {
+                    /* Treat this as a NAT rebinding. */
+                    picoquic_tuple_t* old_tuple = path_x->first_tuple;
+                    /* We need to replace the first tuple by this tuple. */
+                    picoquic_set_first_tuple(path_x, tuple);
+                    /* set a challenge on the old tuple to recover from spoofed addresses */
+                    picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
+                    old_tuple->challenge_required = 1;
+                }
+                else {
+                    /* Treat this a new tuple challenge. */
                     picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
                     tuple->challenge_required = 1;
                 }

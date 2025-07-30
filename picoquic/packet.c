@@ -2087,7 +2087,7 @@ int picoquic_incoming_segment(
     if (ret == 0 && cnx != NULL) {
         if (ph.ptype == picoquic_packet_1rtt_protected) {
             /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
+            ret = picoquic_find_incoming_path(cnx, decrypted_data, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
         }
         else {
             path_id = 0;

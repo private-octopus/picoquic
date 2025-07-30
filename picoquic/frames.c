@@ -697,8 +697,8 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
     uint64_t unique_path_id;
 
     if (is_mp && !cnx->is_multipath_enabled) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            picoquic_frame_type_path_retire_connection_id);
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_path_retire_connection_id, "Multipath is not enabled");
         bytes = NULL;
     }
     else if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
@@ -710,8 +710,9 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
         (!is_mp || path_x->unique_path_id == unique_path_id) &&
         sequence == path_x->first_tuple->p_local_cnxid->sequence) {
         /* Cannot delete the path through which it arrives */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id);
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id,
+            "Cannot delete path through which packet arrives");
         bytes = NULL;
     }
     else {
@@ -7013,6 +7014,45 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
 
     return bytes == NULL;
 }
+
+int picoquic_is_path_challenging_packet(const uint8_t* bytes, size_t bytes_maxsize)
+{
+    const uint8_t* bytes_max = bytes + bytes_maxsize;
+    uint64_t frame_id64;
+    int is_challenge = 1;
+    int has_challenge = 0;
+
+    /* Only a few frames are path challenging, so we check for those. */
+    while (bytes != NULL && bytes < bytes_max) {
+        size_t consumed = 0;
+        int pure_ack = 0;
+
+        if (picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64) == NULL) {
+            break;
+        }
+        switch (frame_id64) {
+        case picoquic_frame_type_path_challenge:
+            has_challenge = 1;
+            break;
+        case picoquic_frame_type_path_response:
+        case picoquic_frame_type_padding:
+        case picoquic_frame_type_new_connection_id:
+        case picoquic_frame_type_path_new_connection_id:
+            break;
+        default:
+            is_challenge = 0;
+            break;
+        }
+        if (picoquic_skip_frame(bytes, bytes_max - bytes, &consumed, &pure_ack) != 0) {
+            break;
+        }
+        else {
+            bytes += consumed;
+        }
+    }
+    return (is_challenge && has_challenge);
+}
+
 
 int picoquic_decode_closing_frames(picoquic_cnx_t * cnx, uint8_t* bytes, size_t bytes_max, int* closing_received)
 {
