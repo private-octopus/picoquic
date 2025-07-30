@@ -714,7 +714,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                 if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
                     (cnx->is_multipath_enabled ||
                         !picoquic_is_path_challenging_packet(decrypted_data->data + decrypted_data->offset,
-                            decrypted_data->length - decrypted_data->offset))) {
+                            decrypted_data->length - (size_t)decrypted_data->offset))) {
                     /* Treat this as a NAT rebinding. */
                     picoquic_tuple_t* old_tuple = path_x->first_tuple;
                     /* We need to replace the first tuple by this tuple. */
