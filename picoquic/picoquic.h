@@ -1027,6 +1027,8 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t max_reorder_delay; /* maximum time gap for out of order packets */
     uint64_t max_reorder_gap; /* maximum number gap for out of order packets */
     uint64_t bytes_in_transit; /* number of bytes currently in transit */
+    uint64_t bytes_sent; /* Total amount of bytes sent on the path */
+    uint64_t bytes_received; /* Total amount of bytes received from the path */
 
 } picoquic_path_quality_t;
 

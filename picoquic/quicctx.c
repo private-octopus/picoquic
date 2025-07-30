@@ -2532,6 +2532,8 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
     quality->max_reorder_delay = path_x->max_reorder_delay;
     quality->max_reorder_gap = path_x->max_reorder_gap;
     quality->bytes_in_transit = path_x->bytes_in_transit;
+    quality->bytes_sent = path_x->bytes_sent;
+    quality->bytes_received = path_x->received;
 }
 
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t* quality)
