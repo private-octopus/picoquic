@@ -697,8 +697,8 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
     uint64_t unique_path_id;
 
     if (is_mp && !cnx->is_multipath_enabled) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            picoquic_frame_type_path_retire_connection_id);
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_path_retire_connection_id, "Multipath is not enabled");
         bytes = NULL;
     }
     else if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
@@ -710,8 +710,9 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
         (!is_mp || path_x->unique_path_id == unique_path_id) &&
         sequence == path_x->first_tuple->p_local_cnxid->sequence) {
         /* Cannot delete the path through which it arrives */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
-            (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id);
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id,
+            "Cannot delete path through which packet arrives");
         bytes = NULL;
     }
     else {

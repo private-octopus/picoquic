@@ -688,16 +688,27 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         if (tuple == NULL) {
             /* If the addresses do not match, we have two possibilities:
             * either the creation of a new tuple, or a NAT rebinding on an existing tuple.
-            * In all cases, we need to create a new tuple. In the NAt rebinding cases, we
-            * may be a bit more agressive, i.e., immediately promote the new tuple
-            * as the default.
+            * In all cases, we need to create a new tuple. In the NAT rebinding cases, we
+            * need to be a bit more agressive, i.e., immediately promote the new tuple
+            * as the default. In fact, we MUST do that if the CID also changed, otherwise
+            * we will stumble on a bug if the packet asks to retire the CID.
             */
 
             if (picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0 &&
                 (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL) {
                 if (picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
-                    picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
-                    tuple->challenge_required = 1;
+                    if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
+                        picoquic_tuple_t* old_tuple = path_x->first_tuple;
+                        /* We need to replace the first tuple by this tuple. */
+                        picoquic_set_first_tuple(path_x, tuple);
+                        /* set a challenge on the old tuple */
+                        picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
+                        old_tuple->challenge_required = 1;
+                    }
+                    else {
+                        picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
+                        tuple->challenge_required = 1;
+                    }
                 }
             }
             /* TODO: clean up in case of failure. */

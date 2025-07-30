@@ -1595,6 +1595,7 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
 void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
 void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
+void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index,

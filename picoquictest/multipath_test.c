@@ -1016,9 +1016,25 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     if (ret == 0 && test_id == multipath_test_keep_alive) {
         uint8_t ping_frame[1] = { (uint8_t)picoquic_frame_type_ping };
+        int nat_test_needed = 1;
+        int rounds_without_nat = 0;
 
         while (ret == 0 && simulated_time < 200000000) {
             uint64_t previous_time = simulated_time;
+
+            if (nat_test_needed) {
+                if (rounds_without_nat > 3) {
+                    /* do a nat rebinding */
+                    test_ctx->client_addr_natted = test_ctx->client_addr;
+                    test_ctx->client_addr_natted.sin_port += 7;
+                    test_ctx->client_use_nat = 1;
+                    nat_test_needed = 0;
+                }
+                else {
+                    rounds_without_nat++;
+                }
+            }
+
             if (ret == 0) {
                 ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0, picoquic_packet_context_application);
                 if (ret != 0) {
@@ -1040,7 +1056,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
         if (ret != 0) {
-            DBG_PRINTF("Keep awake test fails at t=%" PRIu64 ", ret = 0x%x", simulated_time, ret);
+            DBG_PRINTF("Keep alive test fails at t=%" PRIu64 ", ret = 0x%x", simulated_time, ret);
         }
     }
 

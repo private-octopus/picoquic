@@ -1600,7 +1600,7 @@ picoquic_tuple_t* picoquic_create_tuple(picoquic_path_t* path_x, const struct so
     return tuple;
 }
 
-void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+void picoquic_unchain_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
 {
     picoquic_tuple_t* next = path_x->first_tuple;
 
@@ -1618,7 +1618,20 @@ void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
             }
         }
     }
+}
+
+void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+{
+    picoquic_unchain_tuple(path_x, tuple);
     free(tuple);
+}
+
+void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+{
+    picoquic_tuple_t* old_first = path_x->first_tuple;
+    picoquic_unchain_tuple(path_x, tuple);
+    path_x->first_tuple = tuple;
+    tuple->next_tuple = old_first;
 }
 
 /* Set default interface -- to call just after creating a connection context */
@@ -1963,8 +1976,6 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
         }
     }
 }
-
-
 
 /* set the challenge used for a tuple */
 void picoquic_set_tuple_challenge(picoquic_tuple_t * tuple, uint64_t current_time, int use_constant_challenges)
