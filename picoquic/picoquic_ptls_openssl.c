@@ -450,4 +450,15 @@ void picoquic_ptls_openssl_load(int unload)
 
     }
 }
+
+void picoquic_ptls_openssl_log_version(picoquic_cnx_t* cnx)
+{
+#ifdef OPENSSL_VERSION_NUMBER
+    picoquic_log_app_message(cnx, "OpenSSL source version %x, binary version %x", OPENSSL_VERSION_NUMBER, OpenSSL_version_num());
+#endif
+#ifdef LIBRESSL_VERSION_NUMBER
+    picoquic_log_app_message(cnx, "LibreSSL source version %x, binary version %x", LIBRESSL_VERSION_NUMBER, OpenSSL_version_num());
+#endif
+}
+
 #endif
