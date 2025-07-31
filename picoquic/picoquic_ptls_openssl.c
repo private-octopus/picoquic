@@ -31,6 +31,7 @@
 #endif
 #include "picotls.h"
 #include "picoquic.h"
+#include "picoquic_utils.h"
 
 #include "picoquic_crypto_provider_api.h"
 
@@ -411,6 +412,13 @@ void picoquic_ptls_openssl_load(int unload)
     }
     else {
         picoquic_init_openssl();
+#ifdef OPENSSL_VERSION_NUMBER
+        DBG_PRINTF("Open ssl include version: %x", OPENSSL_VERSION_NUMBER);
+#endif
+#ifdef LIBRESSL_VERSION_NUMBER
+        DBG_PRINTF("LIBRE SSL include version: %x", LIBRESSL_VERSION_NUMBER);
+#endif
+        DBG_PRINTF("OpenSSL_version_num(): %x", OpenSSL_version_num());
 
         picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384, 1);
