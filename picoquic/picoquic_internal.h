@@ -1532,6 +1532,7 @@ typedef struct st_picoquic_cnx_t {
     * */
     uint64_t nb_local_cnxid_lists;
     uint64_t next_path_id_in_lists;
+    uint64_t max_path_id_in_cnxid_lists;
     picoquic_local_cnxid_list_t * first_local_cnxid_list;
 
     /* Management of ACK frequency */
