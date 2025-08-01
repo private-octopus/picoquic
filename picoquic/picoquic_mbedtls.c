@@ -56,7 +56,9 @@ void picoquic_mbedtls_load(int unload)
 #include "mbedtls/ecdh.h"
 
 #include "picoquic_crypto_provider_api.h"
-
+#ifdef MBEDTLS_VERSION_NUMBER
+unsigned int mbedtls_version_get_number(void);
+#endif
 
 /* Set the certificate signature function and context using MbedSSL
 */
@@ -87,6 +89,11 @@ void picoquic_mbedtls_load(int unload)
     }
     else if ((ret = ptls_mbedtls_init()) == 0){
 
+#ifdef MBEDTLS_VERSION_NUMBER
+        DBG_PRINTF("MbedTLS include version: %x", MBEDTLS_VERSION_NUMBER);
+#endif
+        DBG_PRINTF("mbedtls_version_get_number(): %x", mbedtls_version_get_number());
+
         picoquic_register_ciphersuite(&ptls_mbedtls_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_mbedtls_aes256gcmsha384, 1);
         picoquic_register_ciphersuite(&ptls_mbedtls_chacha20poly1305sha256, 1);
@@ -114,4 +121,13 @@ void picoquic_mbedtls_load(int unload)
         DBG_PRINTF("Error: ptls_mbedtls_init returns %d", ret);
     }
 }
+
+
+void picoquic_mbedtls_log_version(picoquic_cnx_t* cnx)
+{
+#ifdef MBEDTLS_VERSION_NUMBER
+    picoquic_log_app_message(cnx, "MbedTLS source version %x, binary version %x", MBEDTLS_VERSION_NUMBER, mbedtls_version_get_number());
+#endif
+}
+
 #endif
