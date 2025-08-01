@@ -2906,14 +2906,15 @@ uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_p
         }
         
         // TODO MC: Implement Format MC_JOIN frame
-        // if (ch->state < 5) {
-        //     uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, more_data);
-        //     if (bytes_next > bytes) {
-        //         *is_pure_ack = 0;
-        //         bytes = bytes_next;
-        //         ch->state = 5; // "join_pending"
-        //     }
-        // }
+        // TODO MC: Make sure that MC_JOIN is only sent once MC_ANNOUNCE and MC_KEY have been ACKed by client
+        if (ch->state < 5) {
+            uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, more_data);
+            if (bytes_next > bytes) {
+                *is_pure_ack = 0;
+                bytes = bytes_next;
+                ch->state = 5; // "join_pending"
+            }
+        }
     }
 
     return bytes;

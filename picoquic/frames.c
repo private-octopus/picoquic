@@ -60,6 +60,10 @@ int picoquic_process_ack_of_mc_key_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     size_t bytes_size, size_t* consumed);
 int picoquic_check_mc_key_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, 
     const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_mc_join_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed);
+int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, 
+    const uint8_t* bytes_max, int* no_need_to_repeat);
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
@@ -6214,6 +6218,16 @@ picoquic_mc_channel_in_cnx_t* picoquic_add_channel_to_cnx(picoquic_cnx_t* cnx, p
     return new_channel_in_cnx;
 }
 
+/*
+ * ================
+ * MULTICAST FRAMES
+ * ================
+ */
+
+/*
+ * MC_ANNOUNCE frame
+*/
+
 uint8_t* picoquic_format_mc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_multicast_channel_t* channel, picoquic_path_t* path_x, int * more_data)
 {
     uint64_t ftype = 0;
@@ -6549,6 +6563,10 @@ int picoquic_check_mc_announce_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* 
     return ret;
 }
 
+/*
+ * MC_KEY frame
+*/
+
 uint8_t* picoquic_format_mc_key_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_multicast_channel_t* channel, picoquic_multicast_aead_secret_t* aead, int* more_data) {
     uint8_t* bytes0 = bytes;
 
@@ -6793,6 +6811,268 @@ int picoquic_check_mc_key_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes
     } else {
         fprintf(stdout, "MC_KEY do not need repeat\n");
     }
+
+    return ret;
+}
+
+/*
+ * MC_JOIN frame
+ */
+
+uint8_t* picoquic_format_mc_join_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_multicast_channel_t* channel, int* more_data) {
+    // TODO MC Implement this
+
+    // uint8_t* bytes0 = bytes;
+
+    // // Frame type
+    // // Channel ID Length
+    // if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_mc_key)) == NULL
+    //     || (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, channel->channel_id.id_len)) == NULL) {
+    //     *more_data = 1;
+    //     return bytes0;
+    // }
+
+    // // CLEAN MC: Refactor event/error logging to qlog    
+    // fprintf(stdout, "Send MC_KEY for Channel with ID: ");
+    // print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);
+    // fprintf(stdout, "\n");
+
+    // // Channel ID
+    // uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    // if (bytes_copied == 0) {
+    //     *more_data = 1;
+    //     return bytes0;
+    // } else {
+    //     bytes += bytes_copied;
+    // }
+
+    // // Key Seq Number
+    // // From Pkt Number
+    // // Secret Length
+    // if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, aead->key_seq_number)) == NULL
+    //     || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, aead->from_pkt_number)) == NULL
+    //     || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, aead->secret_len)) == NULL) {
+    //     *more_data = 1;
+    //     return bytes0;
+    // }
+
+    // // Secret
+    // if ((bytes + aead->secret_len) > bytes_max) {
+    //     return NULL;
+    // } else {
+    //     memcpy(bytes, aead->secret, aead->secret_len);
+    //     bytes += aead->secret_len;
+    // }
+
+    return bytes;
+}
+
+ const uint8_t* picoquic_decode_mc_join_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max) {
+    // TODO MC: Implement this
+
+    // if (!cnx->is_multicast_enabled || !cnx->client_mode) {
+    //     picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_mc_key, "received unexpected MC_KEY frame");
+    //     return NULL;
+    // }
+
+    // uint8_t channel_id_len;
+    // picoquic_multicast_channel_id_t channel_id;
+
+    // // Channel ID Length
+    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &channel_id_len)) == NULL) {
+    //     return NULL;
+    // }
+
+    // // Channel ID
+    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, channel_id_len, &channel_id);
+    // if (bytes_copied == 0) {
+    //     return NULL;
+    // } else {
+    //     bytes += bytes_copied;
+    // }
+
+    // picoquic_mc_channel_in_cnx_t* channel_found = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx);
+
+    // picoquic_multicast_channel_t* channel;
+    // if (channel_found != NULL) {
+    //     channel = channel_found->channel;
+    // } else {
+    //     channel = malloc(sizeof(picoquic_multicast_channel_t));
+    //     if (channel == NULL) {
+    //         fprintf(stderr, "could not create multicast channel: malloc failed\n");
+    //         return NULL;
+    //     }
+
+    //     channel->channel_id = channel_id;
+    // }
+
+    // picoquic_multicast_aead_secret_t* aead = malloc(sizeof(picoquic_multicast_aead_secret_t));
+    // if (aead == NULL) {
+    //     fprintf(stderr, "could not create picoquic_mc_channel_in_cnx_t: malloc failed\n");
+    //     return NULL;
+    // }
+
+    // memset(aead, 0, sizeof(picoquic_multicast_aead_secret_t));
+
+    // // Key Seq Number
+    // // From Pkt Number
+    // // Secret Length
+    // if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &aead->key_seq_number)) == NULL
+    //     || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &aead->from_pkt_number)) == NULL
+    //     || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &aead->secret_len)) == NULL) {
+    //     return NULL;
+    // }
+
+    // // Validate key properties
+    // if (channel_found != NULL && channel_found->key_available == 1 && channel_found->channel->nb_aead_secrets > 0 && 
+    //     (channel_found->latest_key_sequence_available + 1 != aead->key_seq_number
+    //     || channel_found->channel->aead_secrets[channel_found->channel->nb_aead_secrets]->from_pkt_number > aead->from_pkt_number)) 
+    // {
+    //     fprintf(stderr, "Error: Received a MC_KEY with invalid properties\n");
+    //     return NULL;
+    // }
+
+    // // Secret
+    // // 48 is currently the global max in picoquic for aead secret len
+    // if ((bytes + aead->secret_len) > bytes_max || aead->secret_len > 48) {
+    //     return NULL;
+    // } else {
+    //     memcpy(aead->secret, bytes, aead->secret_len);
+    //     bytes += aead->secret_len;
+    // }
+
+    // // Add aead object to channel
+    // picoquic_multicast_aead_secret_t** new_aead_list = (picoquic_multicast_aead_secret_t **)malloc((channel->nb_aead_secrets + 1) * sizeof(picoquic_multicast_aead_secret_t *));
+    // if (new_aead_list == NULL) { 
+    //     return NULL;
+    // }
+
+    // if (channel->aead_secrets != NULL) {
+    //     memset(new_aead_list, 0, sizeof(picoquic_multicast_aead_secret_t*));
+    //     if (channel->nb_aead_secrets > 0) {
+    //         memcpy(new_aead_list, channel->aead_secrets, channel->nb_aead_secrets * sizeof(picoquic_multicast_aead_secret_t *));
+    //     }
+    //     free(channel->aead_secrets);
+    // }
+    // channel->aead_secrets = new_aead_list;
+
+    // channel->aead_secrets[channel->nb_aead_secrets] = aead;
+    // channel->nb_aead_secrets++;
+
+    // // Add channel to cnx if not already done
+    // picoquic_mc_channel_in_cnx_t* new_channel_in_cnx;
+
+    // if (channel_found != NULL) {
+    //     new_channel_in_cnx = channel_found;
+    // } else {
+    //     new_channel_in_cnx = picoquic_add_channel_to_cnx(cnx, channel);
+    //     if (new_channel_in_cnx == NULL) {
+    //         fprintf(stderr, "could not create picoquic_mc_channel_in_cnx_t\n");
+    //         return NULL;
+    //     }
+    // }
+
+    // new_channel_in_cnx->key_available = 1;
+    // new_channel_in_cnx->latest_key_sequence_available = aead->key_seq_number;
+
+    return bytes;
+}
+
+const uint8_t* picoquic_skip_mc_join_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    // TODO MC: Implement this 
+
+    // uint8_t ch_id_length = 0;
+    // uint64_t secret_length = 0;
+
+    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &ch_id_length)) != NULL && // channel id length
+    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)ch_id_length)) != NULL && // channel id
+    //     (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && // key seq number
+    //     (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && // from packet number
+    //     (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &secret_length)) != NULL) { // secret length
+    //         bytes = picoquic_frames_fixed_skip(bytes, bytes_max, secret_length); // secret
+    //     }
+
+    return bytes;
+}
+
+int picoquic_process_ack_of_mc_join_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed)
+{
+    // TODO MC: Implement this
+
+    // const uint8_t* bytes_first = bytes;
+    // const uint8_t* bytes_max = bytes + bytes_size;
+    // const uint8_t* bytes_after_ftype = bytes = picoquic_frames_varint_skip(bytes, bytes + bytes_size);
+
+    // uint8_t id_len;
+    // picoquic_multicast_channel_id_t channel_id;
+
+    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
+    //     return -1;
+    // }
+
+    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel_id);
+
+    // if (bytes_copied == 0) {
+    //     return -1;
+    // }
+
+    int ret = 0;
+    // const uint8_t* bytes_next = picoquic_skip_mc_key_frame(bytes_after_ftype, bytes_max);
+
+    // if (bytes_next == NULL) {
+    //     ret = -1;
+    // }
+    // else {
+    //     picoquic_mc_channel_in_cnx_t* ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx);
+    //     ch_in_cnx->key_acked = 1;
+    //     *consumed = bytes_next - bytes_first;
+    // }
+
+    // fprintf(stdout, "ACK of MC_KEY sucessfully processed\n");
+
+    return ret;
+}
+
+int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int* no_need_to_repeat)
+{
+    // TODO MC: Implement this
+
+    int ret = 0;
+    // const uint8_t* bytes_parsing = bytes;
+    // uint8_t id_len;
+    // picoquic_multicast_channel_id_t channel_id;
+    // *no_need_to_repeat = 0;
+
+    // if ((bytes_parsing = picoquic_frames_uint8_decode(bytes_parsing, bytes_max, &id_len)) == NULL) {
+    //     *no_need_to_repeat = 1;
+    //     return -1;
+    // }
+
+    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes_parsing, id_len, &channel_id);
+
+    // if (bytes_copied == 0) {
+    //     *no_need_to_repeat = 1;
+    //     return -1;
+    // }
+
+    // picoquic_mc_channel_in_cnx_t* ch_in_cnx;
+
+    // if ((ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx)) == NULL) {
+    //     /* If the channel is not in the connection (anymore?), no need to repeat this frame. */
+    //     *no_need_to_repeat = 1;
+    // }
+    // else if (ch_in_cnx->state >= 15 || ch_in_cnx->key_acked == 1) {
+    //     /* If latest MC_KEY was acked or client left the channel or intends to leave it, do not repeat */
+    //     *no_need_to_repeat = 1;
+    // }
+
+    // if (*no_need_to_repeat == 0) {
+    //     fprintf(stdout, "MC_KEY needs repeat\n");
+    // } else {
+    //     fprintf(stdout, "MC_KEY do not need repeat\n");
+    // }
 
     return ret;
 }
