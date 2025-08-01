@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include "picoquic.h"
+#include "picoquic_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,7 +91,6 @@ uint8_t picoquic_format_connection_id(uint8_t* bytes, size_t bytes_max, picoquic
 uint8_t picoquic_parse_connection_id(const uint8_t* bytes, uint8_t len, picoquic_connection_id_t *cnx_id);
 uint8_t picoquic_format_multicast_channel_id(uint8_t* bytes, size_t bytes_max, picoquic_multicast_channel_id_t ch_id);
 uint8_t picoquic_parse_multicast_channel_id(const uint8_t * bytes, uint8_t len, picoquic_multicast_channel_id_t * ch_id);
-int picoquic_multicast_channel_id_exists_in_cnx(picoquic_multicast_channel_id_t * ch_id, picoquic_cnx_t* cnx);
 int picoquic_is_connection_id_null(const picoquic_connection_id_t * cnx_id);
 int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, const picoquic_connection_id_t * cnx_id2);
 uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed);

@@ -2882,7 +2882,7 @@ uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_p
         picoquic_mc_channel_in_cnx_t* ch = cnx->mc_channels[i];
 
         // if in state "announce_scheduled"
-        if (ch->state < 2 && !cnx->client_mode) {
+        if (ch->state < 2) {
             uint8_t *bytes_next = picoquic_format_mc_announce_frame(bytes, bytes_max, ch->channel, path_x, more_data);
             if (bytes_next > bytes) {
                 *is_pure_ack = 0;
@@ -2890,15 +2890,22 @@ uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_p
                 ch->state = 2; // "announced"
             }
         }
-        // TODO MC: Implement Format MC_KEY and MC_JOIN frame
-        // if (ch->key_available == 0) {
-        //     uint8_t *bytes_next = picoquic_format_mc_key_frame(bytes, bytes_max, ch->channel, more_data);
-        //     if (bytes_next > bytes) {
-        //         *is_pure_ack = 0;
-        //         bytes = bytes_next;
-        //         ch->key_available = 1;
-        //     }
-        // }
+        
+        // send MC_KEY of latest AEAD key if no key was sent on this cnx yet
+        if (ch->key_available < 1 && ch->latest_key_sequence_available == 0 && ch->channel->nb_aead_secrets > 0) {
+            int key_sequence_number = ch->channel->nb_aead_secrets - 1;
+            picoquic_multicast_aead_secret_t* aead = ch->channel->aead_secrets[ch->channel->nb_aead_secrets-1];
+
+            uint8_t *bytes_next = picoquic_format_mc_key_frame(bytes, bytes_max, ch->channel, aead, more_data);
+            if (bytes_next > bytes) {
+                *is_pure_ack = 0;
+                bytes = bytes_next;
+                ch->key_available = 1;
+                ch->latest_key_sequence_available = key_sequence_number;
+            }
+        }
+        
+        // TODO MC: Implement Format MC_JOIN frame
         // if (ch->state < 5) {
         //     uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, more_data);
         //     if (bytes_next > bytes) {
@@ -3648,7 +3655,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
 
                     // TODO MC: Maybe also include this in almost_ready
-                    if (cnx->is_multicast_enabled) {
+                    if (cnx->is_multicast_enabled && !cnx->client_mode) {
                         /* If required, prepare multicast announce, key and join frames. */
                         bytes_next = picoquic_prepare_multicast_init_frames(cnx, path_x,
                         bytes_next, bytes_max, &more_data, &is_pure_ack,

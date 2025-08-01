@@ -166,7 +166,8 @@ typedef enum {
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
     picoquic_frame_type_observed_address_v6 = 0x9f81a7,
     picoquic_frame_type_mc_announce_v4 = 0xff3e811,
-    picoquic_frame_type_mc_announce_v6 = 0xff3e812
+    picoquic_frame_type_mc_announce_v6 = 0xff3e812,
+    picoquic_frame_type_mc_key = 0xff3e801
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -615,12 +616,12 @@ typedef struct st_picoquic_multicast_channel_t {
     uint16_t header_protection_algorithm;
     uint16_t aead_algorithm;
     picoquic_multicast_header_secret_t header_secret;
-    picoquic_multicast_aead_secret_t aead_secret;
+    picoquic_multicast_aead_secret_t ** aead_secrets;
+    int nb_aead_secrets;
     uint16_t hash_algorithm;
     uint64_t max_rate;
     uint64_t max_ack_delay;
     int is_retired;
-    picoquic_cnx_t ** joined_cnx;
 } picoquic_multicast_channel_t;
 
 // State of a multicast channel in a cnx (with buffers for extensions):
@@ -669,9 +670,18 @@ typedef struct st_picoquic_mc_channel_in_cnx_t {
     picoquic_multicast_channel_t* channel;
     picoquic_mc_state_enum state;
     picoquic_mc_state_reason_enum state_reason;
-    unsigned int key_available;
+    uint64_t latest_key_sequence_available;
+    int mc_announce_acked;
+    int mc_join_acked;
+    int mc_leave_acked;
+    int mc_retire_acked;
+    int mc_state_joined_acked;
+    int mc_state_left_acked;
+    int mc_state_declined_join_acked;
+    int mc_state_retired_acked;
+    int key_available;
+    int key_acked;
 } picoquic_mc_channel_in_cnx_t;
-
 
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
@@ -2122,8 +2132,13 @@ uint8_t* picoquic_prepare_observed_address_frame(uint8_t* bytes, const uint8_t* 
     int* more_data, int* is_pure_ack);
 void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* peer_addr);
 
-uint8_t* picoquic_format_mc_announce_frame(uint8_t* bytes, const uint8_t* bytes_max, 
+picoquic_mc_channel_in_cnx_t* picoquic_find_multicast_channel_in_cnx(picoquic_multicast_channel_id_t * ch_id, picoquic_cnx_t* cnx);
+
+uint8_t* picoquic_format_mc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, 
     picoquic_multicast_channel_t* channel, picoquic_path_t* path_x, int * more_data);
+
+uint8_t* picoquic_format_mc_key_frame(uint8_t* bytes, uint8_t* bytes_max, 
+    picoquic_multicast_channel_t* channel, picoquic_multicast_aead_secret_t* aead, int* more_data);
 
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);

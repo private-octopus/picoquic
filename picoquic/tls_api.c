@@ -1421,11 +1421,19 @@ static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_
     return ret;
 }
 
+/* 
+ * Initial computation of Header secret and AEAD secret 
+ */
 int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicast_channel_t* channel)
 {
     int ret = 0;
     ptls_iovec_t salt;
     size_t rand_bytes_length = quic->local_cnxid_length;
+
+    if (channel->nb_aead_secrets > 0 || channel->header_secret.secret_len > 0) {
+        fprintf(stdout, "Error while computing initial multicast secrets: Already available\n");
+        return -1;
+    }
 
     // always use salt from QUIC v2 in multicast channels for now
     int version_index = picoquic_get_version_index(PICOQUIC_V2_VERSION);
@@ -1450,21 +1458,40 @@ int picoquic_compute_multicast_secrets(picoquic_quic_t * quic, picoquic_multicas
     uint8_t rand_bytes_aead[rand_bytes_length];
     picoquic_crypto_random(quic, rand_bytes_aead, rand_bytes_length);
 
+    picoquic_multicast_aead_secret_t* new_aead_secret = malloc(sizeof(picoquic_multicast_aead_secret_t));
+    if (new_aead_secret == NULL) {
+        fprintf(stderr, "could not create picoquic_multicast_aead_secret_t: malloc failed\n");
+        return -1;
+    }
+
+    picoquic_multicast_aead_secret_t** new_aead_list = (picoquic_multicast_aead_secret_t **)malloc((channel->nb_aead_secrets + 1) * sizeof(picoquic_multicast_aead_secret_t *));
+
+    if (new_aead_list == NULL) {
+        fprintf(stderr, "could not create picoquic_multicast_aead_secret_t list: malloc failed\n");
+        return -1;
+    }
+
+    channel->aead_secrets = new_aead_list;
+    memset(new_aead_secret, 0, sizeof(picoquic_multicast_aead_secret_t));
+    
     ptls_cipher_suite_t* cipher_aead = picoquic_get_cipher_suite_by_id(channel->aead_algorithm, quic->use_low_memory);
-    ret = picoquic_setup_multicast_secret(cipher_aead, salt, rand_bytes_aead, rand_bytes_length, channel->aead_secret.secret);
+    ret = picoquic_setup_multicast_secret(cipher_aead, salt, rand_bytes_aead, rand_bytes_length, new_aead_secret->secret);
 
     if (ret != 0) {
         return ret;
     }
 
     if (channel->aead_algorithm == PICOQUIC_AES_256_GCM_SHA384) {
-        channel->aead_secret.secret_len = 48;
+        new_aead_secret->secret_len = 48;
     } else if (channel->aead_algorithm == PICOQUIC_AES_128_GCM_SHA256) {
-        channel->aead_secret.secret_len = 32;    
+        new_aead_secret->secret_len = 32;    
     }
 
-    channel->aead_secret.key_seq_number = 0;
-    channel->aead_secret.from_pkt_number = 0;
+    new_aead_secret->key_seq_number = 0;
+    new_aead_secret->from_pkt_number = 0;
+
+    channel->aead_secrets[channel->nb_aead_secrets] = new_aead_secret;
+    channel->nb_aead_secrets++;
 
     return ret;
 }

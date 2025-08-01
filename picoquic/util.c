@@ -432,20 +432,6 @@ uint8_t picoquic_parse_multicast_channel_id(const uint8_t * bytes, uint8_t len, 
     return len;
 }
 
-int picoquic_multicast_channel_id_exists_in_cnx(picoquic_multicast_channel_id_t * ch_id, picoquic_cnx_t* cnx)
-{
-    for (int i = 0; i < cnx->nb_mc_channels; i++) {
-        picoquic_mc_channel_in_cnx_t* channel = cnx->mc_channels[i];
-        int len = (int) channel->channel->channel_id.id_len < (int) ch_id->id_len ? (int) channel->channel->channel_id.id_len : (int) ch_id->id_len;
-        
-        if (memcmp(channel->channel->channel_id.id, ch_id->id, len) == 0) {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
 /* Hash function for addresses. */
 
 size_t picoquic_hash_addr_bytes(const struct sockaddr* addr, uint8_t* bytes)
