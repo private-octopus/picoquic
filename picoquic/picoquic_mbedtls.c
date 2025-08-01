@@ -56,7 +56,9 @@ void picoquic_mbedtls_load(int unload)
 #include "mbedtls/ecdh.h"
 
 #include "picoquic_crypto_provider_api.h"
-
+#ifdef MBEDTLS_VERSION_NUMBER
+unsigned int mbedtls_version_get_number(void);
+#endif
 
 /* Set the certificate signature function and context using MbedSSL
 */
@@ -88,7 +90,7 @@ void picoquic_mbedtls_load(int unload)
     else if ((ret = ptls_mbedtls_init()) == 0){
 
 #ifdef MBEDTLS_VERSION_NUMBER
-        DBG_PRINTF("MbedTLS include version: %x", OPENSSL_VERSION_NUMBER);
+        DBG_PRINTF("MbedTLS include version: %x", MBEDTLS_VERSION_NUMBER);
 #endif
         DBG_PRINTF("mbedtls_version_get_number(): %x", mbedtls_version_get_number());
 
