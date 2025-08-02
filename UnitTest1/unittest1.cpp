@@ -2846,8 +2846,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_socket0_error) {
+            int ret = multipath_socket0_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_abandon) {
             int ret = multipath_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_back0) {
+            int ret = multipath_back0_test();
 
             Assert::AreEqual(ret, 0);
         }

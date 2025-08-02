@@ -1531,23 +1531,32 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
 {
     uint64_t unique_path_id = requested_id;
 
-    if (requested_id == UINT64_MAX) {
-        if (!cnx->is_multipath_enabled) {
-            unique_path_id = cnx->unique_path_id_next;
-            cnx->unique_path_id_next++;
+    if (!cnx->is_multipath_enabled) {
+        if (requested_id != 0 && requested_id != UINT64_MAX) {
+            unique_path_id = UINT64_MAX;
         }
         else {
-            /* Look at available stashes. exlcude stash if id=0, as this is the
-             * always used.
-             */
-            picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash;
-
-            while (stash != NULL && (stash->is_in_use || stash->unique_path_id == 0)){
-                stash = stash->next_stash;
-            }
-            if (stash != NULL) {
-                unique_path_id = stash->unique_path_id;
-            }
+            unique_path_id = 0;
+        }
+    }
+    else {
+        /* Unique path ID are allocated in sequence on the client. The server should
+         * always use the number proposed by the client in incoming packets */
+        if (requested_id == UINT64_MAX && (cnx->client_mode || cnx->nb_paths == 0)) {
+            while (cnx->unique_path_id_next < cnx->max_path_id_remote &&
+                cnx->unique_path_id_next < cnx->max_path_id_local &&
+                cnx->unique_path_id_next < cnx->max_path_id_in_cnxid_lists) {
+                /* Find next non used CID */
+                unique_path_id = cnx->unique_path_id_next++;
+                /* There should be an available of CNX_ID for this path_id, 
+                * and that path_id should not be already created.
+                */
+                if (picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0) != NULL &&
+                    picoquic_find_path_by_unique_id(cnx, unique_path_id) < 0) {
+                    /* this CID was not already deleted */
+                    break;
+                }
+             }
         }
     }
     return unique_path_id;
@@ -3630,8 +3639,6 @@ picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_c
     return local_cnxid_list;
 }
 
-
-
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx, 
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time)
 {
@@ -3690,6 +3697,9 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
                 }
                 if (l_cid->sequence == 0) {
                     local_cnxid_list->local_cnxid_oldest_created = current_time;
+                    if (local_cnxid_list->unique_path_id > cnx->max_path_id_in_cnxid_lists) {
+                        cnx->max_path_id_in_cnxid_lists = local_cnxid_list->unique_path_id;
+                    }
                 }
             }
             else {

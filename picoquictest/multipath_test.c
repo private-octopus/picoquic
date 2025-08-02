@@ -96,6 +96,18 @@ static void multipath_test_set_unreachable(picoquic_test_tls_api_ctx_t* test_ctx
     }
 }
 
+static void multipath_test_set_reachable(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->is_unreachable = 0;
+        test_ctx->s_to_c_link->is_unreachable = 0;
+    }
+    else {
+        test_ctx->c_to_s_link_2->is_unreachable = 0;
+        test_ctx->s_to_c_link_2->is_unreachable = 0;
+    }
+}
+
 static void multipath_test_unkill_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id, uint64_t current_time)
 {
     /* Make sure that nothing gets sent on the old links */
@@ -438,6 +450,8 @@ typedef enum {
     multipath_test_nat_challenge,
     multipath_test_break1,
     multipath_test_break2,
+    multipath_test_break3,
+    multipath_test_back0,
     multipath_test_back1,
     multipath_test_perf,
     multipath_test_callback,
@@ -911,8 +925,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
         test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
-        test_id == multipath_test_break1 || test_id == multipath_test_break2 ||
-        test_id == multipath_test_back1 || test_id == multipath_test_standup ||
+        test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
+        test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
@@ -950,6 +964,10 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Trigger "destination unreachable" error on next socket call to link 1 */
                 multipath_test_set_unreachable(test_ctx, 1);
             }
+            else if (test_id == multipath_test_back0 || test_id == multipath_test_break3) {
+                /* Trigger "destination unreachable" error on next socket call to link 0 */
+                multipath_test_set_unreachable(test_ctx, 0);
+            }
             else if (test_id == multipath_test_tunnel) {
                 /* Break both links */
                 multipath_test_kill_links(test_ctx, 0);
@@ -964,7 +982,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     /* For the "backup scenario", wait a small interval, then bring the path # 1 back up
      * For the "tunnel" scenario, do the same but wait 5 seconds and then restore both links.
      */
-    if (ret == 0 && (test_id == multipath_test_back1 || test_id == multipath_test_tunnel)) {
+    if (ret == 0 && (test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_tunnel)) {
         uint64_t timeout = (test_id == multipath_test_tunnel)?5000000:1000000;
 
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
@@ -972,6 +990,15 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         if (ret != 0)
         {
             DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
+        }
+        else if (test_id == multipath_test_back0) {
+            multipath_test_set_reachable(test_ctx, 0);
+            
+            ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+                    (struct sockaddr*)&test_ctx->client_addr, simulated_time);
+            if (ret != 0) {
+                DBG_PRINTF("Create path on default address returns %d\n", ret);
+            }
         }
         else {
             if (test_id == multipath_test_tunnel) {
@@ -1140,7 +1167,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_abandon)) {
+    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 || test_id == multipath_test_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -1150,7 +1177,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && test_id == multipath_test_back1) {
+    if (ret == 0 && (test_id == multipath_test_back0 || test_id == multipath_test_back1)) {
         if (test_ctx->cnx_server->nb_paths != 2) {
             DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -1347,6 +1374,15 @@ int multipath_socket_error_test()
     return  multipath_test_one(max_completion_microsec, multipath_test_break2);
 }
 
+/* Test reaction to socket error on first path
+ */
+int multipath_socket0_error_test()
+{
+    uint64_t max_completion_microsec = 10900000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_break3);
+}
+
 /* Test that abandoned paths are removed after some time
  */
 int multipath_abandon_test()
@@ -1354,6 +1390,16 @@ int multipath_abandon_test()
     uint64_t max_completion_microsec = 3800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_abandon);
+}
+
+/* Test that after breaking path 0 we can establish a new path on the
+* same link when it comes back up.
+ */
+int multipath_back0_test()
+{
+    uint64_t max_completion_microsec = 3300000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_back0);
 }
 
 /* Test that breaking paths can come back up after some time
