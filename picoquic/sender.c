@@ -2869,6 +2869,9 @@ uint8_t * picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
     return bytes_next;
 }
 
+/*
+ * Prepare join-initiating multicast frames from server to client (MC_ANNOUNCE, MC_KEY, MC_JOIN)
+ */
 uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t * bytes, uint8_t * bytes_max, 
     int * more_data, int* is_pure_ack,
@@ -2906,15 +2909,67 @@ uint8_t * picoquic_prepare_multicast_init_frames(picoquic_cnx_t* cnx, picoquic_p
         }
         
         // TODO MC: Implement Format MC_JOIN frame
-        // TODO MC: Make sure that MC_JOIN is only sent once MC_ANNOUNCE and MC_KEY have been ACKed by client
-        if (ch->state < 5) {
-            uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, more_data);
+        if (ch->state < 5 && ch->state >= 2 && ch->key_acked > 0 && ch->mc_announce_acked > 0) {
+            uint8_t *bytes_next = picoquic_format_mc_join_frame(bytes, bytes_max, ch->channel, cnx, more_data);
             if (bytes_next > bytes) {
                 *is_pure_ack = 0;
                 bytes = bytes_next;
                 ch->state = 5; // "join_pending"
             }
         }
+    }
+
+    return bytes;
+}
+
+/* 
+ * Prepare MC_STATE frames to be sent back to the server from the client, when needed. 
+ */
+uint8_t * picoquic_prepare_multicast_state_frames(picoquic_cnx_t* cnx,
+    uint8_t * bytes, uint8_t * bytes_max, 
+    int * more_data, int* is_pure_ack,
+    uint64_t current_time, uint64_t * next_wake_time)
+{
+    if (cnx->mc_channels == NULL || cnx->nb_mc_channels == 0) {
+        return bytes;
+    }
+
+    int nb_channels_join_pending = 0;
+
+    for (int i = 0; i < cnx->nb_mc_channels; i++) {
+        picoquic_mc_channel_in_cnx_t* ch = cnx->mc_channels[i];
+
+        // if in state "join pending" and MC_KEY received -> check if client can join
+        if (ch->state >= 5 && ch->state < 8 && ch->key_available > 0) {
+            nb_channels_join_pending++;
+            picoquic_tp_multicast_client_params_t* params = &cnx->local_parameters.multicast_client_params;
+
+            if (params->max_aggregate_rate < ch->channel->max_rate || params->max_channel_ids < nb_channels_join_pending) {
+                // Channel join not possible, limit violation -> send MC_STATE(DECLINED_JOIN)
+                // TODO MC: Implement more in-depth limit checkings?
+                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
+                    picoquic_frame_type_mc_state_multicast,
+                    picoquic_mc_state_declined_join,
+                    picoquic_mc_state_reason_limit_violation);
+                if (bytes_next > bytes) {
+                    *is_pure_ack = 0;
+                    bytes = bytes_next;
+                    ch->state = 20; // "left"
+                }
+            } else {
+                // Join possible, sent MC_STATE(JOINED)
+                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
+                    picoquic_frame_type_mc_state_multicast,
+                    picoquic_mc_state_joined,
+                    picoquic_mc_state_reason_requested_by_server);
+                if (bytes_next > bytes) {
+                    *is_pure_ack = 0;
+                    bytes = bytes_next;
+                    ch->state = 8; // "join attempted"
+                }
+            }
+        }
+        // TODO MC: Implement handling of other states -> sending appropriate MC_STATE frames
     }
 
     return bytes;
@@ -3655,10 +3710,17 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                             path_x, current_time, next_wake_time, &more_data, &is_pure_ack);
                     }
 
-                    // TODO MC: Maybe also include this in almost_ready
+                    // TODO MC: Maybe also include multicast parts in almost_ready
                     if (cnx->is_multicast_enabled && !cnx->client_mode) {
-                        /* If required, prepare multicast announce, key and join frames. */
+                        /* SERVER: If required, prepare multicast announce, key and join frames. */
                         bytes_next = picoquic_prepare_multicast_init_frames(cnx, path_x,
+                        bytes_next, bytes_max, &more_data, &is_pure_ack,
+                        current_time, next_wake_time);
+                    }
+
+                    if (cnx->is_multicast_enabled && cnx->client_mode) {
+                        /* CLIENT: Send MC_STATE frames to server if required. */
+                        bytes_next = picoquic_prepare_multicast_state_frames(cnx,
                         bytes_next, bytes_max, &more_data, &is_pure_ack,
                         current_time, next_wake_time);
                     }

@@ -270,6 +270,12 @@ typedef struct st_picoquic_multicast_aead_secret_t {
 
 // per draft-jholland-quic-multicast-06
 typedef enum {
+    picoquic_mc_state_left = 0x1,
+    picoquic_mc_state_declined_join = 0x2,
+    picoquic_mc_state_joined = 0x3,
+    picoquic_mc_state_retired = 0x4
+} picoquic_mc_state_enum;
+typedef enum {
     picoquic_mc_state_reason_other = 0x0,
     picoquic_mc_state_reason_requested_by_server = 0x1,
     picoquic_mc_state_reason_administrative_block = 0x2,
@@ -283,6 +289,7 @@ typedef enum {
     picoquic_mc_state_reason_excessive_spurious_traffic = 0x14,
     picoquic_mc_state_reason_max_streams_exceeded = 0x15,
     picoquic_mc_state_reason_limit_violation = 0x16,
+    // Custom (application-specific) error codes may follow here
 } picoquic_mc_state_reason_enum;
 
 /* forward definition to avoid full dependency on picotls.h */
