@@ -7037,7 +7037,7 @@ int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* byte
 */
 
 uint8_t* picoquic_format_mc_state_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_multicast_channel_t* channel, int * more_data, 
-    picoquic_frame_type_enum_t ftype, picoquic_mc_state_enum state, picoquic_mc_state_reason_enum reason)
+    picoquic_frame_type_enum_t ftype, picoquic_mc_state_frame_enum state, picoquic_mc_state_reason_enum reason)
 {
     uint8_t* bytes0 = bytes;
 
@@ -7857,7 +7857,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             // CLEAN MC: Refactor event/error logging to qlog
                             if (bytes != NULL) {
                                 picoquic_multicast_channel_t* channel = cnx->mc_channels[cnx->nb_mc_channels-1]->channel;
-                                picoquic_mc_channel_in_cnx_t* ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel->channel_id, cnx);
 
                                 fprintf(stdout, "Got MC_STATE frame for channel id ");
                                 print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);

@@ -270,11 +270,11 @@ typedef struct st_picoquic_multicast_aead_secret_t {
 
 // per draft-jholland-quic-multicast-06
 typedef enum {
-    picoquic_mc_state_left = 0x1,
-    picoquic_mc_state_declined_join = 0x2,
-    picoquic_mc_state_joined = 0x3,
-    picoquic_mc_state_retired = 0x4
-} picoquic_mc_state_enum;
+    picoquic_mc_state_frame_left = 0x1,
+    picoquic_mc_state_frame_declined_join = 0x2,
+    picoquic_mc_state_frame_joined = 0x3,
+    picoquic_mc_state_frame_retired = 0x4
+} picoquic_mc_state_frame_enum;
 typedef enum {
     picoquic_mc_state_reason_other = 0x0,
     picoquic_mc_state_reason_requested_by_server = 0x1,

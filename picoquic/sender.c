@@ -2949,7 +2949,7 @@ uint8_t * picoquic_prepare_multicast_state_frames(picoquic_cnx_t* cnx,
                 // TODO MC: Implement more in-depth limit checkings?
                 uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
                     picoquic_frame_type_mc_state_multicast,
-                    picoquic_mc_state_declined_join,
+                    picoquic_mc_state_frame_declined_join,
                     picoquic_mc_state_reason_limit_violation);
                 if (bytes_next > bytes) {
                     *is_pure_ack = 0;
@@ -2960,7 +2960,7 @@ uint8_t * picoquic_prepare_multicast_state_frames(picoquic_cnx_t* cnx,
                 // Join possible, sent MC_STATE(JOINED)
                 uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
                     picoquic_frame_type_mc_state_multicast,
-                    picoquic_mc_state_joined,
+                    picoquic_mc_state_frame_joined,
                     picoquic_mc_state_reason_requested_by_server);
                 if (bytes_next > bytes) {
                     *is_pure_ack = 0;
