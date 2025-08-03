@@ -408,13 +408,13 @@ uint64_t picoquic_val64_connection_id(picoquic_connection_id_t cnx_id)
     return val64;
 }
 
-uint8_t picoquic_format_multicast_channel_id(uint8_t* bytes, size_t bytes_max, picoquic_multicast_channel_id_t ch_id)
+uint8_t picoquic_format_multicast_channel_id(uint8_t* bytes, size_t bytes_max, picoquic_multicast_channel_id_t* ch_id)
 {
-    uint8_t copied = ch_id.id_len;
+    uint8_t copied = ch_id->id_len;
     if (copied > bytes_max || copied == 0) {
         copied = 0;
     } else {
-        memcpy(bytes, ch_id.id, copied);
+        memcpy(bytes, ch_id->id, copied);
     }
 
     return copied;

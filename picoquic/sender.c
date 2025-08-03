@@ -2947,7 +2947,7 @@ uint8_t * picoquic_prepare_multicast_state_frames(picoquic_cnx_t* cnx,
             if (params->max_aggregate_rate < ch->channel->max_rate || params->max_channel_ids < nb_channels_join_pending) {
                 // Channel join not possible, limit violation -> send MC_STATE(DECLINED_JOIN)
                 // TODO MC: Implement more in-depth limit checkings?
-                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
+                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch, more_data,
                     picoquic_frame_type_mc_state_multicast,
                     picoquic_mc_state_frame_declined_join,
                     picoquic_mc_state_reason_limit_violation);
@@ -2958,7 +2958,7 @@ uint8_t * picoquic_prepare_multicast_state_frames(picoquic_cnx_t* cnx,
                 }
             } else {
                 // Join possible, sent MC_STATE(JOINED)
-                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch->channel, more_data,
+                uint8_t *bytes_next = picoquic_format_mc_state_frame(bytes, bytes_max, ch, more_data,
                     picoquic_frame_type_mc_state_multicast,
                     picoquic_mc_state_frame_joined,
                     picoquic_mc_state_reason_requested_by_server);

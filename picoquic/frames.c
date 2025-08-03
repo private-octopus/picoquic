@@ -6270,7 +6270,7 @@ uint8_t* picoquic_format_mc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, p
     } 
 
     // Channel ID
-    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, &channel->channel_id);
     if (bytes_copied == 0) {
         *more_data = 1;
         return bytes0;
@@ -6599,7 +6599,7 @@ uint8_t* picoquic_format_mc_key_frame(uint8_t* bytes, uint8_t* bytes_max, picoqu
     }
 
     // Channel ID
-    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, &channel->channel_id);
     if (bytes_copied == 0) {
         *more_data = 1;
         return bytes0;
@@ -6856,7 +6856,7 @@ uint8_t* picoquic_format_mc_join_frame(uint8_t* bytes, uint8_t* bytes_max, picoq
     }
 
     // Channel ID
-    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, &channel->channel_id);
     if (bytes_copied == 0) {
         *more_data = 1;
         return bytes0;
@@ -6992,7 +6992,8 @@ int picoquic_process_ack_of_mc_join_frame(picoquic_cnx_t* cnx, const uint8_t* by
     return ret;
 }
 
-int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int* no_need_to_repeat)
+int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, 
+    const uint8_t* bytes_max, int* no_need_to_repeat)
 {
     int ret = 0;
     const uint8_t* bytes_parsing = bytes;
@@ -7036,7 +7037,7 @@ int picoquic_check_mc_join_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* byte
  * MC_STATE frame
 */
 
-uint8_t* picoquic_format_mc_state_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_multicast_channel_t* channel, int * more_data, 
+uint8_t* picoquic_format_mc_state_frame(uint8_t* bytes, uint8_t* bytes_max, picoquic_mc_channel_in_cnx_t* ch_in_cnx, int * more_data, 
     picoquic_frame_type_enum_t ftype, picoquic_mc_state_frame_enum state, picoquic_mc_state_reason_enum reason)
 {
     uint8_t* bytes0 = bytes;
@@ -7046,16 +7047,25 @@ uint8_t* picoquic_format_mc_state_frame(uint8_t* bytes, uint8_t* bytes_max, pico
         return NULL;
     }
 
+    // Force reason REQUESTED_BY_SERVER for state JOINED and RETIRED, as defined in draft-jholland-multicast-07
+    if (state == picoquic_mc_state_frame_joined || state == picoquic_mc_state_frame_retired) {
+        reason = picoquic_mc_state_reason_requested_by_server;
+    } 
+    // If reason code is out of bounds for frame type TBD-0b, refuse to send frame
+    else if (reason > picoquic_mc_state_reason_limit_violation) {
+        return NULL;
+    }
+    
     // Frame type
     // Channel ID Length
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ftype)) == NULL
-        || (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, channel->channel_id.id_len)) == NULL) {
+        || (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, ch_in_cnx->channel->channel_id.id_len)) == NULL) {
         *more_data = 1;
         return bytes0;
     } 
 
     // Channel ID
-    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, channel->channel_id);
+    uint8_t bytes_copied = picoquic_format_multicast_channel_id(bytes, bytes_max - bytes, &ch_in_cnx->channel->channel_id);
     if (bytes_copied == 0) {
         *more_data = 1;
         return bytes0;
@@ -7063,315 +7073,279 @@ uint8_t* picoquic_format_mc_state_frame(uint8_t* bytes, uint8_t* bytes_max, pico
         bytes += bytes_copied;
     }
 
-    // TODO MC: Implement this
+    if (ch_in_cnx->state_frame_available > 0) {
+        ch_in_cnx->latest_state_sequence_available++;
+    } else {
+        ch_in_cnx->state_frame_available = 1;
+    }
 
-    // // Source IP
-    // // TODO MC: Make source address configurable
-    // struct sockaddr_storage* src_addr = &path_x->local_addr;
-    // uint8_t* src_addr_text;
-    // uint8_t src_addr_text_len;
-    // picoquic_get_ip_addr((struct sockaddr*) src_addr, &src_addr_text, &src_addr_text_len);
+    // State seq number
+    // State
+    // Reason Code
+    // Reason Phrase Length
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ch_in_cnx->latest_state_sequence_available)) != NULL &&
+        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, (uint8_t) state)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, reason)) != NULL
+    ) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0); // Reason phrase currently always empty
+    }
 
-    // for (int i = 0; i < src_addr_text_len; i++) {
-    //     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, src_addr_text[i])) == NULL) {
-    //         *more_data = 1;
-    //         return bytes0;
-    //     }
-    // }
-
-    // // Group IP
-    // uint8_t* group_addr_text;
-    // uint8_t group_addr_text_len;
-    // picoquic_get_ip_addr((struct sockaddr*) &channel->group_ip, &group_addr_text, &group_addr_text_len);
-
-    // for (int i = 0; i < group_addr_text_len; i++) {
-    //     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, group_addr_text[i])) == NULL) {
-    //         *more_data = 1;
-    //         return bytes0;
-    //     }
-    // }
-
-    // uint16_t port = picoquic_get_addr_port((struct sockaddr*) &channel->group_ip);
-
-    // // UDP Port
-    // // Header Protection Algorithm
-    // // Header Secret Length
-    // if ((bytes = picoquic_frames_uint16_encode(bytes, bytes_max, port)) == NULL
-    // || (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->header_protection_algorithm)) == NULL
-    // || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, channel->header_secret.secret_len)) == NULL) {
-    //     *more_data = 1;
-    //     return bytes0;
-    // }
-
-    // // Header Secret
-    // if (bytes + channel->header_secret.secret_len < bytes_max) {
-    //     memcpy(bytes, channel->header_secret.secret, channel->header_secret.secret_len);
-    //     bytes += channel->header_secret.secret_len;
-    // } else {
-    //     *more_data = 1;
-    //     return bytes0;
-    // }
-
-    // // AEAD Algorithm
-    // // Hash Algorithm
-    // // Max Rate
-    // // Max ACK delay
-    // if ((bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->aead_algorithm)) == NULL
-    //     || (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, channel->hash_algorithm)) == NULL
-    //     || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, channel->max_rate)) == NULL
-    //     || (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (channel->max_ack_delay / (uint64_t) 1000))) == NULL
-    // ) {
-    //     *more_data = 1;
-    //     return bytes0;
-    // }
-
-    // // CLEAN MC: Refactor event/error logging to qlog    
-    // fprintf(stdout, "Announce MC Channel with ID: ");
-    // print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);
-    // fprintf(stdout, "\n");
+    // CLEAN MC: Refactor event/error logging to qlog
+    fprintf(stdout, "Send MC_STATE frame with MCQUIC state 0x%i ", state);
+    switch (state) {
+        case 1: 
+            fprintf(stdout, "(LEFT)\n");
+            break;
+        case 2:
+            fprintf(stdout, "(DECLINED JOIN)\n");
+            break;
+        case 3:
+            fprintf(stdout, "(JOINED)\n");
+            break;
+        case 4: 
+            fprintf(stdout, "(RETIRED)\n");
+            break;
+        default:
+            fprintf(stdout, "(unknown)\n");
+    }
 
     return bytes;
 }
 
-const uint8_t* picoquic_decode_mc_state_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_id64) {
-    // TODO MC: Implement this
-    
-    // if (!cnx->is_multicast_enabled || !cnx->client_mode) {
-    //     picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64, "received unexpected MC_ANNOUNCE frame");
-    //     return NULL;
-    // }
-
-    // int addr_family;
-    // if (frame_id64 == picoquic_frame_type_mc_announce_v4) {
-    //     addr_family = AF_INET;
-    // } 
-    // else if (frame_id64 == picoquic_frame_type_mc_announce_v6) {
-    //     addr_family = AF_INET6;
-    // } 
-    // else {
-    //     return NULL;
-    // }
-
-    // uint8_t id_len;
-    // picoquic_multicast_channel_id_t channel_id;
-
-    // // Channel ID Length
-    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
-    //     return NULL;
-    // }
-
-    // // Channel ID
-    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel_id);
-    // picoquic_mc_channel_in_cnx_t* channel_found;
-
-    // if (bytes_copied == 0) {
-    //     return NULL;
-    // } 
-
-    // bytes += bytes_copied;
-
-    // // Channel could already exist in cnx if MC_KEY was decoded before MC_ANNOUNCE frame
-    // if ((channel_found = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx)) != NULL && channel_found->state >= 2) {
-    //     fprintf(stderr, "Received a duplicate MC_ANNOUNCE for channel\n");
-    //     return NULL;
-    // }
-    
-    // picoquic_multicast_channel_t* channel;
-    // if (channel_found != NULL) {
-    //     channel = channel_found->channel;
-    // } else {
-    //     channel = malloc(sizeof(picoquic_multicast_channel_t));
-    //     if (channel == NULL) {
-    //         fprintf(stderr, "could not create multicast channel: malloc failed\n");
-    //         return NULL;
-    //     }
-
-    //     channel->channel_id = channel_id;
-    // }
-
-    // // if not enough bytes received for two addresses (src and group), then error
-    // if ((addr_family == AF_INET && bytes + 8 > bytes_max)
-    // || (addr_family == AF_INET6 && bytes + 32 > bytes_max)) {
-    //     return NULL;
-    // }
-    
-    // // Source IP
-    // if (picoquic_store_byte_addr(&channel->source_ip, addr_family, bytes, 0) != 0) {
-    //     return NULL;
-    // }
-
-    // if (addr_family == AF_INET) {
-    //     bytes += 4;
-    // }
-    // else {
-    //     bytes += 16;
-    // }
-
-    // // UDP Port
-    // uint16_t udp_port;
-    // const uint8_t *bytes_after_port;
-
-    // if ((addr_family == AF_INET && (bytes_after_port = picoquic_frames_uint16_decode(bytes + 4, bytes_max, &udp_port)) == NULL)
-    //     || (addr_family == AF_INET6 && (bytes_after_port = picoquic_frames_uint16_decode(bytes + 16, bytes_max, &udp_port)) == NULL)
-    // ) {
-    //     return NULL;
-    // }
-    // // Group Addr
-    // if (picoquic_store_byte_addr(&channel->group_ip, addr_family, bytes, udp_port) != 0) {
-    //     return NULL;
-    // }
-
-    // bytes = bytes_after_port;
-
-    // // Header Protection Algo
-    // // Header Secret Length
-    // if ((bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->header_protection_algorithm)) == NULL
-    // || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->header_secret.secret_len)) == NULL)  {
-    //     return NULL;
-    // }
-
-    // // Header Secret
-    // if ((bytes + channel->header_secret.secret_len) > bytes_max) {
-    //     return NULL;
-    // } else {
-    //     memcpy(channel->header_secret.secret, bytes, channel->header_secret.secret_len);
-    //     bytes += channel->header_secret.secret_len;
-    // }
-
-    // // AEAD Algo
-    // // Integrity Hash Algo
-    // if ((bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->aead_algorithm)) == NULL
-    // || (bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &channel->hash_algorithm)) == NULL) {
-    //     return NULL;
-    // }
-
-    // // Max Rate
-    // // Max ACK delay
-    // if((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->max_rate)) == NULL
-    // || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &channel->max_ack_delay)) == NULL)  {
-    //     return NULL;
-    // }
-
-    // picoquic_mc_channel_in_cnx_t* new_channel_in_cnx;
-
-    // if (channel_found != NULL) {
-    //     new_channel_in_cnx = channel_found;
-    // } else {
-    //     new_channel_in_cnx = picoquic_add_channel_to_cnx(cnx, channel);
-    //     if (new_channel_in_cnx == NULL) {
-    //         fprintf(stderr, "could not create picoquic_mc_channel_in_cnx_t\n");
-    //         return NULL;
-    //     }
-    // }
-    
-    // new_channel_in_cnx->state = 2; // "announced"
-
-    return bytes;
-}
-
-const uint8_t* picoquic_skip_mc_state_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype)
+const uint8_t* picoquic_decode_mc_state_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, 
+    const uint8_t* bytes_max, uint64_t frame_id64) 
 {
-    // TODO MC: Implement this
-    // uint8_t ch_id_length = 0;
-    // uint64_t secret_length = 0;
+    if (!cnx->is_multicast_enabled || cnx->client_mode) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64, "Received unexpected MC_STATE frame\n");
+        return NULL;
+    }
 
-    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &ch_id_length)) != NULL && // channel id length
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)ch_id_length)) != NULL && // channel id
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, ftype == picoquic_frame_type_mc_announce_v4 ? 4 : 16)) != NULL && // source ip
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, ftype == picoquic_frame_type_mc_announce_v4 ? 4 : 16)) != NULL && // group ip
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 2)) != NULL && // udp port
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 2)) != NULL && // header protection algo
-    //     (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &secret_length)) != NULL && // header secret length
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, secret_length)) != NULL && // header secret
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 2)) != NULL && // aead algorithm
-    //     (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 2)) != NULL && // integrity hash algo
-    //     (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL) { // max rate
-    //         bytes = picoquic_frames_varint_skip(bytes, bytes_max); // max ack delay
-    //     }
+    // Frame type TBC-0c (Application State Code) currently not supported
+    if (frame_id64 == picoquic_frame_type_mc_state_application) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, frame_id64, "Received unsupported MC_STATE frame of type TBD-0c\n");
+        return NULL;
+    } 
+
+    uint8_t id_len;
+    picoquic_multicast_channel_id_t channel_id;
+
+    // Channel ID Length
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
+        return NULL;
+    }
+
+    // Channel ID
+    uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel_id);
+
+    if (bytes_copied == 0) {
+        return NULL;
+    } 
+
+    picoquic_mc_channel_in_cnx_t* channel_found = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx);
+    if (channel_found == NULL) {
+        fprintf(stderr, "Error: Received a MC_JOIN, but no mc channel was found in the connection\n");
+        return NULL;
+    }
+
+    bytes += bytes_copied;
+
+    uint64_t sequence_number;
+    uint8_t state;
+    uint64_t reason;
+    uint64_t reason_phrase_length;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &sequence_number)) != NULL &&
+        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &state)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reason)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reason_phrase_length)) != NULL
+    ) {
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, reason_phrase_length); // Skip reason phrase, if available
+    }
+
+    if ((channel_found->state_frame_available == 0 && sequence_number != channel_found->latest_state_sequence_available) ||
+        (channel_found->state_frame_available > 0 && sequence_number != channel_found->latest_key_sequence_available + 1)
+    ) {
+        fprintf(stderr, "Error: Received a MC_STATE frame with non-strictly-increasing sequence number\n");
+        return NULL;
+    }
+
+    // TODO MC: Maybe add more defined behavior for the different state types
+
+    // MC_STATE(Joined)
+    if (state == picoquic_mc_state_frame_joined) {
+        if (reason != picoquic_mc_state_reason_requested_by_server) {
+            fprintf(stdout, "Notice: Received MC_STATE(Joined) frame did provide an illegal reason code, ignoring reason code\n");
+        }
+        if (channel_found->state >= 5 && channel_found->state < 10) {
+            // client joins after receiving MC_JOIN frame
+            fprintf(stdout, "Got MC_STATE(Joined) from client\n");
+            channel_found->state = 8; // "join attempted"
+        }
+        else if (channel_found->state >=15 && channel_found->state < 25 && channel_found->mc_join_acked) {
+            // Half-illegal behavior: Leave pending or left, but received MC_JOIN in the past
+            fprintf(stdout, "Notice: Client joins multicast channel directly after trying to leave or left\n");
+            channel_found->state = 8; // "join attempted"
+        } 
+        else {
+            // ignoring MC_STATE frame 
+            fprintf(stdout, "Notice: MC_STATE(Joined) frame received outside of join process, ignoring frame\n");
+        }
+    } 
+
+    // MC_STATE(Declined Join)
+    if (state == picoquic_mc_state_frame_declined_join) {
+        if (channel_found->state >= 5 && channel_found->state < 8) {
+            // client declines join after receiving MC_JOIN frame
+            fprintf(stdout, "Got MC_STATE(Declined Join) from client\n");
+            channel_found->state = 20; // "left"
+        }
+        else if (channel_found->state >= 8 && channel_found->state < 15) {
+            // Half-illegal behavior: Client already in Join attempted or join confirmed
+            fprintf(stdout, "Notice: Client declined joining multicast channel after confirming join. Let client leave the channel.\n");
+            channel_found->state = 20; // "left"
+        } 
+        else {
+            // ignoring MC_STATE frame 
+            fprintf(stdout, "Notice: MC_STATE(Declined Join) frame received outside of join process, ignoring frame\n");
+        }
+    }
+
+    // MC_STATE(Left)
+    if (state == picoquic_mc_state_frame_left) {
+        if (channel_found->state >= 5 && channel_found->state < 20) {
+            // client leaves a non-retired channel after join request by server
+            fprintf(stdout, "Got MC_STATE(Leave) from client\n");
+            channel_found->state = 20; // "left"
+        }
+        else {
+            // ignoring MC_STATE frame 
+            fprintf(stdout, "Notice: MC_STATE(Leave) frame received in non-joined state, ignoring frame\n");
+        }
+    }
+
+    // MC_STATE(Retired)
+    if (state == picoquic_mc_state_frame_retired) {
+        if (reason != picoquic_mc_state_reason_requested_by_server) {
+            fprintf(stdout, "Notice: Received MC_STATE(Retired) frame did provide an illegal reason code, ignoring reason code\n");
+        }
+        if (channel_found->state >= 25 && channel_found->state < 30) {
+            // client confirms retired channel
+            fprintf(stdout, "Got MC_STATE(Retired) from client\n");
+            channel_found->state = 30; // "retired"
+        }
+        else {
+            // ignoring MC_STATE frame 
+            fprintf(stdout, "Notice: MC_STATE(Retired) frame received in other state than 'retire pending', ignoring frame\n");
+        }
+    }
+
+    return bytes;
+}
+
+const uint8_t* picoquic_skip_mc_state_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype) {
+    uint8_t ch_id_length = 0;
+    uint64_t reason_phrase_length = 0;
+
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &ch_id_length)) != NULL && // channel id length
+        (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (uint64_t)ch_id_length)) != NULL && // channel id
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && // state sequence number
+        (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, 1)) != NULL && // state
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL && // reason code
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reason_phrase_length))) {// reason phrase length
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, reason_phrase_length); // reason phrase
+        }
 
     return bytes;
 }
 
 int picoquic_process_ack_of_mc_state_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_size, uint64_t ftype, size_t* consumed)
+    size_t bytes_size, uint64_t ftype, size_t* consumed) 
 {
-    // TODO MC: Implement this
+    const uint8_t* bytes_first = bytes;
+    const uint8_t* bytes_max = bytes + bytes_size;
 
-    // const uint8_t* bytes_first = bytes;
-    // const uint8_t* bytes_max = bytes + bytes_size;
+    // Skip frame type
+    const uint8_t* bytes_after_ftype = bytes = picoquic_frames_varint_skip(bytes, bytes_max);
 
-    // // Skip frame type
-    // const uint8_t* bytes_after_ftype = bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    uint8_t id_len;
+    picoquic_multicast_channel_id_t channel_id;
+    uint64_t seq_number;
 
-    // uint8_t id_len;
-    // picoquic_multicast_channel_id_t channel_id;
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
+        return -1;
+    }
 
-    // if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &id_len)) == NULL) {
-    //     return -1;
-    // }
+    uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel_id);
 
-    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes, id_len, &channel_id);
+    if (bytes_copied == 0) {
+        return -1;
+    }
 
-    // if (bytes_copied == 0) {
-    //     return -1;
-    // }
+    bytes += bytes_copied;
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, &seq_number);
+    
+    if (bytes == NULL) {
+        return -1;
+    }
 
     int ret = 0;
-    // const uint8_t* bytes_next = picoquic_skip_mc_announce_frame(bytes_after_ftype, bytes_max, ftype);
+    const uint8_t* bytes_next = picoquic_skip_mc_state_frame(bytes_after_ftype, bytes_max, ftype);
 
-    // if (bytes_next == NULL) {
-    //     return -1;
-    // }
-    // else {
-    //     picoquic_mc_channel_in_cnx_t* ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx);
-    //     if (ch_in_cnx == NULL) {
-    //         return -1;
-    //     }
-    //     ch_in_cnx->mc_announce_acked = 1;
-    //     *consumed = bytes_next - bytes_first;
-    // }
+    if (bytes_next == NULL) {
+        return -1;
+    }
+    else {
+        picoquic_mc_channel_in_cnx_t* ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx);
+        if (ch_in_cnx == NULL) {
+            return -1;
+        }
+        ch_in_cnx->mc_state_acked = 1;
+        ch_in_cnx->latest_state_sequence_acked = seq_number;
+        *consumed = bytes_next - bytes_first;
+    }
     
-    // fprintf(stdout, "ACK of MC_ANNOUNCE successfully processed\n");
+    fprintf(stdout, "ACK of MC_STATE successfully processed\n");
     return ret;
 }
 
 int picoquic_check_mc_state_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int* no_need_to_repeat)
 {
-    // TODO MC: Implement this
     int ret = 0;
-    // const uint8_t* bytes_parsing = bytes;
-    // uint8_t id_len;
-    // picoquic_multicast_channel_id_t channel_id;
-    // *no_need_to_repeat = 0;
+    const uint8_t* bytes_parsing = bytes;
+    uint8_t id_len;
+    picoquic_multicast_channel_id_t channel_id;
+    *no_need_to_repeat = 0;
 
-    // if ((bytes_parsing = picoquic_frames_uint8_decode(bytes_parsing, bytes_max, &id_len)) == NULL) {
-    //     *no_need_to_repeat = 1;
-    //     return -1;
-    // }
+    if ((bytes_parsing = picoquic_frames_uint8_decode(bytes_parsing, bytes_max, &id_len)) == NULL) {
+        *no_need_to_repeat = 1;
+        return -1;
+    }
 
-    // uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes_parsing, id_len, &channel_id);
+    uint8_t bytes_copied = picoquic_parse_multicast_channel_id(bytes_parsing, id_len, &channel_id);
 
-    // if (bytes_copied == 0) {
-    //     *no_need_to_repeat = 1;
-    //     return -1;
-    // }
+    if (bytes_copied == 0) {
+        *no_need_to_repeat = 1;
+        return -1;
+    }
 
-    // picoquic_mc_channel_in_cnx_t* ch_in_cnx;
+    picoquic_mc_channel_in_cnx_t* ch_in_cnx;
 
-    // if ((ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx)) == NULL) {
-    //     /* If the channel is not in the connection (anymore?), no need to repeat this frame. */
-    //     *no_need_to_repeat = 1;
-    // }
-    // else if (ch_in_cnx->state >= 15 || ch_in_cnx->mc_announce_acked == 1) {
-    //     /* If MC_ANNOUNCE was acked or client left the channel or intends to leave it, do not repeat */
-    //     *no_need_to_repeat = 1;
-    // }
+    if ((ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel_id, cnx)) == NULL) {
+        /* If the channel is not in the connection (anymore?), no need to repeat this frame. */
+        *no_need_to_repeat = 1;
+    }
+    else if (ch_in_cnx->latest_state_sequence_acked == ch_in_cnx->latest_state_sequence_available && 
+        ch_in_cnx->mc_state_acked > 0) 
+    {
+        /* If MC_STATE was acked, do not repeat */
+        *no_need_to_repeat = 1;
+    }
 
-    // if (*no_need_to_repeat == 0) {
-    //     fprintf(stdout, "MC_ANNOUNCE needs repeat\n");
-    // } else {
-    //     fprintf(stdout, "MC_ANNOUNCE do not need repeat\n");
-    // }
+    if (*no_need_to_repeat == 0) {
+        fprintf(stdout, "MC_STATE needs repeat\n");
+    } else {
+        fprintf(stdout, "MC_STATE do not need repeat\n");
+    }
 
     return ret;
 }
@@ -7857,14 +7831,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             // CLEAN MC: Refactor event/error logging to qlog
                             if (bytes != NULL) {
                                 picoquic_multicast_channel_t* channel = cnx->mc_channels[cnx->nb_mc_channels-1]->channel;
+                                picoquic_mc_channel_in_cnx_t* ch_in_cnx = picoquic_find_multicast_channel_in_cnx(&channel->channel_id, cnx);
 
-                                fprintf(stdout, "Got MC_STATE frame for channel id ");
+                                fprintf(stdout, " -- Channel id ");
                                 print_hex_bytes(channel->channel_id.id, channel->channel_id.id_len);
-                                
-                                // TODO MC: Add correct logging
-                                // fprintf(stdout, "\n -- Current MC_LIMITS sequence number: %lu\n", ch_in_cnx->latest_limits_sequence_available);
-                                // fprintf(stdout, " -- Current MC_STATE sequence number: %lu\n", ch_in_cnx->latest_state_sequence_available);
-                                // fprintf(stdout, " -- Current MC_KEY sequence number: %lu\n", ch_in_cnx->latest_key_sequence_available);
+                                fprintf(stdout, "\n -- State Seq number: %lu\n", ch_in_cnx->latest_state_sequence_available);
+                                fprintf(stdout, " -- New state (picoquic-internal-code): %u\n", ch_in_cnx->state);
                             } 
                             if (bytes == NULL) {
                                 fprintf(stdout, "ERROR: bytes == NULL after decoding MC_KEY frame\n");
