@@ -403,6 +403,33 @@ uint8_t* h3zero_parse_qpack_header_value_string(uint8_t * bytes, uint8_t* decode
     return bytes;
 }
 
+/* Structured boolean, "?0" or "?1" */
+uint8_t* h3zero_parse_qpack_header_value_boolean(uint8_t* bytes, uint8_t* decoded,
+    size_t decoded_length, int* flag)
+{
+    if (*flag != 0) {
+        /* Duplicate field! */
+        bytes = NULL;
+    }
+    else if (decoded_length < 2 || decoded[0] != '?') {
+        /* Malformed value */
+        bytes = NULL;
+    }
+    else if (decoded[1] == '1') {
+        *flag = 1;
+    }
+    else if (decoded[1] != '0') {
+        /* Malformed value */
+        bytes = NULL;
+    }
+
+    return bytes;
+}
+
+/*  proxy-quic-forwarding = ?1; accept-transform="scramble,identity"; \
+ *                              scramble-key=:abc...789=: 
+ */
+
 uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
     http_header_enum_t header, h3zero_header_parts_t * parts)
 {
@@ -492,6 +519,14 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->protocol, &parts->protocol_length);
                 }
                 break;
+            case http_header_proxy_quic_forwarding:
+                bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                    decoded_length, &parts->proxy_quic_forwarding, &parts->proxy_quic_forwarding);
+                break;
+            case http_header_proxy_port_sharing:
+                bytes = h3zero_parse_qpack_header_value_boolean(bytes, decoded,
+                    decoded_length, &parts->proxy_port_sharing);
+                break;
             default:
                 break;
             }
@@ -508,12 +543,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range", NULL};
+     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range",
+     "Proxy-QUIC-Forwarding", "Proxy-QUIC-Port-Sharing",
+     NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
-        http_header_range
+        http_header_range,
+        http_header_proxy_quic_forwarding,
+        http_header_proxy_port_sharing
     };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
@@ -821,9 +860,9 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
     return bytes;
 }
 
-uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+uint8_t* h3zero_create_connect_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     char const * authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const * origin, char const* ua_string)
+    char const * origin, int proxy_quic_forwarding, int proxy_port_sharing, char const* ua_string)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -854,6 +893,13 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
     }
     return bytes;
+}
+
+uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
+    char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
+    char const* origin, char const* ua_string)
+{
+
 }
 
 uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
@@ -1077,6 +1123,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->protocol);
         *((uint8_t**)&header->protocol) = NULL;
         header->protocol_length = 0;
+    }
+    if (header->proxy_quic_forwarding != NULL) {
+        free((uint8_t*)header->proxy_quic_forwarding);
+        *((uint8_t**)&header->proxy_quic_forwarding) = NULL;
+        header->proxy_quic_forwarding_length = 0;
     }
 }
 

@@ -129,6 +129,8 @@ typedef enum {
     http_header_user_agent,
     http_header_x_forwarded_for,
     http_header_x_frame_options,
+    http_header_proxy_quic_forwarding,
+    http_header_proxy_port_sharing,
 	http_header_max
 } http_header_enum_t;
 
@@ -191,6 +193,9 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
     size_t protocol_length;
+    uint8_t const* proxy_quic_forwarding;
+    size_t proxy_quic_forwarding_length;
+    int proxy_port_sharing;
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
