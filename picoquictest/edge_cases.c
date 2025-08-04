@@ -1643,3 +1643,107 @@ int crypto_hs_offset_test()
 
     return ret;
 }
+
+/*
+* Test what happens if there is data sent after reset,
+* and possibly other shenanigans.
+* 
+ */
+
+static test_api_stream_desc_t test_scenario_reset_case[] = {
+    { 4, 0, 128, 1000000 }
+};
+
+int reset_loop_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t timeout;
+    picoquic_stream_head_t* stream = NULL;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_reset_case, sizeof(test_scenario_reset_case));
+    }
+
+    /* Perform a few rounds of sending loop, but not enough to send all the data */
+    if (ret == 0) {
+        timeout = simulated_time + 100000;
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+    }
+
+    /* trigger a timeout of stream 4 */
+    if (ret == 0) {
+        ret = picoquic_reset_stream(test_ctx->cnx_server, 4, 0);
+    }
+
+    /* make sure that reset is sent */
+    if (ret == 0) {
+        timeout = simulated_time + 100000;
+        for (int i = 0; ret == 0 && i < 16; i++) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, timeout, &was_active);
+            if (ret == 0) {
+                stream = picoquic_find_stream(test_ctx->cnx_server, 4);
+                if (stream == NULL) {
+                    ret = -1;
+                    break;
+                }
+                else if (stream->reset_sent) {
+                    break;
+                }
+            }
+        }
+    }
+    if (ret == 0 && (stream == NULL || !stream->reset_sent)) {
+        DBG_PRINTF("Could not reset stream 4", 4);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        /* add data to the stream to elicit some bad behavior */
+        uint8_t bogus_data[4] = { 1, 2, 3, 4 }; 
+        if (picoquic_add_to_stream(test_ctx->cnx_server, 4, bogus_data, 4, 1) == 0) {
+            DBG_PRINTF("Adding on stream %d after reset should be forbidden", 4);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* add data to the stream to elicit some bad behavior */
+        uint8_t bogus_context[4] = { 0, 0, 0, 0 };
+        if (picoquic_mark_active_stream(test_ctx->cnx_server, 4, 1, bogus_context) == 0) {
+            DBG_PRINTF("Marking stream %d active after reset should be forbidden", 4);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_stream_head_t* ready_stream = picoquic_find_ready_stream(test_ctx->cnx_server);
+
+        if (ready_stream != NULL) {
+            DBG_PRINTF("Stream %" PRIu64 " is ready after reset send", ready_stream->stream_id);
+            ret = -1;
+        }
+    }
+
+    /* Do a loop to check the behavior */
+    if (ret == 0) {
+        timeout = simulated_time + 2000000;
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
