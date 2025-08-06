@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.38.1
+        VERSION 1.1.38.2
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -82,6 +82,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/config.c
     picoquic/cubic.c
     picoquic/ech.c
+    picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -127,6 +128,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_unified_log.h
      picoquic/picoquic_logger.h
      picoquic/picoquic_binlog.h
+     picoquic/picoquic_error_names.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h

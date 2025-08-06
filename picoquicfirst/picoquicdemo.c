@@ -83,6 +83,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #ifdef PICOQUIC_MEMORY_LOG
 #include "auto_memlog.h"
 #endif
+#include "picoquic_error_names.h"
 
 void print_address(FILE* F_log, struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
 {
@@ -870,6 +871,7 @@ int quic_client(const char* ip_address_text, int server_port,
                 {
                     ret = picoquic_perflog_setup(qclient, config->performance_log);
                 }
+                picoquic_display_error_names(qclient);
             }
         }
     }
@@ -1039,16 +1041,23 @@ int quic_client(const char* ip_address_text, int server_port,
 
     if (ret == 0) {
         uint64_t last_err;
+        char const* loc_rem = NULL;
 
         if ((last_err = picoquic_get_local_error(cnx_client)) != 0) {
-            fprintf(stdout, "Connection end with local error 0x%" PRIx64 ".\n", last_err);
+            loc_rem = "local";
+        }
+        else if ((last_err = picoquic_get_remote_error(cnx_client)) != 0) {
+            loc_rem = "remote";
+        }
+        if (last_err != 0){
+            fprintf(stdout, "Connection end with %s error 0x%" PRIx64, loc_rem, last_err);
+            if (qclient->get_error_name != NULL) {
+                fprintf(stdout, ": %s", qclient->get_error_name(last_err));
+            }
+            fprintf(stdout, ".\n");
             ret = -1;
         }
-        if ((last_err = picoquic_get_remote_error(cnx_client)) != 0) {
-            fprintf(stdout, "Connection end with remote error 0x%" PRIx64 ".\n", last_err);
-            ret = -1;
-        }
-        if ((last_err = picoquic_get_application_error(cnx_client)) != 0) {
+        else if ((last_err = picoquic_get_application_error(cnx_client)) != 0) {
             fprintf(stdout, "Connection end with application error 0x%" PRIx64 ".\n", last_err);
             ret = -1;
         }

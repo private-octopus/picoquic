@@ -737,7 +737,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_unified_logging_t* qlog_fns;
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
-
+    char const* (*get_error_name)(uint64_t error_code);
 #ifdef BBRExperiment
     bbr_exp bbr_exp_flags;
 #endif
