@@ -130,8 +130,3 @@ char const* picoquic_error_name(uint64_t error_code)
     }
     return e_name;
 }
-
-void picoquic_display_error_names(picoquic_quic_t * quic)
-{
-    quic->get_error_name = picoquic_error_name;
-}

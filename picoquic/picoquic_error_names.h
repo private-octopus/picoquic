@@ -28,7 +28,6 @@
 extern "C" {
 #endif
     char const* picoquic_error_name(uint64_t error_code);
-    void picoquic_display_error_names(struct st_picoquic_quic_t* quic);
 #ifdef __cplusplus
 }
 #endif
