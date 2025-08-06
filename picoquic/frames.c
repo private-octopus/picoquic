@@ -1366,19 +1366,43 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
              * the current selection is validated */
             break;
         }
-        has_data = (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-                (stream->fin_requested && !stream->fin_sent)));
+
+        /* The tests for "have data" should excatly replicate the tests in
+         * the formating of a stream frame */
+        if (stream->stop_sending_requested && !stream->stop_sending_sent) {
+            /* will send a stop sending frame.
+            * this takes precedence over FIFO vs round-robin processing */
+            found_stream = stream;
+            has_data = 1;
+            break;
+        }
+        else if (stream->reset_sent) {
+            /* No data will be sent after a reset */
+            has_data = 0;
+        }
+        else if (stream->reset_requested) {
+            /* will queue a reset frame --
+            * this takes precedence over FIFO vs round-robin processing */
+            found_stream = stream;
+            has_data = 1;
+            break;
+        }
+        else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+            (stream->fin_requested && !stream->fin_sent))) {
+            has_data = 1;
+        }
+        else {
+            has_data = 0;
+        }
+
+        /* implement affinity scheduling */
         if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
             /* Only consider the streams that meet path affinity requirements */
             has_data = 0;
         }
-        if ((stream->reset_requested && !stream->reset_sent) ||
-            (stream->stop_sending_requested && !stream->stop_sending_sent)) {
-            /* urgent action is needed, this takes precedence over FIFO vs round-robin processing */
-            found_stream = stream;
-            break;
-        } else if (has_data) {
+        
+        if (has_data) {
             /* Check that this stream is actually available for sending data */
             if (stream->sent_offset == 0) {
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
@@ -1651,17 +1675,18 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         }
     }
 
+    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
+        return picoquic_format_stop_sending_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
+    }
+
     if (stream->reset_sent) {
         /* No data will be sent after a reset */
         return bytes;
     }
-    else if (stream->reset_requested && !stream->reset_sent) {
+    else if (stream->reset_requested) {
         return picoquic_format_stream_reset_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
     }
 
-    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-        return picoquic_format_stop_sending_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
-    }
 
     if (!stream->is_active &&
         (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
