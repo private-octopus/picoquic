@@ -128,7 +128,6 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_unified_log.h
      picoquic/picoquic_logger.h
      picoquic/picoquic_binlog.h
-     picoquic/picoquic_error_names.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
