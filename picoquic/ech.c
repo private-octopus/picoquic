@@ -57,7 +57,7 @@ int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt)
     ptls_buffer_init(&config, short_buf, sizeof(short_buf));
     ptls_base64_decode_init(&d_state);
     ret = ptls_base64_decode(b64_txt, &d_state, &config);
-    if (ret == 0 && d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0)) {
+    if (ret == 0 && (d_state.status == PTLS_BASE64_DECODE_DONE || (d_state.status == PTLS_BASE64_DECODE_IN_PROGRESS && d_state.nbc == 0))) {
         ret = 0;
         if (config.off > 0) {
             if ((*v = (uint8_t*)malloc(config.off)) == NULL) {
@@ -230,7 +230,7 @@ typedef struct st_ech_opener_callback_t {
 /* Perform the key exchange using the public key provided by the client
  * in the "enc" parameter and the private key corresponding to the config ID */
 ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
-    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* tls, 
+    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* tls,
     uint8_t config_id, ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
 {
     ptls_aead_context_t* aead = NULL;

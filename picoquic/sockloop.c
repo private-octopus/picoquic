@@ -371,8 +371,8 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 #ifndef ESP_PLATFORM
         // /* TODO: set option IPv6 only */
         picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
-        picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
 #endif
+        picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
         picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
