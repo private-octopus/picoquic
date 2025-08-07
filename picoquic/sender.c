@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
@@ -4069,6 +4070,17 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                     }
                 }
             }
+
+            if (is_initial_sent && cnx->client_mode &&
+                cnx->cnx_state < picoquic_state_client_handshake_start &&
+                coalesced_packet_size > 0 &&
+                coalesced_packet_size < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                /* This is bad */
+                size_t padding = packet_max - coalesced_packet_size;
+                picoquic_public_random(packet_buffer + coalesced_packet_size, padding);
+                coalesced_packet_size += padding;
+            }
+
             if (coalesced_packet_size > packet_max) {
 #ifdef HUNTING_FOR_BUFFER_OVERFLOW
                 int* x = NULL;

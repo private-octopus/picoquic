@@ -150,6 +150,9 @@
     <ClCompile Include="ech.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="error_names.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

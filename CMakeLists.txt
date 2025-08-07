@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.38.1
+        VERSION 1.1.38.3
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -82,6 +82,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/config.c
     picoquic/cubic.c
     picoquic/ech.c
+    picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -124,9 +125,6 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
-     picoquic/picoquic_unified_log.h
-     picoquic/picoquic_logger.h
-     picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
@@ -136,6 +134,23 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
      picoquic/siphash.h)
+
+set(PICOQUIC_CORE_HEADERS_PRIVATE
+    picoquic/bytestream.h
+    picoquic/cc_common.h
+    picoquic/cidset.h
+    picoquic/performance_log.h
+    picoquic/picohash.h
+    picoquic/picoquic_binlog.h
+    picoquic/picoquic_crypto_provider_api.h
+    picoquic/picoquic_internal.h
+    picoquic/picoquic_logger.h
+    picoquic/picoquic_set_binlog.h
+    picoquic/picoquic_set_textlog.h
+    picoquic/picoquic_unified_log.h
+    picoquic/picosplay.h
+    picoquic/tls_api.h
+    picoquic/wincompat.h)
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
@@ -340,6 +355,7 @@ macro(set_picoquic_compile_settings)
 endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+target_sources(picoquic-core PRIVATE ${PICOQUIC_CORE_HEADERS_PRIVATE})
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")

@@ -1041,11 +1041,11 @@ int quic_client(const char* ip_address_text, int server_port,
         uint64_t last_err;
 
         if ((last_err = picoquic_get_local_error(cnx_client)) != 0) {
-            fprintf(stdout, "Connection end with local error 0x%" PRIx64 ".\n", last_err);
+            fprintf(stdout, "Connection ends with local error 0x%" PRIx64 " (%s).\n", last_err, picoquic_error_name(last_err));
             ret = -1;
         }
         if ((last_err = picoquic_get_remote_error(cnx_client)) != 0) {
-            fprintf(stdout, "Connection end with remote error 0x%" PRIx64 ".\n", last_err);
+            fprintf(stdout, "Connection ends with remote error 0x%" PRIx64 " (%s).\n", last_err, picoquic_error_name(last_err));
             ret = -1;
         }
         if ((last_err = picoquic_get_application_error(cnx_client)) != 0) {

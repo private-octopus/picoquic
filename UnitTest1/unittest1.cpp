@@ -1979,6 +1979,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_loop)
+        {
+            int ret = reset_loop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(initial_pto)
         {
             int ret = initial_pto_test();
