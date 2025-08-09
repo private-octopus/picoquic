@@ -3278,12 +3278,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ech_e2e_0rtt) {
+            int ret = ech_e2e_0rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ech_grease) {
             int ret = ech_grease_test();
 
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ech_no_ech) {
+            int ret = ech_no_ech_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(getter) {
             int ret = getter_test();
 
