@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2019, Private Octopus, Inc.
+* Copyright (c) 2025, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -42,6 +42,7 @@
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
 #include "picoquic_binlog.h"
+#include "picoquic_logger.h"
 
  /* ech_config_test:
  * Create an ech configuration list, i.e., the content of an HTTPS "ech=" parameter.
@@ -198,6 +199,9 @@ int ech_cert_test()
 typedef struct st_ech_e2e_spec_t {
     int expect_success;
     int expect_grease;
+    int no_ech_server;
+    int complete_cnx;
+    int try_twice;
 } ech_e2e_spec_t;
 
 int ech_test_check_retry_config(picoquic_cnx_t* cnx,
@@ -217,10 +221,99 @@ int ech_test_check_retry_config(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int ech_e2e_test_one(ech_e2e_spec_t * spec)
+#define ECH_TICKET_FILE_NAME "ech_ticket_store.bin"
+
+static test_api_stream_desc_t ech_scenario_small[] = {
+    { 4, 0, 256, 1000 }
+};
+
+int ech_test_complete_cnx(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* loss_mask, uint64_t* simulated_time)
+{
+    /* load a small scenario */
+    int ret = test_api_init_send_recv_scenario(test_ctx, ech_scenario_small, sizeof(ech_scenario_small));
+
+    /* Perform a data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, loss_mask, simulated_time, 0);
+    }
+
+    /* Before closing, wait for the session ticket to arrive */
+    ret = session_resume_wait_for_ticket(test_ctx, simulated_time);
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, simulated_time, 1000000);
+    }
+
+    /* Verify that the session ticket has been received correctly */
+    if (ret == 0) {
+        if (test_ctx->qclient->p_first_ticket == NULL) {
+            DBG_PRINTF("%s", "no ticket received.");
+            ret = -1;
+        }
+        else {
+            ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, *simulated_time, ECH_TICKET_FILE_NAME);
+            if (ret != 0) {
+                DBG_PRINTF("ticket save error (0x%x).\n", ret);
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+int ech_e2e_second(picoquic_test_tls_api_ctx_t* test_ctx, ptls_buffer_t *ech_config_buf, uint64_t * loss_mask, uint64_t* simulated_time)
+{
+    int ret = 0;
+
+    /* We should verify that 0RTT works for the 2nd connection */
+    picoquic_delete_cnx(test_ctx->cnx_client);
+    test_ctx->cnx_client = NULL;
+    if (test_ctx->cnx_server != NULL) {
+        picoquic_delete_cnx(test_ctx->cnx_server);
+        test_ctx->cnx_server = NULL;
+    }
+
+    /* recreate the client connection */
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+        picoquic_null_connection_id,
+        (struct sockaddr*)&test_ctx->server_addr, *simulated_time,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    }
+    else {
+        if (ech_config_buf->off > 0) {
+            picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf->base, ech_config_buf->off);
+        }
+
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, simulated_time);
+    }
+    if (ret == 0 ) {
+        /* If resume succeeded, the second connection will have a type "PSK" */
+        if (picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0) {
+            DBG_PRINTF("%s", "ECH test, second connection is not PSK.");
+            ret = -1;
+        }
+        else {
+            /* run a receive loop until no outstanding data */
+            ret = tls_api_synch_to_empty_loop(test_ctx, simulated_time, 2048, 0, 0);
+        }
+    }
+    return ret;
+}
+
+int ech_e2e_test_one(ech_e2e_spec_t* spec)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    uint64_t ticket_num = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xec, 0x8e, 0x2e, 0, 0, 0, 0, 0}, 8 };
     ptls_buffer_t ech_config_buf = { 0 };
@@ -233,9 +326,13 @@ int ech_e2e_test_one(ech_e2e_spec_t * spec)
 
     ptls_buffer_init(&ech_config_buf, "", 0);
 
+
+    /* Initialize an empty ticket store */
+    ret = picoquic_save_tickets(NULL, simulated_time, ECH_TICKET_FILE_NAME);
+
     /* Create a test context with delayed init */
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, ECH_TICKET_FILE_NAME, NULL, 0, 1, 0, &initial_cid);
 
     if (ret == 0) {
         ret = picoquic_get_input_path(ech_test_key_file, sizeof(ech_test_key_file), picoquic_solution_dir,
@@ -256,29 +353,34 @@ int ech_e2e_test_one(ech_e2e_spec_t * spec)
         /* server side configuration */
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
-        ret = picoquic_ech_configure_quic_ctx(test_ctx->qserver, ech_test_key_file, ech_test_config_file);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot configure quic server context for ECH, ret = %d (0x%x).", ret, ret);
+        if (!spec->no_ech_server) {
+            ret = picoquic_ech_configure_quic_ctx(test_ctx->qserver, ech_test_key_file, ech_test_config_file);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot configure quic server context for ECH, ret = %d (0x%x).", ret, ret);
+            }
         }
     }
-    if (ret == 0) {
+    if (ret == 0 && (!spec->no_ech_server || spec->expect_grease)) {
         /* client side configuration */
         ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
         if (ret != 0) {
             DBG_PRINTF("Cannot configure quic client context for ECH, ret = %d (0x%x).", ret, ret);
         }
     }
-    if (ret == 0) {
-        /* Read the ECH config from the same file used for the server */
-        ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
-    }
 
-    if (ret == 0) {
-        if (spec->expect_success) {
-            picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
+    if (!spec->no_ech_server) {
+        if (ret == 0) {
+            /* Read the ECH config from the same file used for the server */
+            ret = picoquic_ech_read_config(&ech_config_buf, ech_test_config_file);
         }
-        else {
-            DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
+
+        if (ret == 0) {
+            if (spec->expect_success) {
+                picoquic_ech_configure_client(test_ctx->cnx_client, ech_config_buf.base, ech_config_buf.off);
+            }
+            else {
+                DBG_PRINTF("Cannot configure quic client connection for ECH, ret = %d (0x%x).", ret, ret);
+            }
         }
     }
 
@@ -310,8 +412,22 @@ int ech_e2e_test_one(ech_e2e_spec_t * spec)
         }
         else if (ech_test_check_retry_config(test_ctx->cnx_client,
             ech_config_buf.base, ech_config_buf.off) != 0) {
+            if (!spec->no_ech_server) {
+                ret = -1;
+            }
+        }
+        else if (spec->no_ech_server) {
+            DBG_PRINTF("%s", "There should be no retry config!");
             ret = -1;
         }
+    }
+
+    if (ret == 0 && spec->complete_cnx) {
+        ret = ech_test_complete_cnx(test_ctx, &loss_mask, &simulated_time);
+    }
+
+    if (ret == 0 && spec->try_twice) {
+        ret = ech_e2e_second(test_ctx, &ech_config_buf, &loss_mask, &simulated_time);
     }
 
     ptls_buffer_dispose(&ech_config_buf);
@@ -331,9 +447,28 @@ int ech_e2e_test()
     return ech_e2e_test_one(&spec);
 }
 
+int ech_e2e_0rtt_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_grease = 1;
+    spec.complete_cnx = 1;
+    spec.try_twice = 1;
+    return ech_e2e_test_one(&spec);
+}
+
 int ech_grease_test()
 {
     ech_e2e_spec_t spec = { 0 };
     spec.expect_grease = 1;
+    return ech_e2e_test_one(&spec);
+}
+
+int ech_no_ech_test()
+{
+    ech_e2e_spec_t spec = { 0 };
+    spec.expect_grease = 0;
+    spec.no_ech_server = 1;
+    spec.complete_cnx = 1;
+    spec.try_twice = 1;
     return ech_e2e_test_one(&spec);
 }
