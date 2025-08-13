@@ -472,6 +472,7 @@ static const picoquic_test_def_t test_table[] = {
     { "openssl_cert", openssl_cert_test },
     { "monopath_basic", monopath_basic_test },
     { "monopath_hole", monopath_hole_test },
+    { "monopath_keep_alive", monopath_keep_alive_test },
     { "monopath_rotation", monopath_rotation_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
