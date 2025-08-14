@@ -704,7 +704,8 @@ int test_api_callback(picoquic_cnx_t* cnx,
     else if (fin_or_event == picoquic_callback_path_available ||
         fin_or_event == picoquic_callback_path_suspended ||
         fin_or_event == picoquic_callback_path_deleted ||
-        fin_or_event == picoquic_callback_path_quality_changed) {
+        fin_or_event == picoquic_callback_path_quality_changed ||
+        fin_or_event == picoquic_callback_next_path_allowed) {
         int ret = 0;
         if (ctx->path_events != NULL) {
             if (fin_or_event == picoquic_callback_path_quality_changed) {

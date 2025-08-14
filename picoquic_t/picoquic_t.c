@@ -503,6 +503,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_standup", multipath_standup_test },
     { "multipath_discovery", multipath_discovery_test },
     { "multipath_keep_alive", multipath_keep_alive_test },
+    { "multipath_just_one", multipath_just_one_test },
     { "multipath_qlog", multipath_qlog_test },
     { "multipath_tunnel", multipath_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },

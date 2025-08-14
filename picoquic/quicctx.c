@@ -1543,9 +1543,9 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
         /* Unique path ID are allocated in sequence on the client. The server should
          * always use the number proposed by the client in incoming packets */
         if (requested_id == UINT64_MAX && (cnx->client_mode || cnx->nb_paths == 0)) {
-            while (cnx->unique_path_id_next < cnx->max_path_id_remote &&
-                cnx->unique_path_id_next < cnx->max_path_id_local &&
-                cnx->unique_path_id_next < cnx->max_path_id_in_cnxid_lists) {
+            while (cnx->unique_path_id_next <= cnx->max_path_id_remote &&
+                cnx->unique_path_id_next <= cnx->max_path_id_local &&
+                cnx->unique_path_id_next <= cnx->max_path_id_in_cnxid_lists) {
                 /* Find next non used CID */
                 unique_path_id = cnx->unique_path_id_next++;
                 /* There should be an available of CNX_ID for this path_id, 

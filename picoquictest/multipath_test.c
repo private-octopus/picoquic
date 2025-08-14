@@ -467,7 +467,8 @@ typedef enum {
     multipath_test_fail,
     multipath_test_ab1,
     multipath_test_discovery,
-    multipath_test_keep_alive
+    multipath_test_keep_alive,
+    multipath_test_just_one,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -504,6 +505,10 @@ int multipath_init_callbacks(picoquic_test_tls_api_ctx_t* test_ctx, multipath_te
             if (test_id == multipath_test_quality) {
                 picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 50000, 5000);
                 ret = picoquic_subscribe_to_quality_update_per_path(test_ctx->cnx_client, 0, 50000, 5000);
+            }
+            if (test_id == multipath_test_callback) {
+                int is_already_allowed = 0;
+                ret = picoquic_subscribe_new_path_allowed(test_ctx->cnx_client, &is_already_allowed);
             }
         }
         if (test_id == multipath_test_callback) {
@@ -878,6 +883,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             server_parameters.address_discovery_mode = 1;
             test_ctx->cnx_client->local_parameters.address_discovery_mode = 3;
         }
+        if (test_id == multipath_test_just_one) {
+            server_parameters.initial_max_path_id = 1;
+        }
 
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
@@ -1099,7 +1107,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
-    if (ret == 0 && test_id == multipath_test_basic) {
+    if (ret == 0 && (test_id == multipath_test_basic || test_id == multipath_test_just_one)) {
         if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_client)) != 0) {
             DBG_PRINTF("%s", "Not received all CID from server");
         }
@@ -1505,6 +1513,14 @@ int multipath_keep_alive_test()
     uint64_t max_completion_microsec = 210000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_keep_alive);
+}
+
+/* Setting the initial max patht ID to 1 should allow two paths to be created */
+int multipath_just_one_test()
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_just_one);
 }
 
 
