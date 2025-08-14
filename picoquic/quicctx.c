@@ -1629,9 +1629,16 @@ void picoquic_unchain_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
     }
 }
 
-void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple, int is_deleting_path)
 {
+    /* TODO: dereference local CID, retire remote CID ??? */
+    /* Dereference the remote CID */
+    if (tuple->p_remote_cnxid != NULL) {
+        picoquic_dereference_stashed_cnxid_tuple(path_x->cnx, path_x, tuple, is_deleting_path);
+    }
+    /* Remove from chain to the path */
     picoquic_unchain_tuple(path_x, tuple);
+    /* And finally free */
     free(tuple);
 }
 
@@ -1762,7 +1769,7 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
     }
     /* Remove the list of tuples */
     while (path_x->first_tuple != NULL) {
-        picoquic_delete_tuple(path_x, path_x->first_tuple);
+        picoquic_delete_tuple(path_x, path_x->first_tuple, 1);
     }
 
     /* Free the record */
@@ -2973,30 +2980,35 @@ picoquic_remote_cnxid_t* picoquic_obtain_stashed_cnxid(picoquic_cnx_t* cnx, uint
     return stashed;
 }
 
-void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int is_deleting_cnx)
+void picoquic_dereference_stashed_cnxid_tuple(picoquic_cnx_t* cnx, picoquic_path_t * path_x, picoquic_tuple_t * tuple, int is_deleting_cnx)
 {
-    if (path_x->first_tuple->p_remote_cnxid != NULL) {
-        if (path_x->first_tuple->p_remote_cnxid->nb_path_references <= 1) {
+    if (tuple->p_remote_cnxid != NULL) {
+        if (tuple->p_remote_cnxid->nb_path_references <= 1) {
             uint64_t unique_path_id = (cnx->is_multipath_enabled) ? path_x->unique_path_id : 0;
-            if (!is_deleting_cnx && !path_x->first_tuple->p_remote_cnxid->retire_sent) {
+            if (!is_deleting_cnx && !tuple->p_remote_cnxid->retire_sent) {
                 /* if this was the last reference, retire the old cnxid */
-                if (picoquic_queue_retire_connection_id_frame(cnx, unique_path_id, path_x->first_tuple->p_remote_cnxid->sequence) != 0) {
-                    DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", path_x->first_tuple->p_remote_cnxid->sequence);
+                if (picoquic_queue_retire_connection_id_frame(cnx, unique_path_id, tuple->p_remote_cnxid->sequence) != 0) {
+                    DBG_PRINTF("Could not properly retire CID[%" PRIu64 "]", tuple->p_remote_cnxid->sequence);
                 }
                 else {
-                    path_x->first_tuple->p_remote_cnxid->retire_sent = 1;
+                    tuple->p_remote_cnxid->retire_sent = 1;
                 }
             }
-            if (is_deleting_cnx || path_x->first_tuple->p_remote_cnxid->retire_acked) {
+            if (is_deleting_cnx || tuple->p_remote_cnxid->retire_acked) {
                 /* Delete and perhaps recycle the queued packets */
-                (void)picoquic_remove_stashed_cnxid(cnx, path_x->unique_path_id, path_x->first_tuple->p_remote_cnxid, NULL);
+                (void)picoquic_remove_stashed_cnxid(cnx, path_x->unique_path_id, tuple->p_remote_cnxid, NULL);
             }
         }
         else {
-            path_x->first_tuple->p_remote_cnxid->nb_path_references--;
+            tuple->p_remote_cnxid->nb_path_references--;
         }
     }
-    path_x->first_tuple->p_remote_cnxid = NULL;
+    tuple->p_remote_cnxid = NULL;
+}
+
+void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_deleting_cnx)
+{
+    picoquic_dereference_stashed_cnxid_tuple(cnx, path_x, path_x->first_tuple, is_deleting_cnx);
 }
 
 uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash, uint64_t not_before, uint64_t current_time)
@@ -3716,12 +3728,17 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
     picoquic_local_cnxid_list_t* local_cnxid_list, picoquic_local_cnxid_t* l_cid)
 {
     picoquic_local_cnxid_t* previous = NULL;
+    /* Find the path referenced by the cnxid */
+    int path_index = picoquic_find_path_by_unique_id(cnx, l_cid->path_id);
 
-    /* Set l_cid references to NULL in path contexts */
-    for (int i = 0; i < cnx->nb_paths; i++) {
-        if (cnx->path[i]->first_tuple->p_local_cnxid == l_cid) {
-            cnx->path[i]->first_tuple->p_local_cnxid = NULL;
-            cnx->path[i]->was_local_cnxid_retired = 1;
+    if (path_index >= 0) {
+        /* Set l_cid references to NULL in path contexts */
+        picoquic_tuple_t* tuple = cnx->path[path_index]->first_tuple;
+        while (tuple != NULL) {
+            if (tuple->p_local_cnxid == l_cid) {
+                tuple->p_local_cnxid = NULL;
+            }
+            tuple = tuple->next_tuple;
         }
     }
 

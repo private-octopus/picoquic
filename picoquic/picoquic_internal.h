@@ -1121,7 +1121,6 @@ typedef struct st_picoquic_path_t {
     unsigned int is_nat_challenge : 1;
     unsigned int is_cc_data_updated : 1;
     unsigned int is_multipath_probe_needed : 1;
-    unsigned int was_local_cnxid_retired : 1;
     unsigned int is_ssthresh_initialized : 1;
     unsigned int is_token_published : 1;
     unsigned int is_ticket_seeded : 1; /* Whether the current ticket has been updated with RTT and CWIN */
@@ -1594,7 +1593,7 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
 /* Management of address tuples */
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
 void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
-void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
+void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple, int is_deleting_path);
 void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 /* Management of path */
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
@@ -1650,6 +1649,7 @@ picoquic_remote_cnxid_t* picoquic_remove_stashed_cnxid(picoquic_cnx_t* cnx, uint
 picoquic_remote_cnxid_t* picoquic_get_cnxid_from_stash(picoquic_remote_cnxid_stash_t* stash);
 picoquic_remote_cnxid_t* picoquic_obtain_stashed_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 void picoquic_dereference_stashed_cnxid(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_deleting_cnx);
+void picoquic_dereference_stashed_cnxid_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple, int is_deleting_cnx);
 uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash, uint64_t not_before, uint64_t current_time);
 void picoquic_delete_remote_cnxid_stash(picoquic_cnx_t* cnx, picoquic_remote_cnxid_stash_t* cnxid_stash);
 
@@ -1780,10 +1780,14 @@ int picoquic_remove_header_protection_inner(uint8_t* bytes, size_t length, uint8
 
 size_t picoquic_pad_to_target_length(uint8_t* bytes, size_t length, size_t target);
 
-void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
+void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_path_t * path_x, uint64_t current_time);
+    picoquic_path_t * path_x, uint64_t current_time, picoquic_tuple_t * tuple);
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_t* packet, int ret,
+    size_t length, size_t header_length, size_t checksum_overhead,
+    size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
+    picoquic_path_t* path_x, uint64_t current_time);
 
 void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time);

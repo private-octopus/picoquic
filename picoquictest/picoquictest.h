@@ -486,6 +486,7 @@ int mbedtls_test();
 int openssl_cert_test();
 int monopath_basic_test();
 int monopath_hole_test();
+int monopath_keep_alive_test();
 int monopath_rotation_test();
 int monopath_0rtt_test();
 int monopath_0rtt_loss_test();

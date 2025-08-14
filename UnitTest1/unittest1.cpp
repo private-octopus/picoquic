@@ -2757,6 +2757,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(monopath_keep_alive) {
+            int ret = monopath_keep_alive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(monopath_rotation) {
             int ret = monopath_rotation_test();
 

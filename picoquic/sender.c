@@ -1133,11 +1133,11 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
  * Final steps of encoding and protecting the packet before sending
  */
 
-void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
-    picoquic_packet_t * packet, int ret, 
+void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t* cnx, 
+    picoquic_packet_t* packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
-    size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_path_t * path_x, uint64_t current_time)
+    size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
+    picoquic_path_t* path_x, uint64_t current_time, picoquic_tuple_t* tuple)
 {
     if (length != 0 && length < header_length) {
         length = 0;
@@ -1196,7 +1196,7 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
             length = picoquic_protect_packet(cnx, packet->ptype, packet->bytes, packet->sequence_number,
                 length, header_length,
                 send_buffer, send_buffer_max, cnx->crypto_context[picoquic_epoch_1rtt].aead_encrypt, cnx->crypto_context[picoquic_epoch_1rtt].pn_enc,
-                path_x, NULL, current_time);
+                path_x, tuple, current_time);
             break;
         default:
             /* Packet type error. Do nothing at all. */
@@ -1218,6 +1218,18 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t *cnx,
     else {
         *send_length = 0;
     }
+}
+
+void picoquic_finalize_and_protect_packet(picoquic_cnx_t* cnx,
+    picoquic_packet_t* packet, int ret,
+    size_t length, size_t header_length, size_t checksum_overhead,
+    size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
+    picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_finalize_and_protect_packet_tuple(cnx, packet, ret,
+        length, header_length, checksum_overhead,
+        send_length, send_buffer, send_buffer_max,
+        path_x, current_time, path_x->first_tuple);
 }
 
 /*
