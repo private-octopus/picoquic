@@ -1049,7 +1049,6 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
 {
     size_t byte_index = 0;
     uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
-    int should_delete = 0;
 
     while (byte_index < length) {
         /* Consume the stream until the start of the next frame */
@@ -1127,7 +1126,7 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                     if (!stream_ctx->is_stopped) {
                         picoquic_stop_sending(cnx, stream_ctx->stream_id, QUICPERF_ERROR_DELAY_TOO_HIGH);
                         stream_ctx->is_stopped = 1;
-                        should_delete = 1;
+                        stream_ctx->is_closed = 1;
                     }
                 }
             }
@@ -1137,14 +1136,6 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
     if (fin_or_event == picoquic_callback_stream_fin) {
         stream_ctx->is_closed = 1;
     }
-
-#if 1
-    if (should_delete) {
-        /* Close the stream context, remove its association with the stream id, do not send any more */
-        stream_ctx->is_closed = 1;
-        quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
-    }
-#endif
 }
 
 int quicperf_receive_data_from_client(picoquic_cnx_t* cnx, quicperf_stream_ctx_t* stream_ctx,
