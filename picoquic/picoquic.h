@@ -453,7 +453,7 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
 
 /* The SSLKEYLOG function defines a way to publish the encryption keys
 * used by QUIC. If that feature is enabled, the code read the environment
-* variable SSLKEYLOG to find the path of the file where to log the encryption
+* variable SSLKEYLOGFILE to find the path of the file where to log the encryption
 * file. If the environment variable is not present, no file is set.
 * 
 * This is a very dangerous feature, that can be abused to break encryption.
