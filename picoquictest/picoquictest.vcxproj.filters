@@ -204,6 +204,24 @@
     <ClCompile Include="hystart_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ech_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picomask_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="flow_control_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="red_aqm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="rctl_aqm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dualq_aqm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquictest.h">

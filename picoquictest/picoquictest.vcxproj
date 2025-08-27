@@ -162,7 +162,10 @@
     <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />
+    <ClCompile Include="dualq_aqm.c" />
+    <ClCompile Include="ech_test.c" />
     <ClCompile Include="edge_cases.c" />
+    <ClCompile Include="flow_control_test.c" />
     <ClCompile Include="getter_test.c" />
     <ClCompile Include="h3zerotest.c" />
     <ClCompile Include="h3zero_stream_test.c" />
@@ -183,12 +186,15 @@
     <ClCompile Include="pacing_test.c" />
     <ClCompile Include="parseheadertest.c" />
     <ClCompile Include="picolog_test.c" />
+    <ClCompile Include="picomask_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
     <ClCompile Include="picoquic_ns.c" />
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="qlog_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
+    <ClCompile Include="rctl_aqm.c" />
+    <ClCompile Include="red_aqm.c" />
     <ClCompile Include="sacktest.c" />
     <ClCompile Include="satellite_test.c" />
     <ClCompile Include="skip_frame_test.c" />

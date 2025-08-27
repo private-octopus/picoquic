@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.33.2
+        VERSION 1.1.38.5
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -81,6 +81,8 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
+    picoquic/ech.c
+    picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -123,9 +125,6 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
-     picoquic/picoquic_unified_log.h
-     picoquic/picoquic_logger.h
-     picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
@@ -135,6 +134,23 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
      picoquic/siphash.h)
+
+set(PICOQUIC_CORE_HEADERS_PRIVATE
+    picoquic/bytestream.h
+    picoquic/cc_common.h
+    picoquic/cidset.h
+    picoquic/performance_log.h
+    picoquic/picohash.h
+    picoquic/picoquic_binlog.h
+    picoquic/picoquic_crypto_provider_api.h
+    picoquic/picoquic_internal.h
+    picoquic/picoquic_logger.h
+    picoquic/picoquic_set_binlog.h
+    picoquic/picoquic_set_textlog.h
+    picoquic/picoquic_unified_log.h
+    picoquic/picosplay.h
+    picoquic/tls_api.h
+    picoquic/wincompat.h)
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
@@ -167,7 +183,10 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
+    picoquictest/dualq_aqm.c
+    picoquictest/ech_test.c
     picoquictest/edge_cases.c
+    picoquictest/flow_control_test.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
@@ -190,6 +209,8 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pn2pn64test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
+    picoquictest/red_aqm.c
+    picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
@@ -214,6 +235,8 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
+    picohttp/h3zero_url_template.c
+    picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
@@ -222,15 +245,18 @@ set(PICOHTTP_HEADERS
      picohttp/h3zero.h
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
+     picohttp/h3zero_url_template.h
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picomask.h
      picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
@@ -239,7 +265,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             5a4461d8a3948d9d26bf861e7d90cb80d8093515)
+        GIT_TAG             f350eab60742138ac62b42ee444adf04c7898b0d)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -330,6 +356,7 @@ macro(set_picoquic_compile_settings)
 endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+target_sources(picoquic-core PRIVATE ${PICOQUIC_CORE_HEADERS_PRIVATE})
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")

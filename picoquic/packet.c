@@ -455,7 +455,7 @@ int picoquic_parse_short_packet_header(
         }
     }
     else {
-        /* This may be a packet to a forgotten connection */
+        /* This may be a packet to a forgotten connection, or a packet bound to a proxied connection */
         ph->ptype = picoquic_packet_1rtt_protected;
         ph->payload_length = (uint16_t)((length > ph->offset) ? length - ph->offset : 0);
     }
@@ -785,6 +785,11 @@ int picoquic_parse_header_and_decrypt(
             *consumed = length;
 
             if (*pcnx == NULL) {
+                /* Redirect if proxy available */
+                if (quic->picomask_fns != NULL) {
+                    ret = (quic->picomask_fns->picomask_redirect_fn)(quic->picomask_ctx,
+                        bytes, packet_length, addr_from, consumed); 
+                }
                 if (ph->ptype == picoquic_packet_initial) {
                     ret = picoquic_screen_initial_packet(quic, bytes, packet_length, addr_from, ph, current_time, pcnx, new_ctx_created);
                 }
@@ -2082,7 +2087,7 @@ int picoquic_incoming_segment(
     if (ret == 0 && cnx != NULL) {
         if (ph.ptype == picoquic_packet_1rtt_protected) {
             /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
+            ret = picoquic_find_incoming_path(cnx, decrypted_data, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
         }
         else {
             path_id = 0;
@@ -2323,7 +2328,8 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
         ret == PICOQUIC_ERROR_DUPLICATE ||
-        ret == PICOQUIC_ERROR_AEAD_NOT_READY) {
+        ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+        ret == PICOQUIC_ERROR_REDIRECTED) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
             ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||
@@ -2331,7 +2337,8 @@ int picoquic_incoming_segment(
             ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
             ret == PICOQUIC_ERROR_RETRY ||
-            ret == PICOQUIC_ERROR_SERVER_BUSY) {
+            ret == PICOQUIC_ERROR_SERVER_BUSY ||
+            ret == PICOQUIC_ERROR_REDIRECTED) {
             ret = 0;
         }
         else {

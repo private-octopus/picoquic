@@ -217,10 +217,10 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
         length = 0;
     }
     packet->length = length;
-    picoquic_finalize_and_protect_packet(cnx, packet,
+    picoquic_finalize_and_protect_packet_tuple(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time);
+        path_x, current_time, tuple);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;
@@ -272,7 +272,7 @@ void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, 
             while (tuple != NULL && (next_tuple = tuple->next_tuple) != NULL) {
                 if (next_tuple->challenge_failed) {
                     if (current_time > next_tuple->demotion_time) {
-                        picoquic_delete_tuple(path_x, next_tuple);
+                        picoquic_delete_tuple(path_x, next_tuple, 0);
                         continue;
                     }
                     else if (*next_wake_time > next_tuple->demotion_time) {
@@ -613,7 +613,8 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
  default path.
  */
 
-int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
+int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
+    picoquic_stream_data_node_t* decrypted_data, picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
@@ -669,7 +670,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
 
         /* Treat the special case of the unkown local address, which should only happen
          * for clients and for the first tuple. */
-        if (path_x->first_tuple->local_addr.ss_family == AF_UNSPEC) {
+        if (path_x->first_tuple->local_addr.ss_family == AF_UNSPEC && addr_to->sa_family != AF_UNSPEC) {
             picoquic_store_addr(&cnx->path[path_id]->first_tuple->local_addr, addr_to);
         }
 
@@ -688,22 +689,50 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
         if (tuple == NULL) {
             /* If the addresses do not match, we have two possibilities:
             * either the creation of a new tuple, or a NAT rebinding on an existing tuple.
-            * In all cases, we need to create a new tuple. In the NAt rebinding cases, we
-            * may be a bit more agressive, i.e., immediately promote the new tuple
-            * as the default.
+            * In all cases, we need to create a new tuple. In the NAT rebinding cases, we
+            * need to be a bit more agressive, i.e., immediately promote the new tuple
+            * as the default. In fact, we MUST do that if the CID also changed, otherwise
+            * we will stumble on a bug if the packet asks to retire the CID.
+            *
+            * We thus need to distinguish the NAT rebinding case from the non-multipath
+            * path-migration. This is bound to be ambiguous, but we can use a simple heuristic:
+            *
+            * - if multipath is enabled, the old style path migration is supported but
+            *   discouraged. It is mostly there to support "migration to a prefered
+            *   address", and there is no much harm to always treat that as a NAT
+            *   rebinding. Maybe make an exception if the destination address is
+            *   one of the preferred addresses.
+            * - if multipath is not enabled, check whether this looks like a challenge
+            *   for a new address, i.e., it contains a PATH CHALLENGE frame and only
+            *   non-path validating packets. If true, treat it as a path migration challenge.
+            *   else, treat it as a NAT rebinding.
             */
 
             if (picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0 &&
-                (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL) {
-                if (picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
-                    picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
+                (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL &&
+                picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
+                picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
+                if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
+                    cnx->is_multipath_enabled) {
+                    /* Treat this as a NAT rebinding. */
+                    picoquic_tuple_t* old_tuple = path_x->first_tuple;
+                    /* We need to replace the first tuple by this tuple. */
+                    picoquic_set_first_tuple(path_x, tuple);
+                    tuple->challenge_verified = 1;
+                    /* set a challenge on the old tuple to recover from spoofed addresses */
+                    picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
+                    old_tuple->challenge_required = 1;
+                    old_tuple->challenge_verified = 0;
+                }
+                else {
+                    /* Treat this a new tuple challenge. */
                     tuple->challenge_required = 1;
                 }
             }
             /* TODO: clean up in case of failure. */
         }
         else {
-            /* If the addresses do match, but the CID do not, we have a case of NAT rebinding.
+            /* If the addresses do match, but the CID do not, we have a case of CID migration.
              */
             if (tuple == path_x->first_tuple &&
                 picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {

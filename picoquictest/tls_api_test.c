@@ -704,7 +704,8 @@ int test_api_callback(picoquic_cnx_t* cnx,
     else if (fin_or_event == picoquic_callback_path_available ||
         fin_or_event == picoquic_callback_path_suspended ||
         fin_or_event == picoquic_callback_path_deleted ||
-        fin_or_event == picoquic_callback_path_quality_changed) {
+        fin_or_event == picoquic_callback_path_quality_changed ||
+        fin_or_event == picoquic_callback_next_path_allowed) {
         int ret = 0;
         if (ctx->path_events != NULL) {
             if (fin_or_event == picoquic_callback_path_quality_changed) {
@@ -1280,9 +1281,14 @@ static int tls_api_one_endpoint_dequeue(picoquic_test_endpoint_t *endpoint,
         }
 
         if (packet->length > 16) {
+            struct sockaddr* addr_to = (struct sockaddr*)&packet->addr_to;
+            struct sockaddr unspec;
+            if (endpoint->addr_to_unspec) {
+                unspec.sa_family = AF_UNSPEC;
+                addr_to = &unspec;
+            }
             ret = picoquic_incoming_packet(quic, packet->bytes, (uint32_t)packet->length,
-                (struct sockaddr*)&packet->addr_from,
-                (struct sockaddr*)&packet->addr_to, 0, recv_ecn, simulated_time);
+                (struct sockaddr*)&packet->addr_from, addr_to, 0, recv_ecn, simulated_time);
             *was_active |= 1;
 
             endpoint->next_time_ready = simulated_time +
@@ -1415,12 +1421,13 @@ static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     picoquictest_sim_link_t** target_link, uint64_t simulated_time)
 {
     int ret = 0;
+    int if_index;
 
     test_ctx->server_endpoint.last_send_time = simulated_time;
 
     ret = picoquic_prepare_packet_ex(test_ctx->cnx_server, simulated_time,
         test_ctx->send_buffer, test_ctx->send_buffer_size, send_length,
-        addr_to, addr_from, NULL, p_segment_size);
+        addr_to, addr_from, &if_index, p_segment_size);
     test_ctx->server_endpoint.next_time_ready = simulated_time +
         test_ctx->server_endpoint.prepare_cpu_time;
     if (ret == PICOQUIC_ERROR_DISCONNECTED) {
@@ -1472,6 +1479,7 @@ static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     /* check whether the client has something to send */
     size_t coalesced_length = 0;
     size_t send_buffer_size = test_ctx->send_buffer_size;
+    int if_index;
 
     test_ctx->client_endpoint.last_send_time = simulated_time;
 
@@ -1483,7 +1491,7 @@ static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
 
     ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
         test_ctx->send_buffer + coalesced_length, send_buffer_size - coalesced_length, send_length,
-        addr_to, addr_from, NULL, p_segment_size);
+        addr_to, addr_from, &if_index, p_segment_size);
 
     test_ctx->client_endpoint.next_time_ready = simulated_time +
         test_ctx->client_endpoint.prepare_cpu_time;
@@ -10025,6 +10033,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
         while (ret == 0 && nb_trials < 1024 && nb_inactive < 512) {
             struct sockaddr_storage a_from;
             struct sockaddr_storage a_to;
+            int if_index;
             uint8_t packet[PICOQUIC_MAX_PACKET_SIZE];
             size_t length = 0;
 
@@ -10037,7 +10046,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
             }
 
             ret = picoquic_prepare_packet(target_cnx, simulated_time, packet, PICOQUIC_MAX_PACKET_SIZE,
-                &length, &a_to, &a_from, NULL);
+                &length, &a_to, &a_from, &if_index);
 
             if (ret == PICOQUIC_ERROR_DISCONNECTED) {
                 ret = 0;
@@ -10554,13 +10563,13 @@ int grease_quic_bit_one_way_test()
 
 /* Test effects of random early drop active queue management
  */
+#include "picoquictest_red.h"
 
 static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t target_time, uint64_t loss_target)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     const uint64_t latency_target = 7500;
-    const uint64_t red_drop_mask = 0x5555555555555555ull;
     const uint64_t queue_max_red = 40000;
     const uint64_t picosec_per_byte = (1000000ull * 8) /100;
     uint64_t observed_loss = 0;
@@ -10577,17 +10586,17 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     if (ret == 0) {
         /* Set parameters to simulate random early drop */
         test_ctx->c_to_s_link->microsec_latency = latency_target;
-        test_ctx->c_to_s_link->red_drop_mask = red_drop_mask;
-        test_ctx->c_to_s_link->red_queue_max = queue_max_red;
         test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
         test_ctx->s_to_c_link->microsec_latency = latency_target;
-        test_ctx->s_to_c_link->red_drop_mask = red_drop_mask;
-        test_ctx->s_to_c_link->red_queue_max = queue_max_red;
         test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
+        /* Setting the RED threshold to the latency target, for simplification. */
+        if ((ret = red_aqm_configure(test_ctx->c_to_s_link, latency_target, queue_max_red)) == 0) {
+            ret = red_aqm_configure(test_ctx->s_to_c_link, latency_target, queue_max_red);
+        }
     }
 
     if (ret == 0) {
@@ -11449,8 +11458,6 @@ int pn_random_init_test()
     return ret;
 }
 
-
-
 /* Test the stateless reset blowback control mechanism
  */
 int test_stateless_blowback_one(picoquic_quic_t* quic, uint64_t * simulated_time, int * was_sent)
@@ -12305,6 +12312,56 @@ int get_tls_errors_test()
         ptls_iovec_t* picoquic_get_certs_from_file(char const* file_name, size_t * count);
         /* Reinit the TLS API */
         picoquic_tls_api_init();
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+* Test what happens if a client stack cannot read the "destination address"
+* in the incoming packets and leaves it undef.
+*/
+
+int af_undef_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0xaf, 0x0d, 0xef, 0, 0, 0, 0, 0}, 8 };
+    uint64_t target_time = 1000000;
+    int ret;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0) {
+        test_ctx->client_endpoint.addr_to_unspec = 1;
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Prepare to send data */
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
+    }
+
+    /* Try to complete the data sending loop */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+
+    /* verify that the transmission was complete */
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, target_time);
     }
 
     if (test_ctx != NULL) {

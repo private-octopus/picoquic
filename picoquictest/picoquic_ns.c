@@ -36,6 +36,7 @@
 #include "autoqlog.h"
 #include "picosocks.h"
 #include "picoquic_ns.h"
+#include "picoquictest_dualq.h"
 
 /*
 * The simulation follows the model established for the "stress" tests: single
@@ -295,6 +296,7 @@ int picoquic_ns_create_default_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_
             }
             cc_ctx->vary_link_spec[i].latency = spec->latency;
             cc_ctx->vary_link_spec[i].jitter = spec->jitter;
+            cc_ctx->vary_link_spec[i].is_wifi_jitter = spec->is_wifi_jitter;
             cc_ctx->vary_link_spec[i].queue_delay_max = spec->queue_delay_max;
             cc_ctx->vary_link_spec[i].l4s_max = spec->l4s_max;
         }
@@ -345,9 +347,15 @@ int picoquic_ns_create_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* 
         case link_scenario_wifi_fade:
             if ((ret = picoquic_ns_create_default_link_spec(cc_ctx, spec, 3)) == 0) {
                 cc_ctx->vary_link_spec[0].duration = 1000000;
+                cc_ctx->vary_link_spec[0].jitter = 999;
+                cc_ctx->vary_link_spec[0].is_wifi_jitter = 1;
                 cc_ctx->vary_link_spec[1].duration = 2000000;
-                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.1;
-                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.1;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_down *= 0.9;
+                cc_ctx->vary_link_spec[1].data_rate_in_gbps_up *= 0.9;
+                cc_ctx->vary_link_spec[1].is_wifi_jitter = 1;
+                cc_ctx->vary_link_spec[1].jitter = 12000;
+                cc_ctx->vary_link_spec[2].jitter = 999;
+                cc_ctx->vary_link_spec[2].is_wifi_jitter = 1;
                 cc_ctx->vary_link_spec[2].duration = UINT64_MAX;
             }
             break;
@@ -384,11 +392,13 @@ int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
         ret = -1;
     }
     else {
-        cc_ctx->link[link_id]->l4s_max = link_spec->l4s_max;
         cc_ctx->link[link_id]->nb_loss_in_burst = link_spec->nb_loss_in_burst;
         cc_ctx->link[link_id]->packets_between_losses = link_spec->packets_between_losses;
         cc_ctx->link[link_id]->packets_sent_next_burst = cc_ctx->link[link_id]->packets_sent +
             link_spec->packets_between_losses;
+        if (link_spec->l4s_max > 0) {
+            ret = dualq_aqm_configure(cc_ctx->link[link_id], link_spec->l4s_max);
+        }
     }
     return ret;
 }
@@ -710,9 +720,15 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     /* Requeue the other packets:
      * reset the queue time to current_time, i.e., after packets in transit are delivered.*/
     link->queue_time = current_time;
-    /* reset the leaky bucket, so it starts working from the current time. */
+    /* reset the AQM, so it starts working from the current time. */
+#if 1
+    if (link->aqm_state != NULL) {
+        link->aqm_state->reset(link->aqm_state, current_time);
+    }
+#else
     link->bucket_arrival_last = current_time;
     link->bucket_current = (double)link->bucket_max;
+#endif
     /* reset the value of the link parameters */
     pico_d *= (1.024 * 1.024); /* account for binary units */
     link->next_send_time = current_time;
@@ -720,12 +736,15 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->picosec_per_byte = (uint64_t)pico_d;
     link->microsec_latency = vary_link_spec->latency;
     link->jitter = vary_link_spec->jitter;
+    link->jitter_mode = (vary_link_spec->is_wifi_jitter) ? jitter_wifi : jitter_gauss;
     link->queue_delay_max = vary_link_spec->queue_delay_max;
-    link->l4s_max = vary_link_spec->l4s_max;
     link->is_suspended = (data_rate_in_gps <= 0);
     link->nb_loss_in_burst = vary_link_spec->nb_loss_in_burst;
     link->packets_between_losses = vary_link_spec->packets_between_losses;
     link->packets_sent_next_burst = link->packets_sent + vary_link_spec->packets_between_losses;
+    if (link->aqm_state != NULL) {
+        link->aqm_state->reset(link->aqm_state, current_time);
+    }
 
 
     /* Reschedule the next packets */
@@ -950,12 +969,18 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
+        fprintf(err_fd, "Cannot allocate simulation context.\n");
         ret = -1;
     }
-
     while (ret == 0) {
         int is_active = 0;
-        ret = picoquic_ns_step(cc_ctx, &is_active);
+
+        if ((ret = picoquic_ns_step(cc_ctx, &is_active)) != 0) {
+            if (err_fd != NULL) {
+                fprintf(err_fd, "Simulation fails at simulated time %" PRIu64 " after %d inactive steps, ret = %d(0x%x)\n",
+                    cc_ctx->simulated_time, nb_inactive, ret, ret);
+            }
+        }
 
         if (is_active) {
             nb_inactive = 0;
@@ -963,6 +988,10 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
         else {
             nb_inactive++;
             if (nb_inactive > 512) {
+                if (err_fd != NULL) {
+                    fprintf(err_fd, "Simulation stalls at simulated time %" PRIu64 " after %d inactive steps\n",
+                        cc_ctx->simulated_time, nb_inactive);
+                }
                 ret = -1;
                 break;
             }
@@ -972,12 +1001,26 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
             break;
         }
     }
+    if (err_fd != NULL && ret != 0) {
+        fprintf(err_fd, "Simulated time %" PRIu64 ", ret = %d(0x%x)\n",
+            cc_ctx->simulated_time, ret, ret);
+    }
 
     if (ret == 0 &&
         (cc_ctx->client_ctx[0]->cnx == NULL ||
         (cc_ctx->client_ctx[0]->cnx->cnx_state == picoquic_state_disconnected &&
             (cc_ctx->client_ctx[0]->cnx->local_error != 0 ||
                 cc_ctx->client_ctx[0]->cnx->remote_error != 0)))) {
+        if (err_fd != NULL) {
+            if (cc_ctx->client_ctx[0]->cnx == NULL) {
+                fprintf(err_fd, "Connection was deleted before simulated time %" PRIu64 "\n",
+                    cc_ctx->simulated_time);
+            }
+            else {
+                fprintf(err_fd, "Connection was disconnected before simulated time %" PRIu64 ", local err: %" PRIu64", remote err: %" PRIu64 "\n",
+                    cc_ctx->simulated_time, cc_ctx->client_ctx[0]->cnx->local_error, cc_ctx->client_ctx[0]->cnx->remote_error);
+            }
+        }
         ret = -1;
     }
 

@@ -75,6 +75,9 @@ typedef enum {
     picoquic_option_CWIN_MAX,
     picoquic_option_SSLKEYLOG,
     picoquic_option_AddressDiscovery,
+    picoquic_option_ECH_server,
+    picoquic_option_ECH_client,
+    picoquic_option_ECH_init,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -135,6 +138,13 @@ typedef struct st_picoquic_quic_config_t {
     unsigned int force_zero_share : 1;
     unsigned int no_disk : 1;
     unsigned int large_client_hello : 1;
+    /* ECH parameters for server */
+    char const* ech_key_file;
+    char const* ech_config_file;
+    char const* ech_public_name;
+    /* ECH parameter for the client, base64 encoded */
+    uint8_t * ech_target;
+    size_t ech_target_len;
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);

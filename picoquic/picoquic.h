@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.33.2"
+#define PICOQUIC_VERSION "1.1.38.5"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -110,6 +110,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_ADDRESS_FAMILY (PICOQUIC_ERROR_CLASS + 66)
 #define PICOQUIC_ERROR_PATH_NOT_READY (PICOQUIC_ERROR_CLASS + 67)
 #define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
+#define PICOQUIC_ERROR_REDIRECTED (PICOQUIC_ERROR_CLASS + 69) /* Not an error: the packet was captured by a proxy, no further processing needed */
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -157,6 +158,9 @@ extern "C" {
 #define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
 
 #define PICOQUIC_GROUP_SECP256R1 23
+
+#define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -427,6 +431,9 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
+/* Obtain the text value of the error names */
+char const* picoquic_error_name(uint64_t error_code);
+
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set
  * to { 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05 } the
@@ -447,7 +454,7 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
 
 /* The SSLKEYLOG function defines a way to publish the encryption keys
 * used by QUIC. If that feature is enabled, the code read the environment
-* variable SSLKEYLOG to find the path of the file where to log the encryption
+* variable SSLKEYLOGFILE to find the path of the file where to log the encryption
 * file. If the environment variable is not present, no file is set.
 * 
 * This is a very dangerous feature, that can be abused to break encryption.
@@ -972,6 +979,9 @@ int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, u
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
 int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int* is_already_allowed);
 
+/* Just after a connection context is created, set the if_index for the connection */
+int picoquic_set_first_if_index(picoquic_cnx_t* cnx, unsigned long if_index);
+
 /* The get path addr API provides the IP addresses used by a specific path.
 * The "local" argument determines whether the APi returns the local address
 * (local == 1), the address of the peer (local == 2) or the address observed by the peer (local == 3).
@@ -1021,6 +1031,8 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t max_reorder_delay; /* maximum time gap for out of order packets */
     uint64_t max_reorder_gap; /* maximum number gap for out of order packets */
     uint64_t bytes_in_transit; /* number of bytes currently in transit */
+    uint64_t bytes_sent; /* Total amount of bytes sent on the path */
+    uint64_t bytes_received; /* Total amount of bytes received from the path */
 
 } picoquic_path_quality_t;
 
@@ -1114,11 +1126,16 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
- * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
- * i.e., must fit in the minimum packet length supported by Quic. Trying to
- * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
+* The datagram frame must fit into the path MTU, not be larger than
+* the locally specified maximum, and if the connection is complete
+* not be larger than the max allowed by the peer.
+* 
+* We cannot estimate all that at the time of queuing, because the path MTU
+* may change between the time the datagram is queued and the time it is
+* sent. The test at queuing time are based on the current path MTU. If
+* that changes, datagrams that are too long will be dropped.
  */
-#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
+#define PICOQUIC_DATAGRAM_QUEUE_CAUTIOUS_LENGTH PICOQUIC_ENFORCED_INITIAL_MTU
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 
@@ -1255,6 +1272,27 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
 
+/* Handling of stream packetisation and head-of-line blocking:
+* 
+* When preparing a packet, if a stream is available, picoquic will fill the
+* content of a packet with bytes from that stream. In some cases,
+* there are not enough bytes from completely fill the packet.
+* By default, picoquic will then fill the reminder of the packet with data from
+* other available streams. This default behavior minimizes per packet
+* overhead, but it can reintroduce a form of "head of line blocking":
+* if a packet containing data from multiple streams is lost, all of
+* these streams will be blocked until the missing data is resent.
+* This is less-than-ideal for some real-time applications.
+* 
+* The default behavior can be controlled by setting a stream as "not-coalesced".
+* If that property is set, packets that contain data for the stream will
+* not be contain data for any other stream. Setting the is_not_coalesced
+* flag to zero (default) reverts to the default behavior.
+*/
+
+int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_not_coalesced);
+
 /* Handling of stream priority. 
  * 
  * Picoquic handles priority as an 8 bit unsigned integer.
@@ -1374,6 +1412,11 @@ int picoquic_reset_stream(picoquic_cnx_t* cnx,
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
+
+/* Indicate that the flow control window can only be extended by the application.
+* If use_app_flow_control == 0, then automatic increases will resume.
+*/
+int picoquic_set_app_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, int use_app_flow_control);
 
 /* Obtain the next available stream ID in the local category */
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir);
@@ -1613,13 +1656,7 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
 * will bypass congestion control.
 * 
 * This experimental feature will not be activated in a multipath
-* environment, i.e., if more that 1 path is activated.
-* 
-* To protect against potential abuse, the code includes a rate limiter,
-* ensuring that if congestion control is blocking transmission, 
-* the "bypass" will not result in more than 1 Mbps of
-* traffic.
- */
+* environment, i.e., if more that 1 path is activated.*/
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit);
 
 /* The experimental API `picoquic_set_feedback_loss_notification` allow applications
@@ -1701,6 +1738,55 @@ typedef struct st_picoquic_alpn_list_t {
     char const* alpn_val;
     size_t len;
 } picoquic_alpn_list_t;
+
+/* Set of API for ECH/ESNI */
+/* 
+ * picoquic_ech_configure_quic_ctx:
+ * Configure a QUIC context to support ECH, with parameters:
+ * - quic: the picoquic context to be configured.
+ * - ech_private_key_file_name: the key file used by the server to decrypt incoming ECH options.
+ * - ech_config_file_name: file holding the ECH configuration of the server.
+ * If the private_key_file_name is NULL, the QUIC context will not be able to process
+ * the ECH option in incoming initial packets.
+ * If the private_key_file_name is provided, the ech_config_file_name.
+ */
+int picoquic_ech_configure_quic_ctx(picoquic_quic_t* quic, char const* ech_private_key_file_name, char const* ech_config_file_name);
+
+/*
+* picoquic_release_quic_ctx:
+* The call to ech_release_quic_ctx releases the allocations done by the
+* call to ech_configure_quic_ctx. It should be used when deleting the quic context.
+* It can be safely used even if there was no call to ech_configure_quic_ctx.
+* - quic: the picoquic context to be modified.
+ */
+void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic);
+
+/* picoquic_ech_configure_client:
+ * Configure connection context to require ECH. This requires passing
+ * a list of valid ECH configuration for the target server in the
+ * client handshake properties.
+ * 
+ * This list will typically be obtained by getting the DNS HTTPS records
+ * for the hidden server. These records will provide the name of the
+ * client facing server, and its ECH configuration.
+*/
+int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t* config_data, size_t config_length);
+
+/* picoquic_ech_check_handshake:
+ * Return 1 is ECH was succesfully negotiated, 0 otherwise.
+ */
+int picoquic_is_ech_handshake(picoquic_cnx_t* cnx);
+
+/* Get the retry config parameter returned after the handshake */
+void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
+    uint8_t** retry_config, size_t* retry_config_len);
+
+/* Create an ECH configuration from a private key */
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file);
+
+/* utility function. */
+int picoquic_base64_decode(uint8_t** v, size_t* v_len, char const* b64_txt);
+int picoquic_base64_encode(const uint8_t* v, size_t v_len, char* b64, size_t b64_size, size_t* b64_len);
 
 #ifdef __cplusplus
 }
