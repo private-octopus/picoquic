@@ -471,8 +471,6 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     }
 
     case picoquic_option_HELP:
-        ret = -1;
-        break;
     default:
         ret = -1;
         break;
