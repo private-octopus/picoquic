@@ -348,6 +348,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(stream_state_local_reuse)
+        {
+            int ret = stream_state_local_reuse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(stream_splay)
         {
