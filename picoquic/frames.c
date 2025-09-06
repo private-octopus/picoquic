@@ -71,8 +71,8 @@ picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, 0);
     } 
     else if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
-        /* Protocol error, stream already closed */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, 0);
+        /* Stream already closed locally; do not escalate to transport error here. */
+        return NULL;
     } else {
         while (stream_id >= cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
             stream = picoquic_create_stream(cnx, cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]);

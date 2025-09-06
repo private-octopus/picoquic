@@ -21,6 +21,7 @@
 
 #include <string.h>
 #include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 
 /*
  * Testing Arrival of Frame for Stream Zero
@@ -415,6 +416,58 @@ int TlsStreamFrameTest()
         ret = TlsStreamFrameOneTest(&tls_test_case[i]);
     }
 
+    return ret;
+}
+
+/*
+ * Regression: spurious STREAM_STATE_ERROR when reusing a closed local stream id
+ */
+int stream_state_local_reuse_test()
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    } else {
+        /* Ensure client mode for local bidirectional stream IDs */
+        cnx->client_mode = 1;
+
+        uint64_t sid1 = picoquic_get_next_local_stream_id(cnx, 0);
+        uint64_t sid2 = picoquic_get_next_local_stream_id(cnx, 0);
+
+        if (sid1 != sid2) {
+            ret = -1;
+        } else {
+            picoquic_stream_head_t* s = picoquic_create_stream(cnx, sid1);
+            if (s == NULL) {
+                ret = -1;
+            } else {
+                /* Remove the stream from tree so next_stream_id advanced, but stream object is gone */
+                picoquic_delete_stream(cnx, s);
+
+                if (!(cnx->next_stream_id[STREAM_TYPE_FROM_ID(sid1)] > sid1)) {
+                    ret = -1;
+                } else {
+                    int aret = picoquic_set_app_stream_ctx(cnx, sid2, NULL);
+                    if (aret != PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                        ret = -1;
+                    } else if (cnx->cnx_state == picoquic_state_disconnecting ||
+                        cnx->cnx_state == picoquic_state_disconnected ||
+                        cnx->cnx_state == picoquic_state_handshake_failure ||
+                        cnx->cnx_state == picoquic_state_handshake_failure_resend) {
+                        ret = -1;
+                    } else if (cnx->local_error == PICOQUIC_TRANSPORT_STREAM_STATE_ERROR) {
+                        ret = -1;
+                    }
+                }
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
     return ret;
 }
 

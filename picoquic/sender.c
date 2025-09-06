@@ -63,10 +63,13 @@ static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* 
         }
 
         if (*ret == 0) {
-            stream = picoquic_create_missing_streams(cnx, stream_id, 0);
-
-            if (stream == NULL) {
-                *ret = PICOQUIC_ERROR_MEMORY;
+            if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+                *ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+            } else {
+                stream = picoquic_create_missing_streams(cnx, stream_id, 0);
+                if (stream == NULL) {
+                    *ret = PICOQUIC_ERROR_MEMORY;
+                }
             }
         }
     }
