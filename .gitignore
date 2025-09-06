@@ -15,6 +15,7 @@ Release
 */*.db
 */*.lib
 */*.pdb
+/.tmp.dprobes.h
 */AppX
 */*.exe
 */*.dll
