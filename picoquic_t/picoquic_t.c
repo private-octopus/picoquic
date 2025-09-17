@@ -520,6 +520,7 @@ static const picoquic_test_def_t test_table[] = {
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
+    { "bad_chello", bad_chello_test },
     { "pn_random", pn_random_test },
     { "port_blocked", port_blocked_test },
     { "cplusplus", cplusplustest },

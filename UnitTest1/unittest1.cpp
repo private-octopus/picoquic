@@ -3432,6 +3432,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(bad_chello) {
+            int ret = bad_chello_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(pn_random) {
             int ret = pn_random_test();
 
