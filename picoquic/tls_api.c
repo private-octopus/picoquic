@@ -2874,7 +2874,11 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
     uint8_t* bytes = text;
     uint8_t* bytes_max = text + sizeof(text);
 
-    /* set a short life time for short lived tokens, 24 hours otherwise */
+    /* The prepare token function can prepare two kind of tokens: immediate retry
+    * tokens, that are short lived, or "new tokens", that are valid for a
+    * a longer delay. We differentiate between these two cases by testing the
+    * presence of the Original DCID parameter, which must be present in
+    * the retry tokens, but shall never be in the new tokens. */
     if (odcid->id_len == 0) {
         token_time += PICOQUIC_TOKEN_DELAY_LONG;
     }
