@@ -1976,11 +1976,11 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time)
+int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t timeout_value)
 {
     int ret = 0;
-    uint64_t time_out = *simulated_time + 4000000;
+    uint64_t time_out = *simulated_time + timeout_value;
     int nb_trials = 0;
     int nb_inactive = 0;
     int was_active = 0;
@@ -2010,6 +2010,11 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     return ret;
+}
+
+int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time) {
+    return wait_client_connection_timeout(test_ctx, simulated_time, 4000000);
 }
 
 int tls_api_close_with_losses(
