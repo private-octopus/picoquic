@@ -1203,7 +1203,7 @@ int picoquic_queue_retry_packet(
 
 
     if (picoquic_prepare_retry_token(quic, addr_from,
-        current_time + PICOQUIC_TOKEN_DELAY_SHORT, &ph->dest_cnx_id,
+        current_time, &ph->dest_cnx_id,
         &s_cid, ph->pn, token_buffer, sizeof(token_buffer), &token_size) != 0) {
         ret = PICOQUIC_ERROR_MEMORY;
     }

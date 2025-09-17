@@ -2662,7 +2662,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
         if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr*) & cnx->path[0]->first_tuple->peer_addr,
-            current_time + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid, 0,
+            current_time, &n_cid, &n_cid, 0,
             token_buffer, sizeof(token_buffer), &token_size) == 0) {
             if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);

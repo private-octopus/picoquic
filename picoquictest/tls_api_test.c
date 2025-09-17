@@ -3666,8 +3666,8 @@ int tls_retry_token_valid_test()
     picoquic_connection_id_t* odcid[2];
     picoquic_connection_id_t odcid_found;
     uint64_t time_base = 10000;
-    uint64_t time_delta[4] = { 0, PICOQUIC_TOKEN_DELAY_SHORT, PICOQUIC_TOKEN_DELAY_SHORT + 4000001,
-     24ull * 3600ull * 1000000ull + PICOQUIC_TOKEN_DELAY_SHORT + 1000000 };
+    uint64_t time_delta[4] = { 0, 0, PICOQUIC_TOKEN_DELAY_SHORT + 1,
+        PICOQUIC_TOKEN_DELAY_LONG + 1000000 };
     uint32_t pn[3] = { 0, 1, 2 };
     uint8_t token_buffer[128];
     size_t token_size;
