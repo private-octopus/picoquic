@@ -126,16 +126,8 @@ int picoquic_screen_initial_packet(
 
         if (picoquic_get_initial_aead_context(quic, ph->version_index, &ph->dest_cnx_id,
             0 /* is_client=0 */, 0 /* is_enc = 0 */, &aead_ctx, &pn_dec_ctx) == 0) {
-            ret = picoquic_remove_header_protection_inner((uint8_t *)bytes, ph->offset + ph->payload_length,
+            ret = picoquic_remove_header_protection_inner((uint8_t*)bytes, ph->offset + ph->payload_length,
                 decrypted_bytes, &dph, pn_dec_ctx, 0 /* is_loss_bit_enabled_incoming */, 0 /* sack_list_last*/);
-            if (ret == 0) {
-                size_t decrypted_length = picoquic_aead_decrypt_generic(decrypted_bytes + dph.offset,
-                    bytes + dph.offset, dph.payload_length, dph.pn64, decrypted_bytes, dph.offset, 
-                    aead_ctx);
-                if (decrypted_length >= dph.payload_length) {
-                    ret = PICOQUIC_ERROR_AEAD_CHECK;
-                }
-            }
         }
         else {
             ret = PICOQUIC_ERROR_MEMORY;
