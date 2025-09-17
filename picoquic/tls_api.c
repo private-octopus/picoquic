@@ -2876,10 +2876,10 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
 
     /* set a short life time for short lived tokens, 24 hours otherwise */
     if (odcid->id_len == 0) {
-        token_time += 24ull * 3600ull * 1000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_LONG;
     }
     else {
-        token_time += 4000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_SHORT;
     }
     /* serialize the token components */
     if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, token_time)) != NULL &&
