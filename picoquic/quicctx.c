@@ -3894,6 +3894,27 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t 
 
 /* Connection management
  */
+int picoquic_set_initial_crypto_contexts(picoquic_cnx_t* cnx,
+   void* aead_decrypt,
+   void* pn_dec,
+   void* aead_encrypt,
+   void* pn_enc)
+{
+   if (cnx == NULL || aead_decrypt == NULL || pn_dec == NULL ||
+      aead_encrypt == NULL || pn_enc == NULL)
+   {
+      return -1;
+   }
+
+   picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
+
+   cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = aead_decrypt;
+   cnx->crypto_context[picoquic_epoch_initial].pn_dec = pn_dec;
+   cnx->crypto_context[picoquic_epoch_initial].aead_encrypt = aead_encrypt;
+   cnx->crypto_context[picoquic_epoch_initial].pn_enc = pn_enc;
+
+   return 0;
+}
 
 picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
@@ -5318,4 +5339,3 @@ uint64_t picoquic_uniform_random(uint64_t rnd_max)
 {
     return picoquic_public_uniform_random(rnd_max);
 }
-
