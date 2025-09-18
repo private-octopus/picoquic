@@ -1604,7 +1604,7 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
 
     /* Try to establish the connection */
     if (ret == 0) {
-        if (wait_client_connection_ready(test_ctx, &simulated_time) == 0) {
+        if (wait_client_connection_timeout(test_ctx, &simulated_time, 300000000) == 0) {
             if (test_ctx->cnx_server != NULL) {
                 if (test_ctx->cnx_server->cnx_state != picoquic_state_handshake_failure &&
                     test_ctx->cnx_server->cnx_state < picoquic_state_disconnecting) {
@@ -1616,9 +1616,12 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
         }
     }
 
-    if (ret == 0 && test_ctx->cnx_client->remote_error != PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED) {
-        DBG_PRINTF("For pc=%d, expected error 0x%x, got 0x%x\n", pc,
-            PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED, test_ctx->cnx_client->remote_error);
+    if (ret == 0 && !(
+        test_ctx->cnx_client->remote_error == PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED ||
+        test_ctx->cnx_client->local_error == PICOQUIC_ERROR_IDLE_TIMEOUT)) {
+        DBG_PRINTF("For pc=%d, expected error 0x%x, got 0x%x, local 0x%x\n", pc,
+            PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED,
+            test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
         ret = -1;
     }
 

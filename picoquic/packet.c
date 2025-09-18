@@ -185,9 +185,12 @@ int picoquic_screen_initial_packet(
                     /* Could not allocate the context */
                     ret = PICOQUIC_ERROR_MEMORY;
                 }
-                else if (has_good_token) {
-                    (*pcnx)->initial_validated = 1;
-                    (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
+                else {
+                    *new_ctx_created = 1;
+                    if (has_good_token) {
+                        (*pcnx)->initial_validated = 1;
+                        (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
+                    }
                 }
             }
         }
