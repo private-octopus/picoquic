@@ -1254,15 +1254,6 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
 
-typedef struct st_picoquic_initial_packet_context_t {
-    void* aead_decrypt;
-    void* pn_dec;
-    void* aead_encrypt;
-    void* pn_enc;
-    const uint8_t* decrypted_packet;
-    size_t decrypted_packet_length;
-} picoquic_initial_packet_context_t;
-
 /*
 * Per connection context.
 */
@@ -1469,8 +1460,6 @@ typedef struct st_picoquic_cnx_t {
     /* Data accounting for limiting amplification attacks */
     uint64_t initial_data_received;
     uint64_t initial_data_sent;
-    uint8_t* initial_decrypted_packet;
-    size_t initial_decrypted_packet_length;
 
     /* Flow control information */
     uint64_t data_sent;
@@ -2056,12 +2045,11 @@ uint8_t* picoquic_format_max_path_id_frame(uint8_t* bytes, const uint8_t* bytes_
 uint8_t* picoquic_format_blocked_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence);
 int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t token_length);
-
-picoquic_cnx_t* picoquic_create_cnx_with_initial(picoquic_quic_t* quic,
-    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
-    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
-    char const* sni, char const* alpn, char client_mode,
-    picoquic_initial_packet_context_t* initial_ctx);
+int picoquic_set_initial_crypto_contexts(picoquic_cnx_t* cnx,
+    void* aead_decrypt,
+    void* pn_dec,
+    void* aead_encrypt,
+    void* pn_enc);
 uint8_t* picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream);
 uint8_t* picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
     picoquic_misc_frame_header_t* misc_frame, picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last);

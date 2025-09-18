@@ -3894,71 +3894,32 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t 
 
 /* Connection management
  */
-
-static int picoquic_apply_initial_packet_context(
-    picoquic_cnx_t* cnx,
-    picoquic_initial_packet_context_t* initial_ctx)
+int picoquic_set_initial_crypto_contexts(picoquic_cnx_t* cnx,
+   void* aead_decrypt,
+   void* pn_dec,
+   void* aead_encrypt,
+   void* pn_enc)
 {
-    int ret = 0;
+   if (cnx == NULL || aead_decrypt == NULL || pn_dec == NULL ||
+      aead_encrypt == NULL || pn_enc == NULL)
+   {
+      return -1;
+   }
 
-    if (initial_ctx == NULL) {
-        ret = picoquic_setup_initial_traffic_keys(cnx);
-    }
-    else {
-        if (initial_ctx->aead_decrypt == NULL || initial_ctx->pn_dec == NULL ||
-            initial_ctx->aead_encrypt == NULL || initial_ctx->pn_enc == NULL) {
-            ret = -1;
-        }
-        else {
-            cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = initial_ctx->aead_decrypt;
-            cnx->crypto_context[picoquic_epoch_initial].pn_dec = initial_ctx->pn_dec;
-            cnx->crypto_context[picoquic_epoch_initial].aead_encrypt = initial_ctx->aead_encrypt;
-            cnx->crypto_context[picoquic_epoch_initial].pn_enc = initial_ctx->pn_enc;
+   picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
 
-            if (initial_ctx->decrypted_packet != NULL && initial_ctx->decrypted_packet_length > 0) {
-                cnx->initial_decrypted_packet = (uint8_t*)malloc(initial_ctx->decrypted_packet_length);
-                if (cnx->initial_decrypted_packet == NULL) {
-                    ret = PICOQUIC_ERROR_MEMORY;
-                }
-                else {
-                    memcpy(cnx->initial_decrypted_packet, initial_ctx->decrypted_packet, initial_ctx->decrypted_packet_length);
-                    cnx->initial_decrypted_packet_length = initial_ctx->decrypted_packet_length;
-                }
-            }
-        }
+   cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = aead_decrypt;
+   cnx->crypto_context[picoquic_epoch_initial].pn_dec = pn_dec;
+   cnx->crypto_context[picoquic_epoch_initial].aead_encrypt = aead_encrypt;
+   cnx->crypto_context[picoquic_epoch_initial].pn_enc = pn_enc;
 
-        if (ret != 0) {
-            picoquic_crypto_context_free(&cnx->crypto_context[picoquic_epoch_initial]);
-            if (cnx->initial_decrypted_packet != NULL) {
-                free(cnx->initial_decrypted_packet);
-                cnx->initial_decrypted_packet = NULL;
-                cnx->initial_decrypted_packet_length = 0;
-            }
-            initial_ctx->aead_decrypt = NULL;
-            initial_ctx->pn_dec = NULL;
-            initial_ctx->aead_encrypt = NULL;
-            initial_ctx->pn_enc = NULL;
-            initial_ctx->decrypted_packet = NULL;
-            initial_ctx->decrypted_packet_length = 0;
-        }
-        else {
-            initial_ctx->aead_decrypt = NULL;
-            initial_ctx->pn_dec = NULL;
-            initial_ctx->aead_encrypt = NULL;
-            initial_ctx->pn_enc = NULL;
-            initial_ctx->decrypted_packet = NULL;
-            initial_ctx->decrypted_packet_length = 0;
-        }
-    }
-
-    return ret;
+   return 0;
 }
 
-static picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
-    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
+picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
+    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
     const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
-    char const* sni, char const* alpn, char client_mode,
-    picoquic_initial_packet_context_t* initial_ctx)
+    char const* sni, char const* alpn, char client_mode)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
 
@@ -4211,7 +4172,7 @@ static picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (picoquic_apply_initial_packet_context(cnx, initial_ctx) != 0) {
+        if (picoquic_setup_initial_traffic_keys(cnx)) {
             /* Cannot initialize aead for initial packets */
             picoquic_delete_cnx(cnx);
             cnx = NULL;
@@ -4235,25 +4196,6 @@ static picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     }
 
     return cnx;
-}
-
-picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
-    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
-    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
-    char const* sni, char const* alpn, char client_mode)
-{
-    return picoquic_create_cnx_internal(quic, initial_cnx_id, remote_cnx_id,
-        addr_to, start_time, preferred_version, sni, alpn, client_mode, NULL);
-}
-
-picoquic_cnx_t* picoquic_create_cnx_with_initial(picoquic_quic_t* quic,
-    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
-    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
-    char const* sni, char const* alpn, char client_mode,
-    picoquic_initial_packet_context_t* initial_ctx)
-{
-    return picoquic_create_cnx_internal(quic, initial_cnx_id, remote_cnx_id,
-        addr_to, start_time, preferred_version, sni, alpn, client_mode, initial_ctx);
 }
 
 picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
@@ -4938,12 +4880,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
         if (cnx->retry_token != NULL) {
             free(cnx->retry_token);
             cnx->retry_token = NULL;
-        }
-
-        if (cnx->initial_decrypted_packet != NULL) {
-            free(cnx->initial_decrypted_packet);
-            cnx->initial_decrypted_packet = NULL;
-            cnx->initial_decrypted_packet_length = 0;
         }
 
         picoquic_delete_sooner_packets(cnx);
