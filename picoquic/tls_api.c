@@ -1485,7 +1485,6 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
             secret1 = client_secret;
             secret2 = server_secret;
         }
-        
         ret = picoquic_set_key_from_secret(cipher, 1, 0, &cnx->crypto_context[0], secret1, prefix_label);
 
         if (ret == 0) {
