@@ -1573,6 +1573,15 @@ typedef struct st_picoquic_packet_data_t {
     } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
 
+/* Create a connection context without recomputing initial_aead_dec and
+* initial_pn_dec if they were already computed.
+*/
+picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
+    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
+    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
+    char const* sni, char const* alpn, char client_mode,
+    void* initial_aead_dec, void* initial_pn_dec);
+
 /* Load the stash of retry tokens. */
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
 

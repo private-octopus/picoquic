@@ -94,6 +94,8 @@ int picoquic_screen_initial_packet(
     picoquic_stream_data_node_t* decrypted_data)
 {
     int ret = 0;
+    void* aead_ctx = NULL;
+    void* pn_dec_ctx = NULL;
 
     /* Create a connection context if the CI is acceptable */
     if (packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
@@ -120,8 +122,6 @@ int picoquic_screen_initial_packet(
     else {
         /* This code assumes that *pcnx is always null when screen initial is called. */
         /* Verify the AEAD checkum */
-        void* aead_ctx = NULL;
-        void* pn_dec_ctx = NULL;
 
         if (picoquic_get_initial_aead_context(quic, ph->version_index, &ph->dest_cnx_id,
             0 /* is_client=0 */, 0 /* is_enc = 0 */, &aead_ctx, &pn_dec_ctx) == 0) {
@@ -141,16 +141,6 @@ int picoquic_screen_initial_packet(
         }
         else {
             ret = PICOQUIC_ERROR_MEMORY;
-        }
-
-        if (aead_ctx != NULL) {
-            /* Free the AEAD CTX */
-            picoquic_aead_free(aead_ctx);
-        }
-
-        if (pn_dec_ctx != NULL) {
-            /* Free the PN encryption context */
-            picoquic_cipher_free(pn_dec_ctx);
         }
 
         if (ret == 0) {
@@ -182,7 +172,8 @@ int picoquic_screen_initial_packet(
             else {
                 /* All clear */
                 /* Check: what do do with odcid? */
-                *pcnx = picoquic_create_cnx(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn, NULL, NULL, 0);
+                *pcnx = picoquic_create_cnx_internal(quic, ph->dest_cnx_id, ph->srce_cnx_id, addr_from, current_time, ph->vn,
+                    NULL, NULL, 0, aead_ctx, pn_dec_ctx);
                 if (*pcnx == NULL) {
                     /* Could not allocate the context */
                     ret = PICOQUIC_ERROR_MEMORY;
@@ -193,9 +184,23 @@ int picoquic_screen_initial_packet(
                         (*pcnx)->initial_validated = 1;
                         (void)picoquic_parse_connection_id(original_cnxid.id, original_cnxid.id_len, &(*pcnx)->original_cnxid);
                     }
+                    /* Zeroing the pointers aead_ctx and pn_dec_ctx because the underlying object is
+                     * now owned by the connection. */
+                    aead_ctx = NULL;
+                    pn_dec_ctx = NULL;
                 }
             }
         }
+    }
+
+    if (aead_ctx != NULL) {
+        /* Free the AEAD CTX */
+        picoquic_aead_free(aead_ctx);
+    }
+
+    if (pn_dec_ctx != NULL) {
+        /* Free the PN encryption context */
+        picoquic_cipher_free(pn_dec_ctx);
     }
 
     return ret;
