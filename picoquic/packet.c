@@ -807,7 +807,6 @@ int picoquic_parse_header_and_decrypt(
                     }
                 }
                 else {
-
                     /* Remove header protection at this point -- values of bytes will not change */
                     ret = picoquic_remove_header_protection(*pcnx, (uint8_t*)bytes, decrypted_data->data, ph);
 
@@ -849,10 +848,6 @@ int picoquic_parse_header_and_decrypt(
             else {
                 if (ph->ptype != picoquic_packet_version_negotiation &&
                     ph->ptype != picoquic_packet_retry && ph->ptype != picoquic_packet_error) {
-                    /* TODO: clarify length, payload length, packet length -- special case of initial packet */
-                    length = ph->offset + ph->payload_length;
-                    *consumed = length;
-
                     /* Redirect if proxy available -- function returns 0 if the packet was *not* intercepted */
                     if (quic->picomask_fns != NULL) {
                         ret = (quic->picomask_fns->picomask_redirect_fn)(quic->picomask_ctx,
@@ -864,6 +859,9 @@ int picoquic_parse_header_and_decrypt(
                          * should be treated as an error.
                          */
                         if (ph->ptype == picoquic_packet_initial) {
+                            /* Screening the packet for protection against DOS. If successful, this
+                             * will decrypt the initial packet and create a new connection context.
+                             */
                             ret = picoquic_screen_initial_packet(quic, bytes, packet_length, addr_from, ph, current_time, pcnx,
                                 new_ctx_created, decrypted_data);
                         }
@@ -892,7 +890,6 @@ int picoquic_parse_header_and_decrypt(
             /* Clear text packet. Copy content to decrypted data */
             memmove(decrypted_data->data, bytes, length);
             *consumed = length;
-
         }
     }
     
