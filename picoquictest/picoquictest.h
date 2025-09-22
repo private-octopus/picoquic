@@ -277,6 +277,7 @@ int crypto_hs_offset_test();
 int cubic_test();
 int cubic_jitter_test();
 int cc_compete_cubic2_test();
+int cc_compete_cubic2_hystart_pp_test();
 int cc_compete_prague2_test();
 int cc_compete_d_cubic_test();
 int cc_ns_asym_test();
@@ -603,6 +604,7 @@ int quicperf_media_test();
 int quicperf_multi_test();
 int quicperf_overflow_test();
 int cplusplustest();
+int hystart_test();
 
 #ifdef __cplusplus
 }
