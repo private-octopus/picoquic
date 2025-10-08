@@ -1952,7 +1952,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
             if (path_index == 0) {
                 int alt_path0 = 0;
                 for (int i = 1; i < cnx->nb_paths; i++) {
-                    if (cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL) {
+                    if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
                         alt_path0 = i;
                         break;
                     }
@@ -2103,7 +2103,7 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
 
         if (path_id >= 0) {
             for (int i = 0; no_path_left && i < cnx->nb_paths; i++) {
-                no_path_left &= cnx->path[i]->path_is_demoted;         
+                no_path_left &= !cnx->path[i]->path_is_demoted;         
             }
             if (no_path_left) {
                 /* Caution here: ICMP packets could be forged */

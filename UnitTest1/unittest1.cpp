@@ -2954,6 +2954,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_break_both) {
+            int ret = multipath_break_both_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
