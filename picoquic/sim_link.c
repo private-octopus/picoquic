@@ -223,11 +223,55 @@ uint64_t picoquictest_sim_link_jitter(picoquictest_sim_link_t* link)
     return jitter;
 }
 
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's "latency queue", bypassing the AQM.
+ */
+
+void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t queue_delay, uint64_t transmit_time, uint64_t current_time)
+{
+    link->queue_time = current_time + queue_delay + transmit_time;
+
+    if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
+        link->is_switched_off || picoquictest_sim_link_simloss(link, current_time)) {
+        link->packets_dropped++;
+        free(packet);
+    }
+    else {
+        link->packets_sent++;
+        if (link->last_packet == NULL) {
+            link->first_packet = packet;
+        }
+        else {
+            link->last_packet->next_packet = packet;
+        }
+        link->last_packet = packet;
+        packet->next_packet = NULL;
+        packet->arrival_time = link->queue_time + link->microsec_latency;
+        if (link->jitter != 0) {
+            packet->arrival_time += picoquictest_sim_link_jitter(link);
+        }
+        if (packet->arrival_time < link->resume_time) {
+            packet->arrival_time = link->resume_time;
+        }
+    }
+}
+
+uint64_t picoquictest_sim_link_transmit_time(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet)
+{
+    return ((link->picosec_per_byte * ((uint64_t)packet->length)) >> 20);
+}
+
+uint64_t picoquictest_sim_link_queue_delay(picoquictest_sim_link_t* link, uint64_t current_time)
+{
+    return (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
+}
+
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time)
 {
-    uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
-    uint64_t transmit_time = ((link->picosec_per_byte * ((uint64_t)packet->length)) >> 20);
+    uint64_t transmit_time = picoquictest_sim_link_transmit_time(link, packet);
+    uint64_t queue_delay = picoquictest_sim_link_queue_delay(link, current_time);
     int should_drop = 0;
 
     if (transmit_time <= 0)
@@ -252,6 +296,9 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     }
 
     if (!should_drop) {
+#if 1
+        picoquictest_sim_link_enqueue(link, packet, queue_delay, transmit_time, current_time);
+#else
         link->queue_time = current_time + queue_delay + transmit_time;
         /* TODO: proper simulation of marking policy */
 #if 0
@@ -281,6 +328,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
             }
 
         }
+#endif
     } else {
         /* simulate congestion loss or random drop on queue full */
         link->packets_dropped++;

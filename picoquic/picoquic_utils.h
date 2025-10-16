@@ -335,8 +335,15 @@ uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint6
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time);
 
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's queue, with normal AQM processing and length check. */
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
+
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's "latency queue", bypassing the AQM. */
+void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t queue_delay, uint64_t transmit_time, uint64_t current_time);
 
 /* picoquic_test_simlink_suspend simulates and interuption of transmission until the
 * specified "end of interval" time. There are two modes:
