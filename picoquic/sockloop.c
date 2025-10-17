@@ -1171,6 +1171,57 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 
 /* Management of background thread. */
 
+#ifdef ESP_PLATFORM
+/* ESP32 doesn't have pipe(), so we use a UDP socket pair instead */
+#define pipe esp_pipe
+static int esp_pipe(int fd[2])
+{
+    struct sockaddr_in addr;
+    socklen_t addrlen = sizeof(addr);
+    int listener = -1;
+
+    /* Create listener socket on loopback */
+    listener = socket(AF_INET, SOCK_DGRAM, 0);
+    if (listener < 0) {
+        return -1;
+    }
+
+    /* Bind to loopback on any available port */
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+
+    if (bind(listener, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Get the bound port */
+    if (getsockname(listener, (struct sockaddr*)&addr, &addrlen) < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Create sender socket */
+    fd[1] = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd[1] < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Connect sender to listener */
+    if (connect(fd[1], (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(fd[1]);
+        close(listener);
+        return -1;
+    }
+
+    fd[0] = listener;
+    return 0;
+}
+#endif
+
 static void picoquic_close_network_wake_up(picoquic_network_thread_ctx_t* thread_ctx)
 {
     if (thread_ctx->wake_up_defined) {
