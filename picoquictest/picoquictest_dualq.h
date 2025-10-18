@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PICOQUICTEST_RED_H
-#define PICOQUICTEST_RED_H
+#ifndef PICOQUICTEST_DUALQ_H
+#define PICOQUICTEST_DUALQ_H
 
 #include "picoquic_utils.h"
 
@@ -28,10 +28,10 @@
 extern "C" {
 #endif
 
-    int dualq_aqm_configure(picoquictest_sim_link_t* link, uint64_t l4s_max);
+    int dualq_configure(picoquictest_sim_link_t* link, uint64_t l4s_max);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* PICOQUICTEST_RED_H */
+#endif /* PICOQUICTEST_DUALQ_H */

@@ -397,7 +397,7 @@ int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
         cc_ctx->link[link_id]->packets_sent_next_burst = cc_ctx->link[link_id]->packets_sent +
             link_spec->packets_between_losses;
         if (link_spec->l4s_max > 0) {
-            ret = dualq_aqm_configure(cc_ctx->link[link_id], link_spec->l4s_max);
+            ret = dualq_configure(cc_ctx->link[link_id], link_spec->l4s_max);
         }
     }
     return ret;
@@ -723,7 +723,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     /* reset the AQM, so it starts working from the current time. */
 #if 1
     if (link->aqm_state != NULL) {
-        link->aqm_state->reset(link->aqm_state, current_time);
+        link->aqm_state->reset(link->aqm_state, link, current_time);
     }
 #else
     link->bucket_arrival_last = current_time;
@@ -743,7 +743,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->packets_between_losses = vary_link_spec->packets_between_losses;
     link->packets_sent_next_burst = link->packets_sent + vary_link_spec->packets_between_losses;
     if (link->aqm_state != NULL) {
-        link->aqm_state->reset(link->aqm_state, current_time);
+        link->aqm_state->reset(link->aqm_state, link, current_time);
     }
 
 

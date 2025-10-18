@@ -69,8 +69,11 @@ void rctl_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     link->aqm_state = NULL;
 }
 
-void rctl_reset(picoquictest_aqm_t* self, uint64_t current_time)
+void rctl_reset(picoquictest_aqm_t* self, picoquictest_sim_link_t* link, uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(link);
+#endif
     rctl_state_t* rctl_state = (rctl_state_t*)self;
     /* reset the leaky bucket, so it starts working from the current time. */
     rctl_state->bucket_arrival_last = current_time;

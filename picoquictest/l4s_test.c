@@ -82,8 +82,8 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 
         if (do_l4s) {
             test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
-            if ((ret = dualq_aqm_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
-                ret = dualq_aqm_configure(test_ctx->s_to_c_link, l4s_max);
+            if ((ret = dualq_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
+                ret = dualq_configure(test_ctx->s_to_c_link, l4s_max);
             }
         }
 

@@ -67,11 +67,12 @@ void red_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     link->aqm_state = NULL;
 }
 
-void red_aqm_reset(picoquictest_aqm_t* self, uint64_t current_time)
+void red_aqm_reset(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(self);
     UNREFERENCED_PARAMETER(current_time);
+    UNREFERENCED_PARAMETER(link);
 #endif
 }
 
