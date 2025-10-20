@@ -1578,6 +1578,7 @@ typedef enum {
 
 typedef struct st_picoquic_per_ack_state_t {
     uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t send_delay; /* Delay between send time of acked packet and prior ack. */
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
     uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */

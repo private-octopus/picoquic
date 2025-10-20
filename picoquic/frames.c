@@ -2977,6 +2977,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.rtt_measurement = packet_data->path_ack[i].acked_path->rtt_sample;
+            ack_state.send_delay = packet_data->path_ack[i].largest_sent_time - packet_data->path_ack[i].delivered_sent_prior;
             ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
             ack_state.nb_bytes_acknowledged = packet_data->path_ack[i].data_acked;
             ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
