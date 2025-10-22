@@ -512,6 +512,7 @@ static const picoquic_test_def_t test_table[] = {
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "get_hash", get_hash_test },
     { "get_tls_errors", get_tls_errors_test },
+    { "dualq_aqm", dualq_aqm_test },
     { "ech_config", ech_config_test },
     { "ech_config_p", ech_config_p_test },
     { "ech_e2e", ech_e2e_test },
