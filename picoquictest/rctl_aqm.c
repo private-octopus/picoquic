@@ -61,6 +61,8 @@ void rctl_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
             *should_drop = 1;
         }
     }
+
+    picoquictest_sim_link_enqueue(link, packet, current_time, *should_drop);
 }
 
 void rctl_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)

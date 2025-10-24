@@ -93,7 +93,7 @@ picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
 uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time)
 {
     picoquictest_sim_packet_t* packet;
-    if (link->aqm_state != NULL) {
+    if (link->aqm_state != NULL && link->aqm_state->check_arrival != NULL) {
         /* Calling the update function to retrieve packets from AQM queue as appropriate */
         link->aqm_state->check_arrival(link->aqm_state, link);
     }
@@ -109,7 +109,7 @@ uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint6
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time)
 {
-    if (link->aqm_state != NULL) {
+    if (link->aqm_state != NULL && link->aqm_state->check_arrival != NULL) {
         link->aqm_state->check_arrival(link->aqm_state, link);
     }
     picoquictest_sim_packet_t* packet = link->first_packet;
@@ -325,8 +325,8 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
     else {
         if (link->queue_delay_max > 0 && queue_delay >= link->queue_delay_max) {
             should_drop = 1;
-            picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
         }
+        picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
     }
 
 #if 1

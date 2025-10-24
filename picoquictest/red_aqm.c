@@ -35,8 +35,37 @@ typedef struct st_red_aqm_state_t {
     struct st_picoquictest_aqm_t super;
     uint64_t red_threshold; /* threshold for starting to drop packets */
     uint64_t red_queue_max; /* all packets above that are dropped. */
-    uint64_t red_drop_mask; /* kinda randomize the drops. */
+    uint64_t red_average_queue;
+    double drop_total;
 } red_aqm_state_t;
+
+int red_aqm_recur(red_aqm_state_t* red_state, double drop_rate)
+{
+    int should_drop = 0;
+    red_state->drop_total += drop_rate;
+    if (red_state->drop_total > 1.0) {
+        should_drop = 1;
+        red_state->drop_total -= 1.0;
+    }
+    return should_drop;
+}
+
+double red_aqm_drop_rate(red_aqm_state_t* red_state, uint64_t queue_delay)
+{
+    double drop_rate = 0.0;
+
+    if (queue_delay >= red_state->red_threshold)
+    {
+        if (queue_delay >= red_state->red_queue_max) {
+            drop_rate = 1.0;
+        }
+        else {
+            drop_rate = ((double)(queue_delay - red_state->red_threshold)) /
+                (double)(red_state->red_queue_max - red_state->red_threshold);
+        }
+    }
+    return drop_rate;
+} 
 
 void red_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
@@ -44,21 +73,11 @@ void red_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     red_aqm_state_t* red_state = (red_aqm_state_t*)self;
     uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
 
-    *should_drop = 0;
+    red_state->red_average_queue = (3 * red_state->red_average_queue + queue_delay) / 4;
 
-    if (queue_delay >= red_state->red_threshold)
-    {
-        if (red_state->red_drop_mask == 0 || queue_delay >= red_state->red_queue_max) {
-            *should_drop = 1;
-        }
-        else {
-            /* (poor) simulation of a 50% random drop */
-            uint64_t mask_bit = red_state->red_drop_mask & 1;
-            red_state->red_drop_mask >>= 1;
-            red_state->red_drop_mask |= (mask_bit << 63);
-            *should_drop = (int)mask_bit;
-        }
-    }
+    *should_drop = red_aqm_recur(red_state, red_aqm_drop_rate(red_state, red_state->red_average_queue));
+
+    picoquictest_sim_link_enqueue(link, packet, current_time, *should_drop);
 }
 
 void red_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
@@ -92,7 +111,6 @@ int red_aqm_configure(picoquictest_sim_link_t* link, uint64_t red_threshold, uin
         red_state->super.reset = red_aqm_reset;
         red_state->red_threshold = red_threshold;
         red_state->red_queue_max = red_queue_max;
-        red_state->red_drop_mask = 0x5555555555555555ull;
 
         link->aqm_state = &red_state->super;
     }
