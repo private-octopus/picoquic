@@ -245,11 +245,19 @@ void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_s
     }
     else {
         uint64_t transmit_time = picoquictest_sim_link_transmit_time(link, packet);
+#if 1
+        uint64_t queue_delay = picoquictest_sim_link_queue_delay(link, current_time);
 
+        if (transmit_time <= 0)
+            transmit_time = 1;
+
+        link->queue_time = current_time + queue_delay + transmit_time;
+#else
         if (current_time > link->queue_time) {
             link->queue_time = current_time;
         } 
         link->queue_time += transmit_time;
+#endif
 
         if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
             link->is_switched_off || picoquictest_sim_link_simloss(link, current_time)) {

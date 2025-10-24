@@ -83,6 +83,7 @@ void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, du
         xq->queue_last = packet;
     }
     packet->next_packet = 0;
+    xq->count += 1;
     xq->queue_bytes += packet->length;
     xq->queue_time += picoquictest_sim_link_transmit_time(link, packet);
 }
@@ -98,6 +99,7 @@ picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictes
             xq->queue_last = NULL;
             xq->queue_bytes = 0;
             xq->queue_time = 0;
+            xq->count = 0;
         }
         else
         {
@@ -115,6 +117,7 @@ picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictes
                 /* error case. do not use 0, as that would stop dequeuing */
                 xq->queue_bytes = 1;
             }
+            xq->count -= 1;
         }
     }
     return packet;
@@ -165,9 +168,9 @@ void dualq_enqueue(dualq_state_t* dualq, picoquictest_sim_link_t* link, picoquic
 int dualq_recur(dualq_queue_t* xq, double likelihood) {
     /* Returns TRUE with a certain likelihood */
     int ret = 0;
-    xq->count += likelihood;
-    if (xq->count > 1.0) {
-        xq->count -= 1.0;
+    xq->sum_p += likelihood;
+    if (xq->sum_p > 1.0) {
+        xq->sum_p -= 1.0;
         ret = 1;
     }
     return ret;
@@ -217,7 +220,10 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
             /* scheduler chose lq */
             /* Check for overload saturation */
             if (dualq->p_CL < dualq->p_Lmax) {
-                if (dualq->lq.queue_bytes > dualq->maxTh) {
+#if 1
+                dualq->pprime_L = dualq_laqm(dualq); /* Native LAQM */
+#else
+                if (dualq->lq.queue_bytes > dualq->minTh) {
                     /* > 1 packet queued */
                     dualq->pprime_L = dualq_laqm(dualq); /* Native LAQM */
                 }
@@ -226,6 +232,7 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
                     /* Suppress marking 1 pkt queue */
                     dualq->pprime_L = 0;
                 }
+#endif
                 dualq->p_L = (dualq->pprime_L > dualq->p_CL) ? dualq->pprime_L : dualq->p_CL; /* Combining function */
                 if (dualq_recur(&dualq->lq, dualq->pprime_L)) {
                     /* Linear marking */
@@ -270,12 +277,18 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
 
 void dualq_pi2_update(dualq_state_t* dualq)
 {
+    int64_t target_delta;
+    int64_t delta_q;
+
     dualq->curq = (dualq->cq.queue_time > dualq->lq.queue_time) ?
         dualq->cq.queue_time : dualq->lq.queue_time;
 
+    target_delta = dualq->curq - dualq->target;
+    delta_q = dualq->curq - dualq->prevq;
+
     dualq->pprime = dualq->pprime +
-        dualq->pi2_alpha * (dualq->curq - dualq->target) +
-        dualq->pi2_beta * (dualq->curq - dualq->prevq);
+        dualq->pi2_alpha * target_delta +
+        dualq->pi2_beta * delta_q;
     /* Bounding p' to [0..1] */
     if (dualq->pprime < 0) {
         dualq->pprime = 0;
@@ -284,7 +297,9 @@ void dualq_pi2_update(dualq_state_t* dualq)
         dualq->pprime = 1.0;
     }
     /* Coupled L4S prob = base prob * coupling factor */
-    dualq->p_CL = dualq->pprime * dualq->k;
+    if ((dualq->p_CL = dualq->pprime * dualq->k) > 1.0) {
+        dualq->p_CL = 1.0;
+    }
     dualq->p_C = dualq->pprime * dualq->pprime_L;
     dualq->prevq = dualq->curq;
 }
@@ -331,7 +346,12 @@ void dualq_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
 {
     dualq_state_t* dualq = (dualq_state_t*)self;
-
+#if 1
+    int x = 0;
+    if (current_time > 1000000) {
+        x += 1;
+    }
+#endif
     /* queue the packet. */
     dualq_enqueue(dualq, link, packet, current_time, should_drop);
 
@@ -376,7 +396,7 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max)
     dualq->k = 2.0; /* Coupling factor */
     /* NOT SHOWN % scheduler - dependent weight or equival't parameter */
     /* PI2 Classic AQM parameters */
-    dualq->target = 15000; /* Queue delay target, microseconds */
+    dualq->target = 15000; /* Queue delay target for Classic queue, microseconds */
     uint64_t RTT_max = 100000;  /* Worst case RTT expected, microseconds */
     /* PI2 constants derived from above PI2 parameters */
     dualq->p_Cmax = 1.0 / (dualq->k * dualq->k);
