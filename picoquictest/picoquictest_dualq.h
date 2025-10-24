@@ -65,6 +65,7 @@ extern "C" {
         int64_t curq; /* Current length of the classic queue, in microsecond */
         int64_t prevq; /* Previous length of the classic queue, in microsecond */
         uint64_t update_next; /* last time the pi2 parameters should be updated */
+        uint64_t lq_average_queue;
         double pprime; /* the p' coefficent in RFC9332, nominal mark rate of L4S queue derived from length of classic queue */
         double pprime_L; /* the p'_L coefficient in RFC9332, mark rate of L4S queue computed from L4S queue length, before coupling */
         double p_L; /* actual mark rate of L4S queue, after combining with "p_CL" */

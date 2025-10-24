@@ -150,7 +150,7 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 5, 1200, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 15, 6000, 0, NULL);
 
     return ret;
 }
