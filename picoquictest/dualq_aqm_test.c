@@ -198,6 +198,10 @@ int dualq_dequeue_test()
         ret = -1;
     }
 
+    if (ret == 0 && dqt_ctx.simulated_time > max_time) {
+        ret = -1;
+    }
+
     dualq_test_release_ctx(&dqt_ctx);
 
     return ret;

@@ -202,15 +202,10 @@ static void picoquic_prague_enter_recovery(
     if (pr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         pr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
     }
+    
+    path_x->cwin = pr_state->ssthresh;
+    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
 
-    if (notification == picoquic_congestion_notification_timeout) {
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
-        pr_state->alg_state = picoquic_prague_alg_slow_start;
-    }
-    else {
-        path_x->cwin = pr_state->ssthresh;
-        pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-    }
     picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
 }
 
@@ -305,12 +300,12 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
     if (pr_state->ssthresh == UINT64_MAX) {
         /* Increase cwin based on bandwidth estimation. */
         path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
-        if (pkt_ctx->ecn_ce_total_remote > pr_state->l4s_epoch_ce) {
-            /* CE mark received in intitial state:
-             * exit and enter recovery.
-             */
-            picoquic_prague_enter_recovery(cnx, path_x, picoquic_congestion_notification_ecn_ec, pr_state, current_time);
-        }
+    }
+    if (pkt_ctx->ecn_ce_total_remote > pr_state->l4s_epoch_ce) {
+        /* CE mark received in intitial state:
+         * exit and enter recovery.
+         */
+        picoquic_prague_enter_recovery(cnx, path_x, picoquic_congestion_notification_ecn_ec, pr_state, current_time);
     }
     else {
         path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
