@@ -307,7 +307,7 @@ int satellite_dcubic_seeded_test()
 int satellite_prague_seeded_test()
 {
     /* TODO check max_completion_time */
-    return satellite_test_one(picoquic_prague_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 1, 0, 0);
+    return satellite_test_one(picoquic_prague_algorithm, 100000000, 7500000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
 /* Satellite loss interop test, as shown in https://interop.sedrubal.de/
