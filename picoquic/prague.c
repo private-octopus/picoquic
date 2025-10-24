@@ -239,12 +239,10 @@ static void picoquic_prague_update_alpha(picoquic_path_t* path_x, picoquic_pragu
     }
 
     if (delta_ce > 0 || delta_ect1 > 0) {
-#if 1
         if (frac > pr_state->alpha && (frac >= 512 || is_suspect)) {
             pr_state->alpha = frac;
         }
         else
-#endif
         {
             uint64_t alpha_shifted = pr_state->alpha << PRAGUE_SHIFT_G;
             alpha_shifted -= pr_state->alpha;

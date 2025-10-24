@@ -126,17 +126,16 @@ picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictes
 
 /* Process the packet that was just submitted. 
  */
-void dualq_enqueue(dualq_state_t* dualq, picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
+void dualq_enqueue(dualq_state_t* dualq, picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet, uint64_t current_time)
 {
     /* Test limit and classify lq or cq */
     if (dualq->cq.queue_bytes + dualq->lq.queue_bytes + packet->length > dualq->limit)
     {
         /* drop packet if buffer is full */
-        *should_drop = 1;
+        picoquictest_sim_link_enqueue(link, packet, 0, 1);
     }
     else {
         /* 4 : timestamp(pkt) % only needed if using the sojourn technique */
-        *should_drop = 0;
         packet->arrival_time = current_time;
         /* Packet classifier */
         if (packet->ecn_mark == PICOQUIC_ECN_ECT_1 ||
@@ -220,19 +219,7 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
             /* scheduler chose lq */
             /* Check for overload saturation */
             if (dualq->p_CL < dualq->p_Lmax) {
-#if 1
                 dualq->pprime_L = dualq_laqm(dualq); /* Native LAQM */
-#else
-                if (dualq->lq.queue_bytes > dualq->minTh) {
-                    /* > 1 packet queued */
-                    dualq->pprime_L = dualq_laqm(dualq); /* Native LAQM */
-                }
-                else
-                {
-                    /* Suppress marking 1 pkt queue */
-                    dualq->pprime_L = 0;
-                }
-#endif
                 dualq->p_L = (dualq->pprime_L > dualq->p_CL) ? dualq->pprime_L : dualq->p_CL; /* Combining function */
                 if (dualq_recur(&dualq->lq, dualq->pprime_L)) {
                     /* Linear marking */
@@ -343,17 +330,12 @@ void dualq_check_arrival(picoquictest_aqm_t* self, struct st_picoquictest_sim_li
 
 /* Submit: implement the sim link API */
 void dualq_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-    picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
+    picoquictest_sim_packet_t* packet, uint64_t current_time)
 {
     dualq_state_t* dualq = (dualq_state_t*)self;
-#if 1
-    int x = 0;
-    if (current_time > 1000000) {
-        x += 1;
-    }
-#endif
+
     /* queue the packet. */
-    dualq_enqueue(dualq, link, packet, current_time, should_drop);
+    dualq_enqueue(dualq, link, packet, current_time);
 
     /* submit data if possible, and compute the new value of pi2 parameters if it is time */
     dualq->last_input_time = current_time;

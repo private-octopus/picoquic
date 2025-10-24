@@ -68,16 +68,17 @@ double red_aqm_drop_rate(red_aqm_state_t* red_state, uint64_t queue_delay)
 } 
 
 void red_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-    picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop)
+    picoquictest_sim_packet_t* packet, uint64_t current_time)
 {
     red_aqm_state_t* red_state = (red_aqm_state_t*)self;
     uint64_t queue_delay = (current_time > link->queue_time) ? 0 : link->queue_time - current_time;
+    int should_drop = 0;
 
     red_state->red_average_queue = (3 * red_state->red_average_queue + queue_delay) / 4;
 
-    *should_drop = red_aqm_recur(red_state, red_aqm_drop_rate(red_state, red_state->red_average_queue));
+    should_drop = red_aqm_recur(red_state, red_aqm_drop_rate(red_state, red_state->red_average_queue));
 
-    picoquictest_sim_link_enqueue(link, packet, current_time, *should_drop);
+    picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
 }
 
 void red_aqm_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)

@@ -278,7 +278,7 @@ typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
 
 typedef struct st_picoquictest_aqm_t {
     void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-        picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop);
+        picoquictest_sim_packet_t* packet, uint64_t current_time);
     void (*check_arrival)(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
     void (*reset) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
     void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);

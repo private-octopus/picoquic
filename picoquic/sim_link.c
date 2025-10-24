@@ -245,19 +245,12 @@ void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_s
     }
     else {
         uint64_t transmit_time = picoquictest_sim_link_transmit_time(link, packet);
-#if 1
         uint64_t queue_delay = picoquictest_sim_link_queue_delay(link, current_time);
 
         if (transmit_time <= 0)
             transmit_time = 1;
 
         link->queue_time = current_time + queue_delay + transmit_time;
-#else
-        if (current_time > link->queue_time) {
-            link->queue_time = current_time;
-        } 
-        link->queue_time += transmit_time;
-#endif
 
         if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
             link->is_switched_off || picoquictest_sim_link_simloss(link, current_time)) {
@@ -300,13 +293,6 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
 {
     uint64_t queue_delay = picoquictest_sim_link_queue_delay(link, current_time);
     int should_drop = 0;
-#if 1
-#else
-    uint64_t transmit_time = picoquictest_sim_link_transmit_time(link, packet);
-
-    if (transmit_time <= 0)
-        transmit_time = 1;
-#endif
 
     if (link->is_suspended) {
         packet->arrival_time = UINT64_MAX;
@@ -320,7 +306,7 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
         return;
     }
     if (link->aqm_state != NULL) {
-        link->aqm_state->submit(link->aqm_state, link, packet, current_time, &should_drop);
+        link->aqm_state->submit(link->aqm_state, link, packet, current_time);
     }
     else {
         if (link->queue_delay_max > 0 && queue_delay >= link->queue_delay_max) {
@@ -328,45 +314,6 @@ void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_si
         }
         picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
     }
-
-#if 1
-#else
-    if (!should_drop) {
-        link->queue_time = current_time + queue_delay + transmit_time;
-        /* TODO: proper simulation of marking policy */
-#if 0
-        if (link->l4s_max > 0 && queue_delay >= link->l4s_max) {
-            packet->ecn_mark = PICOQUIC_ECN_CE;
-        }
-#endif
-        if (packet->length > link->path_mtu || picoquictest_sim_link_testloss(link->loss_mask) != 0 ||
-            link->is_switched_off || picoquictest_sim_link_simloss(link, current_time)) {
-            link->packets_dropped++;
-            free(packet);
-        } else {
-            link->packets_sent++;
-            if (link->last_packet == NULL) {
-                link->first_packet = packet;
-            } else {
-                link->last_packet->next_packet = packet;
-            }
-            link->last_packet = packet;
-            packet->next_packet = NULL;
-            packet->arrival_time = link->queue_time + link->microsec_latency;
-            if (link->jitter != 0) {
-                packet->arrival_time += picoquictest_sim_link_jitter(link);
-            }
-            if (packet->arrival_time < link->resume_time) {
-                packet->arrival_time = link->resume_time;
-            }
-
-        }
-    } else {
-        /* simulate congestion loss or random drop on queue full */
-        link->packets_dropped++;
-        free(packet);
-    }
-#endif
 }
 
 /*
