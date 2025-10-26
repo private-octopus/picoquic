@@ -210,6 +210,15 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
+    /* verify that the connection was disconnected without error */
+    if (ret == 0 &&
+        (test_ctx->cnx_client->remote_error != 0 ||
+            test_ctx->cnx_client->local_error != 0)) {
+        DBG_PRINTF("Connection close error: remote %llu, local %llu",
+            test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
+        ret = -1;
+
+    }
 
     if (h3zero_cb != NULL)
     {

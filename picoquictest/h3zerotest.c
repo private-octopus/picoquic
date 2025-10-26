@@ -1284,8 +1284,8 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
             DBG_PRINTF("%s", "did not parse to the end!\n");
             ret = -1;
         }
-        else if (stream_state.frame_header_parsed) {
-            DBG_PRINTF("%s", "stopped with frame not parsed\n");
+        else if (stream_state.frame_prefix_parsed) {
+            DBG_PRINTF("%s", "stopped with frame prefix not parsed\n");
             ret = -1;
         }
         else if (!stream_state.header_found) {

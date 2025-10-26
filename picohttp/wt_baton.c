@@ -343,7 +343,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      * processed directly at the web transport layer.
      */
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
-        ret = picowt_receive_capsule(cnx, stream_ctx, bytes, bytes + length, &baton_ctx->capsule, baton_ctx->h3_ctx);
+        ret = picowt_receive_capsule(cnx, stream_ctx, bytes, bytes + length, &baton_ctx->capsule);
         if (ret == 0 && is_fin) {
             stream_ctx->ps.stream_state.is_fin_received = 1;
             baton_ctx->baton_state = wt_baton_state_closed;
@@ -600,7 +600,9 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
         }
 
         if (ret == 0) {
+#if 0
             stream_ctx->ps.stream_state.is_web_transport = 1;
+#endif
             stream_ctx->path_callback = wt_baton_callback;
             stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;
@@ -767,9 +769,11 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         /* The response from the server has arrived and it is positive.
          * The application can start sending data.
          */
+#if 1
         if (stream_ctx != NULL) {
             stream_ctx->is_upgraded = 1;
         }
+#endif
         break;
 
     case picohttp_callback_post_fin:
