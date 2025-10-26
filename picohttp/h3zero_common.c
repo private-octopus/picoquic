@@ -262,30 +262,6 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	}
 }
 
-#if 0
-/* Unused code */
-uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
-{
-	uint64_t prefix = UINT64_MAX;
-
-	*nb_read = 0;
-	while (*nb_read < data_length) {
-		size_t v_len = (*nb_in_buffer > 0)?VARINT_LEN_T(buffer_8, size_t):8;
-		if (*nb_in_buffer < v_len) {
-			buffer_8[*nb_in_buffer] = data[*nb_read];
-			*nb_read += 1;
-			*nb_in_buffer += 1;
-		}
-		if (*nb_in_buffer >= v_len) {
-			(void)picoquic_frames_uint64_decode(buffer_8, buffer_8 + 8, &prefix);
-			break;
-		}
-	}
-
-	return prefix;
-}
-#endif
-
 int h3zero_protocol_init(picoquic_cnx_t* cnx)
 {
 	uint8_t decoder_stream_head = (uint8_t)h3zero_stream_type_qpack_decoder;
@@ -853,77 +829,6 @@ uint8_t* h3zero_parse_data_stream(uint8_t* bytes, uint8_t* bytes_max,
 	return bytes;
 }
 
-
-#if 0
-	else {
-		size_t available = bytes_max - bytes;
-		if (stream_state->is_web_transport) {
-			/* Bypass all processing if using web transport */
-			*available_data = (size_t)available;
-		}
-		else {
-			if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-				available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-			}
-
-			if (stream_state->current_frame_type == h3zero_frame_header) {
-				if (stream_state->current_frame == NULL) {
-					if (stream_state->current_frame_length <= 0x10000) {
-						stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
-					}
-					if (stream_state->current_frame == NULL) {
-						*error_found = H3ZERO_INTERNAL_ERROR;
-						bytes = NULL;
-					}
-				}
-				if (bytes != NULL) {
-					memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-					stream_state->current_frame_read += available;
-					bytes += available;
-
-					if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-						uint8_t* parsed;
-						h3zero_header_parts_t* parts = (stream_state->header_found) ?
-							&stream_state->trailer : &stream_state->header;
-						stream_state->trailer_found = stream_state->header_found;
-						stream_state->header_found = 1;
-						/* parse */
-						parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-							stream_state->current_frame + stream_state->current_frame_length, parts);
-						if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
-							/* protocol error */
-							*error_found = H3ZERO_FRAME_ERROR;
-							bytes = NULL;
-						}
-						/* free resource */
-						stream_state->frame_prefix_parsed = 0;
-						stream_state->frame_header_read = 0;
-						free(stream_state->current_frame);
-						stream_state->current_frame = NULL;
-					}
-				}
-			}
-		}
-	}
-}
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/************************************************************************************************/
-
 /*
 * HTTP 3.0 common call back.
 */
@@ -1486,28 +1391,20 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 					}
 				}
 				if (available_data > 0) {
-#if 1
+					if (!stream_ctx->flow_opened) {
+						if (stream_ctx->ps.stream_state.current_frame_length < 0x100000) {
+							stream_ctx->flow_opened = 1;
+						}
+						else if (cnx->cnx_state == picoquic_state_ready) {
+							stream_ctx->flow_opened = 1;
+							ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->ps.stream_state.current_frame_length);
+						}
+					}
 					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
 						ret = stream_ctx->path_callback(cnx, bytes, available_data, fin_or_event, stream_ctx, stream_ctx->path_callback_ctx);
 					}
 					else
-#endif
 					{
-						if (!stream_ctx->flow_opened) {
-							if (stream_ctx->ps.stream_state.current_frame_length < 0x100000) {
-								stream_ctx->flow_opened = 1;
-							}
-							else if (cnx->cnx_state == picoquic_state_ready) {
-								stream_ctx->flow_opened = 1;
-								ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->ps.stream_state.current_frame_length);
-							}
-						}
-						/* TODO:if upgraded, pass the content to the application callback */
-#if 1
-						if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
-							ret = 0;
-						}
-#endif
 						if (ret == 0 && ctx->no_disk == 0) {
 							ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
 							if (ret != 0) {
@@ -1591,20 +1488,6 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 		}
 	}
 	if (ret == 0 && stream_ctx != NULL) {
-#if 1
-		/* If the stream is a bidir "web transport" stream, pass the data to the web transport callback */
-#if 1
-		if (stream_ctx->stream_id == 0 && stream_ctx->is_upgraded) {
-			/* This is a bug */
-			ret = 0;
-		}
-#endif
-		if (stream_ctx->is_upgraded && stream_ctx->stream_id != 0) {
-
-			ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
-		}
-		else
-#endif
 		if (IS_BIDIR_STREAM_ID(stream_id)) {
 			if (IS_CLIENT_STREAM_ID(stream_id)) {
 				/* If nothing is known about the stream, it is treated by default as an H3 stream
@@ -1614,12 +1497,6 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 					ret = -1;
 				}
 				else if (cnx->client_mode) {
-#if 0
-					if (stream_ctx->is_upgraded) {
-						ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
-					}
-					else
-#endif
 					if (stream_ctx->is_open) {
 						/* Process incoming H3 client data */
 						ret = h3zero_process_h3_client_data(cnx, stream_id, bytes, length, fin_or_event, ctx,

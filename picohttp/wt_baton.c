@@ -769,13 +769,7 @@ int wt_baton_callback(picoquic_cnx_t* cnx,
         /* The response from the server has arrived and it is positive.
          * The application can start sending data.
          */
-#if 1
-        if (stream_ctx != NULL) {
-            stream_ctx->is_upgraded = 1;
-        }
-#endif
         break;
-
     case picohttp_callback_post_fin:
     case picohttp_callback_post_data:
         /* Data received on a stream for which the per-app stream context is known.
