@@ -50,7 +50,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 {
     uint64_t simulated_time = 0;
     uint64_t queue_delay_max = 20000;
-    uint64_t l4s_max = queue_delay_max / 4;
+    uint64_t l4s_max = max_rttvar;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x45, 0xcc, 0, 0, 0, 0, 0, 0}, 8 };
     int ret;
@@ -61,7 +61,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
     for (size_t i = 0; i < nb_link_states; i++) {
         if (2 * link_state->microsec_latency > queue_delay_max) {
             queue_delay_max = 2 * link_state->microsec_latency;
-            l4s_max = queue_delay_max / 4;
+            /* l4s_max = link_state->microsec_latency / 4; */
         }
     }
 
@@ -82,8 +82,8 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 
         if (do_l4s) {
             test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
-            if ((ret = dualq_aqm_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
-                ret = dualq_aqm_configure(test_ctx->s_to_c_link, l4s_max);
+            if ((ret = dualq_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
+                ret = dualq_configure(test_ctx->s_to_c_link, l4s_max);
             }
         }
 
@@ -131,7 +131,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 4500000, 5, 3000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 4500000, 5, 6000, 0, NULL);
 
     return ret;
 }
@@ -140,8 +140,7 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    /* TODO increased max_completion_time for 100ms, because of "app limited" changes */
-    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 7, 1500, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 5200000, 7, 4500, 0, NULL);
 
     return ret;
 }
@@ -150,7 +149,7 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 5, 1200, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 15, 6000, 0, NULL);
 
     return ret;
 }

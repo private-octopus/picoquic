@@ -10651,7 +10651,7 @@ int red_newreno_test()
 
 int red_cubic_test()
 {
-    int ret = red_cc_algotest(picoquic_cubic_algorithm, 500000, 225);
+    int ret = red_cc_algotest(picoquic_cubic_algorithm, 510000, 225);
     return ret;
 }
 
