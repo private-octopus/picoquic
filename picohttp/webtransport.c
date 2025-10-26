@@ -334,6 +334,7 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
     h3zero_stream_ctx_t* control_stream_ctx)
 {
     int ret = 0;
+    uint8_t null_msg[] = { 0 };
 
     if (control_stream_ctx->ps.stream_state.is_fin_sent) {
         /* cannot send! */
@@ -341,7 +342,7 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
     }
     else {
         ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
-            0, NULL, 0 /* Do not set fin, there could be other capsules */);
+            0, null_msg, 0 /* Do not set fin, there could be other capsules */);
     }
 
     return ret;
