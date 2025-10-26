@@ -525,6 +525,7 @@ int multipath_tunnel_test();
 int token_reuse_api_test();
 int get_hash_test();
 int get_tls_errors_test();
+int dualq_aqm_test();
 int ech_config_test();
 int ech_config_p_test();
 int ech_e2e_test();

@@ -3284,6 +3284,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(dualq_aqm) {
+            int ret = dualq_aqm_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(ech_config) {
             int ret = ech_config_test();
 

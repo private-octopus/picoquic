@@ -644,9 +644,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
         if (byte_index >= bytes_max) {
             fprintf(F, "\n");
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
+            textlog_prefix_initial_cid64(F, cnx_id64);
             fprintf(F, "        Malformed ACK RANGE, %d blocks remain.", (int)num_block);
             error_detected = 1;
             break;
@@ -667,9 +665,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
         if (largest + 1 < range) {
             fprintf(F, "\n");
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
+            textlog_prefix_initial_cid64(F, cnx_id64);
             fprintf(F, "        ack range error: largest=%" PRIu64 ", range=%" PRIu64, largest, range);
             byte_index = bytes_max;
             break;
@@ -687,9 +683,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
         if (byte_index >= bytes_max) {
             fprintf(F, "\n");
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
+            textlog_prefix_initial_cid64(F, cnx_id64);
             fprintf(F, "        Malformed ACK GAP, %d blocks remain.", (int)num_block);
             byte_index = bytes_max;
             error_detected = 1;
@@ -700,9 +694,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
             if (l_gap == 0) {
                 byte_index = bytes_max;
                 fprintf(F, "\n");
-                if (cnx_id64 != 0) {
-                    fprintf(F, "%" PRIx64 ": ", cnx_id64);
-                }
+                textlog_prefix_initial_cid64(F, cnx_id64);
                 fprintf(F, "        Malformed ACK GAP, requires %d bytes out of %d", (int)picoquic_varint_skip(bytes),
                     (int)(bytes_max - byte_index));
                 error_detected = 1;
@@ -717,9 +709,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
         if (largest < block_to_block) {
             fprintf(F, "\n");
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
+            textlog_prefix_initial_cid64(F, cnx_id64);
             fprintf(F, "        ack gap error: largest=%" PRIu64 ", range=%" PRIu64 ", gap=%" PRIu64,
                 largest, range, block_to_block - range);
             byte_index = bytes_max;
@@ -736,9 +726,7 @@ size_t textlog_ack_frame(FILE* F, uint64_t cnx_id64, uint64_t frame_id,  const u
 
             if (l_ecnx == 0) {
                 fprintf(F, "\n");
-                if (cnx_id64 != 0) {
-                    fprintf(F, "%" PRIx64 ": ", cnx_id64);
-                }
+                textlog_prefix_initial_cid64(F, cnx_id64);
                 fprintf(F, "        incorrect ECN encoding");
                 byte_index = bytes_max;
                 error_detected = 1;
@@ -896,9 +884,7 @@ size_t textlog_generic_close_frame(FILE* F, const uint8_t* bytes, size_t bytes_m
         }
         else if (string_length > 0) {
             /* Print the UTF8 string */
-            if (cnx_id64 != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id64);
-            }
+            textlog_prefix_initial_cid64(F, cnx_id64);
             fprintf(F, "        Reason: ");
             textlog_reason_text(F, (size_t)string_length, bytes + byte_index);
             fprintf(F, "\n");
@@ -1993,7 +1979,7 @@ void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64
     {
         while (byte_index < bytes_max && byte_index < 128) {
             if (log_cnxid != 0) {
-                fprintf(F, "%" PRIx64 ": ", cnx_id_64);
+                textlog_prefix_initial_cid64(F, cnx_id_64);
             }
             fprintf(F, "        ");
             for (int i = 0; i < 32 && byte_index < bytes_max && byte_index < 128; i++) {
@@ -2046,7 +2032,7 @@ static void textlog_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t curr
 {
     picoquic_path_t * path_x = cnx->path[0];
 
-    fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+    textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
     textlog_time(F, cnx, current_time, "T= ", ", ");
     fprintf(F, "cwin: %d,", (int)path_x->cwin);
     fprintf(F, "flight: %d,", (int)path_x->bytes_in_transit);
@@ -2330,7 +2316,7 @@ static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = cnx->quic->F_log;
 
-        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
         fprintf(F, "Keys unavailable, buffered packet type %d.\n", ptype);
     }
@@ -2354,7 +2340,7 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = cnx->quic->F_log;
 
-        fprintf(F, "%" PRIx64 ": ", picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
+        textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
         fprintf(F, "Lost packet type %d, number %" PRIu64 ", size %zu", ptype, sequence_number, packet_size);
         if (dcid != NULL) {
