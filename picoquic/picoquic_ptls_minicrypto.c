@@ -70,7 +70,7 @@ void picoquic_ptls_minicrypto_load(int unload)
 
         picoquic_register_tls_key_provider_fn(
             set_minicrypto_private_key_from_key_file,
-            NULL, NULL);
+            NULL, NULL, NULL);
 #if 0
         picoquic_register_verify_certificate_fn(picoquic_openssl_get_certificate_verifier,
             picoquic_openssl_dispose_certificate_verifier,

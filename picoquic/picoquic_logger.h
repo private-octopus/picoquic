@@ -38,8 +38,6 @@ void picoquic_textlog_close(picoquic_quic_t* quic);
 
 /* Handling of packet logging */
 
-void picoquic_log_prefix_initial_cid64(FILE* F, uint64_t log_cnxid64);
-
 void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 

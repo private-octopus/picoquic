@@ -226,6 +226,91 @@ int test_datagram_ack(picoquic_cnx_t* cnx,
     return ret;
 }
 
+
+/* Datagram too long tests.
+* we want to test what happens if the application uses the "queue" API
+* to queue datagrams that are too long. We need to test several conditions:
+*
+* - max packet size -- should be rejected immediately
+* - more than MTU+29 -- should be rejected immediately
+* - faking it: set the MTU larger than necessary to bypass the test,
+*   then reset it. Datagram should be deleted in the send loop
+*   and the send loop should proceed.
+* - exactly + 29 -- should be accepted and should succeed
+*/
+
+int test_datagram_too_long(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    int q_ret = 0;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    size_t pmtu = cnx->path[0]->send_mtu;
+
+    memset(buffer, 0xda, PICOQUIC_MAX_PACKET_SIZE);
+    if ((q_ret = picoquic_queue_datagram_frame(cnx, PICOQUIC_MAX_PACKET_SIZE, buffer)) == 0) {
+        DBG_PRINTF("Submit packet of size %d is accepted, ret = %x", PICOQUIC_MAX_PACKET_SIZE, q_ret);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(buffer, 0xdb, PICOQUIC_MAX_PACKET_SIZE);
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, pmtu, buffer)) == 0) {
+            DBG_PRINTF("Submit packet of size %d is accepted, ret = %x", pmtu, q_ret);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        memset(buffer, 0xdc, PICOQUIC_MAX_PACKET_SIZE);
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, pmtu - 20 - cnx->quic->local_cnxid_length, buffer)) == 0) {
+            DBG_PRINTF("Submit packet of size %d is accepted, ret = %x", pmtu - 28, q_ret);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        memset(buffer, 0xdd, PICOQUIC_MAX_PACKET_SIZE);
+        cnx->path[0]->send_mtu = 1500;
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, 1450, buffer)) != 0) {
+            DBG_PRINTF("Submit packet of size %d is not accepted, ret = %x", 1450, q_ret);
+            ret = -1;
+        }
+        cnx->path[0]->send_mtu = pmtu;
+    }
+
+    if (ret == 0) {
+        size_t dg_overhead = 1 + cnx->quic->local_cnxid_length + 1 + 1 + 16;
+        memset(buffer, 0xde, PICOQUIC_MAX_PACKET_SIZE);
+        cnx->path[0]->send_mtu = 1500;
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, pmtu - dg_overhead, buffer)) != 0) {
+            DBG_PRINTF("Submit packet of size %d is not accepted, ret = %x", pmtu - dg_overhead, q_ret);
+            ret = -1;
+        }
+        cnx->path[0]->send_mtu = pmtu;
+    }
+
+    if (ret == 0) {
+        size_t dg_overhead = 1 + cnx->quic->local_cnxid_length + 1 + 1 + 16;
+        memset(buffer, 0xde, PICOQUIC_MAX_PACKET_SIZE);
+        cnx->path[0]->send_mtu = 1500;
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, pmtu - dg_overhead - 1, buffer)) != 0) {
+            DBG_PRINTF("Submit packet of size %d is not accepted, ret = %x", pmtu - dg_overhead - 1, q_ret);
+            ret = -1;
+        }
+        cnx->path[0]->send_mtu = pmtu;
+    }
+
+    if (ret == 0) {
+        size_t dg_overhead = 1 + cnx->quic->local_cnxid_length + 4 + 1 + 16;
+        if ((q_ret = picoquic_queue_datagram_frame(cnx, pmtu - dg_overhead - 1, buffer)) != 0) {
+            DBG_PRINTF("Submit packet of size %d is not accepted, ret = %x", pmtu - dg_overhead - 1, q_ret);
+        }
+        cnx->path[0]->send_mtu = pmtu;
+    }
+
+    return ret;
+}
+
 int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, uint64_t loss_mask_init)
 {
     uint64_t simulated_time = 0;
@@ -305,6 +390,11 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             }
         }
     }
+
+    if (ret == 0 && dg_ctx->test_too_long) {
+        ret = test_datagram_too_long(test_ctx->cnx_client);
+    }
+
     /* Mark that datagrams are ready */
     if (ret == 0) {
         picoquic_mark_datagram_ready(test_ctx->cnx_client, 1);
@@ -348,7 +438,8 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             nb_inactive++;
         }
         if (dg_ctx->dg_recv[0] == dg_ctx->dg_target[1] &&
-            dg_ctx->dg_recv[1] == dg_ctx->dg_target[0]) {
+            dg_ctx->dg_recv[1] == dg_ctx->dg_target[0] &&
+            test_ctx->cnx_client->first_datagram == NULL) {
             break;
         }
         else if ((loss_mask_init != 0 || dg_ctx->test_wifi != 0) &&
@@ -365,7 +456,8 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
                 all_sent_time = simulated_time;
             }
             else if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_server)  &&
-                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client))
+                picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
+                test_ctx->cnx_client->first_datagram == NULL)
             {
                 break;
             }
@@ -467,7 +559,6 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
                     i, dg_ctx->dg_number_delta_max[i], i, dg_ctx->dg_number_delta_target[i]);
             }
         }
-
     }
 
     /* And then free the resource */
@@ -638,4 +729,15 @@ int datagram_small_packet_test()
     dg_ctx.duration_max = 2060000;
 
     return datagram_test_one(9, &dg_ctx, 0);
+}
+
+int datagram_too_long_test()
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
+    dg_ctx.dg_target[0] = 5;
+    dg_ctx.dg_target[1] = 5;
+    dg_ctx.test_too_long = 1;
+
+    return datagram_test_one(10, &dg_ctx, 0);
 }

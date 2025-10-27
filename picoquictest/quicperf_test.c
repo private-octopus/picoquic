@@ -376,7 +376,7 @@ int quicperf_parse_test_one(const quicperf_test_line_t* tl)
     int ret = 0;
 
     /* Parse the scenario */
-    quicperf_ctx_t* ctx = quicperf_create_ctx(tl->str);
+    quicperf_ctx_t* ctx = quicperf_create_ctx(tl->str, NULL);
     if (ctx == NULL) {
         ret = -1;
     }
@@ -436,7 +436,7 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
 
     initial_cid.id[2] = test_id;
 
-    quicperf_ctx = quicperf_create_ctx(scenario);
+    quicperf_ctx = quicperf_create_ctx(scenario, NULL);
     if (quicperf_ctx == NULL) {
         DBG_PRINTF("Could not get ready to run QUICPERF(%s)\n", scenario);
         return -1;

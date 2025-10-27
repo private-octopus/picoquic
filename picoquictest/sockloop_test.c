@@ -362,7 +362,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         sa6->sin6_family = AF_INET6;
     }
     else if (af == AF_INET) {
-        /* set server IPv6 to loopback */
+        /* set server IPv4 to loopback */
         struct sockaddr_in* sa4 = (struct sockaddr_in*)addr;
         ((uint8_t*)(&sa4->sin_addr))[0] = 127;
         ((uint8_t*)(&sa4->sin_addr))[3] = 1;

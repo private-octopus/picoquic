@@ -21,7 +21,10 @@
 #ifndef H3ZERO_COMMON_H
 #define H3ZERO_COMMON_H
 
+#include <stdint.h>
+#include <stdio.h>
 #include "picosplay.h"
+#include "picoquic.h"
 #include "h3zero.h"
 
 #ifdef __cplusplus
@@ -50,7 +53,8 @@ extern "C" {
 
     struct st_h3zero_stream_ctx_t;
 
-    typedef int (*picohttp_post_data_cb_fn)(picoquic_cnx_t* cnx,
+    typedef int (*picohttp_post_data_cb_fn)(
+        picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
         picohttp_call_back_event_t fin_or_event,
         struct st_h3zero_stream_ctx_t* stream_ctx,
@@ -59,7 +63,7 @@ extern "C" {
     /* Define the table of special-purpose paths used for POST, REST, or connect queries */
     /* TODO: is there a need for path context? */
     typedef struct st_picohttp_server_path_item_t {
-        char* path;
+        char const * path;
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
@@ -83,7 +87,8 @@ extern "C" {
         picosplay_node_t http_stream_node;
         picoquic_cnx_t* cnx;
         unsigned int is_h3:1;
-        unsigned int is_upgraded:1;
+        unsigned int is_upgraded : 1;
+        unsigned int is_bypass : 1;
         union {
             h3zero_data_stream_state_t stream_state; /* h3 only */
             struct {
@@ -157,7 +162,7 @@ extern "C" {
 
     void h3zero_release_capsule(h3zero_capsule_t* capsule);
 
-    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule);
+    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule, h3zero_stream_ctx_t * stream_ctx);
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
@@ -255,6 +260,8 @@ extern "C" {
     void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     int h3zero_prepare_and_send_data(void* context, size_t space, uint64_t send_total_length, uint64_t* sent_length, FILE* F);
+    int h3zero_send_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx,
+        uint64_t capsule_type, size_t capsule_length, uint8_t* capsule_data, int set_fin);
 
 #ifdef __cplusplus
 }

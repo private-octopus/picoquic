@@ -31,6 +31,10 @@
     <ClCompile Include="h3zero_uri.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="h3zero_url_template.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picomask.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">
@@ -60,6 +64,10 @@
     <ClInclude Include="h3zero_uri.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="h3zero_url_template.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picomask.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">

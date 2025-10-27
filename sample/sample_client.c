@@ -156,27 +156,7 @@ static void sample_client_report(sample_client_ctx_t* client_ctx)
         }
         printf("%s: %s, received %zu bytes", client_ctx->file_names[stream_ctx->file_rank], status, stream_ctx->bytes_received);
         if (stream_ctx->is_stream_reset && stream_ctx->remote_error != PICOQUIC_SAMPLE_NO_ERROR){
-            char const* error_text = "unknown error";
-            switch (stream_ctx->remote_error) {
-            case PICOQUIC_SAMPLE_INTERNAL_ERROR:
-                error_text = "internal error";
-                break;
-            case PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR:
-                error_text = "internal error";
-                break;
-            case PICOQUIC_SAMPLE_NO_SUCH_FILE_ERROR:
-                error_text = "no such file";
-                break;
-            case PICOQUIC_SAMPLE_FILE_READ_ERROR:
-                error_text = "file read error";
-                break;
-            case PICOQUIC_SAMPLE_FILE_CANCEL_ERROR:
-                error_text = "cancelled";
-                break;
-            default:
-                break;
-            }
-            printf(", error 0x%" PRIx64 " -- %s", stream_ctx->remote_error, error_text);
+            printf(", error 0x%" PRIx64 "(%s)", stream_ctx->remote_error, picoquic_error_name(stream_ctx->remote_error));
         }
         printf("\n");
         stream_ctx = stream_ctx->next_stream;

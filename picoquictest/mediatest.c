@@ -73,7 +73,8 @@ typedef enum {
     mediatest_video2_back = 7,
     mediatest_suspension = 8,
     mediatest_video2_probe = 9,
-    mediatest_suspension2 = 10
+    mediatest_suspension2 = 10,
+    mediatest_no_coal = 11
 } mediatest_id_enum;
 
 typedef enum {
@@ -155,6 +156,7 @@ typedef struct st_mediatest_ctx_t {
     mediatest_cnx_ctx_t* client_cnx; /* client connection context */
     struct st_mediatest_cnx_ctx_t* first_cnx;
     struct st_mediatest_cnx_ctx_t* last_cnx;
+    int no_coal;
     /* Starting point of statistics -- after the initial disruption */
     uint64_t disruption_clear;
     /* managemenent of datagram load */
@@ -187,6 +189,7 @@ typedef struct st_mediatest_spec_t {
     uint64_t suspension_start_time;
     uint64_t suspension_up_time;
     uint64_t suspension_down_time;
+    int no_coal;
 
 } mediatest_spec_t;
 
@@ -976,7 +979,7 @@ int mediatest_is_finished(mediatest_ctx_t* mt_ctx)
 }
 
 /* Test configuration */
-int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_enum stream_type, size_t data_size)
+int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_enum stream_type, size_t data_size, int no_coal)
 {
     int ret = 0;
     /* Find the next available stream id */
@@ -994,10 +997,16 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
         case media_test_audio:
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_AUDIO_PERIOD;
             ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 2);
+            if (no_coal) {
+                ret = picoquic_set_stream_not_coalesced(cnx_ctx->cnx, stream_ctx->stream_id, no_coal);
+            }
             break;
         case media_test_video:
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO_PERIOD;
             ret = picoquic_set_stream_priority(cnx_ctx->cnx, stream_ctx->stream_id, 4);
+            if (no_coal) {
+                ret = picoquic_set_stream_not_coalesced(cnx_ctx->cnx, stream_ctx->stream_id, no_coal);
+            }
             break;
         case media_test_video2:
             stream_ctx->frames_to_send = MEDIATEST_DURATION / MEDIATEST_VIDEO2_PERIOD;
@@ -1095,10 +1104,12 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
             MEDIATEST_ALPN, mediatest_callback, (void*)mt_ctx, NULL, NULL, NULL,
             mt_ctx->simulated_time, &mt_ctx->simulated_time, NULL, mediatest_ticket_encrypt_key, sizeof(mediatest_ticket_encrypt_key));
 
+        mt_ctx->no_coal = spec->no_coal;
+
         if (mt_ctx->quic[0] == NULL || mt_ctx->quic[1] == NULL) {
             ret = -1;
         }
-        
+
         if (spec->ccalgo != NULL) {
             for (int i = 0; i < 2 && ret == 0; i++) {
                 picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
@@ -1149,16 +1160,16 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
                     ret = -1;
                 }
                 if (spec->data_size > 0 && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, spec->data_size);
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_data, spec->data_size, mt_ctx->no_coal);
                 }
                 if (spec->do_audio && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_audio, 0);
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_audio, 0, mt_ctx->no_coal);
                 }
                 if (spec->do_video && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0);
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video, 0, mt_ctx->no_coal);
                 }
                 if (spec->do_video2 && ret == 0) {
-                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video2, 0);
+                    ret = mediatest_configure_stream(mt_ctx->client_cnx, media_test_video2, 0, mt_ctx->no_coal);
                 }
                 if (spec->do_probe_up && ret == 0) {
                     picoquic_request_forced_probe_up(mt_ctx->client_cnx->cnx, 1);
@@ -1432,6 +1443,21 @@ int mediatest_worst_test()
     spec.do_audio = 1;
     spec.data_size = 10000000;
     ret = mediatest_one(mediatest_worst, &spec);
+
+    return ret;
+}
+
+int mediatest_no_coal_test()
+{
+    int ret;
+    mediatest_spec_t spec = { 0 };
+    spec.ccalgo = picoquic_bbr_algorithm;
+    spec.bandwidth = 0.01;
+    spec.do_video = 1;
+    spec.do_audio = 1;
+    spec.data_size = 10000000;
+    spec.no_coal = 1;
+    ret = mediatest_one(mediatest_no_coal, &spec);
 
     return ret;
 }

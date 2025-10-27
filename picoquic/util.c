@@ -472,24 +472,37 @@ int picoquic_compare_addr(const struct sockaddr * expected, const struct sockadd
 
 int picoquic_compare_ip_addr(const struct sockaddr* expected, const struct sockaddr* actual)
 {
-    int ret = -1;
+    int ret = 0;
 
     if (expected->sa_family == actual->sa_family) {
-        if (expected->sa_family == AF_INET6) {
+        if (expected->sa_family == AF_UNSPEC) {
+            ret = 0;
+        }
+        else if (expected->sa_family == AF_INET6) {
             struct sockaddr_in6* ex = (struct sockaddr_in6*)expected;
             struct sockaddr_in6* ac = (struct sockaddr_in6*)actual;
 
             ret = memcmp(&ex->sin6_addr, &ac->sin6_addr, 16);
         }
-        else {
+        else if (expected->sa_family == AF_INET) {
             struct sockaddr_in* ex = (struct sockaddr_in*)expected;
             struct sockaddr_in* ac = (struct sockaddr_in*)actual;
+#if 1
+            ret = memcmp(&ex->sin_addr, &ac->sin_addr, 4);
+#else
 #ifdef _WINDOWS
-            ret = (ex->sin_addr.S_un.S_addr == ac->sin_addr.S_un.S_addr) ? 0 : -1;
+            ret = (ex->sin_addr.S_un.S_addr == ac->sin_addr.S_un.S_addr);
 #else
             ret = (ex->sin_addr.s_addr == ac->sin_addr.s_addr) ? 0 : -1;
 #endif
+#endif
         }
+        else {
+            ret = 0;
+        }
+    }
+    else {
+        ret = (expected->sa_family > actual->sa_family) ? 1 : -1;
     }
     return ret;
 }
@@ -504,9 +517,13 @@ uint16_t picoquic_get_addr_port(const struct sockaddr* addr)
 int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual)
 {
     int ret = picoquic_compare_ip_addr(expected, actual);
-    if (ret == 0 &&
-        picoquic_get_addr_port(expected) != picoquic_get_addr_port(actual)) {
-        ret = -1;
+    if (ret == 0 && (expected->sa_family == AF_INET6 || expected->sa_family)){
+        uint16_t p_ex = picoquic_get_addr_port(expected);
+        uint16_t p_ac = picoquic_get_addr_port(actual);
+
+        if (p_ex != p_ac) {
+            ret = (p_ex > p_ac) ? 1 : -1;
+        }
     }
     return ret;
 }
@@ -1306,6 +1323,39 @@ double picoquic_test_gauss_random(uint64_t* random_context)
     dx -= 6.0;
 
     return dx;
+}
+
+/*
+* From Knuth:
+*   init:
+*        Let L = exp(-lambda), k = 0 and p = 1.
+*   do:
+*        k = k + 1.
+*        Generate uniform random number u in [0,1] and let p = p * u.
+*   while p > L.
+*   return k - 1.
+*
+* We implement that using fixed point logic, with a parameter equal to
+*     exp_minus_lambda_2_30 = (uint64_t)(exp(-lambda))*0x40000000)
+* We encode the random variable r on up to 30 bits,
+* and the variable p on up to 31 bits(initial value: 0x40000000)
+* The product p*r is encoded on up to 61 bits -- no overflow on u64
+*/
+
+uint64_t picoquic_test_poisson_random(uint64_t* random_context, uint64_t exp_minus_lambda_2_30)
+{
+    uint64_t k = 0;
+    uint64_t p = 0x40000000;
+
+    do {
+        uint64_t r = picoquic_test_random(random_context);
+        r ^= r >> 30;
+        r &= 0x3fffffff;
+        p = (p * r) >> 30;
+        k = k + 1;
+    } while (p > exp_minus_lambda_2_30);
+
+    return (k - 1);
 }
 
 /* Convert binary string to test string for logging purposes.

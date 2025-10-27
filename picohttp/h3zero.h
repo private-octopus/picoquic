@@ -227,9 +227,16 @@ uint8_t * h3zero_qpack_int_encode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t mask, uint64_t val);
 uint8_t * h3zero_qpack_int_decode(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t mask, uint64_t *val);
+uint8_t* h3zero_qpack_code_encode(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t prefix, uint8_t mask, uint64_t code);
+uint8_t* h3zero_qpack_literal_plus_name_encode(uint8_t* bytes, uint8_t* bytes_max,
+    uint8_t const* name, size_t name_length, uint8_t const* val, size_t val_length);
+uint8_t* h3zero_qpack_literal_plus_ref_encode(uint8_t* bytes, uint8_t* bytes_max,
+    uint64_t code, uint8_t const* val, size_t val_length);
 
 uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     h3zero_header_parts_t * parts);
+uint8_t* h3zero_qpack_code_encode(uint8_t* bytes, uint8_t* bytes_max, uint8_t prefix, uint8_t mask, uint64_t code);
 uint8_t * h3zero_create_request_header_frame(uint8_t * bytes, uint8_t * bytes_max,
     uint8_t const * path, size_t path_length, char const * host);
 uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
@@ -271,7 +278,7 @@ typedef struct st_h3zero_data_stream_state_t {
     size_t frame_header_read;
     unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
-    unsigned int frame_header_parsed : 1;
+    unsigned int frame_prefix_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;

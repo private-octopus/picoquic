@@ -150,7 +150,7 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
 * 
 * If the application needs to post new data or otherwise interact with
 * the quic connections, it should call picoquic_wake_up_network_thread,
-* passing the thread context as an argument. This with trigger a
+* passing the thread context as an argument. This will trigger a
 * callback of type `picoquic_packet_loop_wake_up`, which executes
 * in the context of the network thread. Picoquic APIs can be called
 * in this context without worrying about concurrency issues.

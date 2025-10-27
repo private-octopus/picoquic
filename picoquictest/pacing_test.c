@@ -36,6 +36,9 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
+
+#include "picoquictest_rctl.h"
+
 /* Test of the pacing functions.
 */
 
@@ -159,19 +162,16 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
         test_ctx->c_to_s_link->picosec_per_byte = picosec_per_byte;
         test_ctx->s_to_c_link->microsec_latency = latency_target;
         test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
-        /* Set leaky bucket parameters */
-        test_ctx->c_to_s_link->bucket_increase_per_microsec = bucket_increase_per_microsec;
-        test_ctx->c_to_s_link->bucket_max = bucket_max;
-        test_ctx->c_to_s_link->bucket_current = (double)bucket_max;
-        test_ctx->c_to_s_link->bucket_arrival_last = simulated_time;
-        test_ctx->s_to_c_link->bucket_increase_per_microsec = bucket_increase_per_microsec;
-        test_ctx->s_to_c_link->bucket_max = bucket_max;
-        test_ctx->s_to_c_link->bucket_current = (double)bucket_max;
-        test_ctx->s_to_c_link->bucket_arrival_last = simulated_time;
+
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
         picoquic_set_binlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
+
+        /* Set leaky bucket parameters */
+        if ((ret = rctl_configure(test_ctx->c_to_s_link, bucket_increase_per_microsec, bucket_max, simulated_time)) == 0) {
+            ret = rctl_configure(test_ctx->s_to_c_link, bucket_increase_per_microsec, bucket_max, simulated_time);
+        }
     }
 
     if (ret == 0) {

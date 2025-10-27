@@ -306,28 +306,18 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
             err_msg_len = strlen(err_msg);
         }
         length += err_msg_len;
-        /* Encode the capsule */
-        if ((bytes = picoquic_frames_varint_encode(buffer, bytes_max,
-            picowt_capsule_close_webtransport_session)) != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, length)) != NULL &&
-            (bytes = picoquic_frames_uint32_encode(bytes, bytes_max, picowt_err)) != NULL)
-        {
-            if (bytes + err_msg_len > bytes_max) {
-                bytes = NULL;
-            }
-            else if (err_msg_len > 0) {
-                memcpy(bytes, err_msg, err_msg_len);
-                bytes += err_msg_len;
-            }
-        }
-        if (bytes == NULL) {
-            /* This might happen if the error message is too long */
+
+        if ((bytes = picoquic_frames_uint32_encode(buffer, bytes_max, picowt_err)) == NULL ||
+            bytes + err_msg_len > bytes_max) {
             ret = -1;
         }
         else {
-            /* Write the capsule*/
-            ret = picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, buffer, bytes - buffer, 1);
-            control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+            if (err_msg_len > 0) {
+                memcpy(bytes, err_msg, err_msg_len);
+                bytes += err_msg_len;
+            }
+            ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
+                bytes - buffer, buffer, 1 /* Set fin, because we are claosing this stream */);
         }
     }
     return ret;
@@ -343,20 +333,18 @@ DRAIN_WEBTRANSPORT_SESSION Capsule {
 int picowt_send_drain_session_message(picoquic_cnx_t* cnx, 
     h3zero_stream_ctx_t* control_stream_ctx)
 {
-    const uint8_t drain_capsule[] = {
-        0x80, 0,
-        (uint8_t)((picowt_capsule_drain_webtransport_session >> 8) & 0xff),
-        (uint8_t)(picowt_capsule_drain_webtransport_session & 0xff),
-        0
-    };
     int ret = 0;
+    uint8_t null_msg[] = { 0 };
+
     if (control_stream_ctx->ps.stream_state.is_fin_sent) {
         /* cannot send! */
         ret = -1;
     }
     else {
-        ret = picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, drain_capsule, sizeof(drain_capsule), 0);
+        ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
+            0, null_msg, 0 /* Do not set fin, there could be other capsules */);
     }
+
     return ret;
 }
 
@@ -368,13 +356,16 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 * - Close session.
 * 
 */
-int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule, h3zero_callback_ctx_t* h3_ctx)
+int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+    const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {
     int ret = 0; 
     
     while (ret == 0 && bytes < bytes_max) {
         const uint8_t* bytes_first = bytes;
-        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
+
+
+        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule, stream_ctx);
 
         if (bytes == NULL) {
             picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes_first);
@@ -384,9 +375,6 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
         else{
             if (capsule->h3_capsule.is_stored) {
                 switch (capsule->h3_capsule.capsule_type) {
-                case h3zero_capsule_type_datagram:
-                    h3zero_receive_datagram_capsule(cnx, stream_ctx, &capsule->h3_capsule, h3_ctx);
-                    break;
                 case picowt_capsule_drain_webtransport_session:
                 case picowt_capsule_close_webtransport_session:
                     picoquic_log_app_message(cnx, "Received web transport session capsule, type: 0x%" PRIx64 " (%s)",

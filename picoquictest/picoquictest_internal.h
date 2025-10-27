@@ -84,6 +84,7 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     unsigned int is_skipping[2];
     unsigned int test_affinity;
     unsigned int test_wifi;
+    unsigned int test_too_long;
     unsigned int one_datagram_per_packet;
 
 } test_datagram_send_recv_ctx_t;
@@ -162,6 +163,8 @@ typedef struct st_picoquic_test_endpoint_t {
     uint64_t prepare_cpu_time;
     uint64_t incoming_cpu_time;
     size_t packet_queue_max;
+    /* flag to mark use of AF_UNSPEC for receiving "addr_to" */
+    int addr_to_unspec;
     /* next time endpoint ready */
     uint64_t next_time_ready;
     /* last time client sent something */
@@ -353,6 +356,8 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx);
 
 int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time);
+int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t timeout_value);
 
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,
