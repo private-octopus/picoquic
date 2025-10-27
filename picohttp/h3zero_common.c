@@ -262,30 +262,6 @@ void h3zero_delete_all_stream_prefixes(picoquic_cnx_t * cnx, h3zero_callback_ctx
 	}
 }
 
-#if 0
-/* Unused code */
-uint64_t h3zero_parse_stream_prefix(uint8_t* buffer_8, size_t* nb_in_buffer, uint8_t* data, size_t data_length, size_t * nb_read)
-{
-	uint64_t prefix = UINT64_MAX;
-
-	*nb_read = 0;
-	while (*nb_read < data_length) {
-		size_t v_len = (*nb_in_buffer > 0)?VARINT_LEN_T(buffer_8, size_t):8;
-		if (*nb_in_buffer < v_len) {
-			buffer_8[*nb_in_buffer] = data[*nb_read];
-			*nb_read += 1;
-			*nb_in_buffer += 1;
-		}
-		if (*nb_in_buffer >= v_len) {
-			(void)picoquic_frames_uint64_decode(buffer_8, buffer_8 + 8, &prefix);
-			break;
-		}
-	}
-
-	return prefix;
-}
-#endif
-
 int h3zero_protocol_init(picoquic_cnx_t* cnx)
 {
 	uint8_t decoder_stream_head = (uint8_t)h3zero_stream_type_qpack_decoder;
@@ -516,7 +492,7 @@ uint8_t* h3zero_wt_parse_control_stream_id(
 }
 
 /* The only support for remote bidir stream is for
- * web transport. We expect the stream to start by a seb transport header:
+ * web transport. We expect the stream to start by a web transport header:
  *  - type h3zero_frame_webtransport_stream
  *  - value control stream id.
  */
@@ -606,187 +582,250 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 	return bytes;
 }
 
-/* Parsing of a data stream. This is implemented as a filter, with a set of states:
+/*
+* Processing of incoming data on an H3 stream.
+* This normally considers bidir streams created by the client.
+* Normally, these streams are used to "get" H3 Data, but there are
+* a couple exceptions:
 * 
-* - Reading frame length: obtaining the length and type of the next frame.
-* - Reading header frame: obtaining the bytes of the header frame.
-*   When all bytes are obtained, the header is parsed and the header
-*   structure is documented. State moves back to initial, with header-read
-*   flag set. Having two frame headers before a data frame is a bug.
-* - Reading unknown frame: unknown frames can happen at any point in
-*   the stream, and should just be ignored.
-* - Reading data frame: the frame header indicated a data frame of
-*   length N. Treat the following N bytes as data.
+* - If the first frame on the stream is a web transport frame, all data is
+*   passed to the specified call back.
+* - If the URL is associated with a call back, all data carried in "h3 data"
+*   frames will be passed to that callback.
+* 
+* The stream is defined as a succession of frames, which could be
+* specified as:
+*     stream = { WT wt_data } | { H3_request [ H3_data [ H3_data]* [ H3_request ] ] }
+*     H3_data = H3_data_header [ data_chunk ]*
+* 
+* The parser operates as a filter:
+* 
+*   - accumulate the next frame's type, length and bytes [Only type and length if H3_data ]
+*   - check that the frame is authorized
+*   - process the last frame, which updates the state of the stream
+*   - if last frame = data, provide the N next byte to the callback or write them to disk
+*   - continue until the end.
+* 
+* The application will call h3zero_parse_data_stream in a loop, until all bytes
+* received from the network have been processed.
 */
-
-uint8_t * h3zero_parse_data_stream(uint8_t * bytes, uint8_t * bytes_max,
-	h3zero_data_stream_state_t * stream_state, size_t * available_data, uint64_t * error_found)
+static uint8_t* h3zero_get_next_vint(uint8_t* bytes, uint8_t* bytes_max,
+	h3zero_data_stream_state_t* stream_state, size_t* offset, uint64_t * v)
 {
-	*available_data = 0;
-	*error_found = 0;
+	if (stream_state->frame_header_read >= *offset + 1 || bytes < bytes_max) {
+		size_t vint_length;
 
-	if (bytes == NULL || bytes >= bytes_max) {
-		*error_found = H3ZERO_INTERNAL_ERROR;
-		return NULL;
-	}
-
-	if (!stream_state->frame_header_parsed) {
-		size_t frame_type_length;
-		size_t frame_header_length;
-
-		if (stream_state->frame_header_read < 1) {
+		if (stream_state->frame_header_read < *offset + 1) {
 			stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
 		}
-		frame_type_length = h3zero_varint_skip(stream_state->frame_header);
+		vint_length = h3zero_varint_skip(stream_state->frame_header + *offset);
 
-		while (stream_state->frame_header_read < frame_type_length && bytes < bytes_max) {
+		while (stream_state->frame_header_read < *offset + vint_length && bytes < bytes_max) {
 			stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
 		}
 
-		if (stream_state->frame_header_read < frame_type_length) {
-			/* No change in state, wait for more bytes */
-			return bytes;
-		}
-
-		(void)h3zero_varint_decode(stream_state->frame_header, frame_type_length,
-			&stream_state->current_frame_type);
-
-		while (stream_state->frame_header_read < frame_type_length + 1 && bytes < bytes_max) {
-			stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-		}
-
-		frame_header_length = h3zero_varint_skip(stream_state->frame_header + frame_type_length) + frame_type_length;
-
-		if (frame_header_length > sizeof(stream_state->frame_header)) {
-			*error_found = H3ZERO_INTERNAL_ERROR;
-			return NULL; /* This should never happen! */
-		}
-
-		while (stream_state->frame_header_read < frame_header_length && bytes < bytes_max) {
-			stream_state->frame_header[stream_state->frame_header_read++] = *bytes++;
-		}
-
-		if (stream_state->frame_header_read >= frame_header_length) {
-			(void)h3zero_varint_decode(stream_state->frame_header + frame_type_length, frame_header_length - frame_type_length,
-				&stream_state->current_frame_length);
-			stream_state->current_frame_read = 0;
-			stream_state->frame_header_parsed = 1;
-
-			if (stream_state->current_frame_type == h3zero_frame_data) {
-				if (!stream_state->header_found || stream_state->trailer_found || stream_state->is_web_transport) {
-					/* protocol error */
-					*error_found = H3ZERO_FRAME_UNEXPECTED;
-					bytes = NULL;
-				}
-			}
-			else if (stream_state->current_frame_type == h3zero_frame_header) {
-				if (stream_state->header_found && (!stream_state->data_found || stream_state->trailer_found || stream_state->is_web_transport)) {
-					/* protocol error */
-					*error_found = H3ZERO_FRAME_UNEXPECTED;
-					bytes = NULL;
-				}
-				else if (stream_state->current_frame_length > 0x10000) {
-					/* error, excessive load */
-					*error_found = H3ZERO_INTERNAL_ERROR;
-					bytes = NULL;
-				}
-			}
-			else if (stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
-				if (stream_state->header_found) {
-					/* protocol error */
-					*error_found = H3ZERO_FRAME_UNEXPECTED;
-					bytes = NULL;
-				}
-				else {
-					stream_state->header_found = 1;
-					stream_state->is_web_transport = 1;
-					stream_state->control_stream_id = stream_state->current_frame_length;
-					stream_state->current_frame_length = 0;
-					stream_state->frame_header_parsed = 1;
-				}
-			}
-			else if (stream_state->current_frame_type == h3zero_frame_cancel_push || 
-				stream_state->current_frame_type == h3zero_frame_goaway ||
-				stream_state->current_frame_type == h3zero_frame_max_push_id) {
-				*error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
-				bytes = NULL;
-			}
-			else if (stream_state->current_frame_type == h3zero_frame_settings) {
-				*error_found = H3ZERO_FRAME_UNEXPECTED;
-				bytes = NULL;
-			}
-		}
-		return bytes;
-	}
-	else {
-		size_t available = bytes_max - bytes;
-		if (stream_state->is_web_transport) {
-			/* Bypass all processing if using web transport */
-			*available_data = (size_t) available;
+		if (stream_state->frame_header_read < *offset + vint_length) {
+			*v = UINT64_MAX;
 		}
 		else {
-			if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-				available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-			}
-
-			if (stream_state->current_frame_type == h3zero_frame_header) {
-			    if (stream_state->current_frame == NULL) {
-					if (stream_state->current_frame_length <= 0x10000) {
-						stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
-					}
-					if (stream_state->current_frame == NULL) {
-						*error_found = H3ZERO_INTERNAL_ERROR;
-						bytes = NULL;
-					}
-				}
-				if (bytes != NULL) {
-					memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-					stream_state->current_frame_read += available;
-					bytes += available;
-
-					if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-						uint8_t* parsed;
-						h3zero_header_parts_t* parts = (stream_state->header_found) ?
-							&stream_state->trailer : &stream_state->header;
-						stream_state->trailer_found = stream_state->header_found;
-						stream_state->header_found = 1;
-						/* parse */
-						parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-							stream_state->current_frame + stream_state->current_frame_length, parts);
-						if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
-							/* protocol error */
-							*error_found = H3ZERO_FRAME_ERROR;
-							bytes = NULL;
-						}
-						/* free resource */
-						stream_state->frame_header_parsed = 0;
-						stream_state->frame_header_read = 0;
-						free(stream_state->current_frame);
-						stream_state->current_frame = NULL;
-					}
-				}
-			}
-			else if (stream_state->current_frame_type == h3zero_frame_data) {
-				*available_data = (size_t)available;
-				stream_state->current_frame_read += available;
-				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-					stream_state->frame_header_parsed = 0;
-					stream_state->frame_header_read = 0;
-					stream_state->data_found = 1;
-				}
-			}
-			else {
-				/* Unknown frame type, should just be ignored */
-				stream_state->current_frame_read += available;
-				bytes += available;
-				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-					stream_state->frame_header_parsed = 0;
-					stream_state->frame_header_read = 0;
-				}
-			}
+			(void)h3zero_varint_decode(stream_state->frame_header + *offset, vint_length,
+				v);
+			*offset += vint_length;
 		}
 	}
+	else {
+		*v = UINT64_MAX;
+	}
+	return bytes;
+}
 
+static int h3zero_check_frame_type(h3zero_data_stream_state_t* stream_state,
+	uint64_t* error_found)
+{
+	int ret = 0;
+	if (stream_state->current_frame_type == h3zero_frame_data) {
+		if (!stream_state->header_found || stream_state->trailer_found) {
+			/* protocol error */
+			*error_found = H3ZERO_FRAME_UNEXPECTED;
+			ret = -1;
+		}
+	}
+	else if (stream_state->current_frame_type == h3zero_frame_header) {
+		/* We do not expect a third header on the same stream, or even a
+		 * second header if no data has been received -- or if the stream was
+		 * upgraded by a connect call */
+		if (stream_state->header_found &&
+			(!stream_state->data_found || stream_state->trailer_found ||
+				stream_state->is_web_transport)) {
+			/* protocol error */
+			*error_found = H3ZERO_FRAME_UNEXPECTED;
+			ret = -1;
+		}
+		else if (stream_state->current_frame_length > 0x10000) {
+			/* error, excessive load */
+			*error_found = H3ZERO_INTERNAL_ERROR;
+			ret = -1;
+		}
+	}
+	else if (stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
+		/* The web transport header shall always be the first header on an incoming bidir
+		 * stream */
+		if (stream_state->header_found) {
+			/* protocol error */
+			*error_found = H3ZERO_FRAME_UNEXPECTED;
+			ret = -1;
+		}
+	}
+	else if (stream_state->current_frame_type == h3zero_frame_cancel_push ||
+		stream_state->current_frame_type == h3zero_frame_goaway ||
+		stream_state->current_frame_type == h3zero_frame_max_push_id) {
+		*error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
+		ret = -1;
+	}
+	else if (stream_state->current_frame_type == h3zero_frame_settings) {
+		*error_found = H3ZERO_FRAME_UNEXPECTED;
+		ret = -1;
+	}
+	return ret;
+}
+
+static uint8_t* h3zero_parse_frame_prefix(uint8_t* bytes, uint8_t* bytes_max,
+	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
+{
+	size_t offset = 0;
+
+	bytes = h3zero_get_next_vint(bytes, bytes_max, stream_state, &offset,
+		&stream_state->current_frame_type);
+
+	if (stream_state->current_frame_type != UINT64_MAX) {
+		bytes = h3zero_get_next_vint(bytes, bytes_max, stream_state, &offset,
+			&stream_state->current_frame_length);
+	}
+
+	if (stream_state->current_frame_length != UINT64_MAX) {
+		stream_state->current_frame_read = 0;
+		stream_state->frame_prefix_parsed = 1;
+		/* Verify that the type makes sense */
+		if (h3zero_check_frame_type(stream_state, error_found) != 0) {
+			bytes = NULL;
+		}
+	}
+	return bytes;
+}
+
+uint8_t* h3zero_parse_header_frame(uint8_t* bytes, uint8_t* bytes_max, size_t available,
+	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
+{
+	if (stream_state->current_frame == NULL) {
+		stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
+	}
+	if (stream_state->current_frame == NULL) {
+		*error_found = H3ZERO_INTERNAL_ERROR;
+		bytes = NULL;
+	}
+	else {
+		memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
+		stream_state->current_frame_read += available;
+		bytes += available;
+
+		if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+			uint8_t* parsed;
+			h3zero_header_parts_t* parts = (stream_state->header_found) ?
+				&stream_state->trailer : &stream_state->header;
+			stream_state->trailer_found = stream_state->header_found;
+			stream_state->header_found = 1;
+			/* parse */
+			parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
+				stream_state->current_frame + stream_state->current_frame_length, parts);
+			if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
+				/* protocol error */
+				*error_found = H3ZERO_FRAME_ERROR;
+				bytes = NULL;
+			}
+			/* free resource */
+			stream_state->frame_prefix_parsed = 0;
+			stream_state->frame_header_read = 0;
+			free(stream_state->current_frame);
+			stream_state->current_frame = NULL;
+		}
+	}
+	return bytes;
+}
+
+uint8_t* h3zero_parse_data_stream(uint8_t* bytes, uint8_t* bytes_max,
+	h3zero_data_stream_state_t* stream_state, size_t* available_data, uint64_t* error_found)
+{
+	/* process has many of the incoming bytes as possible, until
+	* either a frame was fully received and processed, or an error was detected.
+	*
+	* If receiving a header frame, parse that frame to store the content in
+	* the relevant structure. Return a pointer to the byte just after that
+	* header. Available data shall be zero.
+	*
+	* If receiving data within a data frame, return a pointer to the first
+	* byte of data that should be processed by the application, and set available
+	* to the correct length.
+	*
+	* If receiving bytes on a web transport stream, return a pointer to the
+	* first byte, and set available to the number of bytes to process.
+	*/
+	*available_data = 0; /* Initial value 0; will be set if bytes are available */
+
+	if (stream_state->is_web_transport) {
+		/* Bypass. All the incoming data is passed to the callback */
+		*available_data = bytes_max - bytes;
+	}
+	else
+	{
+		if (!stream_state->frame_prefix_parsed) {
+			bytes = h3zero_parse_frame_prefix(bytes, bytes_max, stream_state, error_found);
+			if (bytes != NULL && stream_state->current_frame_length != UINT64_MAX) {
+				stream_state->frame_prefix_parsed = 1;
+			}
+		}
+		if (bytes != NULL && stream_state->frame_prefix_parsed) {
+			/* if the frame header was parsed, continue: */
+			if (stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
+				stream_state->header_found = 1;
+				stream_state->is_web_transport = 1;
+				stream_state->control_stream_id = stream_state->current_frame_length;
+				stream_state->current_frame_length = 0;
+				stream_state->frame_prefix_parsed = 1;
+				/* Deliver the bytes that followed this header */
+				*available_data = bytes_max - bytes;
+			}
+			else {
+				size_t available = bytes_max - bytes;
+				if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
+					available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
+				}
+				if (stream_state->current_frame_type == h3zero_frame_data) {
+					/* TODO: compute available size */
+					/* TODO: submit data to either callback or H3 */
+					*available_data = (size_t)available;
+					stream_state->current_frame_read += available;
+					if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+						stream_state->frame_prefix_parsed = 0;
+						stream_state->frame_header_read = 0;
+						stream_state->data_found = 1;
+					}
+				}
+				else if (stream_state->current_frame_type == h3zero_frame_header) {
+					/* Process the header frame */
+					bytes = h3zero_parse_header_frame(bytes, bytes_max, available, stream_state, error_found);
+				}
+				else {
+					/* Unknown frame type, should just be ignored */
+					stream_state->current_frame_read += available;
+					bytes += available;
+					if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+						stream_state->frame_prefix_parsed = 0;
+						stream_state->frame_header_read = 0;
+					}
+				}
+			}
+		} /* header parsed */
+	} /* Not web transport */
 	return bytes;
 }
 
@@ -983,8 +1022,7 @@ h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path) {
 }
 
 /* Processing of the request frame.
-* This function is called after the client's stream is closed,
-* after verifying that a request was received */
+* This function is called  after verifying that a request was received */
 
 int h3zero_process_request_frame(
 	picoquic_cnx_t* cnx,
@@ -1203,6 +1241,11 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 	return ret;
 }
 
+
+
+
+
+
 int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
@@ -1216,6 +1259,13 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 
 	while (bytes < bytes_max) {
 		bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
+		/* action should depend on what type of frame was read:
+		* web transport: this is the bypass option. make sure that the callback is set. pass any available data. 
+		* data frame: pass the data to the app, which means writing / reading if web, callback otherwise. 
+		* post: identify the post context, set the call back.
+		* 
+		*/
+
 		if (bytes == NULL) {
 			ret = picoquic_close(cnx, error_found);
 			break;
@@ -1235,6 +1285,7 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 					}
 				}
 			}
+			/* If received a post command, verify that it can be accepted */
 			else if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0) {
 				int path_item = h3zero_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, ctx->path_table, ctx->path_table_nb);
 				if (path_item >= 0) {
@@ -1299,6 +1350,9 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	return ret;
 }
 
+/* H3 Client Data: process data sent by the client.
+*/
+
 int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
@@ -1312,8 +1366,8 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 		uint64_t error_found = 0;
 		size_t available_data = 0;
 		uint8_t* bytes_max = bytes + length;
-		int header_required = !stream_ctx->ps.stream_state.header_found;
 		while (bytes < bytes_max) {
+			int header_required = !stream_ctx->ps.stream_state.header_found;
 			bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
 			if (bytes == NULL) {
 				ret = picoquic_close(cnx, error_found);
@@ -1346,11 +1400,17 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 							ret = picoquic_open_flow_control(cnx, stream_id, stream_ctx->ps.stream_state.current_frame_length);
 						}
 					}
-					if (ret == 0 && ctx->no_disk == 0) {
-						ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
-						if (ret != 0) {
-							picoquic_log_app_message(cnx,
-								"Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
+						ret = stream_ctx->path_callback(cnx, bytes, available_data, fin_or_event, stream_ctx, stream_ctx->path_callback_ctx);
+					}
+					else
+					{
+						if (ret == 0 && ctx->no_disk == 0) {
+							ret = (fwrite(bytes, 1, available_data, stream_ctx->F) > 0) ? 0 : -1;
+							if (ret != 0) {
+								picoquic_log_app_message(cnx,
+									"Could not write data from stream %" PRIu64 ", error 0x%x", stream_id, ret);
+							}
 						}
 					}
 					stream_ctx->received_length += available_data;
@@ -1428,10 +1488,7 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 		}
 	}
 	if (ret == 0 && stream_ctx != NULL) {
-		if (stream_ctx->is_upgraded) {
-			ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
-		}
-		else if (IS_BIDIR_STREAM_ID(stream_id)) {
+		if (IS_BIDIR_STREAM_ID(stream_id)) {
 			if (IS_CLIENT_STREAM_ID(stream_id)) {
 				/* If nothing is known about the stream, it is treated by default as an H3 stream
 				 */
@@ -2006,7 +2063,7 @@ void h3zero_release_capsule(h3zero_capsule_t* capsule)
 	memset(capsule, 0, sizeof(h3zero_capsule_t));
 }
 
-const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule)
+const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule, h3zero_stream_ctx_t * stream_ctx)
 {
 	if (capsule->is_stored) {
 		/* reset the fields to expected value */
@@ -2137,5 +2194,33 @@ int h3zero_prepare_and_send_data(void * context, size_t space, uint64_t send_tot
 		}
 	}
 
+	return ret;
+}
+
+/* Send a capsule, as specified in RFC 9297.
+* The capsules are sent of the "data stream" of the control stream,
+* defined as "all bytes sent in DATA frames with the corresponding
+* stream ID.
+* 
+*/
+int h3zero_send_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx,
+	uint64_t capsule_type, size_t capsule_length, uint8_t* capsule_data, int set_fin)
+{
+	uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+	int ret = 0;
+	uint8_t* bytes;
+	uint8_t* bytes_max = buffer + sizeof(buffer);
+	size_t data_length = ((capsule_type < 64) ? 1 : 2) + ((capsule_length < 64) ? 1 : 2) + capsule_length;
+
+	if ((bytes = picoquic_frames_varint_encode(buffer, bytes_max, h3zero_frame_data)) == NULL ||
+		(bytes = picoquic_frames_varint_encode(bytes, bytes_max, data_length)) == NULL ||
+		(bytes = picoquic_frames_varint_encode(bytes, bytes_max, capsule_type)) == NULL ||
+		(bytes = picoquic_frames_length_data_encode(bytes, bytes_max, capsule_length, capsule_data)) == NULL) {
+		ret = -1;
+	}
+	else {
+		/* Write the capsule*/
+		ret = picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, buffer, bytes - buffer, set_fin);
+	}
 	return ret;
 }

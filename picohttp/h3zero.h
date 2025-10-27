@@ -278,7 +278,7 @@ typedef struct st_h3zero_data_stream_state_t {
     size_t frame_header_read;
     unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
-    unsigned int frame_header_parsed : 1;
+    unsigned int frame_prefix_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;
