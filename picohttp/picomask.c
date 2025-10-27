@@ -619,11 +619,13 @@ int picomask_callback(picoquic_cnx_t* cnx,
         * application needs to close that stream.
         */
         break;
-    case picohttp_callback_connect_accepted: 
+    case picohttp_callback_connect_accepted:
+#if 1
         if (stream_ctx != NULL) {
             /* Stream will now carry "capsules" */
             stream_ctx->is_upgraded = 1;
         }
+#endif
         break;
     case picohttp_callback_post_fin:
     case picohttp_callback_post_data:

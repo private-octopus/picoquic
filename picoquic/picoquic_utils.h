@@ -278,10 +278,11 @@ typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
 
 typedef struct st_picoquictest_aqm_t {
     void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
-        picoquictest_sim_packet_t* packet, uint64_t current_time, int* should_drop);
+        picoquictest_sim_packet_t* packet, uint64_t current_time);
+    void (*check_arrival)(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+    void (*reset) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
     void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
-    void (*reset) (picoquictest_aqm_t* self, uint64_t current_time);
-} picoquctest_aqm_t;
+} picoquictest_aqm_t;
 
 typedef enum {
     jitter_gauss = 0,
@@ -335,9 +336,20 @@ uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint6
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time);
 
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's queue, with normal AQM processing and length check. */
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
-
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's "latency queue", bypassing the AQM.
+* if should_drop != 0, the packet will be dropped instead of queued.
+*/
+void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t current_time, int should_drop);
+/* Compute transmission time of a packet (used internally by picoquictest_sim_link_enqueue) */
+uint64_t picoquictest_sim_link_transmit_time(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet);
+/* Compute the queuing delay for the next packet */
+uint64_t picoquictest_sim_link_queue_delay(picoquictest_sim_link_t* link, uint64_t current_time);
 /* picoquic_test_simlink_suspend simulates and interuption of transmission until the
 * specified "end of interval" time. There are two modes:
 * 

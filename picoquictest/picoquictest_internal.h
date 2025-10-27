@@ -356,6 +356,8 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx);
 
 int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time);
+int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t timeout_value);
 
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,

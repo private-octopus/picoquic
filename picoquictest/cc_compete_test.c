@@ -91,10 +91,10 @@ int cc_compete_prague2_test()
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
-    spec.main_target_time = 1600000;
+    spec.main_target_time = 2500000;
     spec.data_rate_in_gbps = 0.05;
     spec.latency = 25000;
-    spec.l4s_max = 15000;
+    spec.l4s_max = 5000;
     spec.icid = icid;
     spec.qlog_dir = ".";
 

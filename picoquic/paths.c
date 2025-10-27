@@ -217,10 +217,10 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
         length = 0;
     }
     packet->length = length;
-    picoquic_finalize_and_protect_packet(cnx, packet,
+    picoquic_finalize_and_protect_packet_tuple(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time);
+        path_x, current_time, tuple);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;
@@ -272,7 +272,7 @@ void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, 
             while (tuple != NULL && (next_tuple = tuple->next_tuple) != NULL) {
                 if (next_tuple->challenge_failed) {
                     if (current_time > next_tuple->demotion_time) {
-                        picoquic_delete_tuple(path_x, next_tuple);
+                        picoquic_delete_tuple(path_x, next_tuple, 0);
                         continue;
                     }
                     else if (*next_wake_time > next_tuple->demotion_time) {
@@ -711,21 +711,21 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             if (picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0 &&
                 (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL &&
                 picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
+                picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
                 if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
-                    (cnx->is_multipath_enabled ||
-                        !picoquic_is_path_challenging_packet(decrypted_data->data + decrypted_data->offset,
-                            decrypted_data->length - (size_t)decrypted_data->offset))) {
+                    cnx->is_multipath_enabled) {
                     /* Treat this as a NAT rebinding. */
                     picoquic_tuple_t* old_tuple = path_x->first_tuple;
                     /* We need to replace the first tuple by this tuple. */
                     picoquic_set_first_tuple(path_x, tuple);
+                    tuple->challenge_verified = 1;
                     /* set a challenge on the old tuple to recover from spoofed addresses */
                     picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
                     old_tuple->challenge_required = 1;
+                    old_tuple->challenge_verified = 0;
                 }
                 else {
                     /* Treat this a new tuple challenge. */
-                    picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
                     tuple->challenge_required = 1;
                 }
             }

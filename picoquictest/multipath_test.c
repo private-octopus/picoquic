@@ -467,7 +467,9 @@ typedef enum {
     multipath_test_fail,
     multipath_test_ab1,
     multipath_test_discovery,
-    multipath_test_keep_alive
+    multipath_test_keep_alive,
+    multipath_test_just_one,
+    multipath_test_break_both,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -504,6 +506,10 @@ int multipath_init_callbacks(picoquic_test_tls_api_ctx_t* test_ctx, multipath_te
             if (test_id == multipath_test_quality) {
                 picoquic_subscribe_to_quality_update(test_ctx->cnx_client, 50000, 5000);
                 ret = picoquic_subscribe_to_quality_update_per_path(test_ctx->cnx_client, 0, 50000, 5000);
+            }
+            if (test_id == multipath_test_callback) {
+                int is_already_allowed = 0;
+                ret = picoquic_subscribe_new_path_allowed(test_ctx->cnx_client, &is_already_allowed);
             }
         }
         if (test_id == multipath_test_callback) {
@@ -759,6 +765,55 @@ int multipath_datagram_send_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
+int multipath_test_do_keep_alive(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t * simulated_time)
+{
+    int ret = 0;
+    uint8_t ping_frame[1] = { (uint8_t)picoquic_frame_type_ping };
+    int nat_test_needed = 1;
+    int rounds_without_nat = 0;
+
+    while (ret == 0 && *simulated_time < 200000000) {
+        uint64_t previous_time = *simulated_time;
+
+        if (nat_test_needed) {
+            if (rounds_without_nat > 3) {
+                /* do a nat rebinding */
+                test_ctx->client_addr_natted = test_ctx->client_addr;
+                test_ctx->client_addr_natted.sin_port += 7;
+                test_ctx->client_use_nat = 1;
+                nat_test_needed = 0;
+            }
+            else {
+                rounds_without_nat++;
+            }
+        }
+
+        if (ret == 0) {
+            ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0, picoquic_packet_context_application);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot queue ping frame, ret = 0x%x", ret);
+                break;
+            }
+        }
+
+        ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 10000000);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait 10 seconds, ret = 0x%x", ret);
+            break;
+        }
+
+        if (!(TEST_CLIENT_READY && TEST_SERVER_READY) || *simulated_time < previous_time + 1000000) {
+            DBG_PRINTF("Connection stalled at t=%" PRIu64, *simulated_time);
+            ret = -1;
+            break;
+        }
+    }
+    if (ret != 0) {
+        DBG_PRINTF("Keep alive test fails at t=%" PRIu64 ", ret = 0x%x", *simulated_time, ret);
+    }
+    return ret;
+}
+
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
 {
     uint64_t simulated_time = 0;
@@ -828,6 +883,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         if (test_id == multipath_test_discovery) {
             server_parameters.address_discovery_mode = 1;
             test_ctx->cnx_client->local_parameters.address_discovery_mode = 3;
+        }
+        if (test_id == multipath_test_just_one) {
+            server_parameters.initial_max_path_id = 1;
         }
 
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
@@ -927,7 +985,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
         test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
         test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
-        test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
+        test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
          * For the tunnel scenario, do the same but kill both links.
@@ -972,6 +1030,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Break both links */
                 multipath_test_kill_links(test_ctx, 0);
                 multipath_test_kill_links(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_break_both) {
+                /* Break both paths, program them to return socket errors */
+                multipath_test_set_unreachable(test_ctx, 0);
+                multipath_test_set_unreachable(test_ctx, 1);
             } else {
                 multipath_test_kill_links(test_ctx, 
                     (test_id == multipath_test_drop_first ||
@@ -1042,49 +1105,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && test_id == multipath_test_keep_alive) {
-        uint8_t ping_frame[1] = { (uint8_t)picoquic_frame_type_ping };
-        int nat_test_needed = 1;
-        int rounds_without_nat = 0;
-
-        while (ret == 0 && simulated_time < 200000000) {
-            uint64_t previous_time = simulated_time;
-
-            if (nat_test_needed) {
-                if (rounds_without_nat > 3) {
-                    /* do a nat rebinding */
-                    test_ctx->client_addr_natted = test_ctx->client_addr;
-                    test_ctx->client_addr_natted.sin_port += 7;
-                    test_ctx->client_use_nat = 1;
-                    nat_test_needed = 0;
-                }
-                else {
-                    rounds_without_nat++;
-                }
-            }
-
-            if (ret == 0) {
-                ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0, picoquic_packet_context_application);
-                if (ret != 0) {
-                    DBG_PRINTF("Cannot queue ping frame, ret = 0x%x", ret);
-                    break;
-                }
-            }
-
-            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 10000000);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot wait 10 seconds, ret = 0x%x", ret);
-                break;
-            }
-
-            if (!(TEST_CLIENT_READY && TEST_SERVER_READY) || simulated_time < previous_time + 1000000) {
-                DBG_PRINTF("Connection stalled at t=%" PRIu64, simulated_time);
-                ret = -1;
-                break;
-            }
-        }
-        if (ret != 0) {
-            DBG_PRINTF("Keep alive test fails at t=%" PRIu64 ", ret = 0x%x", simulated_time, ret);
-        }
+        ret = multipath_test_do_keep_alive(test_ctx, &simulated_time);
     }
 
     /* Check that the transmission succeeded */
@@ -1092,7 +1113,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
-    if (ret == 0 && test_id == multipath_test_basic) {
+    if (ret == 0 && (test_id == multipath_test_basic || test_id == multipath_test_just_one)) {
         if ((ret = multipath_verify_all_cid_available(test_ctx->cnx_client)) != 0) {
             DBG_PRINTF("%s", "Not received all CID from server");
         }
@@ -1243,6 +1264,17 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
     }
+
+    if (test_id == multipath_test_break_both) {
+        /* exception: this test is supposed to fail, because both links
+        * are unreachable. */
+        if (ret == 0) {
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
     /* Delete the context */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -1369,7 +1401,7 @@ int multipath_break1_test()
  */
 int multipath_socket_error_test()
 {
-    uint64_t max_completion_microsec = 10900000;
+    uint64_t max_completion_microsec = 11000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break2);
 }
@@ -1500,9 +1532,25 @@ int multipath_keep_alive_test()
     return multipath_test_one(max_completion_microsec, multipath_test_keep_alive);
 }
 
+/* Setting the initial max patht ID to 1 should allow two paths to be created */
+int multipath_just_one_test()
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_just_one);
+}
+
+/* Breaking both links at the same time. Expect the connection to break,
+ * without crashing. */
+int multipath_break_both_test()
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_break_both);
+}
 
 /* Monopath tests:
- * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
+ * Enable the multipath option, but use only a single path. The goal of the tests is to verify that
  * these "monopath" scenarios perform just as well as if multipath was not enabled.
  */
 
@@ -1510,11 +1558,13 @@ typedef enum {
     monopath_test_basic = 0,
     monopath_test_hole,
     monopath_test_rotation,
+    monopath_keep_alive
 } monopath_test_enum_t;
 
 /* Basic connection with the multicast option enabled. */
 int monopath_test_one(monopath_test_enum_t test_case)
 {
+    uint64_t max_completion_microsec = 2200000;
     uint64_t simulated_time = 0;
     const uint64_t latency = 10000;
     picoquic_tp_t client_parameters;
@@ -1522,6 +1572,8 @@ int monopath_test_one(monopath_test_enum_t test_case)
     picoquic_connection_id_t initial_cid = { {0xba, 0xba, 1, 0, 0, 0, 0, 0}, 8 };
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = 0;
+
+    initial_cid.id[7] = (uint8_t)test_case;
 
     multipath_init_params(&client_parameters, 0);
     multipath_init_params(&server_parameters, 0);
@@ -1558,9 +1610,42 @@ int monopath_test_one(monopath_test_enum_t test_case)
             picoquic_set_default_crypto_epoch_length(test_ctx->qserver, 200);
         }
 
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            test_scenario_multipath, sizeof(test_scenario_multipath), 0, 0, 0, 2 * latency,
-            2200000);
+        if (ret == 0) {
+            ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+            if (ret != 0)
+            {
+                DBG_PRINTF("Connect loop returns %d\n", ret);
+            }
+        }
+
+        /* Prepare to send data */
+        if (ret == 0) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath,
+                sizeof(test_scenario_multipath));
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("Init send receive scenario returns %d\n", ret);
+            }
+        }
+
+        if (ret == 0) {
+            ret = tls_api_data_sending_loop(test_ctx, &test_ctx->loss_mask_default, &simulated_time, 0);
+
+            if (ret != 0)
+            {
+                DBG_PRINTF("Data sending loop returns %d\n", ret);
+            }
+        }
+    }
+
+    if (ret == 0 && test_case == monopath_keep_alive) {
+        max_completion_microsec = 202000000;
+        ret = multipath_test_do_keep_alive(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
     }
 
     if (ret == 0){
@@ -1575,7 +1660,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
                 DBG_PRINTF("%s", "No key rotation observed.\n");
                 ret = -1;
             }
-        }
+        } 
     }
 
     /* Free the resource, which will close the log file.
@@ -1601,11 +1686,18 @@ int monopath_hole_test()
     return monopath_test_one(monopath_test_hole);
 }
 
+/* test that a single path connection can be kept alive */
+int monopath_keep_alive_test()
+{
+    return monopath_test_one(monopath_keep_alive);
+}
+
 /* Testing key rotation in monopath context. */
 int monopath_rotation_test()
 {
     return monopath_test_one(monopath_test_rotation);
 }
+
 
 /* The zero RTT test uses the unipath code, with a special parameter.
  * Test both regular 0RTT set up, and case of losses.

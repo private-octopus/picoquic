@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.38.3"
+#define PICOQUIC_VERSION "1.1.39.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -453,7 +453,7 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
 
 /* The SSLKEYLOG function defines a way to publish the encryption keys
 * used by QUIC. If that feature is enabled, the code read the environment
-* variable SSLKEYLOG to find the path of the file where to log the encryption
+* variable SSLKEYLOGFILE to find the path of the file where to log the encryption
 * file. If the environment variable is not present, no file is set.
 * 
 * This is a very dangerous feature, that can be abused to break encryption.
@@ -1578,6 +1578,7 @@ typedef enum {
 
 typedef struct st_picoquic_per_ack_state_t {
     uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t send_delay; /* Delay between send time of acked packet and prior ack. */
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
     uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */

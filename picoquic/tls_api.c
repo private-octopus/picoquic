@@ -1485,7 +1485,6 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
             secret1 = client_secret;
             secret2 = server_secret;
         }
-        
         ret = picoquic_set_key_from_secret(cipher, 1, 0, &cnx->crypto_context[0], secret1, prefix_label);
 
         if (ret == 0) {
@@ -2874,12 +2873,16 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
     uint8_t* bytes = text;
     uint8_t* bytes_max = text + sizeof(text);
 
-    /* set a short life time for short lived tokens, 24 hours otherwise */
+    /* The prepare token function can prepare two kind of tokens: immediate retry
+    * tokens, that are short lived, or "new tokens", that are valid for a
+    * a longer delay. We differentiate between these two cases by testing the
+    * presence of the Original DCID parameter, which must be present in
+    * the retry tokens, but shall never be in the new tokens. */
     if (odcid->id_len == 0) {
-        token_time += 24ull * 3600ull * 1000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_LONG;
     }
     else {
-        token_time += 4000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_SHORT;
     }
     /* serialize the token components */
     if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, token_time)) != NULL &&
