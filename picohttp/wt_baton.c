@@ -600,9 +600,6 @@ int wt_baton_accept(picoquic_cnx_t* cnx,
         }
 
         if (ret == 0) {
-#if 0
-            stream_ctx->ps.stream_state.is_web_transport = 1;
-#endif
             stream_ctx->path_callback = wt_baton_callback;
             stream_ctx->path_callback_ctx = baton_ctx;
             baton_ctx->connection_ready = 1;

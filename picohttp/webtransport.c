@@ -375,13 +375,6 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
         else{
             if (capsule->h3_capsule.is_stored) {
                 switch (capsule->h3_capsule.capsule_type) {
-#if 0
-                case h3zero_capsule_type_datagram: {
-                    h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
-                    h3zero_receive_datagram_capsule(cnx, stream_ctx, &capsule->h3_capsule, h3_ctx);
-                    break;
-                }
-#endif
                 case picowt_capsule_drain_webtransport_session:
                 case picowt_capsule_close_webtransport_session:
                     picoquic_log_app_message(cnx, "Received web transport session capsule, type: 0x%" PRIx64 " (%s)",
