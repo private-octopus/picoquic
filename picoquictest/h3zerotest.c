@@ -3494,10 +3494,12 @@ int h3zero_settings_encode_test(const uint8_t* ref, size_t ref_length, h3zero_se
     uint8_t* bytes = buffer;
     uint8_t* bytes_max = buffer + sizeof(buffer);
 
-    if ((bytes = h3zero_settings_encode(bytes, bytes_max, test)) != NULL &&
-        (bytes - buffer) == ref_length &&
-        memcmp(buffer, ref, ref_length) == 0) {
-        ret = 0;
+    if ((bytes = h3zero_settings_encode(bytes, bytes_max, test)) != NULL) {
+        size_t actual_length = bytes - buffer;
+        if (actual_length == ref_length &&
+            memcmp(buffer, ref, ref_length) == 0) {
+            ret = 0;
+        }
     }
     return ret;
 }

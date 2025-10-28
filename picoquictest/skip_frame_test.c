@@ -1546,7 +1546,7 @@ uint8_t* picoquic_format_new_token_frame(uint8_t* bytes, uint8_t* bytes_max, int
     uint8_t* token, size_t token_length);
 uint8_t* picoquic_format_stop_sending_frame(picoquic_stream_head_t* stream,
     uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
-uint8_t* picoquic_format_stream_reset_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+uint8_t* picoquic_format_reset_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
     uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_data_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     uint8_t* bytes_max, int* more_data, int* is_pure_ack);
@@ -1606,7 +1606,7 @@ int frames_format_test()
     }
     if (ret == 0) {
         stream->reset_requested = 1;
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_reset_frame, 2, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST_ONCE(picoquic_format_reset_stream_frame, 2, cnx, stream, bytes, bytes_max, &more_data, &is_pure_ack);
         stream->reset_requested = 0;
         FRAME_FORMAT_TEST(picoquic_format_new_connection_id_frame, cnx, local_cnxid_list, bytes, bytes_max, &more_data, &is_pure_ack, l_cid);
         FRAME_FORMAT_TEST(picoquic_format_retire_connection_id_frame, bytes, bytes_max, &more_data, &is_pure_ack, 1, 0, 17);

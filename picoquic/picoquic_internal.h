@@ -162,7 +162,8 @@ typedef enum {
     picoquic_frame_type_paths_blocked = 0x15228c0d,
     picoquic_frame_type_path_cid_blocked = 0x15228c0e,
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
-    picoquic_frame_type_observed_address_v6 = 0x9f81a7
+    picoquic_frame_type_observed_address_v6 = 0x9f81a7,
+    picoquic_frame_type_reset_stream_at = 0x24,
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -817,6 +818,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t last_time_data_sent;
     picosplay_tree_t stream_data_tree; /* splay of received stream segments */
     uint64_t sent_offset; /* Amount of data sent in the stream */
+    uint64_t reliable_size; /* Length guaranteed when sending "reset at" */
     picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
@@ -1331,6 +1333,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_address_discovery_receiver : 1; /* receive the address discovery extension */
     unsigned int is_subscribed_to_path_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
+    unsigned int is_reset_stream_at_enabled : 1; /* Reset Stream At is supported */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
