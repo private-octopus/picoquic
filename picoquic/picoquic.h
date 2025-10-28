@@ -333,6 +333,7 @@ typedef struct st_picoquic_tp_t {
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
+    int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
 } picoquic_tp_t;
 
 /*
