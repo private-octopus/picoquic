@@ -376,6 +376,9 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_address_discovery:
                     qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
                     break;
+                case picoquic_tp_reset_stream_at:
+                    qlog_vint_transport_extension(f, "reset_stream_at", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);

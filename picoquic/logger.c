@@ -444,6 +444,9 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_address_discovery:
         tp_name = "address_discovery";
         break;
+    case picoquic_tp_reset_stream_at:
+        tp_name = "reset_stream_at";
+        break;
     default:
         break;
     }
