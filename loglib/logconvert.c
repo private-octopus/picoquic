@@ -55,6 +55,8 @@ const char * ftype2str(picoquic_frame_type_enum_t ftype)
         return "padding";
     case picoquic_frame_type_reset_stream:
         return "reset_stream";
+    case picoquic_frame_type_reset_stream_at:
+        return "reset_stream_at";
     case picoquic_frame_type_connection_close:
     case picoquic_frame_type_application_close:
         return "connection_close";

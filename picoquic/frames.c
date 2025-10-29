@@ -545,12 +545,16 @@ int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8
     int ret = 0;
     const uint8_t* bytes_max = bytes + bytes_size;
     uint64_t stream_id = 0;
+    uint64_t reliable_size = 0;
     picoquic_stream_head_t* stream;
 
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+        }
+        if (bytes != NULL) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reliable_size);
         }
     }
     if (bytes == NULL) {
@@ -559,6 +563,9 @@ int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8
     }
     else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL ||
         stream->reset_acked) {
+        *no_need_to_repeat = 1;
+    }
+    else if (reliable_size > stream->reliable_size) {
         *no_need_to_repeat = 1;
     }
     return ret;
@@ -3559,6 +3566,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
             break;
         case picoquic_frame_type_stop_sending:
             ret = picoquic_check_stop_sending_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
+            break;
+        case picoquic_frame_type_reset_stream_at:
+            ret = picoquic_check_reset_stream_at_needs_repeat(cnx, bytes, bytes_max, no_need_to_repeat);
             break;
         default: {
             uint64_t frame_id64;
@@ -6794,6 +6804,10 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 ack_needed = 1;
                 bytes = picoquic_decode_datagram_frame(cnx, path_x, bytes, bytes_max);
                 break;
+            case picoquic_frame_type_reset_stream_at:
+                bytes = picoquic_decode_reset_stream_at_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
             default: {
                 uint64_t frame_id64;
                 const uint8_t* bytes0 = bytes;
@@ -7134,6 +7148,10 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
         case picoquic_frame_type_datagram:
         case picoquic_frame_type_datagram_l:
             bytes = picoquic_skip_datagram_frame(bytes, bytes_max);
+            *pure_ack = 0;
+            break;
+        case picoquic_frame_type_reset_stream_at:
+            bytes = picoquic_skip_reset_stream_at_frame(bytes, bytes_max);
             *pure_ack = 0;
             break;
         default: {

@@ -348,6 +348,14 @@ static uint8_t test_frame_observed_address_v6[] = {
     0x45, 0x67,
 };
 
+static uint8_t test_frame_reset_stream_at[] = {
+    picoquic_frame_type_reset_stream_at,
+    17,
+    1,
+    0x40, 128,
+    13
+};
+
 #define TEST_SKIP_ITEM_OLD(n, x, a, l, e, err, skip_err)    \
     {                                                       \
         n, x, sizeof(x), a, l, e, err, skip_err, 0, 0       \
@@ -424,6 +432,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1),
     TEST_SKIP_ITEM_MPATH("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0, 1, 9),
     TEST_SKIP_ITEM_MPATH("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0, 1, 12),
+    TEST_SKIP_ITEM("reset_stream_at", test_frame_reset_stream_at, 0, 0, 3, 0, 0, 3)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -932,6 +941,9 @@ void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int
         }
     }
 
+    /* enable stream reset at so the test works */
+    cnx->is_reset_stream_at_enabled = 1;
+
     /* if testing handshake done, set state to ready so frame is ignored. */
     if (epoch == 3) {
         cnx->cnx_state = picoquic_state_ready;
@@ -1056,6 +1068,7 @@ int parse_frame_0rtt_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint
                 case picoquic_frame_type_path_challenge:
                 case picoquic_frame_type_datagram:
                 case picoquic_frame_type_datagram_l:
+                case picoquic_frame_type_reset_stream_at:
                     if (l_ret != 0) {
                         ret = -1;
                     }
