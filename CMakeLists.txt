@@ -370,6 +370,7 @@ target_include_directories(picoquic-core
     PUBLIC
         ${MBEDTLS_INCLUDE_DIRS}
         picoquic
+        c4/src
         picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE
