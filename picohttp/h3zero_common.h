@@ -185,8 +185,6 @@ extern "C" {
         struct st_h3zero_stream_prefix_t* last;
     } h3zero_stream_prefixes_t;
 
-    int h3zero_protocol_init(picoquic_cnx_t* cnx);
-
     /* CLIENT DEFINITIONS 
      */
     int h3zero_client_create_stream_request_ex(
@@ -215,6 +213,7 @@ extern "C" {
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
         unsigned int connection_closed : 1;
+        unsigned int settings_sent : 1;
         int nb_open_streams;
         int nb_open_files;
         uint32_t nb_client_streams;
@@ -222,6 +221,10 @@ extern "C" {
 
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+
+    int h3zero_protocol_init(picoquic_cnx_t* cnx);
+
+    int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
 

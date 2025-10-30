@@ -312,6 +312,18 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 			ret = picoquic_set_stream_priority(cnx, decoder_stream_id, 1);
 		}
 	}
+
+	return ret;
+}
+
+int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+{
+	int ret = 0;
+
+	if (!ctx->settings_sent) {
+		ctx->settings_sent = 1;
+		ret = h3zero_protocol_init(cnx);
+	}
 	return ret;
 }
 
@@ -1845,7 +1857,7 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		}
 		else {
 			picoquic_set_callback(cnx, h3zero_callback, ctx);
-			ret = h3zero_protocol_init(cnx);
+			ret = h3zero_protocol_init_safe(cnx, ctx);
 		}
 	} else{
 		ctx = (h3zero_callback_ctx_t*)callback_ctx;
@@ -1929,7 +1941,9 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			break;
 		case picoquic_callback_almost_ready:
 		case picoquic_callback_ready:
-			/* TODO: Check that the transport parameters are what Http3 expects */
+			/* The H3 settings frame should only be started at this point,
+			* after the limits for unidir streams are known */
+			ret = h3zero_protocol_init_safe(cnx, ctx);
 			break;
 		default:
 			/* unexpected -- just ignore. */

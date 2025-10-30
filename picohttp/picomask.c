@@ -710,7 +710,7 @@ int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni,
         }
         else {
             picoquic_set_callback(picomask_ctx->cnx, h3zero_callback, picomask_ctx->h3_ctx);
-            ret = h3zero_protocol_init(picomask_ctx->cnx);
+            ret = h3zero_protocol_init_safe(picomask_ctx->cnx, picomask_ctx->h3_ctx);
         }
     }
     /* TODO: release picomask_ctx on error */

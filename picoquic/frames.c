@@ -143,6 +143,11 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
     
     /* We only delete the stream if there are no pending retransmissions */
     if (stream->is_closed && picoquic_is_stream_acked(stream)) {
+#if 1
+        if (stream->stream_id == 2) {
+            ret = 0;
+        }
+#endif
         picoquic_delete_stream(cnx, stream);
     }
 
@@ -465,7 +470,7 @@ static const uint8_t* picoquic_skip_reset_stream_at_frame(const uint8_t* bytes, 
  */
 
 uint8_t* picoquic_format_reset_stream_at_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t* bytes, uint8_t* bytes_max, uint64_t sent_offset, int* more_data, int* is_pure_ack)
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
 {
     uint8_t* bytes0 = bytes;
 
@@ -1877,9 +1882,13 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         return bytes;
     }
     else if (stream->reset_requested) {
-        return picoquic_format_reset_stream_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
+        if (stream->reliable_size > 0) {
+            return picoquic_format_reset_stream_at_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
+        }
+        else {
+            return picoquic_format_reset_stream_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
+        }
     }
-
 
     if (!stream->is_active &&
         (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
