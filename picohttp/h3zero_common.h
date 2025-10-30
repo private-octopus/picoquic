@@ -243,7 +243,8 @@ extern "C" {
     uint8_t* h3zero_parse_incoming_remote_stream(
         uint8_t* bytes, uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
-        h3zero_callback_ctx_t* ctx);
+        h3zero_callback_ctx_t* ctx,
+        picoquic_cnx_t* opt_cnx);
 
     void h3zero_forget_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx);
 

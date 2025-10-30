@@ -399,7 +399,8 @@ static void h3zero_reset_control_stream_state(h3zero_data_stream_state_t* stream
 }
 
 static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found)
+	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+	void* opt_cnx)
 {
 	while (bytes != NULL && bytes < bytes_max) {
 		/* If frame type not known yet, get it. */
@@ -455,6 +456,17 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			}
 			/* Process the frame if needed, or free it */
 			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+
+				if (opt_cnx != NULL) {
+					char x[256];
+
+					for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
+						size_t nb_chars = 0;
+						picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
+					}
+					picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
+				}
+
 				if (stream_state->current_frame_type == h3zero_frame_settings) {
 					/* TODO: actually parse the settings */
 					const uint8_t* decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
@@ -537,7 +549,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx,
-	uint64_t * error_found)
+	uint64_t * error_found,
+	void* opt_cnx)
 {
 	h3zero_data_stream_state_t* stream_state = &stream_ctx->ps.stream_state;
 
@@ -554,7 +567,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 	}
 	switch (stream_state->stream_type) {
 	case h3zero_stream_type_control: /* used to send/receive setting frame and other control frames. */
-		bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found);
+		bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found, opt_cnx);
 		break;
 	case h3zero_stream_type_push: /* Push type not supported in current implementation */
 		bytes = bytes_max;
@@ -581,7 +594,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 uint8_t* h3zero_parse_incoming_remote_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
-	h3zero_callback_ctx_t* ctx)
+	h3zero_callback_ctx_t* ctx,
+	picoquic_cnx_t * opt_cnx)
 {
 	uint64_t error_found = 0;
 
@@ -589,7 +603,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 		bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
 	}
 	else {
-		bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+		bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, opt_cnx);
 	}
 	return bytes;
 }
@@ -918,7 +932,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 			bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
 		}
 		else {
-			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, cnx);
 		}
 
 		if (bytes == NULL) {
