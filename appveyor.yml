@@ -23,6 +23,10 @@ matrix:
       configuration: Debug
       OPENSSL64DIR: C:\OpenSSL-v11-Win64
 
+clone_script:
+- cmd: git clone -q --recursive --branch=%APPVEYOR_REPO_BRANCH% https://github.com/%APPVEYOR_REPO_NAME%.git %APPVEYOR_BUILD_FOLDER%
+- cmd: git checkout -qf %APPVEYOR_REPO_COMMIT%
+
 build:
   parallel: true
   project: picoquic.sln
