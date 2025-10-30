@@ -80,7 +80,8 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/bytestream.c
     picoquic/cc_common.c
     picoquic/config.c
-    picoquic/cubic.c
+    picoquic/cubic.
+    picoquic/c4/src/c4.c
     picoquic/ech.c
     picoquic/error_names.c
     picoquic/fastcc.c
@@ -133,6 +134,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_bbr1.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
+     picoquic/c4/src/c4.h
      picoquic/siphash.h)
 
 set(PICOQUIC_CORE_HEADERS_PRIVATE

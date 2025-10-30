@@ -25,6 +25,7 @@
 #include "picoquic_bbr1.h"
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
+#include "c4.h"
 
 
 /* Register a complete list of congestion control algorithms, which
