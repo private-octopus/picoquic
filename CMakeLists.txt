@@ -80,7 +80,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/bytestream.c
     picoquic/cc_common.c
     picoquic/config.c
-    picoquic/cubic.
+    picoquic/cubic.c
     c4/src/c4.c
     picoquic/ech.c
     picoquic/error_names.c
