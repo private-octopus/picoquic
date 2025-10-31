@@ -3550,21 +3550,6 @@ int h3zero_settings_test()
     return ret;
 }
 
-            /*
-            * h3zero_content_type_none = 0,
-            * h3zero_content_type_not_supported,
-            * h3zero_content_type_text_html,
-            * h3zero_content_type_text_plain,
-            * h3zero_content_type_image_gif,
-            * h3zero_content_type_image_jpeg,
-            * h3zero_content_type_image_png,
-            * h3zero_content_type_dns_message,
-            * h3zero_content_type_javascript,
-            * h3zero_content_type_json,
-            * h3zero_content_type_www_form_urlencoded,
-            * h3zero_content_type_text_css
-            */
-
 typedef struct st_h3zero_string_content_type_compar_list_t {
     const char *path;
     const h3zero_content_type_enum content_type;
