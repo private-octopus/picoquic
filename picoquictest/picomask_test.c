@@ -635,8 +635,9 @@ int picomask_test_target_cnx_create(picomask_test_ctx_t* pt_ctx)
             /* TODO: Set transport parameters? */
             picoquic_set_callback(cnx, h3zero_callback, h3_ctx);
             /* Perform the initialization, settings and QPACK streams
+            * TODO: should be done on "ready"
              */
-            ret = h3zero_protocol_init(cnx);
+            ret = h3zero_protocol_init_safe(cnx, h3_ctx);
         }
         /* TODO: Request a simple file */
         /* start */

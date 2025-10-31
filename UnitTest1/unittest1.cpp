@@ -1991,6 +1991,25 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(reset_stream_at_basic) {
+            int ret = reset_stream_at_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_stream_at_limit) {
+            int ret = reset_stream_at_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_stream_at_loss) {
+            int ret = reset_stream_at_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(initial_pto)
         {
             int ret = initial_pto_test();

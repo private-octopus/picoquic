@@ -180,6 +180,20 @@ static const uint8_t* picoquic_log_reset_stream_frame(FILE* f, const uint8_t* by
     return bytes;
 }
 
+static const uint8_t* picoquic_log_reset_stream_at_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    const uint8_t* bytes_begin = bytes;
+
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, 1);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+    bytes = picoquic_log_varint_skip(bytes, bytes_max);
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+    return bytes;
+}
+
 static const uint8_t* picoquic_log_stop_sending_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
     const uint8_t* bytes_begin = bytes;
@@ -573,6 +587,9 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
             break;
         case picoquic_frame_type_reset_stream:
             bytes = picoquic_log_reset_stream_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_reset_stream_at:
+            bytes = picoquic_log_reset_stream_at_frame(f, bytes, bytes_max);
             break;
         case picoquic_frame_type_connection_close:
             bytes = picoquic_log_close_frame(f, bytes, bytes_max);

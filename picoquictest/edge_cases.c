@@ -1880,3 +1880,167 @@ int reset_loop_test()
 
     return ret;
 }
+
+/*
+* Add a series of tests for the "reset_stream_at" function.
+* Basic: verify that if one stream is created but not sent yet, we can
+* reset it and verify that the "reliable_size" bytes have been
+* delivered.
+*/
+
+static test_api_stream_desc_t test_scenario_reset_at[] = {
+    { 4, 0, 257, 1000000 }
+};
+
+typedef enum {
+    rsat_basic,
+    rsat_limit,
+    rsat_loss
+} reset_stream_at_test_enum;
+
+int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
+{
+    /* set a test context, establish the connection, 
+     * ensure that reset_at is supported.
+     */
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t timeout = 0;
+    uint64_t reliable_size = 0;
+    uint64_t sent_limit = 0;
+
+    picoquic_connection_id_t icid = { { 0x8e, 0x5e, 0x57, 0xa7, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret;
+    
+    icid.id[4] = (uint8_t)rsat_spec;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &icid);
+
+    if (ret == 0) {
+        /* set parameters */
+        test_ctx->qserver->default_tp.is_reset_stream_at_enabled = 1;
+        test_ctx->cnx_client->local_parameters.is_reset_stream_at_enabled = 1;
+        /* request logs */
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_binlog(test_ctx->qserver, ".");
+        test_ctx->qclient->use_long_log = 1;
+        picoquic_set_binlog(test_ctx->qclient, ".");
+        binlog_new_connection(test_ctx->cnx_client);
+        /* start connection */
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        if (!test_ctx->cnx_client->is_reset_stream_at_enabled ||
+            !test_ctx->cnx_server->is_reset_stream_at_enabled) {
+            DBG_PRINTF("Fail no negotiate reset_at, client: %d, server: %d",
+                test_ctx->cnx_client->is_reset_stream_at_enabled,
+                test_ctx->cnx_server->is_reset_stream_at_enabled);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && rsat_spec == rsat_loss) {
+        loss_mask = 0xf0a05007030c9042ull;
+    }
+
+    /* Prepare to send data */
+    ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_reset_at, sizeof(test_scenario_reset_at));
+
+    /* Run a few runs of simulation to make sure that some amount of data is sent */
+    if (ret == 0) {
+        timeout = 30000;
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+    }
+
+    if (ret == 0) {
+        uint64_t received = test_ctx->test_stream[0].r_recv_nb;
+        picoquic_stream_head_t* stream = NULL;
+        if ((stream = picoquic_find_stream(test_ctx->cnx_server, 4)) == NULL) {
+            ret = -1;
+        }
+        else {
+            sent_limit = stream->sent_offset;
+        }
+
+        switch (rsat_spec) {
+        case rsat_limit:
+            /* receive everything that was already sent, but no more */
+            reliable_size = sent_limit;
+            break;
+        case rsat_loss:
+            /* ask for more data than was received, to test loss recovery vs reset */
+            reliable_size = received + 5000;
+            break;
+        case rsat_basic:
+            default:
+            /* Very basic scenario: reset at something almost already received */
+            reliable_size = received + 1;
+            break;
+        }
+
+        if (reliable_size > sent_limit) {
+            reliable_size = sent_limit;
+        }
+        
+        if (reliable_size > 0) {
+            ret = picoquic_reset_stream_at(test_ctx->cnx_server, 4, 0, reliable_size);
+        }
+    }
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 1000);
+    }
+
+    if (ret == 0 && !test_ctx->test_finished) {
+        DBG_PRINTF("Failed no complete test at time %llu, received %llu",
+            (unsigned long long)simulated_time,
+            (unsigned long long)test_ctx->test_stream[0].r_recv_nb);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        if (test_ctx->test_stream[0].r_recv_nb < reliable_size) {
+            DBG_PRINTF("Fail no receive %llu, got %llu",
+                (unsigned long long)reliable_size,
+                (unsigned long long)test_ctx->test_stream[0].r_recv_nb);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        if (test_ctx->test_stream[0].r_recv_nb < reliable_size) {
+            DBG_PRINTF("Fail no receive %llu, got %llu",
+                (unsigned long long)reliable_size,
+                (unsigned long long)test_ctx->test_stream[0].r_recv_nb);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int reset_stream_at_basic_test()
+{
+    return reset_stream_at_test_one(rsat_basic);
+}
+
+int reset_stream_at_limit_test()
+{
+    return reset_stream_at_test_one(rsat_limit);
+}
+
+int reset_stream_at_loss_test()
+{
+    return reset_stream_at_test_one(rsat_loss);
+}

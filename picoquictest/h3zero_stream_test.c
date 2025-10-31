@@ -252,7 +252,7 @@ int h3zero_incoming_unidir_test()
         for (size_t i = 0; ret == 0 && i < 4; i++) {
             uint8_t * bytes = &unidir_input[i];
             uint8_t * bytes_max = bytes + 1;
-            bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx);
+            bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx, NULL);
             if (bytes == bytes_max) {
                 continue;
             }
@@ -306,7 +306,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
     uint8_t* bytes, uint8_t* bytes_max,
     h3zero_stream_ctx_t* stream_ctx,
     h3zero_callback_ctx_t* ctx,
-    uint64_t* error_found);
+    uint64_t* error_found, void* opt_cnx);
 
 uint8_t* h3zero_test_get_setting_frame(uint8_t* bytes, uint8_t* bytes_max)
 {
@@ -344,7 +344,7 @@ uint8_t* h3zero_test_submit_frame(uint8_t* bytes, uint8_t* bytes_max, h3zero_str
         if (next_bytes > bytes_max) {
             next_bytes = bytes_max;
         }
-        if ((bytes = h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found)) != next_bytes) {
+        if ((bytes = h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found, NULL)) != next_bytes) {
             bytes = NULL;
             break;
         }

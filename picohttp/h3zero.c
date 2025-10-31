@@ -1106,7 +1106,7 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    17, /* Length of setting frame content */
+    13, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
     /* enable_connect_protocol = 0x8 */
@@ -1114,7 +1114,6 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     /* datagram support */
     (uint8_t)h3zero_setting_h3_datagram, 1,
     /* Declare max 1 web transport session */
-    (uint8_t)0xC0, 0, 0, 0,
     ((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),

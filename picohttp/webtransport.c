@@ -87,6 +87,7 @@ static void picowt_set_transport_parameters_values(const picoquic_tp_t* tp_curre
     if (tp_new->max_datagram_frame_size == 0) {
         tp_new->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
     }
+    tp_new->is_reset_stream_at_enabled = 1;
 }
 
 void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
@@ -206,9 +207,6 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
     {
         picowt_set_transport_parameters(*p_cnx);
         picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
-        /* Perform the initialization, settings and QPACK streams
-         */
-        ret = h3zero_protocol_init(*p_cnx);
     }
     return ret;
 }

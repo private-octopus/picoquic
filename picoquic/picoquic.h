@@ -333,6 +333,7 @@ typedef struct st_picoquic_tp_t {
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
+    int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
 } picoquic_tp_t;
 
 /*
@@ -1408,6 +1409,8 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error);
+int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint64_t local_stream_error, uint64_t reliable_size);
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);

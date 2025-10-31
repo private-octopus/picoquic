@@ -874,7 +874,7 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
     else {
         uint8_t* bytes_max = bytes + length;
 
-        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx);
+        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx, cnx);
 
         if (bytes == NULL) {
             picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);

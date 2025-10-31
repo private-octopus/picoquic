@@ -344,6 +344,8 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
                 if (ret == 0) {
                     fprintf(stdout, "Accept enable multipath: %d.\n", qserver->default_multipath_option);
                 }
+                qserver->default_tp.is_reset_stream_at_enabled = 1;
+                qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
             }
         }
     }
@@ -945,10 +947,10 @@ int quic_client(const char* ip_address_text, int server_port,
             /* Set PMTUD policy to delayed on the client, leave to default=basic on server */
             picoquic_cnx_set_pmtud_policy(cnx_client, picoquic_pmtud_delayed);
             picoquic_set_default_pmtud_policy(qclient, picoquic_pmtud_delayed);
-
+            cnx_client->local_parameters.max_datagram_frame_size = 1532;
+            cnx_client->local_parameters.is_reset_stream_at_enabled = 1;
             if (is_quicperf) {
                 picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
-                cnx_client->local_parameters.max_datagram_frame_size = 1532;
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
@@ -956,7 +958,6 @@ int quic_client(const char* ip_address_text, int server_port,
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;
                 cnx_client->local_parameters.enable_time_stamp = 3;
-                cnx_client->local_parameters.do_grease_quic_bit = 1;
 
                 if (callback_ctx.tp != NULL) {
                     picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);
