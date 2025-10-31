@@ -456,20 +456,20 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			}
 			/* Process the frame if needed, or free it */
 			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+				if (stream_state->current_frame != NULL && stream_state->current_frame_type == h3zero_frame_settings) {
+					const uint8_t* decoded_last = NULL;
 
-				if (opt_cnx != NULL) {
-					char x[256];
+					if (opt_cnx != NULL && !ctx->settings.settings_received && stream_state->current_frame_length > 0) {
+						char x[256];
 
-					for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
-						size_t nb_chars = 0;
-						picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
+						for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
+							size_t nb_chars = 0;
+							picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
+						}
+						picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
 					}
-					picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
-				}
-
-				if (stream_state->current_frame_type == h3zero_frame_settings) {
 					/* TODO: actually parse the settings */
-					const uint8_t* decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
+					decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
 						stream_state->current_frame + stream_state->current_frame_length, &ctx->settings);
 					if (decoded_last == NULL) {
 						*error_found = H3ZERO_SETTINGS_ERROR;

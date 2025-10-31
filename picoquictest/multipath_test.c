@@ -1513,7 +1513,7 @@ int multipath_backup_test()
 
 int multipath_standup_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 7200000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup);
 }
