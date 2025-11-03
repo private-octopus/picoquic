@@ -1267,11 +1267,6 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 	return ret;
 }
 
-
-
-
-
-
 int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
@@ -1282,19 +1277,25 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	size_t available_data = 0;
 	uint64_t error_found = 0;
 	uint8_t* bytes_max = bytes + length;
+	uint64_t header_was_found = stream_ctx->ps.stream_state.header_found;
 
 	while (bytes < bytes_max) {
 		bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
 		/* action should depend on what type of frame was read:
-		* web transport: this is the bypass option. make sure that the callback is set. pass any available data. 
-		* data frame: pass the data to the app, which means writing / reading if web, callback otherwise. 
+		* web transport: this is the bypass option. make sure that the callback is set. pass any available data.
+		* data frame: pass the data to the app, which means writing / reading if web, callback otherwise.
 		* post: identify the post context, set the call back.
-		* 
+		*
 		*/
 
 		if (bytes == NULL) {
 			ret = picoquic_close(cnx, error_found);
 			break;
+		}
+		if (!header_was_found && stream_ctx->ps.stream_state.header_found &&
+			stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+			ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
+			header_was_found = 1;
 		}
 		else if (available_data > 0) {
 			if (stream_ctx->ps.stream_state.is_web_transport) {
@@ -1353,23 +1354,21 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 			bytes += available_data;
 		}
 	}
-	/* Process the header if necessary */
+
 	if (ret == 0 && !process_complete) {
 		if (stream_ctx->ps.stream_state.is_web_transport) {
 			if (fin_or_event == picoquic_callback_stream_fin && available_data == 0 && stream_ctx->path_callback != NULL) {
 				ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 			}
 		}
-		else {
-			if (fin_or_event == picoquic_callback_stream_fin || stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
-				/* Process the request header. */
-				if (stream_ctx->ps.stream_state.header_found) {
-					ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
-				}
-				else {
-					/* Unexpected end of stream before the header is received */
-					ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
-				}
+		else if (fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_connect) {
+			/* For Get or Post methods, we wait the end of the stream to process the header. */
+			if (stream_ctx->ps.stream_state.header_found) {
+				ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
+			}
+			else {
+				/* Unexpected end of stream before the header is received */
+				ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
 			}
 		}
 	}
@@ -2102,6 +2101,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		capsule->capsule_type = 0;
 		capsule->capsule_length = 0;
 		capsule->is_stored = 0;
+		capsule->is_length_known = 0;
 	}
 	if (!capsule->is_length_known) {
 		size_t length_of_type = 0;
@@ -2153,7 +2153,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 			capsule->capsule_buffer = capsule_buffer;
 			capsule->capsule_buffer_size = capsule->capsule_length;
 		}
-		if (capsule->capsule_buffer == NULL) {
+ 		if (capsule->capsule_buffer == NULL) {
 			capsule->value_read = 0;
 			capsule->capsule_buffer_size = 0;
 			bytes = NULL;

@@ -3396,6 +3396,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_krome) {
+            int ret = picowt_baton_krome_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_uri) {
             int ret = picowt_baton_uri_test();
 
