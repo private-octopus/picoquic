@@ -599,6 +599,7 @@ int picowt_baton_multi_test();
 int picowt_baton_random_test();
 int picowt_baton_wrong_test();
 int picowt_baton_uri_test();
+int picowt_baton_krome_test();
 int picowt_drain_test();
 int picowt_tp_test();
 int quicperf_parse_test();
