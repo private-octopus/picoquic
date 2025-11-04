@@ -71,5 +71,5 @@ including declaration of the H3 "path" and the provision of a web transport call
 
 In the case of webtransport compatible native applications, we could probably provide a
 generic implementation that acts as a shim layer between native QUIC events and the
-web transport callback, so the application developer only has to provide the ALPN
-of the native APP and the web transport callback. But that's not done yet...
+web transport callback so the application developer only has
+to code the application protocol logic once. But that's not done yet...
