@@ -134,7 +134,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_bbr1.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
-     c4/src/c4.h
+     #c4/src/c4.h
      picoquic/siphash.h)
 
 set(PICOQUIC_CORE_HEADERS_PRIVATE
