@@ -11509,7 +11509,6 @@ int bad_chello_test()
     picoquic_connection_id_t icid = { { 0xba, 0xdc, 0xe1, 0x10, 0, 0, 0, 0}, 8 };
     int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &icid, 10000, 0, 0, 0);
-    uint32_t max_number_cnx_ctx = 0;
     uint8_t buffer[PICOQUIC_ENFORCED_INITIAL_MTU];
     
 

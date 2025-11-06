@@ -372,7 +372,7 @@ void dualq_reset(picoquictest_aqm_t* self, picoquictest_sim_link_t* link, uint64
  */
 void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max)
 {
-    /* Set input parameter defaults
+    /* Set input parameter defaults */
     /* DualQ Coupled framework parameters */
     dualq->limit = ((uint64_t)DUALQ_MAX_LINK_RATE * 250ull)/1000000 ; /* Dual buffer size */
     dualq->k = 2.0; /* Coupling factor */
