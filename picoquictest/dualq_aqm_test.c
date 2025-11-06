@@ -84,13 +84,9 @@ int dualq_test_ctx_test()
 
 picoquictest_sim_packet_t* dualq_test_get_packet(uint8_t ecn_mark, size_t length)
 {
-    int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-    if (packet == NULL) {
-        ret = -1;
-    }
-    else {
+    if (packet != NULL) {
         packet->ecn_mark = ecn_mark;
         packet->length = length;
     }
@@ -161,9 +157,9 @@ int dualq_dequeue_test()
     }
     /* Perform link departure until all packets sent */
 
-    while ( ret == 0 &&
+    while (ret == 0 &&
         (dqt_ctx.dqs->lq.queue_bytes > 0 ||
-        dqt_ctx.dqs->cq.queue_bytes > 0)) {
+            dqt_ctx.dqs->cq.queue_bytes > 0)) {
         trials++;
         if (trials > 1000) {
             ret = -1;
@@ -186,15 +182,15 @@ int dualq_dequeue_test()
     }
 
     if (ret == 0 &&
-        dqt_ctx.dqs->cq.queue_bytes != 0 ||
-        dqt_ctx.dqs->cq.queue_first != NULL ||
-        dqt_ctx.dqs->cq.queue_last != NULL) {
+        (dqt_ctx.dqs->cq.queue_bytes != 0 ||
+            dqt_ctx.dqs->cq.queue_first != NULL ||
+            dqt_ctx.dqs->cq.queue_last != NULL)) {
         ret = -1;
     }
     if (ret == 0 &&
-        dqt_ctx.dqs->lq.queue_bytes != 0 ||
-        dqt_ctx.dqs->lq.queue_first != NULL ||
-        dqt_ctx.dqs->lq.queue_last != NULL) {
+        (dqt_ctx.dqs->lq.queue_bytes != 0 ||
+            dqt_ctx.dqs->lq.queue_first != NULL ||
+            dqt_ctx.dqs->lq.queue_last != NULL)) {
         ret = -1;
     }
 
@@ -241,8 +237,6 @@ int dualq_submit_test()
         int i_queue = i % 5;
         dualq_queue_t* xq = (queue_id[i_queue] == 0) ? &dqt_ctx.dqs->cq : &dqt_ctx.dqs->lq;
         picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[i_queue], 1000);
-        uint64_t packet_time = picoquictest_sim_link_transmit_time(dqt_ctx.link, packet);
-        int expect_link_queue = dqt_ctx.link->queue_time < dqt_ctx.simulated_time;
         uint64_t old_bytes = xq->queue_bytes;
         uint64_t old_queue_time = dqt_ctx.link->queue_time;
         uint64_t old_total = dqt_ctx.dqs->cq.queue_bytes + dqt_ctx.dqs->lq.queue_bytes + packet->length;
@@ -315,7 +309,6 @@ int dualq_sustain_test_submit(dualq_test_ctx* dqt_ctx, int* nb_sent)
 {
     int ret = 0;
     const uint8_t ecn_sequence[] = { 0, PICOQUIC_ECN_ECT_0, 0, PICOQUIC_ECN_ECT_1, PICOQUIC_ECN_CE };
-    const int queue_id[] = { 0, 0, 0, 1, 1 };
     picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[*nb_sent % 5], 1000);
     if (packet == NULL) {
         ret = -1;

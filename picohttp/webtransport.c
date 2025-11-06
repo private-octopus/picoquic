@@ -303,7 +303,6 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
     uint8_t buffer[512];
     int ret = 0;
     /* Compute the length */
-    size_t length = 4;
     size_t err_msg_len = 0;
     uint8_t* bytes;
     uint8_t* bytes_max = buffer + sizeof(buffer);
@@ -317,7 +316,6 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
         if (err_msg != NULL) {
             err_msg_len = strlen(err_msg);
         }
-        length += err_msg_len;
 
         if ((bytes = picoquic_frames_uint32_encode(buffer, bytes_max, picowt_err)) == NULL ||
             bytes + err_msg_len > bytes_max) {

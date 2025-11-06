@@ -1653,11 +1653,6 @@ int crypto_hs_offset_test()
 * 
  */
 
-static test_api_stream_desc_t test_scenario_reset_case[] = {
-    { 4, 0, 128, 1000000 },
-    { 8, 0, 128, 1000000 }
-};
-
 typedef struct st_reset_loop_callback_t {
     uint64_t data_sent[4];
     uint64_t data_received[4];

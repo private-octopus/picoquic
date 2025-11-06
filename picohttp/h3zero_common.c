@@ -1379,11 +1379,11 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 */
 
 int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
-	uint64_t stream_id, uint8_t* bytes, size_t length,
-	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
-	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
+	uint64_t stream_id, uint8_t* bytes, size_t length, int is_fin,
+	h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
 {
 	int ret = 0;
+
 	if (stream_ctx->F == NULL && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
 		ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 	}
@@ -1426,7 +1426,9 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 						}
 					}
 					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
-						ret = stream_ctx->path_callback(cnx, bytes, available_data, fin_or_event, stream_ctx, stream_ctx->path_callback_ctx);
+						ret = stream_ctx->path_callback(cnx, bytes, available_data, 
+							(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
+							stream_ctx, stream_ctx->path_callback_ctx);
 					}
 					else
 					{
@@ -1445,7 +1447,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 		}
 	}
 
-	if (fin_or_event == picoquic_callback_stream_fin) {
+	if (is_fin) {
 		if (stream_ctx->path_callback != NULL) {
 			stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 		}
@@ -1529,7 +1531,7 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 					}
 					else {
 						/* Perform application callback */
-						ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
+						ret = h3zero_post_data_or_fin(cnx, bytes, length, (fin_or_event == picoquic_callback_stream_fin), stream_ctx);
 					}
 				}
 				else {
