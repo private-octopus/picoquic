@@ -589,7 +589,6 @@ int h3zero_client_data_submit(picoquic_cnx_t * cnx, uint64_t  stream_id, uint8_t
     int ret = 0;
     size_t chunk = (spec->split_submit) ? 7 : length;
     size_t submitted = 0;
-    picoquic_call_back_event_t fin_or_event = picoquic_callback_stream_data;
 
     if (spec->short_length) {
         length--;

@@ -237,7 +237,6 @@ int dualq_submit_test()
         int i_queue = i % 5;
         dualq_queue_t* xq = (queue_id[i_queue] == 0) ? &dqt_ctx.dqs->cq : &dqt_ctx.dqs->lq;
         picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[i_queue], 1000);
-        uint64_t packet_time = picoquictest_sim_link_transmit_time(dqt_ctx.link, packet);
         uint64_t old_bytes = xq->queue_bytes;
         uint64_t old_queue_time = dqt_ctx.link->queue_time;
         uint64_t old_total = dqt_ctx.dqs->cq.queue_bytes + dqt_ctx.dqs->lq.queue_bytes + packet->length;
