@@ -492,9 +492,8 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 * until the FIN.
  */
 int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
-    h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
+    uint64_t stream_id, uint8_t* bytes, size_t length, int is_fin,
+    h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
 
 typedef struct st_client_data_test_spec {
     uint64_t stream_type;
@@ -598,18 +597,19 @@ int h3zero_client_data_submit(picoquic_cnx_t * cnx, uint64_t  stream_id, uint8_t
 
     while (ret == 0 && submitted < length) {
         size_t next_chunk = chunk;
+        int is_fin = 0;
         if (submitted + next_chunk >= length) {
             next_chunk = length - submitted;
             if (!spec->split_fin) {
-                fin_or_event = picoquic_callback_stream_fin;
+                is_fin = 1;
             }
         }
-        ret = h3zero_process_h3_client_data(cnx, stream_id, bytes + submitted, next_chunk, fin_or_event, h3_ctx,
+        ret = h3zero_process_h3_client_data(cnx, stream_id, bytes + submitted, next_chunk, is_fin, h3_ctx,
             stream_ctx, finstream_id);
         submitted += next_chunk;
     }
     if (ret == 0 && spec->split_fin) {
-        ret = h3zero_process_h3_client_data(cnx, stream_id, NULL, 0, picoquic_callback_stream_fin, h3_ctx,
+        ret = h3zero_process_h3_client_data(cnx, stream_id, NULL, 0, 1, h3_ctx,
             stream_ctx, finstream_id);
     }
     if (cnx->cnx_state != picoquic_state_ready) {
