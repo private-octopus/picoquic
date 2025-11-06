@@ -33,8 +33,8 @@
 * and picoquic_create_and_configure(). 
  */
 
-picoquic_congestion_algorithm_t const* getter_test_cc_algo_list[7] = {
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL
+picoquic_congestion_algorithm_t const* getter_test_cc_algo_list[8] = {
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 void picoquic_register_all_congestion_control_algorithms()
@@ -46,5 +46,6 @@ void picoquic_register_all_congestion_control_algorithms()
     getter_test_cc_algo_list[4] = picoquic_bbr_algorithm;
     getter_test_cc_algo_list[5] = picoquic_prague_algorithm;
     getter_test_cc_algo_list[6] = picoquic_bbr1_algorithm;
-    picoquic_register_congestion_control_algorithms(getter_test_cc_algo_list, 7);
+    getter_test_cc_algo_list[7] = c4_algorithm;
+    picoquic_register_congestion_control_algorithms(getter_test_cc_algo_list, 8);
 }
