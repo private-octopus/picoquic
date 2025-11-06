@@ -280,6 +280,7 @@ int crypto_hs_offset_test();
 int cubic_test();
 int cubic_jitter_test();
 int cc_compete_cubic2_test();
+int cc_compete_c4c4_test();
 int cc_compete_prague2_test();
 int cc_compete_d_cubic_test();
 int cc_ns_asym_test();
