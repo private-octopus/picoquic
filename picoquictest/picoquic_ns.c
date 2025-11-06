@@ -964,7 +964,9 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
-        fprintf(err_fd, "Cannot allocate simulation context.\n");
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Cannot allocate simulation context.\n");
+        }
         ret = -1;
     }
     while (ret == 0) {
@@ -998,7 +1000,7 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     }
     if (err_fd != NULL && ret != 0) {
         fprintf(err_fd, "Simulated time %" PRIu64 ", ret = %d(0x%x)\n",
-            cc_ctx->simulated_time, ret, ret);
+            (cc_ctx!=NULL)?cc_ctx->simulated_time:0, ret, ret);
     }
 
     if (ret == 0 &&
