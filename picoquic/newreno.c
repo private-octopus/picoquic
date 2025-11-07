@@ -52,12 +52,12 @@ static void picoquic_newreno_sim_enter_recovery(
     uint64_t current_time)
 {
     nr_state->ssthresh = nr_state->cwin / 2;
-    if (nr_state->ssthresh < cnx->quic->cwin_min) {
-        nr_state->ssthresh = cnx->quic->cwin_min;
+    if (nr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
+        nr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
     }
 
     if (notification == picoquic_congestion_notification_timeout) {
-        nr_state->cwin = cnx->quic->cwin_min;
+        nr_state->cwin = PICOQUIC_CWIN_MINIMUM;
         nr_state->alg_state = picoquic_newreno_alg_slow_start;
     }
     else {
