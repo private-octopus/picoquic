@@ -1,10 +1,7 @@
-<<<<<<< HEAD
 [submodule "deps/picotls"]
 	path = deps/picotls
 	url = https://github.com/Quicr/picotls.git
 	branch = main
-=======
 [submodule "c4"]
 	path = c4
 	url = https://github.com/private-octopus/c4
->>>>>>> 5cfd08902590a2909c1de55c8e2ebe4f3e82bb76
