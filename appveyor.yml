@@ -23,6 +23,9 @@ matrix:
       configuration: Debug
       OPENSSL64DIR: C:\OpenSSL-v11-Win64
 
+install:
+  - ps: git submodule --quiet update --init --recursive
+
 build:
   parallel: true
   project: picoquic.sln

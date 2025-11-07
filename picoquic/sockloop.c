@@ -1025,6 +1025,29 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     }
 
                     if (send_socket == INVALID_SOCKET) {
+                        if (nb_sockets_available < PICOQUIC_PACKET_LOOP_SOCKETS_MAX) {
+                            picoquic_socket_ctx_t* new_ctx = &s_ctx[nb_sockets_available];
+                            memset(new_ctx, 0, sizeof(*new_ctx));
+                            new_ctx->af = peer_addr.ss_family;
+                            if (peer_addr.ss_family == AF_INET6) {
+                                new_ctx->port = ntohs(((struct sockaddr_in6*)&peer_addr)->sin6_port);
+                            }
+                            else {
+                                new_ctx->port = ntohs(((struct sockaddr_in*)&peer_addr)->sin_port);
+                            }
+                            new_ctx->n_port = htons(new_ctx->port);
+                            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx) == 0) {
+                                send_socket = new_ctx->fd;
+                                send_port = new_ctx->n_port;
+                                nb_sockets_available++;
+                                if (nb_sockets < nb_sockets_available) {
+                                    nb_sockets = nb_sockets_available;
+                                }
+                            }
+                        }
+                    }
+
+                    if (send_socket == INVALID_SOCKET) {
                         sock_ret = -1;
                         sock_err = -1;
                     }

@@ -22,13 +22,20 @@ jobs:
         with:
           # We must fetch at least the immediate parents so that if this is
           # a pull request then we can checkout the head.
-          fetch-depth: 2
           submodules: 'recursive'
 
-      - name: Building picoquic
+      - name: check-load
+        run: |
+          ls
+          ls c4/src
+
+      - name: Building picotls
         run: |
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
+
+      - name: Building picoquic
+        run: |
           cmake -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
           make
 

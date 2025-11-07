@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.35.0
+        VERSION 1.1.40.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -81,7 +81,9 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
+    c4/src/c4.c
     picoquic/ech.c
+    picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -124,9 +126,6 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
-     picoquic/picoquic_unified_log.h
-     picoquic/picoquic_logger.h
-     picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
@@ -135,7 +134,25 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_bbr1.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
+     #c4/src/c4.h
      picoquic/siphash.h)
+
+set(PICOQUIC_CORE_HEADERS_PRIVATE
+    picoquic/bytestream.h
+    picoquic/cc_common.h
+    picoquic/cidset.h
+    picoquic/performance_log.h
+    picoquic/picohash.h
+    picoquic/picoquic_binlog.h
+    picoquic/picoquic_crypto_provider_api.h
+    picoquic/picoquic_internal.h
+    picoquic/picoquic_logger.h
+    picoquic/picoquic_set_binlog.h
+    picoquic/picoquic_set_textlog.h
+    picoquic/picoquic_unified_log.h
+    picoquic/picosplay.h
+    picoquic/tls_api.h
+    picoquic/wincompat.h)
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
@@ -168,6 +185,8 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
+    picoquictest/dualq_aqm.c
+    picoquictest/dualq_aqm_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
     picoquictest/flow_control_test.c
@@ -192,6 +211,8 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pn2pn64test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
+    picoquictest/red_aqm.c
+    picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
     picoquictest/skip_frame_test.c
@@ -339,6 +360,7 @@ macro(set_picoquic_compile_settings)
 endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
+target_sources(picoquic-core PRIVATE ${PICOQUIC_CORE_HEADERS_PRIVATE})
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
@@ -350,6 +372,7 @@ target_include_directories(picoquic-core
     PUBLIC
         ${MBEDTLS_INCLUDE_DIRS}
         picoquic
+        c4/src
         picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE

@@ -51,6 +51,9 @@
 * large volume of data, sending large number of streams, or
 * sending datagrams. Consider extensions!
 */
+int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
+    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
+    uint8_t* extra, size_t extra_length);
 
 wt_baton_app_ctx_t baton_test_ctx = {
     15
@@ -130,9 +133,17 @@ static int picowt_baton_test_one(
         }
 
         if (ret == 0) {
-            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
-                baton_ctx.authority, baton_ctx.server_path,
-                wt_baton_callback, &baton_ctx);
+            if (test_id == 8) {
+                uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
+                ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                    baton_ctx.authority, baton_ctx.server_path,
+                    wt_baton_callback, &baton_ctx, grease_capsule, 12);
+            }
+            else {
+                ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                    baton_ctx.authority, baton_ctx.server_path,
+                    wt_baton_callback, &baton_ctx);
+            }
         }
 
         if (ret == 0) {
@@ -210,6 +221,15 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
+    /* verify that the connection was disconnected without error */
+    if (ret == 0 &&
+        (test_ctx->cnx_client->remote_error != 0 ||
+            test_ctx->cnx_client->local_error != 0)) {
+        DBG_PRINTF("Connection close error: remote %llu, local %llu",
+            test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
+        ret = -1;
+
+    }
 
     if (h3zero_cb != NULL)
     {
@@ -269,6 +289,13 @@ int picowt_baton_multi_test()
 int picowt_baton_random_test()
 {
     int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_krome_test()
+{
+    int ret = picowt_baton_test_one(8, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }

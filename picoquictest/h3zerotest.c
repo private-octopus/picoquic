@@ -1284,8 +1284,8 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
             DBG_PRINTF("%s", "did not parse to the end!\n");
             ret = -1;
         }
-        else if (stream_state.frame_header_parsed) {
-            DBG_PRINTF("%s", "stopped with frame not parsed\n");
+        else if (stream_state.frame_prefix_parsed) {
+            DBG_PRINTF("%s", "stopped with frame prefix not parsed\n");
             ret = -1;
         }
         else if (!stream_state.header_found) {
@@ -3494,10 +3494,12 @@ int h3zero_settings_encode_test(const uint8_t* ref, size_t ref_length, h3zero_se
     uint8_t* bytes = buffer;
     uint8_t* bytes_max = buffer + sizeof(buffer);
 
-    if ((bytes = h3zero_settings_encode(bytes, bytes_max, test)) != NULL &&
-        (bytes - buffer) == ref_length &&
-        memcmp(buffer, ref, ref_length) == 0) {
-        ret = 0;
+    if ((bytes = h3zero_settings_encode(bytes, bytes_max, test)) != NULL) {
+        size_t actual_length = bytes - buffer;
+        if (actual_length == ref_length &&
+            memcmp(buffer, ref, ref_length) == 0) {
+            ret = 0;
+        }
     }
     return ret;
 }
@@ -3547,21 +3549,6 @@ int h3zero_settings_test()
 
     return ret;
 }
-
-            /*
-            * h3zero_content_type_none = 0,
-            * h3zero_content_type_not_supported,
-            * h3zero_content_type_text_html,
-            * h3zero_content_type_text_plain,
-            * h3zero_content_type_image_gif,
-            * h3zero_content_type_image_jpeg,
-            * h3zero_content_type_image_png,
-            * h3zero_content_type_dns_message,
-            * h3zero_content_type_javascript,
-            * h3zero_content_type_json,
-            * h3zero_content_type_www_form_urlencoded,
-            * h3zero_content_type_text_css
-            */
 
 typedef struct st_h3zero_string_content_type_compar_list_t {
     const char *path;

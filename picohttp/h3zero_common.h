@@ -87,7 +87,8 @@ extern "C" {
         picosplay_node_t http_stream_node;
         picoquic_cnx_t* cnx;
         unsigned int is_h3:1;
-        unsigned int is_upgraded:1;
+        unsigned int is_upgraded : 1;
+        unsigned int is_bypass : 1;
         union {
             h3zero_data_stream_state_t stream_state; /* h3 only */
             struct {
@@ -161,7 +162,7 @@ extern "C" {
 
     void h3zero_release_capsule(h3zero_capsule_t* capsule);
 
-    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule);
+    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule, h3zero_stream_ctx_t * stream_ctx);
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
@@ -183,8 +184,6 @@ extern "C" {
         struct st_h3zero_stream_prefix_t* first;
         struct st_h3zero_stream_prefix_t* last;
     } h3zero_stream_prefixes_t;
-
-    int h3zero_protocol_init(picoquic_cnx_t* cnx);
 
     /* CLIENT DEFINITIONS 
      */
@@ -214,6 +213,7 @@ extern "C" {
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
         unsigned int connection_closed : 1;
+        unsigned int settings_sent : 1;
         int nb_open_streams;
         int nb_open_files;
         uint32_t nb_client_streams;
@@ -221,6 +221,10 @@ extern "C" {
 
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+
+    int h3zero_protocol_init(picoquic_cnx_t* cnx);
+
+    int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
 
@@ -239,7 +243,8 @@ extern "C" {
     uint8_t* h3zero_parse_incoming_remote_stream(
         uint8_t* bytes, uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
-        h3zero_callback_ctx_t* ctx);
+        h3zero_callback_ctx_t* ctx,
+        picoquic_cnx_t* opt_cnx);
 
     void h3zero_forget_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx);
 
@@ -259,6 +264,8 @@ extern "C" {
     void h3zero_delete_all_stream_prefixes(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     int h3zero_prepare_and_send_data(void* context, size_t space, uint64_t send_total_length, uint64_t* sent_length, FILE* F);
+    int h3zero_send_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream_ctx,
+        uint64_t capsule_type, size_t capsule_length, uint8_t* capsule_data, int set_fin);
 
 #ifdef __cplusplus
 }

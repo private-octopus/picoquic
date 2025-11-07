@@ -100,16 +100,18 @@ typedef enum {
 
 typedef struct st_picoquic_prague_state_t {
     picoquic_prague_alg_state_t alg_state;
-    // double alpha;
-    uint64_t alpha_shifted;
     uint64_t alpha;
     uint64_t residual_ack;
     uint64_t ssthresh;
-    uint64_t recovery_start;
+    uint64_t recovery_stamp;
+    uint64_t recovery_sequence;
     uint64_t l4s_update_sent;
     uint64_t l4s_epoch_send;
     uint64_t l4s_epoch_ect1;
     uint64_t l4s_epoch_ce;
+    uint64_t l4s_packet_ect1;
+    uint64_t l4s_packet_ce;
+
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
 
@@ -152,7 +154,6 @@ static picoquic_packet_context_t* picoquic_prague_get_pkt_ctx(picoquic_cnx_t* cn
     return pkt_ctx;
 }
 
-
 static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
@@ -160,8 +161,6 @@ static void picoquic_prague_reset_l3s(picoquic_cnx_t* cnx, picoquic_prague_state
     pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
     pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
     pr_state->alpha = 0;
-    pr_state->alpha_shifted = 0;
-
 }
 
 
@@ -171,8 +170,26 @@ static void picoquic_prague_reset(picoquic_cnx_t * cnx, picoquic_prague_state_t*
     picoquic_prague_reset_l3s(cnx, pr_state, path_x);
 }
 
+static void picoquic_prague_initialize_era(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    picoquic_prague_state_t* pr_state,
+    uint64_t current_time)
+{
+    /* Initialize the era */
+    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
+    pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
+    pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
+    pr_state->recovery_stamp = current_time;
+    pr_state->recovery_sequence = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
+}
 
-/* The recovery state last 1 RTT, during which parameters will be frozen
+/* Prague reduces the congestion window at most once per
+* RTT. This is done by entering recovery, during which the
+* window is reset to ssthresh.
+* 
+* If entering recovery from loss, the reduction factor is 1/2.
+* If entering from CE, the reduction factor depends on alpha.
  */
 static void picoquic_prague_enter_recovery(
     picoquic_cnx_t* cnx,
@@ -182,99 +199,125 @@ static void picoquic_prague_enter_recovery(
     uint64_t current_time)
 {
     pr_state->ssthresh = path_x->cwin / 2;
-    if (pr_state->ssthresh < cnx->quic->cwin_min) {
-        pr_state->ssthresh = cnx->quic->cwin_min;
+    if (pr_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
+        pr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
     }
+    
+    path_x->cwin = pr_state->ssthresh;
+    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
 
-    if (notification == picoquic_congestion_notification_timeout) {
-        path_x->cwin = cnx->quic->cwin_min;
-        pr_state->alg_state = picoquic_prague_alg_slow_start;
+    picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
+}
+
+static void picoquic_prague_update_alpha(picoquic_path_t* path_x, picoquic_prague_state_t* pr_state,
+    uint64_t delta_ect1, uint64_t delta_ce, uint64_t current_time)
+{
+    uint64_t frac = 0;
+    int is_suspect = 0;
+
+    if (delta_ce > 0) {
+        frac = (delta_ce * 1024) / (delta_ce + delta_ect1);
     }
     else {
-        path_x->cwin = pr_state->ssthresh;
-        pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+        frac = 0;
     }
 
-    pr_state->recovery_start = current_time;
+    if (pr_state->l4s_update_sent != 0 && frac >= 512 && pr_state->alpha < 128 &&
+        current_time - pr_state->recovery_stamp > path_x->smoothed_rtt) {
+        /*
+         * the epoch lasted more than the RTT. This is most
+         * probably due to period of inactivity, then effects of imprecise
+         * tuning of pacing's leaky bucket algorithm. Limiting the
+         * fraction frac to about 1/8th to avoid too much bad effects. */
+        is_suspect = 1;
+        frac = 128;
+    }
 
-    pr_state->residual_ack = 0;
-    
-    picoquic_prague_reset_l3s(cnx, pr_state, path_x);
+    if (delta_ce > 0 || delta_ect1 > 0) {
+        if (frac > pr_state->alpha && (frac >= 512 || is_suspect)) {
+            pr_state->alpha = frac;
+        }
+        else
+        {
+            uint64_t alpha_shifted = pr_state->alpha << PRAGUE_SHIFT_G;
+            alpha_shifted -= pr_state->alpha;
+            alpha_shifted += frac;
+            pr_state->alpha = alpha_shifted >> PRAGUE_SHIFT_G;
+        }
+    }
+    picoquic_log_app_message(path_x->cnx,
+        "Prague: %" PRIu64 ",%d,%d,%d,%" PRIu64 ",%" PRIu64,
+        current_time, (int)delta_ect1, (int)delta_ce, (int)pr_state->alpha, path_x->cwin, path_x->rtt_sample);
 }
 
-static void picoquic_prague_update_alpha(picoquic_cnx_t* cnx,
-    picoquic_path_t* path_x, picoquic_prague_state_t* pr_state, uint64_t nb_bytes_acknowledged, uint64_t current_time)
+void picoquic_prague_process_ack(picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x, picoquic_prague_state_t* pr_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
-    /* Check the L4S epoch, based on first number sent in previous epoch */
     picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
-    uint64_t update_sent = pkt_ctx->latest_time_acknowledged;
+    uint64_t next_sequence = picoquic_cc_get_ack_number(path_x->cnx, path_x);
 
-    if (pkt_ctx->highest_acknowledged != UINT64_MAX &&
-        pkt_ctx->highest_acknowledged > pr_state->l4s_epoch_send) {
-        /* The epoch packet has been acked. Time to update alpha. */
-        uint64_t frac = 0;
-        int is_suspect = 0;
-        pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        uint64_t delta_ect1 = pkt_ctx->ecn_ect1_total_remote - pr_state->l4s_epoch_ect1;
-        uint64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
+    if (next_sequence > pr_state->recovery_sequence) {
+        /* new period. Update alpha, etc. */
+        int64_t delta_ect1 = pkt_ctx->ecn_ect1_total_remote - pr_state->l4s_epoch_ect1;
+        int64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
 
-        if (delta_ce > 0) {
-            frac = (delta_ce * 1024) / (delta_ce + delta_ect1);
-        }
-        else {
-            frac = 0;
-        }
+        if (delta_ect1 >= 0 && delta_ce >= 0 && delta_ce + delta_ect1 > 0 ) {
+            /* We are receiving ECN signals, so update alpha and do CWND reduction */
+            uint64_t delta_cwin;
+            picoquic_prague_update_alpha(path_x, pr_state, delta_ect1, delta_ce, current_time);
 
-        if (pr_state->l4s_update_sent != 0 && frac > 512 && pr_state->alpha < 128 &&
-            update_sent - pr_state->l4s_update_sent > path_x->smoothed_rtt) {
-            /* 
-             * the epoch lasted more than the RTT. This is most
-             * probably due to period of inactivity, then effects of imprecise
-             * tuning of pacing's leaky bucket algorithm. Limiting the
-             * fraction frac to about 1/8th to avoid too much bad effects. */
-            is_suspect = 1;
-            frac = 128;
-        }
-        pr_state->l4s_update_sent = update_sent;
-
-        if (delta_ce > 0 || delta_ect1 > 0) {
-            if (frac > pr_state->alpha && (frac > 512 || is_suspect)) {
-                pr_state->alpha = frac;
-                pr_state->alpha_shifted = frac << PRAGUE_SHIFT_G;
+            /* Update the ssthresh and the CWIN */
+            delta_cwin = (path_x->cwin * pr_state->alpha) / 2048;
+            path_x->cwin -= delta_cwin;
+            if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+                path_x->cwin = PICOQUIC_CWIN_MINIMUM;
             }
-            else {
-                int64_t delta_frac = frac - pr_state->alpha;
-
-                pr_state->alpha_shifted += delta_frac;
-                pr_state->alpha = pr_state->alpha_shifted >> PRAGUE_SHIFT_G;
-            }
+            pr_state->ssthresh = path_x->cwin;
         }
-        pr_state->l4s_epoch_send = pkt_ctx->send_sequence;
-        pr_state->l4s_epoch_ect1 = pkt_ctx->ecn_ect1_total_remote;
-        pr_state->l4s_epoch_ce = pkt_ctx->ecn_ce_total_remote;
+        /* reset the era limits */
+        picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
+    }
+    /* Increment CWND whether in recovery or not */
+    if (pkt_ctx->ecn_ect1_total_remote >= pr_state->l4s_packet_ect1 &&
+        pkt_ctx->ecn_ce_total_remote >= pr_state->l4s_packet_ce) {
+        uint64_t delta_ect1_ack = pkt_ctx->ecn_ect1_total_remote - pr_state->l4s_packet_ect1;
+        uint64_t delta_ce_ack = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_packet_ce;
+        uint64_t ack_bytes = ack_state->nb_bytes_acknowledged;
+        double frac_not_ce = 1.0;
 
-        if (delta_ce > 0) {
-            if (pr_state->alpha > 512) {
-                /* If we got many ECN marks in the last RTT, treat as full on congestion */
-                picoquic_prague_enter_recovery(cnx, path_x, picoquic_congestion_notification_ecn_ec, pr_state, current_time);
-            }
-            else {
-                /* If we got ECN marks in the last RTT, update the ssthresh and the CWIN */
-                uint64_t reduction = (path_x->cwin * pr_state->alpha) / 2048;
-                pr_state->ssthresh = path_x->cwin - reduction;
-                if (pr_state->ssthresh < cnx->quic->cwin_min) {
-                    pr_state->ssthresh = cnx->quic->cwin_min;
-                }
-                uint64_t old_cwin = path_x->cwin;
-                path_x->cwin = pr_state->ssthresh;
-                pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+        if (delta_ce_ack + delta_ect1_ack > 0) {
+            frac_not_ce = ((double)delta_ect1_ack) / (double)(delta_ce_ack + delta_ect1_ack);
+            ack_bytes = (uint64_t)(frac_not_ce * (double)ack_bytes);
+        }
+        path_x->cwin += path_x->send_mtu * ack_bytes / path_x->cwin;
+    }
+}
 
-                picoquic_log_app_message(cnx, "Prague alpha: %" PRIu64 ", cwin, was % " PRIu64 " is now % " PRIu64 "\n",
-                    pr_state->alpha, old_cwin, path_x->cwin);
-            }
+void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x, picoquic_prague_state_t* pr_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
+{
+    picoquic_packet_context_t* pkt_ctx = picoquic_prague_get_pkt_ctx(cnx, path_x);
+    if (pr_state->ssthresh == UINT64_MAX) {
+        /* Increase cwin based on bandwidth estimation. */
+        path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+    }
+    if (pkt_ctx->ecn_ce_total_remote > pr_state->l4s_epoch_ce) {
+        /* CE mark received in intitial state:
+         * exit and enter recovery.
+         */
+        picoquic_prague_enter_recovery(cnx, path_x, picoquic_congestion_notification_ecn_ec, pr_state, current_time);
+    }
+    else {
+        path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
+
+        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+        if (path_x->cwin >= pr_state->ssthresh) {
+            pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
+            picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
         }
     }
 }
+
 
 /* Callback management for Prague
  */
@@ -291,70 +334,33 @@ void picoquic_prague_notify(
         switch (notification) {
         /* RTT measurements will happen before acknowledgement is signalled */
         case picoquic_congestion_notification_acknowledgement: {
-            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
-                pr_state->ssthresh == UINT64_MAX) {
-                /* Increase cwin based on bandwidth estimation. */
-                path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
-            }
-
-            /* Regardless of the alg state, update alpha */
-            picoquic_prague_update_alpha(cnx, path_x, pr_state, ack_state->nb_bytes_acknowledged, current_time);
-
             /* Increase or reduce the congestion window based on alpha */
             switch (pr_state->alg_state) {
             case picoquic_prague_alg_slow_start:
-                /* TODO l4s_prague test fails. Have to increase max_completion time about 100 ms */
-                if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
-
-                    /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
-                    if (path_x->cwin >= pr_state->ssthresh) {
-                        pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-                    }
-                }
+                picoquic_prague_process_start_ack(cnx, path_x, pr_state, ack_state, current_time);
                 break;
             case picoquic_prague_alg_congestion_avoidance:
-            default: {
-                uint64_t complete_delta = ack_state->nb_bytes_acknowledged * path_x->send_mtu + pr_state->residual_ack;
-                pr_state->residual_ack = complete_delta % path_x->cwin;
-                uint64_t delta = complete_delta / path_x->cwin;
-                delta = (delta * (1024 - pr_state->alpha)) / 1024;
-                path_x->cwin += delta;
+            default:
+                picoquic_prague_process_ack(cnx, path_x, pr_state, ack_state, current_time);
                 break;
-            }
             }
             break;
         }
         case picoquic_congestion_notification_ecn_ec:
-            // picoquic_prague_update_alpha(cnx, path_x, pr_state, nb_bytes_acknowledged, current_time);
-            if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
-                pr_state->ssthresh == UINT64_MAX) {
-                if (path_x->cwin > path_x->send_mtu) {
-                    path_x->cwin -= path_x->send_mtu;
-                }
-                pr_state->ssthresh = path_x->cwin;
-                pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-                path_x->is_ssthresh_initialized = 1;
-            }
+            /* already managed as part of ACK */
             break;
         case picoquic_congestion_notification_repeat:
-        case picoquic_congestion_notification_timeout:
-            /* enter recovery */
+            /* enter recovery on loss. We should do nothing on timeout */
             if (picoquic_cc_hystart_loss_test(&pr_state->rtt_filter, notification, ack_state->lost_packet_number,
-                PICOQUIC_SMOOTHED_LOSS_THRESHOLD) && current_time - pr_state->recovery_start > path_x->smoothed_rtt) {
+                PICOQUIC_SMOOTHED_LOSS_THRESHOLD) && current_time - pr_state->recovery_sequence > path_x->smoothed_rtt) {
                 picoquic_prague_enter_recovery(cnx, path_x, notification, pr_state, current_time);
             }
             break;
+        case picoquic_congestion_notification_timeout:
+            /* We should not react on PTO */
+            break;
         case picoquic_congestion_notification_spurious_repeat:
-            if (current_time - pr_state->recovery_start < path_x->smoothed_rtt) {
-                /* If spurious repeat of initial loss detected,
-                 * exit recovery and reset threshold to pre-entry cwin.
-                 */
-                if (path_x->cwin < 2 * pr_state->ssthresh) {
-                    path_x->cwin = 2 * pr_state->ssthresh;
-                    pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
-                }
-            }
+            /* we should do nothing, since we do not react on PTO */
             break;
         case picoquic_congestion_notification_rtt_measurement:
             if (pr_state->alg_state == picoquic_prague_alg_slow_start &&
@@ -383,7 +389,6 @@ void picoquic_prague_notify(
             /* ignore */
             break;
         }
-
         /* Compute pacing data */
         picoquic_update_pacing_data(cnx, path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
             pr_state->ssthresh == UINT64_MAX);

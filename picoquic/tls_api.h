@@ -203,6 +203,8 @@ void picoquic_tls_api_init();
 void picoquic_tls_api_unload();
 void picoquic_tls_api_reset(uint64_t init_flags);
 
+void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);
+
 #ifdef __cplusplus
 }
 #endif

@@ -272,6 +272,18 @@ typedef struct st_picoquictest_sim_packet_t {
     uint8_t bytes[PICOQUIC_MAX_PACKET_SIZE];
 } picoquictest_sim_packet_t;
 
+
+typedef struct st_picoquictest_sim_link_t picoquictest_sim_link_t;
+typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
+
+typedef struct st_picoquictest_aqm_t {
+    void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
+        picoquictest_sim_packet_t* packet, uint64_t current_time);
+    void (*check_arrival)(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+    void (*reset) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
+    void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+} picoquictest_aqm_t;
+
 typedef enum {
     jitter_gauss = 0,
     jitter_wifi
@@ -299,16 +311,12 @@ typedef struct st_picoquictest_sim_link_t {
     uint64_t packets_sent_next_burst; /* Next burst starts when this many packets are sent. */
     uint64_t nb_losses_this_burst; /* Number of packets still to lose in this burst */
     uint64_t end_of_burst_time; /* Bursts are limited in time to avoid silly effects */
-    /* Variables for random early drop simulation */
-    uint64_t red_drop_mask;
-    uint64_t red_queue_max;
+    /* Active queue management */
+    struct st_picoquictest_aqm_t* aqm_state;
+#if 0
     /* L4S MAX sets the ECN mark threshold if doing L4S or DCTCP style ECN marking. */
     uint64_t l4s_max;
-    /* Variables for rate limiter simulation */
-    double bucket_increase_per_microsec;
-    uint64_t bucket_max;
-    double bucket_current;
-    uint64_t bucket_arrival_last;
+#endif
     /* Variable for multipath simulation */
     int is_switched_off;
     int is_unreachable;
@@ -328,9 +336,20 @@ uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint6
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time);
 
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's queue, with normal AQM processing and length check. */
 void picoquictest_sim_link_submit(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
     uint64_t current_time);
-
+/* picoquictest_sim_link_enqueue:
+* submit a packet to the link's "latency queue", bypassing the AQM.
+* if should_drop != 0, the packet will be dropped instead of queued.
+*/
+void picoquictest_sim_link_enqueue(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet,
+    uint64_t current_time, int should_drop);
+/* Compute transmission time of a packet (used internally by picoquictest_sim_link_enqueue) */
+uint64_t picoquictest_sim_link_transmit_time(picoquictest_sim_link_t* link, picoquictest_sim_packet_t* packet);
+/* Compute the queuing delay for the next packet */
+uint64_t picoquictest_sim_link_queue_delay(picoquictest_sim_link_t* link, uint64_t current_time);
 /* picoquic_test_simlink_suspend simulates and interuption of transmission until the
 * specified "end of interval" time. There are two modes:
 * 

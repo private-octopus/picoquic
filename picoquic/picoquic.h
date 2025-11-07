@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.35.0"
+#define PICOQUIC_VERSION "1.1.40.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -110,6 +110,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_ADDRESS_FAMILY (PICOQUIC_ERROR_CLASS + 66)
 #define PICOQUIC_ERROR_PATH_NOT_READY (PICOQUIC_ERROR_CLASS + 67)
 #define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
+#define PICOQUIC_ERROR_REDIRECTED (PICOQUIC_ERROR_CLASS + 69) /* Not an error: the packet was captured by a proxy, no further processing needed */
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -332,6 +333,7 @@ typedef struct st_picoquic_tp_t {
     int is_multipath_enabled;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
+    int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
 } picoquic_tp_t;
 
 /*
@@ -429,6 +431,9 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
  * 0: only log the first 100 packets for each connection. */
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
+/* Obtain the text value of the error names */
+char const* picoquic_error_name(uint64_t error_code);
+
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set
  * to { 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05 } the
@@ -449,7 +454,7 @@ void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_nam
 
 /* The SSLKEYLOG function defines a way to publish the encryption keys
 * used by QUIC. If that feature is enabled, the code read the environment
-* variable SSLKEYLOG to find the path of the file where to log the encryption
+* variable SSLKEYLOGFILE to find the path of the file where to log the encryption
 * file. If the environment variable is not present, no file is set.
 * 
 * This is a very dangerous feature, that can be abused to break encryption.
@@ -689,17 +694,6 @@ void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode
  * algorithm would have authorized a larger value.
  */
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
-
-/** picoquic_set_cwin_min:
- *
- * Set a minimum value for congestion control window (default: PICOQUIC_CWIN_MINIMUM)
- * This option can be used to change the congestion control minimum value
- * that would be used during periods of congestion.
- *
- * This should be called after calling picoquic_set_cwin_max when also changing
- * the cwin_max value.
- */
-void picoquic_set_cwin_min(picoquic_quic_t* quic, uint64_t cwin_min);
 
 /* picoquic_set_max_data_limit: 
 * set a maximum value for the "max data" option, thus limiting the
@@ -1037,6 +1031,8 @@ typedef struct st_picoquic_path_quality_t {
     uint64_t max_reorder_delay; /* maximum time gap for out of order packets */
     uint64_t max_reorder_gap; /* maximum number gap for out of order packets */
     uint64_t bytes_in_transit; /* number of bytes currently in transit */
+    uint64_t bytes_sent; /* Total amount of bytes sent on the path */
+    uint64_t bytes_received; /* Total amount of bytes received from the path */
 
 } picoquic_path_quality_t;
 
@@ -1130,11 +1126,16 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
     int is_pure_ack, picoquic_packet_context_enum pc);
 
 /* Queue a datagram frame for sending later.
- * The datagram length must be no more than PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH,
- * i.e., must fit in the minimum packet length supported by Quic. Trying to
- * queue a larger datagram will result in an error PICOQUIC_ERROR_DATAGRAM_TOO_LONG.
+* The datagram frame must fit into the path MTU, not be larger than
+* the locally specified maximum, and if the connection is complete
+* not be larger than the max allowed by the peer.
+* 
+* We cannot estimate all that at the time of queuing, because the path MTU
+* may change between the time the datagram is queued and the time it is
+* sent. The test at queuing time are based on the current path MTU. If
+* that changes, datagrams that are too long will be dropped.
  */
-#define PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH 1200
+#define PICOQUIC_DATAGRAM_QUEUE_CAUTIOUS_LENGTH PICOQUIC_ENFORCED_INITIAL_MTU
 int picoquic_queue_datagram_frame(picoquic_cnx_t* cnx, size_t length, const uint8_t* bytes);
 
 /* The incoming packet API is used to pass incoming packets to a 
@@ -1271,6 +1272,27 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
 
+/* Handling of stream packetisation and head-of-line blocking:
+* 
+* When preparing a packet, if a stream is available, picoquic will fill the
+* content of a packet with bytes from that stream. In some cases,
+* there are not enough bytes from completely fill the packet.
+* By default, picoquic will then fill the reminder of the packet with data from
+* other available streams. This default behavior minimizes per packet
+* overhead, but it can reintroduce a form of "head of line blocking":
+* if a packet containing data from multiple streams is lost, all of
+* these streams will be blocked until the missing data is resent.
+* This is less-than-ideal for some real-time applications.
+* 
+* The default behavior can be controlled by setting a stream as "not-coalesced".
+* If that property is set, packets that contain data for the stream will
+* not be contain data for any other stream. Setting the is_not_coalesced
+* flag to zero (default) reverts to the default behavior.
+*/
+
+int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_not_coalesced);
+
 /* Handling of stream priority. 
  * 
  * Picoquic handles priority as an 8 bit unsigned integer.
@@ -1387,6 +1409,8 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, co
  * that stream and that any data currently queued can be abandoned. */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error);
+int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint64_t local_stream_error, uint64_t reliable_size);
 
 /* Open the flow control for receiving the expected data on a stream */
 int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t expected_data_size);
@@ -1557,6 +1581,7 @@ typedef enum {
 
 typedef struct st_picoquic_per_ack_state_t {
     uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */
+    uint64_t send_delay; /* Delay between send time of acked packet and prior ack. */
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
     uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */

@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2018, Private Octopus, Inc.
+* Copyright (c) 2025, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -19,30 +19,19 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PICOQUIC_LOGGER_H
-#define PICOQUIC_LOGGER_H
-#include <stdio.h>
-#include "picoquic.h"
-#include "picoquic_unified_log.h"
+#ifndef PICOQUICTEST_RCTL_H
+#define PICOQUICTEST_RCTL_H
+
+#include "picoquic_utils.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Set the text log file and start tracing into it.
- * Set to NULL value to stop text log.
- */
-int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
-/* Close the text log, e.g., when closing the QUIC context */
-void picoquic_textlog_close(picoquic_quic_t* quic);
+    int rctl_configure(picoquictest_sim_link_t* link, double bucket_increase_per_microsec, uint64_t bucket_max, uint64_t current_time);
 
-/* Handling of packet logging */
-
-void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
-    uint8_t* ticket, uint16_t ticket_length);
-
-const char* picoquic_log_fin_or_event_name(picoquic_call_back_event_t ev);
 #ifdef __cplusplus
 }
 #endif
-#endif /* PICOQUIC_LOGGER_H */
+
+#endif /* PICOQUICTEST_RCTL_H */

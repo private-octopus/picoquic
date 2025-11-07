@@ -120,6 +120,7 @@ picoquic_keyex_dispose_t picoquic_keyex_dispose_fn = NULL;
  */
 #ifdef PICOQUIC_WITH_MBEDTLS
 void picoquic_mbedtls_load(int unload);
+void picoquic_mbedtls_log_version(picoquic_cnx_t* cnx);
 #endif
 #if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
 void picoquic_ptls_fusion_load(int unload);
@@ -127,6 +128,7 @@ void picoquic_ptls_fusion_load(int unload);
 /* void picoquic_bcrypt_load(int unload); */
 #ifndef PTLS_WITHOUT_OPENSSL
 void picoquic_ptls_openssl_load(int unload);
+void picoquic_ptls_openssl_log_version(picoquic_cnx_t* cnx);
 #endif
 void picoquic_ptls_minicrypto_load(int unload);
 
@@ -196,6 +198,31 @@ static void picoquic_tls_api_zero()
     picoquic_clear_crypto_errors_fn = NULL;
  
     picoquic_crypto_random_provider_fn = NULL;
+}
+
+void picoquic_tls_api_log_versions(picoquic_cnx_t * cnx)
+{
+
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MINICRYPTO) == 0) {
+        picoquic_log_app_message(cnx, "%s", "Minicrypto was loaded.");
+    }
+#ifndef PTLS_WITHOUT_OPENSSL
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_OPENSSL) == 0) {
+        picoquic_ptls_openssl_log_version(cnx);
+    }
+#endif
+    // picoquic_bcrypt_load(unload);
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+        picoquic_log_app_message(cnx, "%s", "Fusion was loaded.");
+    }
+#endif
+
+#ifdef PICOQUIC_WITH_MBEDTLS
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
+        picoquic_mbedtls_log_version(cnx);
+    }
+#endif
 }
 
 void picoquic_tls_api_init()
@@ -1458,7 +1485,6 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
             secret1 = client_secret;
             secret2 = server_secret;
         }
-        
         ret = picoquic_set_key_from_secret(cipher, 1, 0, &cnx->crypto_context[0], secret1, prefix_label);
 
         if (ret == 0) {
@@ -2664,6 +2690,8 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
                 DBG_PRINTF("Handshake failed, ret = 0x%x.\n", ret);
 #endif
                 (void)picoquic_connection_error(cnx, error_code, 0);
+                /* Log the version numbers of SSL/TLS packages to facilitate debugging. */
+                picoquic_tls_api_log_versions(cnx);
                 ret = 0;
             }
         }
@@ -2671,6 +2699,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
 
     /* Reset indication of current connection */
     cnx->quic->cnx_in_progress = NULL;
+
 
     return ret;
 }
@@ -2844,12 +2873,16 @@ int picoquic_prepare_retry_token(picoquic_quic_t* quic, const struct sockaddr* a
     uint8_t* bytes = text;
     uint8_t* bytes_max = text + sizeof(text);
 
-    /* set a short life time for short lived tokens, 24 hours otherwise */
+    /* The prepare token function can prepare two kind of tokens: immediate retry
+    * tokens, that are short lived, or "new tokens", that are valid for a
+    * a longer delay. We differentiate between these two cases by testing the
+    * presence of the Original DCID parameter, which must be present in
+    * the retry tokens, but shall never be in the new tokens. */
     if (odcid->id_len == 0) {
-        token_time += 24ull * 3600ull * 1000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_LONG;
     }
     else {
-        token_time += 4000000ull;
+        token_time += PICOQUIC_TOKEN_DELAY_SHORT;
     }
     /* serialize the token components */
     if ((bytes = picoquic_frames_uint64_encode(bytes, bytes_max, token_time)) != NULL &&
