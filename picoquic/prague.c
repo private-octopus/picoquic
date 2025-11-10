@@ -352,7 +352,7 @@ void picoquic_prague_notify(
         case picoquic_congestion_notification_repeat:
             /* enter recovery on loss. We should do nothing on timeout */
             if (picoquic_cc_hystart_loss_test(&pr_state->rtt_filter, notification, ack_state->lost_packet_number,
-                PICOQUIC_SMOOTHED_LOSS_THRESHOLD) && current_time - pr_state->recovery_sequence > path_x->smoothed_rtt) {
+                PICOQUIC_SMOOTHED_LOSS_THRESHOLD) && current_time - pr_state->recovery_stamp > path_x->smoothed_rtt) {
                 picoquic_prague_enter_recovery(cnx, path_x, notification, pr_state, current_time);
             }
             break;
