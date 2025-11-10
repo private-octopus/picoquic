@@ -252,7 +252,7 @@ int h3zero_incoming_unidir_test()
         for (size_t i = 0; ret == 0 && i < 4; i++) {
             uint8_t * bytes = &unidir_input[i];
             uint8_t * bytes_max = bytes + 1;
-            bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx);
+            bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx, NULL);
             if (bytes == bytes_max) {
                 continue;
             }
@@ -306,7 +306,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
     uint8_t* bytes, uint8_t* bytes_max,
     h3zero_stream_ctx_t* stream_ctx,
     h3zero_callback_ctx_t* ctx,
-    uint64_t* error_found);
+    uint64_t* error_found, void* opt_cnx);
 
 uint8_t* h3zero_test_get_setting_frame(uint8_t* bytes, uint8_t* bytes_max)
 {
@@ -344,7 +344,7 @@ uint8_t* h3zero_test_submit_frame(uint8_t* bytes, uint8_t* bytes_max, h3zero_str
         if (next_bytes > bytes_max) {
             next_bytes = bytes_max;
         }
-        if ((bytes = h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found)) != next_bytes) {
+        if ((bytes = h3zero_parse_remote_unidir_stream(bytes, next_bytes, stream_ctx, h3_ctx, error_found, NULL)) != next_bytes) {
             bytes = NULL;
             break;
         }
@@ -492,9 +492,8 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 * until the FIN.
  */
 int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
-    h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
+    uint64_t stream_id, uint8_t* bytes, size_t length, int is_fin,
+    h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id);
 
 typedef struct st_client_data_test_spec {
     uint64_t stream_type;
@@ -590,7 +589,6 @@ int h3zero_client_data_submit(picoquic_cnx_t * cnx, uint64_t  stream_id, uint8_t
     int ret = 0;
     size_t chunk = (spec->split_submit) ? 7 : length;
     size_t submitted = 0;
-    picoquic_call_back_event_t fin_or_event = picoquic_callback_stream_data;
 
     if (spec->short_length) {
         length--;
@@ -598,18 +596,19 @@ int h3zero_client_data_submit(picoquic_cnx_t * cnx, uint64_t  stream_id, uint8_t
 
     while (ret == 0 && submitted < length) {
         size_t next_chunk = chunk;
+        int is_fin = 0;
         if (submitted + next_chunk >= length) {
             next_chunk = length - submitted;
             if (!spec->split_fin) {
-                fin_or_event = picoquic_callback_stream_fin;
+                is_fin = 1;
             }
         }
-        ret = h3zero_process_h3_client_data(cnx, stream_id, bytes + submitted, next_chunk, fin_or_event, h3_ctx,
+        ret = h3zero_process_h3_client_data(cnx, stream_id, bytes + submitted, next_chunk, is_fin, h3_ctx,
             stream_ctx, finstream_id);
         submitted += next_chunk;
     }
     if (ret == 0 && spec->split_fin) {
-        ret = h3zero_process_h3_client_data(cnx, stream_id, NULL, 0, picoquic_callback_stream_fin, h3_ctx,
+        ret = h3zero_process_h3_client_data(cnx, stream_id, NULL, 0, 1, h3_ctx,
             stream_ctx, finstream_id);
     }
     if (cnx->cnx_state != picoquic_state_ready) {
@@ -887,6 +886,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
+    h3zero_stream_ctx_t* stream_ctx = NULL;
     uint64_t simulated_time = 0;
     h3zero_capsule_t capsule = { 0 };
     test_datagram_ctx_t dg_ctx = { 0 };
@@ -912,7 +912,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
             const uint8_t* next_bytes;
             memset(buffer, 0xff, sizeof(buffer));
             memcpy(buffer, capsule_bytes + bytes_received, this_chunk);
-            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule)) == NULL) {
+            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule, stream_ctx)) == NULL) {
                 ret = -1;
             }
             else {

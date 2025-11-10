@@ -63,10 +63,13 @@ static picoquic_stream_head_t* picoquic_find_stream_for_writing(picoquic_cnx_t* 
         }
 
         if (*ret == 0) {
-            stream = picoquic_create_missing_streams(cnx, stream_id, 0);
-
-            if (stream == NULL) {
-                *ret = PICOQUIC_ERROR_MEMORY;
+            if (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)]) {
+                *ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
+            } else {
+                stream = picoquic_create_missing_streams(cnx, stream_id, 0);
+                if (stream == NULL) {
+                    *ret = PICOQUIC_ERROR_MEMORY;
+                }
             }
         }
     }
@@ -349,31 +352,38 @@ void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
     }
 }
 
-int picoquic_reset_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint64_t local_stream_error)
+int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint64_t local_stream_error, uint64_t reliable_size)
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
 
-    stream = picoquic_find_stream(cnx, stream_id);
-
-    if (stream == NULL) {
+    if (reliable_size > 0 && !cnx->is_reset_stream_at_enabled) {
+        ret = PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION;
+    }
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
     else {
         stream->app_stream_ctx = NULL;
-        if (stream->fin_sent && picoquic_check_sack_list(&stream->sack_list, 0, stream->fin_offset) == 0){
+        if (stream->fin_sent && picoquic_check_sack_list(&stream->sack_list, 0, stream->fin_offset) == 0) {
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->reset_requested) {
             stream->local_error = local_stream_error;
             stream->reset_requested = 1;
+            stream->reliable_size = reliable_size;
         }
     }
 
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 
     return ret;
+}
+int picoquic_reset_stream(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint64_t local_stream_error)
+{
+    return picoquic_reset_stream_at(cnx, stream_id, local_stream_error, 0);
 }
 
 uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
@@ -2659,7 +2669,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
         if (picoquic_prepare_retry_token(cnx->quic, (struct sockaddr*) & cnx->path[0]->first_tuple->peer_addr,
-            current_time + PICOQUIC_TOKEN_DELAY_LONG, &n_cid, &n_cid, 0,
+            current_time, &n_cid, &n_cid, 0,
             token_buffer, sizeof(token_buffer), &token_size) == 0) {
             if (picoquic_queue_new_token_frame(cnx, token_buffer, token_size) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_new_token);

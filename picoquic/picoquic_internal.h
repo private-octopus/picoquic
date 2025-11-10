@@ -162,7 +162,8 @@ typedef enum {
     picoquic_frame_type_paths_blocked = 0x15228c0d,
     picoquic_frame_type_path_cid_blocked = 0x15228c0e,
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
-    picoquic_frame_type_observed_address_v6 = 0x9f81a7
+    picoquic_frame_type_observed_address_v6 = 0x9f81a7,
+    picoquic_frame_type_reset_stream_at = 0x24,
 } picoquic_frame_type_enum_t;
 
 /* PMTU discovery requirement status */
@@ -589,6 +590,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
 #define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
+#define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
 
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
@@ -817,6 +819,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t last_time_data_sent;
     picosplay_tree_t stream_data_tree; /* splay of received stream segments */
     uint64_t sent_offset; /* Amount of data sent in the stream */
+    uint64_t reliable_size; /* Length guaranteed when sending "reset at" */
     picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
@@ -1331,6 +1334,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_address_discovery_receiver : 1; /* receive the address discovery extension */
     unsigned int is_subscribed_to_path_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
+    unsigned int is_reset_stream_at_enabled : 1; /* Reset Stream At is supported */
     
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1572,6 +1576,15 @@ typedef struct st_picoquic_packet_data_t {
         uint64_t data_acked;
     } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
+
+/* Create a connection context without recomputing initial_aead_dec and
+* initial_pn_dec if they were already computed.
+*/
+picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
+    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
+    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
+    char const* sni, char const* alpn, char client_mode,
+    void* initial_aead_dec, void* initial_pn_dec);
 
 /* Load the stash of retry tokens. */
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);

@@ -348,6 +348,12 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(stream_state_local_reuse)
+        {
+            int ret = stream_state_local_reuse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
         TEST_METHOD(stream_splay)
         {
@@ -1985,6 +1991,25 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(reset_stream_at_basic) {
+            int ret = reset_stream_at_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_stream_at_limit) {
+            int ret = reset_stream_at_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_stream_at_loss) {
+            int ret = reset_stream_at_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(initial_pto)
         {
             int ret = initial_pto_test();
@@ -2051,6 +2076,13 @@ namespace UnitTest1
         TEST_METHOD(cc_compete_cubic2)
         {
             int ret = cc_compete_cubic2_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_compete_c4c4)
+        {
+            int ret = cc_compete_c4c4_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2955,6 +2987,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_break_both) {
+            int ret = multipath_break_both_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
@@ -3279,6 +3317,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(dualq_aqm) {
+            int ret = dualq_aqm_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(ech_config) {
             int ret = ech_config_test();
 
@@ -3367,6 +3410,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_krome) {
+            int ret = picowt_baton_krome_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_uri) {
             int ret = picowt_baton_uri_test();
 
@@ -3429,6 +3478,12 @@ namespace UnitTest1
 
         TEST_METHOD(grease_quic_bit_one_way) {
             int ret = grease_quic_bit_one_way_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bad_chello) {
+            int ret = bad_chello_test();
 
             Assert::AreEqual(ret, 0);
         }

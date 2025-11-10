@@ -89,11 +89,7 @@ int ech_config_test()
 {
     int ret = 0;
     char test_server_pub_key_file[512];
-    size_t pub_key_objects = 0;
     const char* public_name = "test.example.com";
-    uint8_t config_id = 1;
-    ptls_hpke_kem_t* kem = NULL;
-    uint8_t max_name_length = 128;
     uint8_t* config = NULL;
     size_t config_len = 0;
 
@@ -128,11 +124,7 @@ int ech_config_p_test()
 {
     int ret = 0;
     char test_server_key_file[512];
-    size_t pub_key_objects = 0;
     const char* public_name = "test.example.com";
-    uint8_t config_id = 1;
-    ptls_hpke_kem_t* kem = NULL;
-    uint8_t max_name_length = 128;
     uint8_t* config = NULL;
     size_t config_len = 0;
 
@@ -313,7 +305,6 @@ int ech_e2e_test_one(ech_e2e_spec_t* spec)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    uint64_t ticket_num = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0xec, 0x8e, 0x2e, 0, 0, 0, 0, 0}, 8 };
     ptls_buffer_t ech_config_buf = { 0 };

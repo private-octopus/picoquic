@@ -376,6 +376,9 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_address_discovery:
                     qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
                     break;
+                case picoquic_tp_reset_stream_at:
+                    qlog_vint_transport_extension(f, "reset_stream_at", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -856,6 +859,23 @@ void qlog_reset_stream_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"final_size\": %"PRIu64"", final_size);
 }
 
+void qlog_reset_stream_at_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+    uint64_t final_size = 0;
+    uint64_t reliable_size = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
+    byteread_vint(s, &final_size);
+    fprintf(f, ", \"final_size\": %"PRIu64"", final_size);
+    byteread_vint(s, &reliable_size);
+    fprintf(f, ", \"reliable_size\": %"PRIu64"", final_size);
+}
+
 void qlog_stop_sending_frame(FILE* f, bytestream* s)
 {
     uint64_t stream_id = 0;
@@ -1258,6 +1278,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_reset_stream:
         qlog_reset_stream_frame(f, s);
+        break;
+    case picoquic_frame_type_reset_stream_at:
+        qlog_reset_stream_at_frame(f, s);
         break;
     case picoquic_frame_type_stop_sending:
         qlog_stop_sending_frame(f, s);

@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.38.5
+        VERSION 1.1.40.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
+    c4/src/c4.c
     picoquic/ech.c
     picoquic/error_names.c
     picoquic/fastcc.c
@@ -133,6 +134,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_bbr1.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
+     #c4/src/c4.h
      picoquic/siphash.h)
 
 set(PICOQUIC_CORE_HEADERS_PRIVATE
@@ -184,6 +186,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
     picoquictest/dualq_aqm.c
+    picoquictest/dualq_aqm_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
     picoquictest/flow_control_test.c
@@ -368,6 +371,7 @@ target_include_directories(picoquic-core
     PUBLIC
         ${MBEDTLS_INCLUDE_DIRS}
         picoquic
+        c4/src
         picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE

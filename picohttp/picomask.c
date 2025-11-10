@@ -619,11 +619,13 @@ int picomask_callback(picoquic_cnx_t* cnx,
         * application needs to close that stream.
         */
         break;
-    case picohttp_callback_connect_accepted: 
+    case picohttp_callback_connect_accepted:
+#if 1
         if (stream_ctx != NULL) {
             /* Stream will now carry "capsules" */
             stream_ctx->is_upgraded = 1;
         }
+#endif
         break;
     case picohttp_callback_post_fin:
     case picohttp_callback_post_data:
@@ -708,7 +710,7 @@ int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni,
         }
         else {
             picoquic_set_callback(picomask_ctx->cnx, h3zero_callback, picomask_ctx->h3_ctx);
-            ret = h3zero_protocol_init(picomask_ctx->cnx);
+            ret = h3zero_protocol_init_safe(picomask_ctx->cnx, picomask_ctx->h3_ctx);
         }
     }
     /* TODO: release picomask_ctx on error */

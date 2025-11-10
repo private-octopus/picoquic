@@ -1952,7 +1952,7 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
             if (path_index == 0) {
                 int alt_path0 = 0;
                 for (int i = 1; i < cnx->nb_paths; i++) {
-                    if (cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL) {
+                    if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
                         alt_path0 = i;
                         break;
                     }
@@ -2103,7 +2103,7 @@ void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t curre
 
         if (path_id >= 0) {
             for (int i = 0; no_path_left && i < cnx->nb_paths; i++) {
-                no_path_left &= cnx->path[i]->path_is_demoted;         
+                no_path_left &= !cnx->path[i]->path_is_demoted;         
             }
             if (no_path_left) {
                 /* Caution here: ICMP packets could be forged */
@@ -3895,10 +3895,11 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t 
 /* Connection management
  */
 
-picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
+picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id, 
     const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
-    char const* sni, char const* alpn, char client_mode)
+    char const* sni, char const* alpn, char client_mode,
+    void * initial_aead_dec, void* initial_pn_dec)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
 
@@ -4151,7 +4152,26 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     if (cnx != NULL) {
-        if (picoquic_setup_initial_traffic_keys(cnx)) {
+        if (initial_aead_dec != NULL && initial_pn_dec != NULL) {
+            cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = initial_aead_dec;
+            cnx->crypto_context[picoquic_epoch_initial].pn_dec = initial_pn_dec;
+            if (picoquic_get_initial_aead_context(quic, cnx->version_index, &cnx->initial_cnxid,
+                cnx->client_mode, 1 /* encoding mode */,
+                &cnx->crypto_context[picoquic_epoch_initial].aead_encrypt,
+                &cnx->crypto_context[picoquic_epoch_initial].pn_enc) != 0) {
+                /* Cannot initialize aead encrypt for initial packets */
+                /* Make sure that we do not delete the already allocated
+                * initial_aead_dec and initial_pn_dec when clearing the
+                * connection, so as not to mess the application management
+                * of memory.
+                 */
+                cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = NULL;
+                cnx->crypto_context[picoquic_epoch_initial].pn_dec = NULL;
+                picoquic_delete_cnx(cnx);
+                cnx = NULL;
+            }
+        }
+        else if (picoquic_setup_initial_traffic_keys(cnx)) {
             /* Cannot initialize aead for initial packets */
             picoquic_delete_cnx(cnx);
             cnx = NULL;
@@ -4160,7 +4180,16 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
 
     if (cnx != NULL && !client_mode && quic->local_cnxid_length > 0) {
         if (picoquic_register_net_icid(cnx) != 0) {
-            DBG_PRINTF("%s", "Could not register the ICID in table.\n");
+            DBG_PRINTF("%s", "Could not register the ICID in table.\n"); 
+            if (initial_aead_dec != NULL && initial_pn_dec != NULL) {
+                /* Make sure that we do not delete the already allocated
+                * initial_aead_dec and initial_pn_dec when clearing the
+                * connection, so as not to mess the application management
+                * of memory.
+                 */
+                cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = NULL;
+                cnx->crypto_context[picoquic_epoch_initial].pn_dec = NULL;
+            }
             picoquic_delete_cnx(cnx);
             cnx = NULL;
         }
@@ -4175,6 +4204,15 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     }
 
     return cnx;
+}
+
+picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
+    picoquic_connection_id_t initial_cnx_id, picoquic_connection_id_t remote_cnx_id,
+    const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
+    char const* sni, char const* alpn, char client_mode)
+{
+    return picoquic_create_cnx_internal(quic, initial_cnx_id, remote_cnx_id, addr_to, start_time, preferred_version,
+        sni, alpn, client_mode, NULL, NULL);
 }
 
 picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,

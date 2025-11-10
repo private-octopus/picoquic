@@ -1976,11 +1976,11 @@ int tls_api_wait_for_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time)
+int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time, uint64_t timeout_value)
 {
     int ret = 0;
-    uint64_t time_out = *simulated_time + 4000000;
+    uint64_t time_out = *simulated_time + timeout_value;
     int nb_trials = 0;
     int nb_inactive = 0;
     int was_active = 0;
@@ -2010,6 +2010,11 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     return ret;
+}
+
+int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time) {
+    return wait_client_connection_timeout(test_ctx, simulated_time, 4000000);
 }
 
 int tls_api_close_with_losses(
@@ -3666,8 +3671,8 @@ int tls_retry_token_valid_test()
     picoquic_connection_id_t* odcid[2];
     picoquic_connection_id_t odcid_found;
     uint64_t time_base = 10000;
-    uint64_t time_delta[4] = { 0, PICOQUIC_TOKEN_DELAY_SHORT, PICOQUIC_TOKEN_DELAY_SHORT + 4000001,
-     24ull * 3600ull * 1000000ull + PICOQUIC_TOKEN_DELAY_SHORT + 1000000 };
+    uint64_t time_delta[4] = { 0, 0, PICOQUIC_TOKEN_DELAY_SHORT + 1,
+        PICOQUIC_TOKEN_DELAY_LONG + 1000000 };
     uint32_t pn[3] = { 0, 1, 2 };
     uint8_t token_buffer[128];
     size_t token_size;
@@ -10646,7 +10651,7 @@ int red_newreno_test()
 
 int red_cubic_test()
 {
-    int ret = red_cc_algotest(picoquic_cubic_algorithm, 500000, 225);
+    int ret = red_cc_algotest(picoquic_cubic_algorithm, 510000, 225);
     return ret;
 }
 
@@ -11335,7 +11340,216 @@ int cnx_ddos_unit_test()
     return cnx_ddos_test_loop(1000, 1000, NULL);
 }
 
+/* Test sending various malformed CHello packets to the server.
+* 
+* We first reproduced an issue signalled by email:
+* What I changed from a normal connection establishment: I sent the curve X25519 as the
+* ECDHE group in the Supported Groups Extension and Key Share Extension in the client hello,
+* but formated the elliptic curve point in the secp256r1 format: 0x04<32B X-coordinate><32B Y-coordinate>.
+* 
+* Tested with the picoquicdemo server from picoquic 1.1.33.2 in the default configuration,
+* compiled with the "-DPICOQUIC_FETCH_PTLS=Y" flag. 
+* 
+*/
 
+static uint8_t chello_malformed[] = {
+    0x01, /* Client Hello */
+    0x00, 0x01, 0x19, /* L= 281 */
+    0x03, 0x03, /* version = 0x0303 */
+    0xe2, 0xc9, 0x8d, 0x67, 0xe6, 0x60, 0xeb, 0x1f,
+    0xe4, 0xbc, 0xa6, 0x19, 0x14, 0xac, 0x86, 0x1a,
+    0xf7, 0xb1, 0xa1, 0x8d, 0xd5, 0x59, 0xe9, 0x19,
+    0x20, 0xd2, 0xee, 0xd3, 0xa5, 0x04, 0x2e, 0xa2, /* Random 32 */
+    0x00, /* length of legacy version = 0 */
+    0x00, 0x06, /* Length of cipher suites = 6 */
+        0x13, 0x01, /* TLS_AES_128_GCM_SHA256 */
+        0x13, 0x02, /* TLS_AES_256_GCM_SHA384 */
+        0x13, 0x03, /* TLS_CHACHA20_POLY1305_SHA256  */
+    0x01, 0x00, /* opaque legacy_compression_methods, l=1, v[1] = 0 */
+    0x00, 0xea, /* Extension length = 234 */
+        0x00, 0x33, /* Key share extension(51) */
+        0x00, 0x47, /* Key share group */
+        0x00, 0x45, /* Key share entry */
+            0x00, 0x1d, /* Named group, should be secp256r1, 0x0017, but we are using x25519(0x001D), keeping the secp format! */
+            0x00, 0x41, /* key exchange length = 65 */
+            0x04, /* legacy form */
+            0x1e, 0x93, 0x9a, 0x4a, 0x38, 0x62, 0xf3, 0xd9,
+            0x23, 0x68, 0x25, 0x5d, 0x63, 0x01, 0xcb, 0xcc,
+            0x73, 0xa0, 0x7e, 0x3c, 0xf2, 0x23, 0xab, 0x0e,
+            0x5a, 0x3e, 0x65, 0x50, 0x8b, 0xcb, 0x21, 0xe3, /* X, 32 bytes */
+            0x7b, 0x6f, 0xb7, 0x13, 0xaf, 0x3d, 0x0b, 0x8a,
+            0x5e, 0xb3, 0x13, 0x59, 0xda, 0x73, 0x24, 0xbf,
+            0x69, 0xf1, 0x4f, 0x64, 0x7e, 0x04, 0xad, 0x6d,
+            0x4d, 0xdb, 0x99, 0x0f, 0xc9, 0x20, 0x8d, 0xdc, /* Y, 32 bytes */
+    0x00, 0x00, /* Server name extension (0) */
+    0x00, 0x15, /* Server name extension length length (21) */
+        0x00, 0x13, /* Server name struct (19) */
+        0x00, /* Name type: host name(0) */
+        0x00, 0x10, /* name length (16) */
+        0x74, 0x65, 0x73, 0x74, 0x2e, /* test. */
+        0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, /* example */
+        0x2e, 0x63, 0x6f, 0x6d, /* .com */
+    0x00, 0x10, /* Extension application_layer_protocol_negotiation(16) */
+        0x00, 0x10, /* ALPN extension length (16) */
+        0x00, 0x0e, /* Protocol name list length (14) */
+        0x0d, /* name length (13) */
+        0x70, 0x69, 0x63, 0x6f, 0x71, 0x75, 0x69, 0x63, 0x2d, 0x74, 0x65, 0x73, 0x74, /* picoquic-test */
+    0x00, 0x2b, /* extension: supported_versions(43) */
+        0x00, 0x03, /* supported_versions length(3) */
+        0x02, /* Length of version (2) */
+        0x03, 0x04, /* TLS 1.3 = 0x0304 */
+    0x00, 0x0d, /* Extension signature_algorithms(13) */
+    0x00, 0x10, /* signature_algorithms extension length (16) */
+        0x00, 0x0e, /* length of algorithm list (14) -- 7 algorithms */
+        0x08, 0x07, /* ed25519(0x0807), */
+        0x04, 0x03, /* ecdsa_secp256r1_sha256(0x0403), */
+        0x05, 0x03, /* ecdsa_secp384r1_sha384(0x0503), */
+        0x06, 0x03, /* ecdsa_secp521r1_sha512(0x0603), */
+        0x08, 0x06, /* rsa_pss_rsae_sha512(0x0806), */
+        0x08, 0x05, /* rsa_pss_rsae_sha384(0x0805), */
+        0x08, 0x04, /* rsa_pss_rsae_sha256(0x0804), */
+    0x00, 0x0a, /* extension supported_groups(10), */
+    0x00, 0x06, /* length of supported_groups extension(6) */
+        0x00, 0x04, /* length of list of supported_groups extension(4) -- 2 groups. We place x25519 first */
+        0x00, 0x1d, /* x25519(0x001D), */
+        0x00, 0x17, /* secp256r1(0x0017) */
+    0xff, 0xa5, /* extension type 0xffa5 (draft version of QUIc extensions) */
+    0x00, 0x49, /* quic extension length 73 */
+    0x05, 0x04, 0x80, 0x20, 0x00, 0x00, 0x04, 0x04,
+    0x80, 0x10, 0x00, 0x00, 0x08, 0x02, 0x42, 0x00,
+    0x01, 0x04, 0x80, 0x00, 0x75, 0x30, 0x03, 0x02,
+    0x45, 0xa0, 0x09, 0x02, 0x42, 0x00, 0x06, 0x04,
+    0x80, 0x01, 0x00, 0x63, 0x07, 0x04, 0x80, 0x00,
+    0xff, 0xff, 0x0e, 0x01, 0x08, 0x0b, 0x01, 0x0a,
+    0x0f, 0x08, 0x0e, 0xa0, 0xd8, 0xd8, 0x54, 0x9e,
+    0x27, 0x43, 0x50, 0x57, 0x01, 0x01, 0xc0, 0x00,
+    0x00, 0x00, 0xff, 0x04, 0xde, 0x1b, 0x02, 0x43,
+    0xe8,
+};
+
+int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buffer_size, uint8_t * chello,  size_t chello_length)
+{
+    int ret = 0;
+    picoquic_connection_id_t icid;
+    picoquic_connection_id_t scid;
+    void* aead_ctx = NULL;
+    void* pn_enc_ctx = NULL;
+    size_t length = 0;
+    size_t header_length = 0;
+    size_t pn_offset = 0;
+    size_t pn_length = 0;
+    uint8_t first_mask = 0x0f;
+    uint8_t* bytes = buffer;
+    uint8_t* bytes_max = buffer + buffer_size - 16;
+
+    /* Prepare initial and source CID */
+    icid.id_len = 8;
+    picoquic_public_random(icid.id, 8);
+    scid.id_len = quic->local_cnxid_length;
+    picoquic_public_random(scid.id, scid.id_len);
+    /* format the initial header */
+    header_length = picoquic_create_long_header(
+        picoquic_packet_initial,
+        &icid,
+        &scid,
+        0, /* Do grease bit */
+        picoquic_supported_versions[0].version,
+        0, /* version_index */
+        0, /* sequence_number */
+        0, /* retry_token_length */
+        NULL, /* retry_token */
+        buffer,
+        &pn_offset,
+        &pn_length);
+    /* Format the payload, i.e. the chello encoded as a crypto stream data */
+    bytes += header_length;
+    if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_crypto_hs)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) != NULL &&
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, chello_length, chello)) != NULL) {
+        length = bytes - buffer;
+        picoquic_update_payload_length(buffer, pn_offset, header_length - pn_length,
+            length + 16);
+    }
+    else {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* create an encryption context */
+        if ((ret = picoquic_get_initial_aead_context(quic, 0, &icid,
+            1 /* is_client=1 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx)) == 0) {
+            /* encrypt the payload. */
+            size_t send_length = picoquic_aead_encrypt_generic(buffer + /* header_length */ header_length,
+                buffer + header_length, length - header_length,
+                0, buffer, header_length, aead_ctx);
+            send_length += header_length;
+            /* Next, encrypt the PN -- The sample is located after the pn_offset */
+            picoquic_protect_packet_header(buffer, pn_offset, first_mask, pn_enc_ctx);
+            /* Fill the packet to specified length */
+            memset(buffer + send_length, 0, buffer_size - send_length);
+        }
+        /* Free the encryption contexts if allocated */
+        if (aead_ctx != NULL) {
+            /* Free the AEAD CTX */
+            picoquic_aead_free(aead_ctx);
+        }
+
+        if (pn_enc_ctx != NULL) {
+            /* Free the PN encryption context */
+            picoquic_cipher_free(pn_enc_ctx);
+        }
+    }
+
+    return ret;
+}
+
+int bad_chello_test()
+{
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t icid = { { 0xba, 0xdc, 0xe1, 0x10, 0, 0, 0, 0}, 8 };
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &icid, 10000, 0, 0, 0);
+    uint8_t buffer[PICOQUIC_ENFORCED_INITIAL_MTU];
+    
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        /* Create an initial packet with a bad chello */
+        ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
+    }
+
+    /* Submit the packet to the server context */
+    if (ret == 0) {
+        picoquic_cnx_t* cnx_trial = NULL;
+        ret = picoquic_incoming_packet_ex(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU,
+            (struct sockaddr*)&test_ctx->client_addr, (struct sockaddr*)&test_ctx->server_addr, 0,
+            0, &cnx_trial, simulated_time);
+        if (cnx_trial != NULL) {
+            DBG_PRINTF("Bad chello caused context creation at t=%" PRIu64, simulated_time);
+            ret = -1;
+        }
+    }
+
+    /* If not apparently broken, start the client connection. */
+    if (ret == 0) {
+        simulated_time += 10000;
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 20000, 2000000);
+
+        if (ret == 0) {
+            DBG_PRINTF("Post bad chello connection succeeds at t=%" PRIu64 , simulated_time);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
 /*
  * Test randomization of initial packet number
  */

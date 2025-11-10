@@ -397,7 +397,7 @@ int picoquic_ns_create_link(picoquic_ns_ctx_t* cc_ctx, int link_id)
         cc_ctx->link[link_id]->packets_sent_next_burst = cc_ctx->link[link_id]->packets_sent +
             link_spec->packets_between_losses;
         if (link_spec->l4s_max > 0) {
-            ret = dualq_aqm_configure(cc_ctx->link[link_id], link_spec->l4s_max);
+            ret = dualq_configure(cc_ctx->link[link_id], link_spec->l4s_max);
         }
     }
     return ret;
@@ -721,14 +721,9 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
      * reset the queue time to current_time, i.e., after packets in transit are delivered.*/
     link->queue_time = current_time;
     /* reset the AQM, so it starts working from the current time. */
-#if 1
     if (link->aqm_state != NULL) {
-        link->aqm_state->reset(link->aqm_state, current_time);
+        link->aqm_state->reset(link->aqm_state, link, current_time);
     }
-#else
-    link->bucket_arrival_last = current_time;
-    link->bucket_current = (double)link->bucket_max;
-#endif
     /* reset the value of the link parameters */
     pico_d *= (1.024 * 1.024); /* account for binary units */
     link->next_send_time = current_time;
@@ -743,7 +738,7 @@ void picoquic_ns_simlink_reset(picoquictest_sim_link_t* link, double data_rate_i
     link->packets_between_losses = vary_link_spec->packets_between_losses;
     link->packets_sent_next_burst = link->packets_sent + vary_link_spec->packets_between_losses;
     if (link->aqm_state != NULL) {
-        link->aqm_state->reset(link->aqm_state, current_time);
+        link->aqm_state->reset(link->aqm_state, link, current_time);
     }
 
 
@@ -969,7 +964,9 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
-        fprintf(err_fd, "Cannot allocate simulation context.\n");
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Cannot allocate simulation context.\n");
+        }
         ret = -1;
     }
     while (ret == 0) {
@@ -1003,7 +1000,7 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     }
     if (err_fd != NULL && ret != 0) {
         fprintf(err_fd, "Simulated time %" PRIu64 ", ret = %d(0x%x)\n",
-            cc_ctx->simulated_time, ret, ret);
+            (cc_ctx!=NULL)?cc_ctx->simulated_time:0, ret, ret);
     }
 
     if (ret == 0 &&

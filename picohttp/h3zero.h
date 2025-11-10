@@ -207,7 +207,8 @@ typedef struct st_h3zero_header_parts_t {
 #define h3zero_setting_grease_mask 0x0f0f
 #define h3zero_settings_enable_connect_protocol 0x8
 #define h3zero_setting_h3_datagram 0x33
-#define h3zero_settings_webtransport_max_sessions 0xc671706aull
+#define h3zero_settings_webtransport_max_sessions 0x14e9cd29
+#define h3zero_settings_webtransport_max_sessions_old 0xc671706aull
 
 typedef struct st_h3zero_settings_t {
     uint64_t webtransport_max_sessions;
@@ -278,7 +279,7 @@ typedef struct st_h3zero_data_stream_state_t {
     size_t frame_header_read;
     unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
-    unsigned int frame_header_parsed : 1;
+    unsigned int frame_prefix_parsed : 1;
     unsigned int header_found : 1;
     unsigned int data_found : 1;
     unsigned int trailer_found : 1;

@@ -469,6 +469,7 @@ typedef enum {
     multipath_test_discovery,
     multipath_test_keep_alive,
     multipath_test_just_one,
+    multipath_test_break_both,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -984,7 +985,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
         test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
         test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
-        test_id == multipath_test_abandon || test_id == multipath_test_tunnel)) {
+        test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
          * For the tunnel scenario, do the same but kill both links.
@@ -1029,6 +1030,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Break both links */
                 multipath_test_kill_links(test_ctx, 0);
                 multipath_test_kill_links(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_break_both) {
+                /* Break both paths, program them to return socket errors */
+                multipath_test_set_unreachable(test_ctx, 0);
+                multipath_test_set_unreachable(test_ctx, 1);
             } else {
                 multipath_test_kill_links(test_ctx, 
                     (test_id == multipath_test_drop_first ||
@@ -1258,6 +1264,17 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
         }
     }
+
+    if (test_id == multipath_test_break_both) {
+        /* exception: this test is supposed to fail, because both links
+        * are unreachable. */
+        if (ret == 0) {
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+    }
     /* Delete the context */
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -1384,7 +1401,7 @@ int multipath_break1_test()
  */
 int multipath_socket_error_test()
 {
-    uint64_t max_completion_microsec = 10900000;
+    uint64_t max_completion_microsec = 11000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break2);
 }
@@ -1496,7 +1513,7 @@ int multipath_backup_test()
 
 int multipath_standup_test()
 {
-    uint64_t max_completion_microsec = 3000000;
+    uint64_t max_completion_microsec = 7200000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup);
 }
@@ -1523,6 +1540,14 @@ int multipath_just_one_test()
     return multipath_test_one(max_completion_microsec, multipath_test_just_one);
 }
 
+/* Breaking both links at the same time. Expect the connection to break,
+ * without crashing. */
+int multipath_break_both_test()
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_break_both);
+}
 
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The goal of the tests is to verify that

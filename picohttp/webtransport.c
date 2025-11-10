@@ -87,6 +87,7 @@ static void picowt_set_transport_parameters_values(const picoquic_tp_t* tp_curre
     if (tp_new->max_datagram_frame_size == 0) {
         tp_new->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
     }
+    tp_new->is_reset_stream_at_enabled = 1;
 }
 
 void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
@@ -206,9 +207,6 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
     {
         picowt_set_transport_parameters(*p_cnx);
         picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
-        /* Perform the initialization, settings and QPACK streams
-         */
-        ret = h3zero_protocol_init(*p_cnx);
     }
     return ret;
 }
@@ -218,8 +216,9 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
 * Connect
 */
 
-int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
-    const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
+    const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
+    uint8_t * extra, size_t extra_length)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
@@ -263,6 +262,13 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
             }
             size_t connect_length = bytes - buffer;
             stream_ctx->ps.stream_state.is_upgrade_requested = 1;
+
+            if (extra != NULL && extra_length > 0 && connect_length + extra_length <= sizeof(buffer)) {
+                memcpy(buffer + connect_length, extra, extra_length);
+                connect_length += extra_length;
+            }
+
+
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
                     0, stream_ctx);
         }
@@ -273,6 +279,12 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
         }
     }
     return ret;
+}
+
+int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
+    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+{
+    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, NULL, 0);
 }
 
 /*
@@ -291,7 +303,6 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
     uint8_t buffer[512];
     int ret = 0;
     /* Compute the length */
-    size_t length = 4;
     size_t err_msg_len = 0;
     uint8_t* bytes;
     uint8_t* bytes_max = buffer + sizeof(buffer);
@@ -305,29 +316,18 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
         if (err_msg != NULL) {
             err_msg_len = strlen(err_msg);
         }
-        length += err_msg_len;
-        /* Encode the capsule */
-        if ((bytes = picoquic_frames_varint_encode(buffer, bytes_max,
-            picowt_capsule_close_webtransport_session)) != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, length)) != NULL &&
-            (bytes = picoquic_frames_uint32_encode(bytes, bytes_max, picowt_err)) != NULL)
-        {
-            if (bytes + err_msg_len > bytes_max) {
-                bytes = NULL;
-            }
-            else if (err_msg_len > 0) {
-                memcpy(bytes, err_msg, err_msg_len);
-                bytes += err_msg_len;
-            }
-        }
-        if (bytes == NULL) {
-            /* This might happen if the error message is too long */
+
+        if ((bytes = picoquic_frames_uint32_encode(buffer, bytes_max, picowt_err)) == NULL ||
+            bytes + err_msg_len > bytes_max) {
             ret = -1;
         }
         else {
-            /* Write the capsule*/
-            ret = picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, buffer, bytes - buffer, 1);
-            control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+            if (err_msg_len > 0) {
+                memcpy(bytes, err_msg, err_msg_len);
+                bytes += err_msg_len;
+            }
+            ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
+                bytes - buffer, buffer, 1 /* Set fin, because we are claosing this stream */);
         }
     }
     return ret;
@@ -343,20 +343,18 @@ DRAIN_WEBTRANSPORT_SESSION Capsule {
 int picowt_send_drain_session_message(picoquic_cnx_t* cnx, 
     h3zero_stream_ctx_t* control_stream_ctx)
 {
-    const uint8_t drain_capsule[] = {
-        0x80, 0,
-        (uint8_t)((picowt_capsule_drain_webtransport_session >> 8) & 0xff),
-        (uint8_t)(picowt_capsule_drain_webtransport_session & 0xff),
-        0
-    };
     int ret = 0;
+    uint8_t null_msg[] = { 0 };
+
     if (control_stream_ctx->ps.stream_state.is_fin_sent) {
         /* cannot send! */
         ret = -1;
     }
     else {
-        ret = picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, drain_capsule, sizeof(drain_capsule), 0);
+        ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
+            0, null_msg, 0 /* Do not set fin, there could be other capsules */);
     }
+
     return ret;
 }
 
@@ -368,13 +366,15 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 * - Close session.
 * 
 */
-int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule, h3zero_callback_ctx_t* h3_ctx)
+int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+    const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {
     int ret = 0; 
     
     while (ret == 0 && bytes < bytes_max) {
         const uint8_t* bytes_first = bytes;
-        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
+
+        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule, stream_ctx);
 
         if (bytes == NULL) {
             picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes_first);
@@ -384,28 +384,33 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
         else{
             if (capsule->h3_capsule.is_stored) {
                 switch (capsule->h3_capsule.capsule_type) {
-                case h3zero_capsule_type_datagram:
-                    h3zero_receive_datagram_capsule(cnx, stream_ctx, &capsule->h3_capsule, h3_ctx);
-                    break;
                 case picowt_capsule_drain_webtransport_session:
                 case picowt_capsule_close_webtransport_session:
-                    picoquic_log_app_message(cnx, "Received web transport session capsule, type: 0x%" PRIx64 " (%s)",
-                        capsule->h3_capsule.capsule_type,
-                        (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session)?"close session":"drain session");
                     if (capsule->h3_capsule.capsule_length < 4) {
                         picoquic_log_app_message(cnx, "Web transport capsule too short, %zu bytes", capsule->h3_capsule.capsule_length);
                         ret = -1;
                     }
                     else {
+                        char text[256];
+                        size_t text_len = 0;
                         capsule->error_msg = picoquic_frames_uint32_decode(
                             capsule->h3_capsule.capsule_buffer, capsule->h3_capsule.capsule_buffer + capsule->h3_capsule.capsule_length,
                             &capsule->error_code);
                         capsule->error_msg_len = capsule->h3_capsule.capsule_length - 4;
+                        text_len = (capsule->error_msg_len > 255) ? 255 : capsule->error_msg_len;
+                        if (text_len > 0) {
+                            memcpy(text, capsule->error_msg, text_len);
+                        }
+                        text[text_len] = 0;
+                        picoquic_log_app_message(cnx,
+                            "Received web transport session capsule, type: 0x%" PRIx64 " (%s), error: %" PRIx32 " (%s)",
+                            capsule->h3_capsule.capsule_type,
+                            (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session) ? "close session" : "drain session",
+                            capsule->error_code, text);
                     }
                     break;
                 default:
                     picoquic_log_app_message(cnx, "Unexpected web transport capsule type: 0x%" PRIx64, capsule->h3_capsule.capsule_type);
-                    ret = -1;
                     break;
                 }
             }

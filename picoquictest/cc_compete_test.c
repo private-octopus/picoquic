@@ -31,6 +31,7 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 #include "picoquic_utils.h"
+#include "picoquic_c4.h"
 
 /* Congestion compete test.
 * These tests measure what happens when multiple connections fight for the same
@@ -80,6 +81,26 @@ int cc_compete_cubic2_test()
     return picoquic_ns(&spec, NULL);
 }
 
+
+int cc_compete_c4c4_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xc4, 0xc4, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = c4_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = c4_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 2;
+    spec.main_target_time = 8500000;
+    spec.queue_delay_max = 40000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec, NULL);
+}
+
 int cc_compete_cubic2_hystart_pp_test()
 {
     picoquic_ns_spec_t spec = { 0 };
@@ -111,10 +132,10 @@ int cc_compete_prague2_test()
     spec.background_start_time = 0;
     spec.background_scenario_text = cc_compete_batch_scenario_10M;
     spec.nb_connections = 2;
-    spec.main_target_time = 1600000;
+    spec.main_target_time = 2500000;
     spec.data_rate_in_gbps = 0.05;
     spec.latency = 25000;
-    spec.l4s_max = 15000;
+    spec.l4s_max = 5000;
     spec.icid = icid;
     spec.qlog_dir = ".";
 
