@@ -114,20 +114,21 @@ int hystart_test() {
         picoquic_prague_algorithm,
         picoquic_bbr1_algorithm
     };
-    uint64_t max_completion_times[] = {
-        10000000,
-        10500000,
-        10500000,
+    uint64_t max_completion_times[][3] = {
+        /* hystart     hystart++   disabled */
+        {10000000,  10000000,   10000000},  /* newreno */
+        {10500000,  10500000,   10500000},  /* cubic */
+        {10500000,  10500000,   10500000},  /* dcubic */
         //21000,
-        10000000,
-        10000000,
-        10000000
+        {10000000,  10000000,   10000000},  /* bbr */
+        {10000000,  10000000,   10000000}, /* prague */
+        {10000000,  10000000,   10000000}   /* bbr1 */
     };
     int ret = 0;
 
     for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*) && !ret; i++) {
         for (picoquic_hystart_alg_t hystart_alg = picoquic_hystart_alg_hystart_t; hystart_alg <= picoquic_hystart_alg_disabled_t && !ret; hystart_alg++) {
-            ret = hystart_test_one(ccalgos[i], hystart_alg, 50000000, max_completion_times[i], 50, 125000, 0, 125000 * 10);
+            ret = hystart_test_one(ccalgos[i], hystart_alg, 50000000, max_completion_times[i][hystart_alg], 50, 125000, 0, 125000 * 10);
             if (ret != 0) {
                 DBG_PRINTF("HyStart test fails for <%s><%i>", ccalgos[i]->congestion_algorithm_id, hystart_alg);
             }
