@@ -495,10 +495,6 @@ int wt_baton_server(char const* path, picoquic_quic_config_t* config)
     printf("Server exit, ret = 0x%x\n", ret);
 
     /* Clean up */
-    if (config->cnx_id_cbdata != NULL) {
-        picoquic_lb_compat_cid_config_free(qserver);
-    }
-
     if (qserver != NULL) {
         picoquic_free(qserver);
     }
