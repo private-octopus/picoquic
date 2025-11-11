@@ -143,11 +143,6 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
     
     /* We only delete the stream if there are no pending retransmissions */
     if (stream->is_closed && picoquic_is_stream_acked(stream)) {
-#if 1
-        if (stream->stream_id == 2) {
-            ret = 0;
-        }
-#endif
         picoquic_delete_stream(cnx, stream);
     }
 
