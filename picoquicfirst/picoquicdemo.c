@@ -309,7 +309,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
             ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
         }
         if (ret == 0) {
-            qserver = picoquic_create_and_configure(config, picoquic_demo_server_callback, &picoquic_file_param, current_time, NULL);
+            qserver = picoquic_create_and_configure(config, NULL, &picoquic_file_param, current_time, NULL);
             if (qserver == NULL) {
                 ret = -1;
             }

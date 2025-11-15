@@ -68,13 +68,9 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 
-/* The generic server callback will call either http3 or http0.9,
+/* The generic server will use either http3 or http0.9,
  * according to the ALPN selected by the client
  */
-
-int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
 
