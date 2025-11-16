@@ -1590,6 +1590,7 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t inflight_prior;
     uint64_t lost_packet_number;
     uint64_t lost_packet_sent_time;
+    int pc; /* Using int type instead of pc enum to avoid include depencies */
     unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
