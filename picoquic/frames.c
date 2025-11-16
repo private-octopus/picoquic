@@ -2793,7 +2793,6 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
 
                 if (cnx->congestion_alg != NULL) {
                     picoquic_per_ack_state_t ack_state = { 0 };
-                    ack_state.pc = pc;
                     ack_state.lost_packet_number = p->sequence_number;
                     cnx->congestion_alg->alg_notify(cnx, old_path, picoquic_congestion_notification_spurious_repeat,
                        &ack_state, current_time);
@@ -3149,7 +3148,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
  */
 
 void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
-    int epoch, int pc, uint64_t current_time, picoquic_packet_data_t* packet_data)
+    int epoch, uint64_t current_time, picoquic_packet_data_t* packet_data)
 {
     for (int i = 0; i < packet_data->nb_path_ack; i++) {
         uint64_t lost_before_ack = path_x->total_bytes_lost;
@@ -3174,7 +3173,6 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         }
         if (cnx->congestion_alg != NULL && packet_data->path_ack[i].acked_path->rtt_sample > 0) {
             picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.pc = pc;
             ack_state.rtt_measurement = packet_data->path_ack[i].acked_path->rtt_sample;
             ack_state.send_delay = packet_data->path_ack[i].largest_sent_time - packet_data->path_ack[i].delivered_sent_prior;
             ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
@@ -4037,7 +4035,6 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
             picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.pc = pc;
             ack_state.lost_packet_number = largest_in_path;
             pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, ack_path,
@@ -6922,7 +6919,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     }
 
     if (bytes != NULL) {
-        process_decoded_packet_data(cnx, path_x, epoch, pc, current_time, &packet_data);
+        process_decoded_packet_data(cnx, path_x, epoch, current_time, &packet_data);
 
         if (ack_needed) {
             cnx->latest_receive_time = current_time;

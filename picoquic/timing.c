@@ -102,7 +102,6 @@ static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* pat
             if (ip_addr_length == cnx->seed_ip_addr_length &&
                 memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
                 picoquic_per_ack_state_t ack_state = { 0 };
-                ack_state.pc = picoquic_packet_context_application; /* Arbitrary! */
                 ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
                 cnx->cwin_notified_from_seed = 1;
                 cnx->congestion_alg->alg_notify(cnx, path_x,
@@ -303,7 +302,6 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         /* Pass the new values to the congestion algorithm */
         if (cnx->congestion_alg != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
-            ack_state.pc = picoquic_context_from_epoch(epoch);
             ack_state.rtt_measurement = rtt_estimate;
             ack_state.one_way_delay = (cnx->is_time_stamp_enabled) ? old_path->one_way_delay_sample : 0;
             cnx->congestion_alg->alg_notify(cnx, old_path,
