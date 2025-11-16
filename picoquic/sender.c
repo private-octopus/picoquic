@@ -1816,6 +1816,7 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
          * before the initial timer. */
         if (old_path != NULL && cnx->congestion_alg != NULL && p->send_time < cnx->start_time + PICOQUIC_INITIAL_RTT) {
             picoquic_per_ack_state_t ack_state = { 0 };
+            ack_state.pc = pc;
             ack_state.rtt_measurement = old_path->rtt_sample;
             ack_state.nb_bytes_acknowledged = p->length;
             old_path->delivered += p->length;
@@ -3105,6 +3106,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                 length = bytes_next - bytes;
                 if (path_x->cwin < path_x->bytes_in_transit) {
                     picoquic_per_ack_state_t ack_state = { 0 };
+                    ack_state.pc = pc;
                     cnx->cwin_blocked = 1;
                     path_x->last_cwin_blocked_time = current_time;
                     if (cnx->congestion_alg != NULL) {
@@ -3469,7 +3471,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         path_x->last_cwin_blocked_time = current_time;
                         if (cnx->congestion_alg != NULL) {
                             picoquic_per_ack_state_t ack_state = { 0 };
-
+                            ack_state.pc = pc;
                             cnx->congestion_alg->alg_notify(cnx, path_x,
                                 picoquic_congestion_notification_cwin_blocked,
                                 &ack_state, current_time);

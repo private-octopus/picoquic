@@ -153,7 +153,7 @@
     <ClCompile Include="error_names.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\c4\src\c4.c">
+    <ClCompile Include="c4.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -222,6 +222,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\picoquic_mbedtls\ptls_mbedtls.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="c4.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

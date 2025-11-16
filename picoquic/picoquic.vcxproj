@@ -145,9 +145,9 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\c4\src\c4.c" />
     <ClCompile Include="bbr1.c" />
     <ClCompile Include="bytestream.c" />
+    <ClCompile Include="c4.c" />
     <ClCompile Include="cc_common.c" />
     <ClCompile Include="config.c" />
     <ClCompile Include="cubic.c" />
@@ -200,6 +200,7 @@
   <ItemGroup>
     <ClInclude Include="..\picoquic_mbedtls\ptls_mbedtls.h" />
     <ClInclude Include="bytestream.h" />
+    <ClInclude Include="c4.h" />
     <ClInclude Include="cc_common.h" />
     <ClInclude Include="frames.h" />
     <ClInclude Include="logwriter.h" />
