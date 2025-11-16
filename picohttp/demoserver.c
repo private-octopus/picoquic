@@ -599,46 +599,33 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     return 0;
 }
 
-/* Generic callback. On first instantiation of a connection, will get the
- * negotiated ALPN, and provision the appropriate callback.
- */
-
-int picoquic_demo_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
-{
-    int ret = 0;
-    picoquic_alpn_enum alpn_code = picoquic_alpn_undef;
-    char const * alpn = picoquic_tls_get_negotiated_alpn(cnx);
-
-    if (alpn != NULL) {
-        alpn_code = picoquic_parse_alpn(alpn);
-    }
-
-    switch (alpn_code) {
-    case picoquic_alpn_http_3:
-        ret = h3zero_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
-        break;
-    case picoquic_alpn_quicperf:
-        ret = quicperf_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
-        break;
-    case picoquic_alpn_http_0_9:
-    default:
-        ret = picoquic_h09_server_callback(cnx, stream_id, bytes, length, fin_or_event, callback_ctx, v_stream_ctx);
-        break;
-    }
-
-    return ret;
-}
-
 /* Callback from the TLS stack upon receiving a list of proposed ALPN in the Client Hello */
 size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count)
 {
     size_t ret = count;
+    picoquic_alpn_enum alpn_code = picoquic_alpn_undef;
+    picoquic_cnx_t* cnx = quic->cnx_in_progress;
 
     for (size_t i = 0; i < count; i++) {
-        if (picoquic_parse_alpn_nz((const char *)list[i].base, list[i].len) != picoquic_alpn_undef) {
+        if ((alpn_code = picoquic_parse_alpn_nz((const char *)list[i].base, list[i].len)) != picoquic_alpn_undef) {
             ret = i;
+            break;
+        }
+    }
+
+    if (alpn_code != picoquic_alpn_undef && cnx != NULL) {
+        void* default_callback_ctx = picoquic_get_default_callback_context(quic);
+        switch (alpn_code) {
+        case picoquic_alpn_http_3:
+            picoquic_set_callback(cnx, h3zero_callback, default_callback_ctx);
+            break;
+        case picoquic_alpn_quicperf:
+            picoquic_set_callback(cnx, quicperf_callback, default_callback_ctx);
+            break;
+        case picoquic_alpn_http_0_9:
+            picoquic_set_callback(cnx, picoquic_h09_server_callback, default_callback_ctx);
+            break;
+        default:
             break;
         }
     }
