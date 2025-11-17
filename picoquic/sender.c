@@ -3472,7 +3472,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         if (cnx->congestion_alg != NULL) {
                             picoquic_per_ack_state_t ack_state = { 0 };
                             ack_state.pc = pc;
-
                             cnx->congestion_alg->alg_notify(cnx, path_x,
                                 picoquic_congestion_notification_cwin_blocked,
                                 &ack_state, current_time);
