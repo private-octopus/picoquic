@@ -84,6 +84,7 @@ void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, du
     }
     packet->next_packet = 0;
     xq->count += 1;
+    packet->arrival_time += xq->queue_time;
     xq->queue_bytes += packet->length;
     xq->queue_time += picoquictest_sim_link_transmit_time(link, packet);
 }
@@ -303,7 +304,7 @@ void dualq_update_it(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64
     
     while (link->queue_time <= current_time) {
         if ((packet = dualq_dequeue_one(dualq, link, link->queue_time, &should_drop)) != NULL) {
-            picoquictest_sim_link_enqueue(link, packet, link->queue_time, should_drop);
+            picoquictest_sim_link_enqueue(link, packet, packet->arrival_time, should_drop);
         }
         else {
             break;

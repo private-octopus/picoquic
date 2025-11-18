@@ -327,7 +327,7 @@ int dualq_sustain_test()
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
     uint64_t submit_time = dqt_ctx.simulated_time;
-    uint64_t max_time = 125000;
+    uint64_t max_time = 160000;
     int nb_received = 0;
     int nb_sent = 0;
 
