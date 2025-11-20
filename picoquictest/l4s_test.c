@@ -131,7 +131,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 6200000, 5, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 10500000, 5, 3000, 0, NULL);
 
     return ret;
 }
@@ -149,7 +149,7 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 5800000, 15, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3800000, 5, 3000, 0, NULL);
 
     return ret;
 }
@@ -178,7 +178,7 @@ int l4s_bbr_updown_test()
 #else
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 10300000, 56, 6000, nb_l4s_link_updown, l4s_link_updown);
+    int ret = l4s_congestion_test(ccalgo, 1, 5800000, 56, 3000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
 #endif

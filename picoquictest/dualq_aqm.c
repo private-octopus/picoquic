@@ -21,7 +21,31 @@
 
 /*
 * Implementation of the DualQ AQM,
-* based on code sample for dualq pi2 in RFC 9332
+* based on code sample for dualq pi2 in RFC 9332.
+* The code implements the "timestamp" variant.
+* 
+* The link object manages:
+* 
+* - a queue of pending L4S packets (lq)
+* - a queue of pending classic packets (cq)
+* - a queue of packets in transit (default link queue).
+* 
+* The key events are:
+* - arrival of packets through the "submit" API. The packets are time stamped
+*   (packet->arrival_time), and then added to either the L4S or the classic Queue.
+* - Departure from the "pending" queue. This happens as soon as the arrival
+*   time of the last packet in the "transit" queue is above the current time.
+*   The L4S code is run, resulting in packet marking (ECT1 or CE) and
+*   either forwarding or drop. The arrival time of the packet is set to
+*   time of dequeue + transmission and transit time, including jitter.
+* - Departure from the "transit" queue, i.e., arrival.
+* 
+* We have an API problem because the previous queue model only supported
+* arrival (submit) and departure. The first version of the code tried to
+* work around these limitations by using a form of virtual time, but it
+* is very complicated and error prone. It seems better to rely on
+* explicit calls from the simulator.
+*   
  */
 
 #include "picoquic_internal.h"
@@ -84,9 +108,7 @@ void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, du
     }
     packet->next_packet = 0;
     xq->count += 1;
-    packet->arrival_time += xq->queue_time;
     xq->queue_bytes += packet->length;
-    xq->queue_time += picoquictest_sim_link_transmit_time(link, packet);
 }
 
 picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, dualq_queue_t* xq)
@@ -99,18 +121,10 @@ picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictes
         if (xq->queue_first == NULL) {
             xq->queue_last = NULL;
             xq->queue_bytes = 0;
-            xq->queue_time = 0;
             xq->count = 0;
         }
         else
         {
-            uint64_t transmit_time = picoquictest_sim_link_transmit_time(link, packet);
-            if (transmit_time < xq->queue_time) {
-                xq->queue_time -= transmit_time;
-            }
-            else {
-                xq->queue_time = 0;
-            }
             if (packet->length < xq->queue_bytes) {
                 xq->queue_bytes -= packet->length;
             }
@@ -193,16 +207,20 @@ picoquictest_sim_packet_t* dualq_scheduler(dualq_state_t* dualq, picoquictest_si
     return packet;
 }
 
-double dualq_laqm(dualq_state_t* dualq)
+double dualq_laqm(dualq_state_t* dualq, uint64_t current_time)
 {
     double pprime = 0;
+    uint64_t lq_time = 0;
     /* Returns Native L4S AQM probability */
     if (dualq->lq.count > 1) {
-        if (dualq->lq.queue_time >= dualq->maxTh) {
+        if (dualq->lq.queue_first->arrival_time < current_time) {
+            lq_time = current_time - dualq->lq.queue_first->arrival_time;
+        }
+        if (lq_time >= dualq->maxTh) {
             pprime = 1.0;
         }
-        else if (dualq->lq.queue_time > dualq->minTh) {
-            pprime = ((double)(dualq->lq.queue_time - dualq->minTh)) / dualq->range;
+        else if (lq_time > dualq->minTh) {
+            pprime = ((double)(lq_time - dualq->minTh)) / dualq->range;
         }
     }
     return pprime;
@@ -220,7 +238,7 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
             /* scheduler chose lq */
             /* Check for overload saturation */
             if (dualq->p_CL < dualq->p_Lmax) {
-                dualq->pprime_L = dualq_laqm(dualq); /* Native LAQM */
+                dualq->pprime_L = dualq_laqm(dualq, current_time); /* Native LAQM */
                 dualq->p_L = (dualq->pprime_L > dualq->p_CL) ? dualq->pprime_L : dualq->p_CL; /* Combining function */
                 if (dualq_recur(&dualq->lq, dualq->pprime_L)) {
                     /* Linear marking */
@@ -263,13 +281,22 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
 
 /* The Pi2 coefficients must be updated every Tupdate */
 
-void dualq_pi2_update(dualq_state_t* dualq)
+void dualq_pi2_update(dualq_state_t* dualq, uint64_t current_time)
 {
     int64_t target_delta;
     int64_t delta_q;
+    uint64_t cq_time = 0;
+    uint64_t lq_time = 0;
 
-    dualq->curq = (dualq->cq.queue_time > dualq->lq.queue_time) ?
-        dualq->cq.queue_time : dualq->lq.queue_time;
+    if (dualq->cq.queue_first != NULL && dualq->cq.queue_first->arrival_time < current_time) {
+        cq_time = current_time - dualq->cq.queue_first->arrival_time;
+    }
+    if (dualq->lq.queue_first != NULL && dualq->lq.queue_first->arrival_time < current_time) {
+        lq_time = current_time - dualq->lq.queue_first->arrival_time;
+    }
+
+    dualq->curq = (cq_time > lq_time) ?
+        cq_time : lq_time;
 
     target_delta = dualq->curq - dualq->target;
     delta_q = dualq->curq - dualq->prevq;
@@ -303,31 +330,32 @@ void dualq_update_it(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64
     int should_drop;
     
     while (link->queue_time <= current_time) {
-        if ((packet = dualq_dequeue_one(dualq, link, link->queue_time, &should_drop)) != NULL) {
-            picoquictest_sim_link_enqueue(link, packet, packet->arrival_time, should_drop);
+        if ((packet = dualq_dequeue_one(dualq, link, current_time, &should_drop)) != NULL) {
+            picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
         }
         else {
             break;
         }
     }
-    if (link->queue_time < current_time) {
-        link->queue_time = current_time;
-    }
 
     if (current_time >= dualq->update_next) {
-        dualq_pi2_update(dualq);
+        dualq_pi2_update(dualq, current_time);
         dualq->update_next = current_time + dualq->Tupdate;
     }
 }
 
-void dualq_check_arrival(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link)
+int dualq_has_pending(picoquictest_aqm_t* self)
 {
-    if (link->first_packet == NULL) {
-        dualq_state_t* dualq = (dualq_state_t*)self;
-        dualq_update_it(dualq, link, link->queue_time);
-    }
+    dualq_state_t* dualq = (dualq_state_t*)self;
+
+    return (dualq->lq.queue_first != NULL || dualq->cq.queue_first != NULL);
 }
 
+void dualq_admit_pending(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time)
+{
+    dualq_state_t* dualq = (dualq_state_t*)self;
+    dualq_update_it(dualq, link, current_time);
+}
 
 /* Submit: implement the sim link API */
 void dualq_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
@@ -427,9 +455,11 @@ int dualq_configure(picoquictest_sim_link_t* link, uint64_t l4s_max)
     if (link->aqm_state != NULL) {
         /* use the function pointers as signature to recognize dualq */
         if (link->aqm_state->submit == dualq_submit &&
-            link->aqm_state->check_arrival == dualq_check_arrival &&
+            link->aqm_state->has_pending == dualq_has_pending &&
+            link->aqm_state->admit_pending == dualq_admit_pending &&
             link->aqm_state->reset == dualq_reset &&
-            link->aqm_state->release == dualq_release) {
+            link->aqm_state->release == dualq_release
+            ) {
             /* already using dualq! */
             dualq = (dualq_state_t*)link->aqm_state;
         }
@@ -448,7 +478,8 @@ int dualq_configure(picoquictest_sim_link_t* link, uint64_t l4s_max)
         else {
             memset(dualq, 0, sizeof(dualq_state_t));
             dualq->super.submit = dualq_submit;
-            dualq->super.check_arrival = dualq_check_arrival;
+            dualq->super.has_pending = dualq_has_pending;
+            dualq->super.admit_pending = dualq_admit_pending;
             dualq->super.reset = dualq_reset;
             dualq->super.release = dualq_release;
         }
