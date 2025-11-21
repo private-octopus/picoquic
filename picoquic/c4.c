@@ -231,7 +231,7 @@ uint64_t c4_ecn_threshold(c4_state_t* c4_state)
 {
     uint64_t sensitivity = c4_sensitivity_1024(c4_state);
 
-    uint64_t ecn_threshold = 256 - MULT1024(sensitivity, 128);
+    uint64_t ecn_threshold = 192 - MULT1024(sensitivity, 96);
 
     return ecn_threshold;
 }
@@ -686,14 +686,14 @@ static void c4_enter_push(
     }
     else {
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
-    }
-    if (c4_state->ecn_alpha > 0) {
-        uint64_t scale_1024;
-        uint64_t push_delta;
-        c4_state->ecn_threshold = c4_ecn_threshold(c4_state);
-        scale_1024 = (c4_state->ecn_alpha * 1024) / c4_state->ecn_threshold;
-        push_delta = MULT1024(scale_1024, c4_state->alpha_1024_current);
-        c4_state->alpha_1024_current -= push_delta;
+        if (c4_state->ecn_alpha > 0) {
+            uint64_t scale_1024;
+            uint64_t push_delta;
+            c4_state->ecn_threshold = c4_ecn_threshold(c4_state);
+            scale_1024 = (c4_state->ecn_alpha * 1024) / c4_state->ecn_threshold;
+            push_delta = MULT1024(scale_1024, C4_ALPHA_PUSH_1024 - C4_ALPHA_PUSH_LOW_1024);
+            c4_state->alpha_1024_current -= push_delta;
+        }
     }
     c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_era_reset(path_x, c4_state, current_time);
