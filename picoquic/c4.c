@@ -347,8 +347,6 @@ static void c4_apply_rate_and_cwin(
                 pacing_rate = c4_state->seed_rate;
             }
         }
-        /* Increase pacing rate by factor 1.25 to allow for bunching of packets */
-        pacing_rate = MULT1024(1024+256, pacing_rate);
     }
     else if (c4_state->alg_state == c4_pushing) {
         uint64_t delta_alpha = c4_state->alpha_1024_current - 1024;
@@ -360,7 +358,8 @@ static void c4_apply_rate_and_cwin(
     }
 
     path_x->cwin = target_cwin;
-    quantum = target_cwin / 4;
+    /* set the quantum to 4 milliseconds (OK, 4/1.024 ms, for simplicity) */
+    quantum = MULT1024(4, pacing_rate);
     if (quantum > 0x10000) {
         quantum = 0x10000;
     }
