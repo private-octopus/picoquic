@@ -60,7 +60,7 @@ typedef void (*picoquic_log_app_message_fn)(picoquic_cnx_t* cnx, const char* fmt
 /* Log arrival or departure of an UDP datagram on a connection */
 typedef void (*picoquic_log_pdu_fn)(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id);
+    uint64_t unique_path_id, unsigned char ecn);
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
 typedef void (*picoquic_log_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int receiving, uint64_t current_time,
@@ -143,7 +143,7 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...);
 
 /* Log arrival or departure of an UDP datagram on a connection */
 void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length, uint64_t unique_path_id);
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length, uint64_t unique_path_id, unsigned char ecn);
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
 void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,

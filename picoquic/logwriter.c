@@ -696,7 +696,7 @@ static uint64_t binlog_get_path_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id)
+    uint64_t unique_path_id, unsigned char ecn)
 {
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -709,6 +709,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     bytewrite_vint(msg, packet_length);
     bytewrite_addr(msg, addr_local);
     bytewrite_vint(msg, unique_path_id);
+    bytewrite_int8(msg, ecn);
 
     uint8_t head[4] = { 0 };
     picoformat_32(head, (uint32_t)bytestream_length(msg));
@@ -719,11 +720,11 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
 
 static void binlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id)
+    uint64_t unique_path_id, unsigned char ecn)
 {
     if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
         binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length,
-            unique_path_id);
+            unique_path_id, ecn);
     }
 }
 

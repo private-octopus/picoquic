@@ -2126,7 +2126,7 @@ int picoquic_incoming_segment(
         /* if needed, log that the packet is received */
         if (cnx != NULL) {
             picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length,
-                (path_id >= 0) ? cnx->path[path_id]->unique_path_id : 0);
+                (path_id >= 0) ? cnx->path[path_id]->unique_path_id : 0, received_ecn);
         }
         else {
             picoquic_log_quic_pdu(quic, 1, current_time, picoquic_val64_connection_id(ph.dest_cnx_id),

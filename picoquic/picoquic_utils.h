@@ -279,9 +279,10 @@ typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
 typedef struct st_picoquictest_aqm_t {
     void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
         picoquictest_sim_packet_t* packet, uint64_t current_time);
-    void (*check_arrival)(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
     void (*reset) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
     void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+    int (*has_pending) (picoquictest_aqm_t* self);
+    void (*admit_pending) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
 } picoquictest_aqm_t;
 
 typedef enum {
@@ -332,6 +333,10 @@ void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
 picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
 
 uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
+
+void picoquictest_sim_link_admit_pending(picoquictest_sim_link_t* link, uint64_t current_time);
+
+uint64_t picoquictest_sim_link_next_admission(picoquictest_sim_link_t* link, uint64_t current_time, uint64_t next_time);
 
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time);

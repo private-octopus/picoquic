@@ -1934,9 +1934,9 @@ void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 
 
     picoquic_log_pdu(cnx, 1, current_time,
-        (struct sockaddr*)&s6_1, (struct sockaddr*)&s6_2, 1234, 0);
+        (struct sockaddr*)&s6_1, (struct sockaddr*)&s6_2, 1234, 0, 0);
     picoquic_log_pdu(cnx, 0, current_time,
-        (struct sockaddr*)&s4_1, (struct sockaddr*)&s4_2, 55, 0);
+        (struct sockaddr*)&s4_1, (struct sockaddr*)&s4_2, 55, 0, 0);
 
     picoquic_log_quic_pdu(quic, 0, current_time, val64,
         (struct sockaddr*)&s6_2, (struct sockaddr*)&s6_1, 1234);

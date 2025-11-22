@@ -70,6 +70,10 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
+    else {
+        test_ctx->c_to_s_link->queue_delay_max = queue_delay_max;
+        test_ctx->s_to_c_link->queue_delay_max = queue_delay_max;
+    }
 
     /* Set the congestion algorithm to specified value.
      * Initialize L4S behavior.
@@ -131,7 +135,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 4500000, 5, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 5600000, 5, 3000, 0, NULL);
 
     return ret;
 }
@@ -140,7 +144,7 @@ int l4s_prague_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 5200000, 7, 4500, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 4100000, 9, 4500, 0, NULL);
 
     return ret;
 }
@@ -149,7 +153,7 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3500000, 15, 6000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3800000, 13, 3000, 0, NULL);
 
     return ret;
 }
@@ -166,7 +170,7 @@ int l4s_prague_updown_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 6500000, 55, 6000, nb_l4s_link_updown, l4s_link_updown);
+    int ret = l4s_congestion_test(ccalgo, 1, 6300000, 55, 6000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
 }
@@ -178,7 +182,7 @@ int l4s_bbr_updown_test()
 #else
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 6850000, 56, 6000, nb_l4s_link_updown, l4s_link_updown);
+    int ret = l4s_congestion_test(ccalgo, 1, 5800000, 56, 3000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
 #endif
