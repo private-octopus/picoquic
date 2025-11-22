@@ -399,11 +399,17 @@ void dualq_reset(picoquictest_aqm_t* self, picoquictest_sim_link_t* link, uint64
 * buffer size, latency (with RTT_MAX = 2*latency)
 * We may want to experiment with different target delays than 15ms.
  */
-void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max)
+void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_link_t* link)
 {
     /* Set input parameter defaults */
     /* DualQ Coupled framework parameters */
-    dualq->limit = ((uint64_t)DUALQ_MAX_LINK_RATE * 250ull)/1000000 ; /* Dual buffer size */
+    if (link->queue_delay_max <= link->microsec_latency || link->picosec_per_byte == 0) {
+        dualq->limit = ((uint64_t)DUALQ_MAX_LINK_RATE * 250ull) / 1000000; /* Dual buffer size */
+    }
+    else {
+        uint64_t queue_delay = link->queue_delay_max - link->microsec_latency;
+        dualq->limit = (queue_delay * 1000000) / link->picosec_per_byte;
+    }
     dualq->k = 2.0; /* Coupling factor */
     /* NOT SHOWN % scheduler - dependent weight or equival't parameter */
     /* PI2 Classic AQM parameters */
@@ -488,7 +494,7 @@ int dualq_configure(picoquictest_sim_link_t* link, uint64_t l4s_max)
     if (ret == 0){
         /* reconfigure with the new parameter */
         link->aqm_state = &dualq->super;
-        dualq_params_init(dualq, l4s_max);
+        dualq_params_init(dualq, l4s_max, link);
     }
     return ret;
 }
