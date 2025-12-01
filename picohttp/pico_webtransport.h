@@ -94,6 +94,11 @@ extern "C" {
     h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx,
         uint64_t control_stream_id);
 
+    /* Reset local stream
+    * Discuss: what about the H3 context?
+     */
+    int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, uint64_t local_stream_error);
+
 #ifdef __cplusplus
 }
 #endif

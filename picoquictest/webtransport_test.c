@@ -181,6 +181,9 @@ static int picowt_baton_test_one(
         }
 
         /* TODO: insert here the logic of web transport scenarios. */
+
+
+
         if (++nb_trials > 100000) {
             DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
