@@ -853,7 +853,11 @@ static void c4_notify_congestion(
         beta = (C4_BETA_LOSS_1024 + MULT1024(c4_sensitivity_1024(c4_state), C4_BETA_LOSS_1024))/2;
     }
     else if (c_mode == c4_congestion_ecn) {
-        /* Apply proportional reduction. Question: should it be sensitivity related? */
+        /* Apply proportional reduction.
+         * The threshold value is a function of sensitivity, and thus the reduction
+         * incorporates a sensitivity factor. There is no obvious need for
+         * additional sensitivity related factors.
+         */
         beta = (c4_state->ecn_alpha - c4_state->ecn_threshold) * 1024 / c4_state->ecn_threshold;
         if (beta > C4_BETA_LOSS_1024) {
             /* capping beta to the standard 1/4th. */
