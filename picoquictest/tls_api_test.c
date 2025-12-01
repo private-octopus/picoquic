@@ -1347,6 +1347,34 @@ static void tls_api_one_endpoint_arrival(picoquictest_sim_link_t* sim_link,
     }
 }
 
+static void tls_api_one_endpoint_admission(picoquictest_sim_link_t* sim_link, uint64_t simulated_time)
+{
+    picoquictest_sim_link_admit_pending(sim_link, simulated_time);
+}
+
+static void tls_api_endpoint_admission(picoquic_test_tls_api_ctx_t* test_ctx,
+    tls_api_sim_action_enum next_action, uint64_t next_time)
+{
+    switch (next_action) {
+    case sim_action_client_admission:
+        tls_api_one_endpoint_admission(test_ctx->s_to_c_link, next_time);
+        break;
+    case sim_action_server_admission:
+        tls_api_one_endpoint_admission(test_ctx->c_to_s_link, next_time);
+        break;
+    case sim_action_client_admission2:
+        tls_api_one_endpoint_admission(test_ctx->s_to_c_link_2, next_time);
+        break;
+    case sim_action_server_admission2:
+        tls_api_one_endpoint_admission(test_ctx->c_to_s_link_2, next_time);
+        break;
+    default:
+        /* Should never happen. */
+        break;
+    }
+}
+
+
 static void tls_api_endpoint_arrival(picoquic_test_tls_api_ctx_t* test_ctx,
     tls_api_sim_action_enum next_action, uint64_t next_time)
 {
@@ -1531,7 +1559,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
         next_action = sim_action_stateless_packet;
     }
     else {
-        uint64_t client_arrival, server_arrival;
+        uint64_t client_arrival, server_arrival, client_admission, server_admission;
         int continue_dequeue;
         
         next_time = *simulated_time + 120000000ull;
@@ -1565,26 +1593,48 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 next_time = client_arrival;
                 next_action = sim_action_client_arrival;
             }
+            client_admission = picoquictest_sim_link_next_admission(test_ctx->s_to_c_link, *simulated_time, next_time);
+            if (client_admission < next_time) {
+                next_time = client_admission;
+                next_action = sim_action_client_admission;
+            }
 
             server_arrival = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link, next_time);
             if (server_arrival < next_time) {
                 next_time = server_arrival;
                 next_action = sim_action_server_arrival;
             }
+            server_admission = picoquictest_sim_link_next_admission(test_ctx->c_to_s_link, *simulated_time, next_time);
+            if (server_admission < next_time) {
+                next_time = server_admission;
+                next_action = sim_action_server_admission;
+            }
 
             if (test_ctx->s_to_c_link_2 != NULL) {
+                uint64_t client_admission_2;
                 uint64_t client_arrival_2 = picoquictest_sim_link_next_arrival(test_ctx->s_to_c_link_2, next_time);
                 if (client_arrival_2 < next_time) {
                     next_time = client_arrival_2;
                     next_action = sim_action_client_arrival2;
                 }
+                client_admission_2 = picoquictest_sim_link_next_admission(test_ctx->s_to_c_link_2, *simulated_time, next_time);
+                if (client_admission_2 < next_time) {
+                    next_time = client_admission_2;
+                    next_action = sim_action_client_admission2;
+                }
             }
 
             if (test_ctx->c_to_s_link_2 != NULL) {
+                uint64_t server_admission_2;
                 uint64_t server_arrival_2 = picoquictest_sim_link_next_arrival(test_ctx->c_to_s_link_2, next_time);
                 if (server_arrival_2 < next_time) {
                     next_time = server_arrival_2;
                     next_action = sim_action_server_arrival2;
+                }
+                server_admission_2 = picoquictest_sim_link_next_admission(test_ctx->c_to_s_link_2, *simulated_time, next_time);
+                if (server_admission_2 < next_time) {
+                    next_time = server_admission_2;
+                    next_action = sim_action_server_admission2;
                 }
             }
 
@@ -1609,6 +1659,11 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             if (next_action >= sim_action_client_arrival && next_action <= sim_action_server_arrival2) {
                 /* packet arrival at one of the endpoints */
                 tls_api_endpoint_arrival(test_ctx, next_action, next_time);
+                continue_dequeue = 1;
+            }
+            else if (next_action >= sim_action_client_admission && next_action <= sim_action_server_admission2) {
+                /* packet admission at one of the endpoints */
+                tls_api_endpoint_admission(test_ctx, next_action, next_time);
                 continue_dequeue = 1;
             }
         } while (continue_dequeue);

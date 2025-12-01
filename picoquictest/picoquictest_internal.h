@@ -154,6 +154,10 @@ typedef enum {
     sim_action_server_arrival,
     sim_action_client_arrival2,
     sim_action_server_arrival2,
+    sim_action_client_admission,
+    sim_action_server_admission,
+    sim_action_client_admission2,
+    sim_action_server_admission2,
     sim_action_client_dequeue,
     sim_action_server_dequeue
 } tls_api_sim_action_enum;
