@@ -354,7 +354,7 @@ static void c4_apply_rate_and_cwin(
         if (c4_state->nominal_max_rtt < 4* C4_RTT_MARGIN_DELAY) {
             delta_rtt_target = c4_state->nominal_max_rtt / 4;
         }
-        target_cwin += delta_rtt_target * pacing_rate;
+        target_cwin += (delta_rtt_target * pacing_rate) / 1000000;
 
         if (c4_state->alg_state == c4_pushing) {
             uint64_t delta_alpha = c4_state->alpha_1024_current - 1024;
