@@ -96,6 +96,7 @@
 #define C4_NB_CRUISE_BEFORE_PUSH 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_RTT_MARGIN_5PERCENT 51
+#define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_JITTER 250000
 #define C4_KAPPA ((double)(1.0/4.0))
 #define C4_ECN_SHIFT_G 4 /* g = 1/2^4, gain parameter for alpha EWMA */
@@ -348,12 +349,20 @@ static void c4_apply_rate_and_cwin(
             }
         }
     }
-    else if (c4_state->alg_state == c4_pushing) {
-        uint64_t delta_alpha = c4_state->alpha_1024_current - 1024;
-        uint64_t delta_rate = MULT1024(delta_alpha, c4_state->nominal_rate);
-        uint64_t delta_cwin = (delta_rate * c4_state->nominal_max_rtt) / 1000000;
-        if (delta_cwin < path_x->send_mtu) {
-            target_cwin += path_x->send_mtu - delta_cwin;
+    else {
+        uint64_t delta_rtt_target = C4_RTT_MARGIN_DELAY;
+        if (c4_state->nominal_max_rtt < 4* C4_RTT_MARGIN_DELAY) {
+            delta_rtt_target = c4_state->nominal_max_rtt / 4;
+        }
+        target_cwin += delta_rtt_target * pacing_rate;
+
+        if (c4_state->alg_state == c4_pushing) {
+            uint64_t delta_alpha = c4_state->alpha_1024_current - 1024;
+            uint64_t delta_rate = MULT1024(delta_alpha, c4_state->nominal_rate);
+            uint64_t delta_cwin = (delta_rate * c4_state->nominal_max_rtt) / 1000000;
+            if (delta_cwin < path_x->send_mtu) {
+                target_cwin += path_x->send_mtu - delta_cwin;
+            }
         }
     }
 
@@ -602,7 +611,6 @@ static void c4_enter_recovery(
         c4_state->nb_push_no_congestion = 0;
         c4_state->recovery_event_not_delay = (c_mode != c4_congestion_delay);
     }
-    c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
 
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
@@ -613,6 +621,7 @@ static void c4_enter_recovery(
     if (c4_state->alg_state != c4_recovery) {
         c4_state->alg_state = c4_recovery;
         c4_era_reset(path_x, c4_state, current_time);
+        c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
     }
 }
 
@@ -708,18 +717,15 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     if (path_x->rtt_sample < c4_state->era_min_rtt) {
         c4_state->era_min_rtt = path_x->rtt_sample;
     }
-    /* Update the running min RTT, as the max RTT computation depends on it. */
-    if (c4_state->era_min_rtt < c4_state->running_min_rtt) {
-        c4_state->running_min_rtt = c4_state->era_min_rtt;
-    }
-    else if (c4_state->alpha_1024_previous <= C4_ALPHA_PREVIOUS_LOW) {
-        c4_state->running_min_rtt = (7 * c4_state->running_min_rtt + c4_state->era_min_rtt) / 8;
-    }
-    /* Update the max RTT */
-    if (c4_state->nominal_max_rtt == 0) {
-        c4_state->nominal_max_rtt = c4_state->era_max_rtt;
-    }
-    else if (c4_state->alpha_1024_previous <= 1024) {
+    if (c4_state->alpha_1024_previous <= C4_ALPHA_NEUTRAL_1024) {
+        /* Update the running min RTT, as the max RTT computation depends on it. */
+        if (c4_state->era_min_rtt < c4_state->running_min_rtt) {
+            c4_state->running_min_rtt = c4_state->era_min_rtt;
+        }
+        else {
+            c4_state->running_min_rtt = (7 * c4_state->running_min_rtt + c4_state->era_min_rtt) / 8;
+        }
+
         /* We want to increase the max RTT, but we want to limit the jitter
          * measurement to avoid aberrant behavior.
          */
@@ -729,13 +735,18 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
         if (corrected_max > c4_state->nominal_max_rtt) {
             c4_state->nominal_max_rtt = corrected_max;
         }
-        else if (c4_state->alpha_1024_previous <= C4_ALPHA_PREVIOUS_LOW) {
+        else {
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
         }
+        /* Recompute the delay threshold as the max RTT was updated. */
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
     }
-    /* Recompute the delay threshold if the max RTT was updated. */
-    c4_state->delay_threshold = c4_delay_threshold(c4_state);
+    else if (c4_state->nominal_max_rtt == 0) {
+        /* Initialize the max RTT and the delay threshold. */
+        c4_state->nominal_max_rtt = c4_state->era_max_rtt;
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
+    }
 }
 
 /* Handle data ack event.
