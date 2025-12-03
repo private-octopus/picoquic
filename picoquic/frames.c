@@ -2860,8 +2860,7 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                     receive_interval = send_interval;
                 }
 
-                bw_estimate = delivered * 1000000;
-                bw_estimate /= receive_interval;
+                bw_estimate = PICOQUIC_RATE_FROM_BYTES(delivered, receive_interval);
 
                 path_x->bandwidth_estimate = bw_estimate;
                 if (!rs_is_path_limited || bw_estimate > path_x->bandwidth_estimate) {
@@ -2921,8 +2920,7 @@ void picoquic_estimate_max_path_bandwidth(picoquic_cnx_t* cnx, picoquic_path_t* 
                     receive_interval = send_interval;
                 }
 
-                bw_estimate = delivered * 1000000;
-                bw_estimate /= receive_interval;
+                bw_estimate = PICOQUIC_RATE_FROM_BYTES(delivered, receive_interval);
                 /* Retain if larger than previous estimate */
                 if (bw_estimate > path_x->peak_bandwidth_estimate) {
                     path_x->peak_bandwidth_estimate = bw_estimate;

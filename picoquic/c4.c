@@ -318,7 +318,7 @@ static void c4_apply_rate_and_cwin(
     uint64_t quantum;
     uint64_t target_cwin = PICOQUIC_CWIN_INITIAL;
     if (c4_state->nominal_max_rtt != 0 && c4_state->nominal_rate != 0) {
-        target_cwin = (pacing_rate * c4_state->nominal_max_rtt) / 1000000;
+        target_cwin = PICOQUIC_BYTES_FROM_RATE(c4_state->nominal_max_rtt, pacing_rate);
     }
 
     if (c4_state->alg_state == c4_initial) {
@@ -331,7 +331,7 @@ static void c4_apply_rate_and_cwin(
         }
         /* Initial special case: bandwidth discovery */
         if (c4_state->nb_packets_in_startup > 0) {
-            uint64_t min_win = (path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000) / 2;
+            uint64_t min_win = PICOQUIC_BYTES_FROM_RATE(path_x->smoothed_rtt, path_x->peak_bandwidth_estimate) / 2;
             if (min_win > target_cwin) {
                 target_cwin = min_win;
             }
@@ -343,7 +343,7 @@ static void c4_apply_rate_and_cwin(
         if (c4_state->use_seed_cwin && c4_state->seed_cwin > target_cwin) {
             /* Match half the difference between seed and computed CWIN */
             target_cwin = (c4_state->seed_cwin + target_cwin) / 2;
-            c4_state->seed_rate = (c4_state->seed_cwin * 1000000) / path_x->smoothed_rtt;
+            c4_state->seed_rate = PICOQUIC_RATE_FROM_BYTES(c4_state->seed_cwin, path_x->smoothed_rtt);
             if (c4_state->seed_rate > pacing_rate) {
                 pacing_rate = c4_state->seed_rate;
             }
@@ -354,12 +354,12 @@ static void c4_apply_rate_and_cwin(
         if (c4_state->nominal_max_rtt < 4* C4_RTT_MARGIN_DELAY) {
             delta_rtt_target = c4_state->nominal_max_rtt / 4;
         }
-        target_cwin += (delta_rtt_target * pacing_rate) / 1000000;
+        target_cwin += PICOQUIC_BYTES_FROM_RATE(delta_rtt_target, pacing_rate);
 
         if (c4_state->alg_state == c4_pushing) {
             uint64_t delta_alpha = c4_state->alpha_1024_current - 1024;
             uint64_t delta_rate = MULT1024(delta_alpha, c4_state->nominal_rate);
-            uint64_t delta_cwin = (delta_rate * c4_state->nominal_max_rtt) / 1000000;
+            uint64_t delta_cwin = PICOQUIC_BYTES_FROM_RATE(c4_state->nominal_max_rtt, delta_rate);
             if (delta_cwin < path_x->send_mtu) {
                 target_cwin += path_x->send_mtu - delta_cwin;
             }
@@ -759,8 +759,8 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     if (ack_state->rtt_measurement > 0 && ack_state->nb_bytes_delivered_since_packet_sent > 0) {
         uint64_t verified_rtt = (ack_state->rtt_measurement > ack_state->send_delay) ?
             ack_state->rtt_measurement : ack_state->send_delay;
-        rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
-            verified_rtt;
+        rate_measurement = PICOQUIC_RATE_FROM_BYTES(ack_state->nb_bytes_delivered_since_packet_sent,
+            verified_rtt);
 
 #ifdef C4_WITH_LOGGING
         /* Collect raw measurements for analysis */
@@ -783,7 +783,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 * If the number of bytes sent are larger than the corrected bytes,
                 * we know the delivery was slowed by the network, not the app.
                 */
-            uint64_t target_cwin = (previous_rate * c4_state->running_min_rtt) / 1000000;
+            uint64_t target_cwin = PICOQUIC_BYTES_FROM_RATE(c4_state->running_min_rtt, previous_rate);
             if (ack_state->nb_bytes_delivered_since_packet_sent > target_cwin) {
                 c4_state->push_was_not_limited = 1;
             }

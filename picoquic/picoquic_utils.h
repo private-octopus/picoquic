@@ -64,6 +64,14 @@ extern "C" {
 #define PICOQUIC_LOSS_RECOVERY 5
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
+/* Macros for handling conversion between data rate, microseconds and bytes
+* By default, data rates are expressed as bytes per second (uint64_t),
+* delays are expressed in microseconds (uint64_t). The following
+* macros help in the conversions and ensure code consistency.
+*/
+#define PICOQUIC_BYTES_FROM_RATE(microseconds, bps) (((uint64_t)(microseconds)*((uint64_t)(bps)))/1000000ull)
+#define PICOQUIC_RATE_FROM_BYTES(bytes, microseconds) ((((uint64_t)(bytes))*1000000ull)/((uint64_t)(microseconds)))
+
 
 void debug_set_stream(FILE *F);
 #if 0
