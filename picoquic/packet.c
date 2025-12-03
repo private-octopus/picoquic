@@ -1991,7 +1991,8 @@ int picoquic_incoming_1rtt(
                 else {
                     uint64_t delta = current_time - cnx->path[path_id]->receive_rate_epoch;
                     if (delta > path_x->smoothed_rtt && delta > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
-                        path_x->receive_rate_estimate = ((cnx->path[path_id]->received - cnx->path[path_id]->received_prior) * 1000000) / delta;
+                        path_x->receive_rate_estimate = PICOQUIC_RATE_FROM_BYTES(
+                            cnx->path[path_id]->received - cnx->path[path_id]->received_prior, delta);
                         path_x->received_prior = cnx->path[path_id]->received;
                         path_x->receive_rate_epoch = current_time;
                         if (path_x->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {

@@ -141,7 +141,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             uint8_t* ip_addr;
             uint8_t ip_addr_length;
             uint64_t estimated_rtt = 2 * latency;
-            uint64_t estimated_bdp = (125000ull * mbps_up) * estimated_rtt / 1000000ull;
+            uint64_t estimated_bdp = PICOQUIC_BYTES_FROM_RATE(estimated_rtt, (125000ull * mbps_up));
             picoquic_get_ip_addr((struct sockaddr*)&test_ctx->server_addr, &ip_addr, &ip_addr_length);
 
             picoquic_seed_bandwidth(test_ctx->cnx_client, estimated_rtt, estimated_bdp,
