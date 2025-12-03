@@ -4121,7 +4121,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 if (p_addr_to != NULL && p_addr_from != NULL) {
                     picoquic_log_pdu(cnx, 0, current_time,
                         (struct sockaddr*)p_addr_to, (struct sockaddr*)p_addr_from, coalesced_packet_size,
-                        path_x->unique_path_id);
+                        path_x->unique_path_id, 0);
                 }
             }
 
