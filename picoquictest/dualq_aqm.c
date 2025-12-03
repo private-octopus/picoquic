@@ -404,7 +404,7 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
     /* Set input parameter defaults */
     /* DualQ Coupled framework parameters */
     if (link->queue_delay_max <= link->microsec_latency || link->picosec_per_byte == 0) {
-        dualq->limit = ((uint64_t)DUALQ_MAX_LINK_RATE * 250ull) / 1000000; /* Dual buffer size */
+        dualq->limit = PICOQUIC_BYTES_FROM_RATE(250ull, DUALQ_MAX_LINK_RATE); /* Dual buffer size */
     }
     else {
         uint64_t queue_delay = link->queue_delay_max - link->microsec_latency;
