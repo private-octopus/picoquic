@@ -479,8 +479,7 @@ int wt_baton_server(char const* path, picoquic_quic_config_t* config)
                 {
                     ret = picoquic_perflog_setup(qserver, config->performance_log);
                 }
-                qserver->default_tp.is_reset_stream_at_enabled = 1;
-                qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+                picowt_set_default_transport_parameters(qserver);
             }
         }
     }

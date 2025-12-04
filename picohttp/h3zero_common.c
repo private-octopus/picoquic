@@ -96,6 +96,11 @@ static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
 
 void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx)
 {
+#if 1
+	if (stream_ctx->stream_id == 36) {
+		DBG_PRINTF("%s", "bug");
+	}
+#endif
 	if (cnx != NULL) {
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
@@ -1895,15 +1900,16 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			if (stream_ctx != NULL) {
 				if (stream_ctx->path_callback != NULL) {
 					/* reset post callback. */
-					ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
+					ret = stream_ctx->path_callback(cnx, NULL, 0, (fin_or_event == picoquic_callback_stream_reset)?
+						picohttp_callback_reset:picohttp_callback_stop_sending, stream_ctx, stream_ctx->path_callback_ctx);
 				}
 				else {
 					/* If a file is open on a client, close and do the accounting. */
 					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+					if (IS_BIDIR_STREAM_ID(stream_id)) {
+						picoquic_reset_stream(cnx, stream_id, 0);
+					}
 				}
-			}
-			if (IS_BIDIR_STREAM_ID(stream_id)) {
-				picoquic_reset_stream(cnx, stream_id, 0);
 			}
 			break;
 		case picoquic_callback_stateless_reset:

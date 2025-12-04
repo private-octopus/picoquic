@@ -47,6 +47,7 @@ extern "C" {
         picohttp_callback_post_datagram, /* Datagram received on this context */
         picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
+        picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
         picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free
     } picohttp_call_back_event_t;
