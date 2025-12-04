@@ -96,11 +96,6 @@ static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
 
 void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx)
 {
-#if 1
-	if (stream_ctx->stream_id == 36) {
-		DBG_PRINTF("%s", "bug");
-	}
-#endif
 	if (cnx != NULL) {
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
