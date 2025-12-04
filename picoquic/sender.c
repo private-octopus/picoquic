@@ -146,7 +146,8 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     if (ret == 0) {
         if (is_active) {
             /* The call only fails if the stream was closed or reset */
-            if (!stream->fin_requested && !stream->reset_requested &&
+            if (!stream->fin_requested && 
+                (!stream->reset_requested || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size) == 0) &&
                 cnx->callback_fn != NULL) {
                 stream->app_stream_ctx = app_stream_ctx;
                 if (!stream->is_active) {

@@ -32,7 +32,8 @@ extern "C" {
 #define picowt_capsule_drain_webtransport_session 0x78ae 
 
     /* Set required transport parameters for web transport  */
-    void picowt_set_transport_parameters(picoquic_cnx_t* cnx);
+    void picowt_set_transport_parameters(picoquic_cnx_t* cnx); 
+    void picowt_set_default_transport_parameters(picoquic_quic_t* quic);
 
     /* Create the control stream for the Web Transport session on the client. */
     h3zero_stream_ctx_t* picowt_set_control_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx);
@@ -93,6 +94,10 @@ extern "C" {
     */
     h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidir, h3zero_callback_ctx_t* h3_ctx,
         uint64_t control_stream_id);
+
+    /* Reset local stream
+     */
+    int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, uint64_t local_stream_error);
 
 #ifdef __cplusplus
 }

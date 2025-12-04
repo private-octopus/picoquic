@@ -324,6 +324,20 @@ int varint_test()
             }
         }
     }
+
+    if (ret == 0) {
+        /* test the length prediction */
+        size_t picoquic_frames_varint_encode_length(uint64_t n64);
+
+        for (picoquic_varintformat_test_t* test = varint_test_cases; ret == 0 && test < max_test; test++) {
+            if (test->is_canonical) {
+                size_t predicted_length = picoquic_frames_varint_encode_length(test->decoded);
+                if (predicted_length != test->length) {
+                    ret = -1;
+                }
+            }
+        }
+    }
  
     return ret;
 }
