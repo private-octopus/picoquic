@@ -83,6 +83,7 @@
 #define MULT1024(c, v) (((v)*(c)) >> 10)
 #define C4_ALPHA_NEUTRAL_1024 1024 /* 100% */
 #define C4_ALPHA_RECOVER_1024 960 /* 93.75% */
+#define C4_ALPHA_RECOVER2_1024 896 /* 87.50% */
 #define C4_ALPHA_CRUISE_1024 1024 /* 100% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
 #define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
@@ -297,9 +298,6 @@ static void c4_update_ecn_alpha(picoquic_path_t* path_x, c4_state_t* c4_state, u
             c4_state->ecn_alpha = alpha_shifted >> C4_ECN_SHIFT_G;
         }
     }
-    picoquic_log_app_message(path_x->cnx,
-        "C4-ECN: %" PRIu64 ",%d,%d,%d,%" PRIu64 ",%" PRIu64,
-        current_time, (int)delta_ect1, (int)delta_ce, (int)c4_state->ecn_alpha, path_x->cwin, path_x->rtt_sample);
 }
 
 /*
@@ -430,7 +428,7 @@ static int c4_era_check(
         return 0;
     }
     else {
-        return (picoquic_cc_get_ack_number(path_x->cnx, path_x) >= c4_state->era_sequence);
+        return (picoquic_cc_get_lowest_not_ack(path_x) > c4_state->era_sequence);
     }
 }
 
@@ -765,10 +763,11 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 #ifdef C4_WITH_LOGGING
         /* Collect raw measurements for analysis */
         picoquic_log_app_message(path_x->cnx,
-            "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d",
+            "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
             rate_measurement, c4_state->nominal_rate, 
             ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, ack_state->send_delay,
-            c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified);
+            c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+            0, 0, (int)c4_state->ecn_alpha);
 #endif
 
         /* Assessment of rate limited status */
@@ -851,12 +850,6 @@ static void c4_notify_congestion(
     uint64_t beta = C4_BETA_LOSS_1024;
     c4_state->congestion_notified = 1;
 
-    if (c4_state->alg_state == c4_recovery &&
-        (c_mode != c4_congestion_delay || !c4_state->recovery_event_not_delay)) {
-        /* Do not treat additional events during same freeze interval */
-        return;
-    }
-
     if (c_mode == c4_congestion_loss) {
         /* Make amount of slow down function of sensitivity,
         * for better fairness between C4 connections.
@@ -890,18 +883,47 @@ static void c4_notify_congestion(
         c4_state->recent_delay_excess = 0;
     }
 
-    if (c4_state->alg_state == c4_pushing) {
-        c4_state->nb_push_no_congestion = 0;
-    }
-    else {
-        c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
-        if (c_mode == c4_congestion_loss) {
-            c4_state->nominal_max_rtt -= MULT1024(beta, c4_state->nominal_max_rtt);
-            c4_state->delay_threshold = c4_delay_threshold(c4_state);
+
+    if (c4_state->alg_state == c4_recovery) {
+        if (c4_state->alpha_1024_current == C4_ALPHA_RECOVER_1024) {
+            /* Congestion notification after entering recovery 
+             * indicates that queues are building up. It is thus
+             * prudent to decrease "alpha_current" and to spend a bit
+             * more time in recovery, to reduce these queues. */
+            c4_state->alpha_1024_current = C4_ALPHA_RECOVER2_1024;
+            c4_state->era_sequence = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
+#ifdef C4_WITH_LOGGING
+            picoquic_log_app_message(path_x->cnx,
+                "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
+                0, c4_state->nominal_rate,
+                0, 0, 0,
+                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+                (int)beta, c_mode, (int)c4_state->ecn_alpha);
+#endif
         }
     }
-
-    c4_enter_recovery(path_x, c4_state, c_mode, current_time);
+    else
+    {
+        if (c4_state->alg_state == c4_pushing) {
+            c4_state->nb_push_no_congestion = 0;
+        }
+        else {
+            c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
+            if (c_mode == c4_congestion_loss) {
+                c4_state->nominal_max_rtt -= MULT1024(beta, c4_state->nominal_max_rtt);
+                c4_state->delay_threshold = c4_delay_threshold(c4_state);
+            }
+#ifdef C4_WITH_LOGGING
+            picoquic_log_app_message(path_x->cnx,
+                "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
+                0, c4_state->nominal_rate,
+                0, 0, 0,
+                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+                (int)beta, c_mode, (int)c4_state->ecn_alpha);
+#endif
+        }
+        c4_enter_recovery(path_x, c4_state, c_mode, current_time);
+    }
 
     c4_apply_rate_and_cwin(path_x, c4_state);
 
