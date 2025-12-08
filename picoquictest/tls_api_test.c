@@ -625,7 +625,8 @@ int test_api_callback(picoquic_cnx_t* cnx,
     if (fin_or_event == picoquic_callback_close ||
         fin_or_event == picoquic_callback_application_close ||
         fin_or_event == picoquic_callback_almost_ready ||
-        fin_or_event == picoquic_callback_ready) {
+        fin_or_event == picoquic_callback_ready ||
+        fin_or_event == picoquic_callback_app_wakeup) {
         /* do nothing in our tests */
         return 0;
     }
