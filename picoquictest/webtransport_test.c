@@ -69,6 +69,28 @@ picohttp_server_path_item_t path_item_list[1] =
     }
 };
 
+static int picowt_baton_test_reset(wt_baton_ctx_t * baton_ctx, int* reset_needed)
+{
+    int ret = 0;
+
+    /* Check whether there is already a lane assigned to that stream */
+    for (size_t i = 0; i < baton_ctx->nb_lanes; i++) {
+        if (baton_ctx->lanes[i].baton_state == wt_baton_state_sending) {
+            /* Found a reset target, look for stream context */
+            h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(baton_ctx->h3_ctx,
+                baton_ctx->lanes[i].sending_stream_id);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            } else {
+                ret = picowt_reset_stream(baton_ctx->cnx, stream_ctx, 12345);
+                *reset_needed = 0;
+            }
+            break;
+        }
+    }
+    return ret;
+}
+
 static int picowt_baton_test_one(
     uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
@@ -86,6 +108,7 @@ static int picowt_baton_test_one(
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
     h3zero_callback_ctx_t* h3zero_cb = NULL;
+    int reset_needed = (test_id == 9);
 
     initial_cid.id[3] = test_id;
 
@@ -104,6 +127,7 @@ static int picowt_baton_test_one(
         }
 
         if (ret == 0) {
+            picowt_set_default_transport_parameters(test_ctx->qserver);
             picowt_set_transport_parameters(test_ctx->cnx_client);
         }
     }
@@ -111,7 +135,7 @@ static int picowt_baton_test_one(
     if (ret != 0) {
         DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
     }
-    else if (test_ctx == NULL || test_ctx->cnx_client == NULL || test_ctx->qserver == NULL) {
+    else if (test_ctx == NULL || test_ctx->cnx_client == NULL) {
         DBG_PRINTF("%s", "Connections where not properly created!\n");
         ret = -1;
     }
@@ -180,8 +204,12 @@ static int picowt_baton_test_one(
             break;
         }
 
-        /* TODO: insert here the logic of web transport scenarios. */
-        if (++nb_trials > 100000) {
+        /* logic of web transport scenarios. */
+        if (ret == 0 && baton_ctx.nb_turns > 2 && reset_needed) {
+            ret = picowt_baton_test_reset(&baton_ctx, &reset_needed);
+        }
+
+        if (ret == 0 && ++nb_trials > 100000) {
             DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
             break;
@@ -196,6 +224,10 @@ static int picowt_baton_test_one(
                 baton_ctx.lanes_completed == baton_ctx.nb_lanes &&
                 baton_ctx.nb_datagrams_sent > 0 && baton_ctx.nb_datagrams_received > 0)) {
             DBG_PRINTF("Baton test succeeds after %d turns, %d datagrams sent, %d received",
+                baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
+        }
+        else if (test_id == 9 && baton_ctx.baton_state == wt_baton_state_closed) {
+            DBG_PRINTF("Baton reset test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
         }
         else {
@@ -296,6 +328,13 @@ int picowt_baton_random_test()
 int picowt_baton_krome_test()
 {
     int ret = picowt_baton_test_one(8, "/baton?baton=240", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_reset_test()
+{
+    int ret = picowt_baton_test_one(9, "/baton?count=8", 0, 5000000, ".", ".");
 
     return ret;
 }

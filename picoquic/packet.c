@@ -1991,7 +1991,8 @@ int picoquic_incoming_1rtt(
                 else {
                     uint64_t delta = current_time - cnx->path[path_id]->receive_rate_epoch;
                     if (delta > path_x->smoothed_rtt && delta > PICOQUIC_BANDWIDTH_TIME_INTERVAL_MIN) {
-                        path_x->receive_rate_estimate = ((cnx->path[path_id]->received - cnx->path[path_id]->received_prior) * 1000000) / delta;
+                        path_x->receive_rate_estimate = PICOQUIC_RATE_FROM_BYTES(
+                            cnx->path[path_id]->received - cnx->path[path_id]->received_prior, delta);
                         path_x->received_prior = cnx->path[path_id]->received;
                         path_x->receive_rate_epoch = current_time;
                         if (path_x->receive_rate_estimate > cnx->path[path_id]->receive_rate_max) {
@@ -2126,7 +2127,7 @@ int picoquic_incoming_segment(
         /* if needed, log that the packet is received */
         if (cnx != NULL) {
             picoquic_log_pdu(cnx, 1, current_time, addr_from, addr_to, packet_length,
-                (path_id >= 0) ? cnx->path[path_id]->unique_path_id : 0);
+                (path_id >= 0) ? cnx->path[path_id]->unique_path_id : 0, received_ecn);
         }
         else {
             picoquic_log_quic_pdu(quic, 1, current_time, picoquic_val64_connection_id(ph.dest_cnx_id),

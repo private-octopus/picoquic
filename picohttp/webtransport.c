@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <picoquic.h>
 #include "picoquic_utils.h"
+#include "picoquic_internal.h"
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
 
@@ -98,8 +99,15 @@ void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
     picoquic_set_transport_parameters(cnx, &tp_new);
 }
 
-/* Web transport commands */
+void picowt_set_default_transport_parameters(picoquic_quic_t* quic)
+{
+    quic->default_tp.is_reset_stream_at_enabled = 1;
+    if (quic->default_tp.max_datagram_frame_size == 0) {
+        quic->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+    }
+}
 
+/* Web transport commands */
 
 /**
 * Create stream: when a stream is created locally. 
@@ -146,6 +154,37 @@ h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidi
     return(stream_ctx);
 }
 
+
+int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t * stream_ctx, uint64_t local_stream_error)
+{
+    /* Compute the length of the preamble:
+    * if is local:
+    *    varint(h3zero_frame_webtransport_stream or h3zero_stream_type_webtransport): 2 bytes
+    *    + varint (control stream_id)
+    * else if is bidir:
+    *    resetting a remotely created half of a bidir stream. Just reset.
+    * else: can't do that.
+    * 
+    * if both sides of the stream are closed, delete the H3 stream context.
+     */
+    int ret = 0;
+    int is_bidir = IS_BIDIR_STREAM_ID(stream_ctx->stream_id);
+    int is_local = IS_LOCAL_STREAM_ID(stream_ctx->stream_id, cnx->client_mode);
+
+    if (!is_local && !is_bidir) {
+        ret = -1;
+    }
+    else {
+        size_t reliable_size = 0;
+        if (is_local) {
+            reliable_size = 2 + picoquic_frames_varint_encode_length(stream_ctx->ps.stream_state.control_stream_id);
+        }
+        ret = picoquic_reset_stream_at(cnx, stream_ctx->stream_id, local_stream_error, reliable_size);
+        stream_ctx->ps.stream_state.is_fin_sent = 1;
+    }
+
+    return ret;
+}
 
 /* Web transport initiate, client side. Start with two parameters:
 * cnx: an established QUIC connection, set to ALPN=H3.

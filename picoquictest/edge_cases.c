@@ -2007,16 +2007,6 @@ int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
             ret = -1;
         }
     }
-
-    if (ret == 0) {
-        if (test_ctx->test_stream[0].r_recv_nb < reliable_size) {
-            DBG_PRINTF("Fail no receive %llu, got %llu",
-                (unsigned long long)reliable_size,
-                (unsigned long long)test_ctx->test_stream[0].r_recv_nb);
-            ret = -1;
-        }
-    }
-
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;

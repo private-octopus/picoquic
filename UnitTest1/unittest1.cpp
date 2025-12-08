@@ -2073,6 +2073,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(c4)
+        {
+            int ret = c4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(c4_jitter)
+        {
+            int ret = c4_jitter_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cc_compete_cubic2)
         {
             int ret = cc_compete_cubic2_test();
@@ -2215,6 +2229,13 @@ namespace UnitTest1
         TEST_METHOD(bbr_long)
         {
             int ret = bbr_long_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(c4_long)
+        {
+            int ret = c4_long_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3399,6 +3420,12 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_random) {
             int ret = picowt_baton_random_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_reset) {
+            int ret = picowt_baton_reset_test();
 
             Assert::AreEqual(ret, 0);
         }

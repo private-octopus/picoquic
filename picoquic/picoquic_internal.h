@@ -809,6 +809,7 @@ typedef struct st_picoquic_stream_head_t {
     struct st_picoquic_path_t * affinity_path; /* Path for which affinity is set, or NULL if none */
     uint64_t consumed_offset; /* amount of data consumed by the application */
     uint64_t fin_offset; /* If the fin mark is received, index of the byte after last */
+    uint64_t reset_offset; /* Size guaranteed by relaible reset */
     uint64_t maxdata_local; /* flow control limit of how much the peer is authorized to send */
     uint64_t maxdata_local_acked; /* highest value in max stream data frame acked by the peer */
     uint64_t maxdata_remote; /* flow control limit of how much we authorize the peer to send */

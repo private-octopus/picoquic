@@ -38,7 +38,7 @@ extern "C" {
 
     typedef struct st_dualq_queue_t {
         uint64_t queue_bytes;
-        uint64_t queue_time;
+        //uint64_t queue_time;
         int count; /* number of packets in queue */
         double sum_p; /* Ongoing sum of drop prob, create drop is sum > 1*/
         picoquictest_sim_packet_t* queue_first;

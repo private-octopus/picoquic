@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.41.0"
+#define PICOQUIC_VERSION "1.1.42.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1590,6 +1590,7 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t inflight_prior;
     uint64_t lost_packet_number;
     uint64_t lost_packet_sent_time;
+    int pc; /* Using int type instead of pc enum to avoid include dependencies */
     unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
