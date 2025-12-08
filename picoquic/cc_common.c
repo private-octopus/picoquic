@@ -52,6 +52,14 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     return highest_acknowledged;
 }
 
+uint64_t picoquic_cc_get_lowest_not_ack(picoquic_path_t* path_x)
+{
+    picoquic_packet_context_t* pkt_ctx = (path_x->cnx->is_multipath_enabled) ? &path_x->pkt_ctx : &path_x->cnx->pkt_ctx[picoquic_packet_context_application];
+    uint64_t lowest_not_ack = (pkt_ctx->pending_first != NULL) ? pkt_ctx->pending_first->sequence_number : pkt_ctx->highest_acknowledged + 1;
+
+    return lowest_not_ack;
+}
+
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t latest_time_acknowledged;
