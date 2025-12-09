@@ -1289,7 +1289,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 }
 
 /* Basic multipath test. Set up two links in parallel, verify that both are used and that
- * the overall transmission is shorterthan if only one link was used.
+ * the overall transmission is shorter than if only one link was used.
  */
 
 int multipath_basic_test()

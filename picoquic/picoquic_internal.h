@@ -1493,7 +1493,7 @@ typedef struct st_picoquic_cnx_t {
     picoquic_stream_head_t * last_output_stream;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
-    uint64_t priority_limit_for_bypass; /* Bypass CC if dtagram or stream priority lower than this, 0 means never */
+    uint64_t priority_limit_for_bypass; /* Bypass CC if datagram or stream priority lower than this, 0 means never */
 
     /* Repeat queue contains packets with data frames that should be
      * sent according to priority when congestion window opens. */
@@ -1530,9 +1530,9 @@ typedef struct st_picoquic_cnx_t {
     /* Management of the CNX-ID stash */
     picoquic_remote_cnxid_stash_t * first_remote_cnxid_stash;
     /* management of local CID stash.
-    * the number of lists represents the number of list already created,
-    * minus the number of lists deleted.
-    * */
+     * the number of lists represents the number of lists already created,
+     * minus the number of lists deleted.
+     */
     uint64_t nb_local_cnxid_lists;
     uint64_t next_path_id_in_lists;
     uint64_t max_path_id_in_cnxid_lists;
