@@ -91,6 +91,7 @@
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
+#define C4_BETA_CREEP_1024 32 /* 3.125%, 1/32 */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
@@ -113,6 +114,7 @@ typedef enum {
 typedef enum {
     c4_congestion_none = 0,
     c4_congestion_delay,
+    c4_congestion_creeping,
     c4_congestion_ecn,
     c4_congestion_loss
 } c4_congestion_t;
@@ -140,6 +142,7 @@ typedef struct st_c4_state_t {
 
     uint64_t delay_threshold;
     uint64_t recent_delay_excess;
+    uint64_t recent_ack_ratio;
 
     uint64_t last_lost_packet_number; /* Used for computation of loss rate. Init to 0 */
     double smoothed_drop_rate; /* Average packet loss rate */
@@ -766,7 +769,8 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
             rate_measurement, c4_state->nominal_rate, 
             ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, ack_state->send_delay,
-            c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+            c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate,
+            (int)(path_x->bytes_in_transit),
             0, 0, (int)c4_state->ecn_alpha);
 #endif
 
@@ -786,6 +790,12 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             if (ack_state->nb_bytes_delivered_since_packet_sent > target_cwin) {
                 c4_state->push_was_not_limited = 1;
             }
+        }
+        /* assessment of ack ratio to detect creeping increases */
+        if (ack_state->nb_bytes_delivered_since_packet_sent > 0 &&
+            path_x->bytes_in_transit > 0) {
+            uint64_t ack_ratio = (1024*ack_state->nb_bytes_delivered_since_packet_sent)/path_x->bytes_in_transit;
+            c4_state->recent_ack_ratio = (7 * c4_state->recent_ack_ratio + ack_ratio) / 8;
         }
     }
 
@@ -868,6 +878,9 @@ static void c4_notify_congestion(
             beta = C4_BETA_LOSS_1024;
         }
     }
+    else if (c_mode == c4_congestion_creeping) {
+        beta = C4_BETA_CREEP_1024;
+    }
     
     if (c_mode == c4_congestion_delay) {
         /* TODO: we should really use bytes in flight! */
@@ -897,7 +910,8 @@ static void c4_notify_congestion(
                 "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
                 0, c4_state->nominal_rate,
                 0, 0, 0,
-                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate,
+                (int)(path_x->bytes_in_transit),
                 (int)beta, c_mode, (int)c4_state->ecn_alpha);
 #endif
         }
@@ -918,7 +932,8 @@ static void c4_notify_congestion(
                 "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d, %d, %d, %d",
                 0, c4_state->nominal_rate,
                 0, 0, 0,
-                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified,
+                c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate,
+                (int)(path_x->bytes_in_transit),
                 (int)beta, c_mode, (int)c4_state->ecn_alpha);
 #endif
         }
@@ -977,6 +992,12 @@ static void c4_handle_rtt(
         /* May well be congested */
         c4_notify_congestion(path_x, c4_state, rtt_measurement, c4_congestion_delay, current_time);
     }
+    else if (c4_state->alpha_1024_previous == C4_ALPHA_CRUISE_1024 &&
+        rtt_measurement > c4_state->nominal_max_rtt &&
+        c4_state->recent_ack_ratio > 1024) {
+        /* Continuous increase of RTT probably due to slightly excessive nominal bandwidth */
+        c4_notify_congestion(path_x, c4_state, rtt_measurement, c4_congestion_creeping, current_time);
+    }   
 }
 
 /*
