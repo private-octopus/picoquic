@@ -4227,8 +4227,7 @@ int session_resume_test()
  */
 void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
 
-int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss, 
-    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath)
+int zero_rtt_test_one(zero_rtt_test_t * zrt)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -4246,29 +4245,33 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
     for (int i = 0; i < 2; i++) {
         /* Insert a delay before the second connection attempt */
         if (i == 1) {
-            simulated_time += extra_delay;
+            simulated_time += zrt->extra_delay;
         }
         /* Set up the context, while setting the ticket store parameter for the client */
         if (ret == 0) {
             ret = tls_api_init_ctx(&test_ctx, 
                 (i==0)?0: proposed_version, sni, alpn, &simulated_time, ticket_file_name, NULL, 0, 1,
-                (i == 0)?0:use_badcrypt);
+                (i == 0)?0: zrt->use_badcrypt);
 
-            if (ret == 0 && no_coal) {
+            if (ret == 0 && zrt->no_coal) {
                 test_ctx->qserver->dont_coalesce_init = 1;
             }
 
-            if (ret == 0 && hardreset != 0 && i == 1) {
+            if (ret == 0 && zrt->hardreset != 0 && i == 1) {
                 picoquic_set_cookie_mode(test_ctx->qserver, 1);
             }
 
-            if (ret == 0 && do_multipath) {
+            if (ret == 0 && zrt->do_multipath) {
                 /* Set the multipath option at both client and server */
                 multipath_init_params(&server_parameters, 0);
                 picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
                 test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
                 test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
+            }
+
+            if (ret == 0 && zrt->propose_ech) {
+                ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
             }
 
             if (ret == 0) {
@@ -4282,7 +4285,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             test_ctx->c_to_s_link->microsec_latency = 50000ull;
             test_ctx->s_to_c_link->microsec_latency = 50000ull;
 
-            if (long_data) {
+            if (zrt->long_data) {
                 for (uint64_t x = 0; x <= 16; x++) {
                     uint64_t stream_id = 4u * x + 4u;
                     test_ctx->nb_test_streams = (size_t)(x + 1);
@@ -4307,8 +4310,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
                 }
             }
 
-            if (early_loss > 0) {
-                loss_mask = early_loss;
+            if (zrt->early_loss > 0) {
+                loss_mask = zrt->early_loss;
             }
         }
 
@@ -4317,11 +4320,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
             if (ret != 0) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d fails (0x%x)\n",
-                    use_badcrypt, hardreset, i, ret);
+                    zrt->use_badcrypt, zrt->hardreset, i, ret);
             }
         }
 
-        if (ret == 0 && use_badcrypt == 0 && hardreset == 0) {
+        if (ret == 0 && zrt->use_badcrypt == 0 && zrt->hardreset == 0) {
             int rtt_is_available = picoquic_is_0rtt_available(test_ctx->cnx_client);
 
             if ((rtt_is_available && i == 0) ||
@@ -4332,11 +4335,11 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (use_badcrypt == 0 && hardreset == 0 && (
+            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d not PSK.\n",
-                    use_badcrypt, hardreset, i);
+                    zrt->use_badcrypt, zrt->hardreset, i);
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
@@ -4344,7 +4347,7 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
             }
         }
 
-        if (ret == 0 && i == 1 && do_multipath) {
+        if (ret == 0 && i == 1 && zrt->do_multipath) {
             /* verify that multipath was negotiated */
             if (!test_ctx->cnx_client->is_multipath_enabled ||
                 !test_ctx->cnx_server->is_multipath_enabled) {
@@ -4371,54 +4374,54 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
             if (ret != 0) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d close error (0x%x).\n",
-                    use_badcrypt, hardreset, i, ret);
+                    zrt->use_badcrypt, zrt->hardreset, i, ret);
             }
         }
 
         /* Verify that the 0RTT data was sent and acknowledged */
         if (ret == 0 && i == 1) {
-            if (use_badcrypt == 0 && hardreset == 0) {
+            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0) {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
-                        use_badcrypt, hardreset);
+                        zrt->use_badcrypt, zrt->hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 &&
+                else if (zrt->early_loss == 0 &&
                     test_ctx->cnx_client->nb_zero_rtt_acked != test_ctx->cnx_client->nb_zero_rtt_sent) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT acked.\n",
-                        use_badcrypt, hardreset);
+                        zrt->use_badcrypt, zrt->hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 && no_coal && test_ctx->cnx_server != NULL &&
+                else if (zrt->early_loss == 0 && zrt->no_coal && test_ctx->cnx_server != NULL &&
                         test_ctx->cnx_client->nb_zero_rtt_sent != test_ctx->cnx_server->nb_zero_rtt_received) {
                     DBG_PRINTF("Zero RTT test sent %d 0RTT, received %d\n",
                         test_ctx->cnx_client->nb_zero_rtt_sent, test_ctx->cnx_server->nb_zero_rtt_received);
                     ret = -1;
                 }
-                else if (long_data && test_ctx->cnx_client->nb_zero_rtt_sent < 3) {
+                else if (zrt->long_data && test_ctx->cnx_client->nb_zero_rtt_sent < 3) {
                     DBG_PRINTF("Zero RTT long test (badcrypt: %d, hard: %d), only %d zero RTT sent.\n",
-                        use_badcrypt, hardreset, (int)test_ctx->cnx_client->nb_zero_rtt_sent);
+                        zrt->use_badcrypt, zrt->hardreset, (int)test_ctx->cnx_client->nb_zero_rtt_sent);
                     ret = -1;
                 }
             } else {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
-                        use_badcrypt, hardreset);
+                        zrt->use_badcrypt, zrt->hardreset);
                     ret = -1;
                 }
-                else if (early_loss == 0 && hardreset == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                else if (zrt->early_loss == 0 && zrt->hardreset == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), zero acked, not expected.\n",
-                        use_badcrypt, hardreset);
+                        zrt->use_badcrypt, zrt->hardreset);
                     ret = -1;
                 }
                 else if (test_ctx->sum_data_received_at_server == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d, loss: %d), no data received.\n",
-                        use_badcrypt, hardreset, early_loss);
+                        zrt->use_badcrypt, zrt->hardreset, zrt->early_loss);
                     ret = -1;
                 }
                 else if (test_ctx->cnx_client->did_receive_short_initial) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), server sent unpadded initial.\n",
-                        use_badcrypt, hardreset);
+                        zrt->use_badcrypt, zrt->hardreset);
                     ret = -1;
                 }
             }
@@ -4428,13 +4431,13 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
         if (ret == 0) {
             if (test_ctx->qclient->p_first_ticket == NULL) {
                 DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, no ticket received.\n",
-                    use_badcrypt, hardreset, i);
+                    zrt->use_badcrypt, zrt->hardreset, i);
                 ret = -1;
             } else {
                 ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time, ticket_file_name);
                 if (ret != 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), cnx %d, ticket save error (0x%x).\n",
-                        use_badcrypt, hardreset, i, ret);
+                        zrt->use_badcrypt, zrt->hardreset, i, ret);
                 }
             }
         }
@@ -4455,7 +4458,8 @@ int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
 
 int zero_rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 0);
+    zero_rtt_test_t zrt = { 0 };
+    return zero_rtt_test_one(&zrt);
 }
 
 /*
@@ -4473,8 +4477,10 @@ int zero_rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 0);
+        zero_rtt_test_t zrt = { 0 };
+        zrt.early_loss = 1ull << i;
+
+        ret = zero_rtt_test_one(&zrt);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT test fails when packet #%d is lost.\n", i);
         }
@@ -4492,7 +4498,9 @@ int zero_rtt_loss_test()
 
 int zero_rtt_spurious_test()
 {
-    return zero_rtt_test_one(1, 0, 0, 0, 0, 0, 0);
+    zero_rtt_test_t zrt = { 0 };
+    zrt.use_badcrypt = 1;
+    return zero_rtt_test_one(&zrt);
 }
 
 /*
@@ -4504,7 +4512,9 @@ int zero_rtt_spurious_test()
 
 int zero_rtt_retry_test()
 {
-    return zero_rtt_test_one(0, 1, 0, 0, 0, 0, 0);
+    zero_rtt_test_t zrt = { 0 };
+    zrt.hardreset = 1;
+    return zero_rtt_test_one(&zrt);
 }
 
 /*
@@ -4516,7 +4526,9 @@ int zero_rtt_retry_test()
 
 int zero_rtt_no_coal_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 1, 0, 0, 0);
+    zero_rtt_test_t zrt = { 0 };
+    zrt.no_coal = 1;
+    return zero_rtt_test_one(&zrt);
 }
 
 /* Test the robustness of the connection in a zero RTT scenario,
@@ -4532,6 +4544,7 @@ int zero_rtt_many_losses_test()
     for (int i = 0; ret == 0 && i < 50; i++)
     {
         uint64_t loss_mask = 0;
+        zero_rtt_test_t zrt = { 0 };
 
         for (int j = 0; j < 64; j++)
         {
@@ -4541,8 +4554,8 @@ int zero_rtt_many_losses_test()
                 loss_mask |= 1;
             }
         }
-
-        ret = zero_rtt_test_one(0, 0, loss_mask, 0, 0, 0, 0);
+        zrt.early_loss = loss_mask;
+        ret = zero_rtt_test_one(&zrt);
         if (ret != 0) {
             DBG_PRINTF("Handshake fails for mask %d, mask = %llx", i, (unsigned long long)loss_mask);
         }
@@ -4556,7 +4569,9 @@ int zero_rtt_many_losses_test()
 
 int zero_rtt_long_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 1, 0, 0);
+    zero_rtt_test_t zrt = { 0 };
+    zrt.long_data = 1;
+    return zero_rtt_test_one(&zrt);
 }
 
 /*
@@ -4569,14 +4584,18 @@ int zero_rtt_delay_test()
     int bad_ret;
     const uint64_t nominal_delay_sec = 100000;
     const uint64_t nominal_delay = nominal_delay_sec * 1000000;
+    zero_rtt_test_t zrt = { 0 };
+    zrt.long_data = 1;
+    zrt.extra_delay = nominal_delay + 1000000;
 
-    bad_ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay + 1000000, 0);
+    bad_ret = zero_rtt_test_one(&zrt);
     if (bad_ret == 0) {
         DBG_PRINTF("Zero RTT succeed despite delay = %" PRIu64, " + 1 second.", nominal_delay_sec);
         ret = -1;
     }
     else {
-        ret = zero_rtt_test_one(0, 0, 0, 0, 1, nominal_delay - 2000000, 0);
+        zrt.extra_delay = nominal_delay - 2000000;
+        ret = zero_rtt_test_one(&zrt);
         if (ret != 0) {
             DBG_PRINTF("Zero RTT fails for delay = %" PRIu64, " - 2 seconds.", nominal_delay_sec);
         }
@@ -4584,6 +4603,18 @@ int zero_rtt_delay_test()
 
     return ret;
 }
+
+/*
+* 0-RTT ech. Verify that the 0 RTT works even greasing ech
+*/
+
+int zero_rtt_ech_test()
+{
+    zero_rtt_test_t zrt = { 0 };
+    zrt.propose_ech = 1;
+    return zero_rtt_test_one(&zrt);
+}
+
 /*
  * Stop sending test. Start a long transmission, but after receiving some bytes,
  * send a stop sending request. Then ask for another transmission. The

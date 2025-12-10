@@ -1562,7 +1562,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+#if 0
+        TEST_METHOD(zero_rtt_ech) {
+            int ret = zero_rtt_ech_test();
 
+            Assert::AreEqual(ret, 0);
+        }
+#endif
         TEST_METHOD(cnxid_transmit)
         {
             int ret = transmit_cnxid_test();

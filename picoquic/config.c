@@ -935,7 +935,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             }
         }
 
-        if (ret == 0) {
+        if (ret == 0 && (config->ech_key_file != NULL || config->ech_target != NULL)) {
             ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
         }
 

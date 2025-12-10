@@ -174,6 +174,7 @@ int zero_rtt_no_coal_test();
 int zero_rtt_many_losses_test();
 int zero_rtt_long_test();
 int zero_rtt_delay_test();
+int zero_rtt_ech_test();
 int parse_frame_test();
 int frames_repeat_test();
 int frames_ackack_error_test();
