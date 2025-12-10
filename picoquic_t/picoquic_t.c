@@ -259,6 +259,9 @@ static const picoquic_test_def_t test_table[] = {
     { "zero_rtt_many_losses", zero_rtt_many_losses_test },
     { "zero_rtt_long", zero_rtt_long_test },
     { "zero_rtt_delay", zero_rtt_delay_test },
+#if 0
+    { "zero_rtt_ech", zero_rtt_ech_test },
+#endif
     { "random_tester", random_tester_test},
     { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},
