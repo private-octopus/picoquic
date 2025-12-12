@@ -23,7 +23,7 @@ The main objects in the transport library are the QUIC context and the QUIC conn
 The QUIC context provides the data common to all connections and holds the tables
 necessary to route packets to specific connections. Connections are created within
 a QUIC context. Each connection context holds path contexts enabling the management
-of conenction migration to different addresses, or simulataneous use of multiple
+of connection migration to different addresses, or simulataneous use of multiple
 paths if multipath extensions are enabled. The connection context also maintains a list
 of streams opened by the application or by the peer, and generally all the structures
 required to enable transmission of data according to the QUIC protocol.
@@ -33,14 +33,14 @@ required to enable transmission of data according to the QUIC protocol.
 QUIC uses TLS 1.3 to negotiate encryption keys and verify certificates or public keys
 during the handshake. Picoquic uses the TLS implementation provided by
 [`picotls`](https://github.com/h2o/picotls), which
-in turn uses cryptographic functions provided by openSSL.
+in turn uses cryptographic functions provided by OpenSSL.
 
 ## Single threaded library
 
 The QUIC library is not designed to be thread safe. The design assumes that the application
 and the network API are coordinated so that only one of the API functions is used at a
 time for a given QUIC context, or for any connection within that QUIC context. On the
-other hand, it is entirely possible for an application to create several QUIc contexts
+other hand, it is entirely possible for an application to create several QUIC contexts
 and to handle them in parallel.
 
 ## Virtual time
@@ -169,7 +169,7 @@ occured.
 
 If an error occurs when sending packets, the process should first verify whether the
 error code implies that the destination is unreachable. It may for example use
-this error classification API, whih returns a non zero value when the error
+this error classification API, which returns a non zero value when the error
 indicates unreachability:
 ```
 int picoquic_socket_error_implies_unreachable(int sock_err)

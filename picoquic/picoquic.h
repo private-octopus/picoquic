@@ -1002,7 +1002,7 @@ int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int loc
 * `picoquic_get_default_path_quality` at any time. The application can
 * also subscribe to the `quality change` callback, and only call
 * the path quality API after the callback signalled a path
-* qualiy change.
+* quality change.
 * 
 * The application subscribes to the path quality update
 * using "picoquic_subscribe_to_quality_update" API
