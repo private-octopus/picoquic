@@ -2347,6 +2347,11 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
             (cnx->crypto_context[3].aead_encrypt == NULL || length + checksum_overhead + PICOQUIC_MIN_SEGMENT_SIZE > send_buffer_max)) {
             length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
         }
+        else if (packet->ptype == picoquic_packet_handshake &&
+            length + checksum_overhead < send_buffer_max &&
+            picoquic_tls_client_authentication_activated(cnx->quic)) {
+            length = picoquic_pad_to_target_length(bytes, length, send_buffer_max - checksum_overhead);
+        }
     }
 
     picoquic_finalize_and_protect_packet(cnx, packet,

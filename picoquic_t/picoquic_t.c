@@ -435,6 +435,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cert_verify_rsa", cert_verify_rsa_test },
     { "cid_quiescence", cid_quiescence_test },
     { "client_auth", request_client_authentication_test },
+    { "client_auth_25519", request_client_authentication_25519_test },
     { "client_cert_callback", set_verify_certificate_callback_test },
     { "mediatest_video", mediatest_video_test },
     { "mediatest_video_audio", mediatest_video_audio_test },

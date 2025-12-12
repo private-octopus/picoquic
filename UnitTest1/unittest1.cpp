@@ -1382,6 +1382,13 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(client_auth_25519)
+        {
+          int ret = request_client_authentication_25519_test();
+
+          Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(virtual_time)
         {
             int ret = virtual_time_test();
