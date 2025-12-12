@@ -5486,29 +5486,22 @@ int set_certificate_and_key_test()
     return ret;
 }
 
-int request_client_authentication_test()
+int request_client_authentication_test_one(const char *test_client_cert_file,
+                                           const char *test_client_key_file,
+                                           const char *test_server_cert_file,
+                                           const char *test_server_key_file,
+                                           const char *test_ca_cert_store_file)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    char test_server_cert_file[512];
-    char test_server_key_file[512];
-    char test_server_cert_store_file[512];
-    int ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
-
-    if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
-    }
-
-    if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
-    }
+    picoquic_test_tls_api_ctx_t *test_ctx = NULL;
+    int ret = 0;
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
-    }
-    else {
-        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    } else {
+        ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time,
+                               NULL, NULL, 0, 0, 0);
     }
 
     if (ret == 0 && test_ctx == NULL) {
@@ -5516,33 +5509,43 @@ int request_client_authentication_test()
     }
 
     /* Delete the client context, and recreate with a certificate */
-    if (ret == 0)
-    {
+    if (ret == 0) {
         if (test_ctx->qclient != NULL) {
             picoquic_free(test_ctx->qclient);
             test_ctx->cnx_client = NULL;
         }
 
-        test_ctx->qclient = picoquic_create(8,
-            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
-            NULL, test_api_callback, (void*)&test_ctx->client_callback, NULL, NULL, NULL,
-            simulated_time, &simulated_time, NULL, NULL, 0);
+        test_ctx->qclient = picoquic_create(8, test_client_cert_file, test_client_key_file,
+                                            test_ca_cert_store_file, NULL, test_api_callback,
+                                            (void *)&test_ctx->client_callback, NULL, NULL, NULL,
+                                            simulated_time, &simulated_time, NULL, NULL, 0);
 
         if (test_ctx->qclient == NULL) {
             ret = -1;
-        }
-        else {
+        } else {
             /* Enforce client only mode on the client side. */
             picoquic_enforce_client_only(test_ctx->qclient, 1);
         }
+
+        if (test_ctx->qserver != NULL) {
+            picoquic_free(test_ctx->qserver);
+            test_ctx->cnx_client = NULL;
+        }
+
+        test_ctx->qserver = picoquic_create(8, test_server_cert_file, test_server_key_file,
+                                            test_ca_cert_store_file, PICOQUIC_TEST_ALPN,
+                                            test_api_callback, (void *)&test_ctx->server_callback,
+                                            NULL, NULL, NULL, simulated_time, &simulated_time, NULL,
+                                            test_ticket_encrypt_key,
+                                            sizeof(test_ticket_encrypt_key));
     }
 
     /* recreate the client connection */
     if (ret == 0) {
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
                                                    picoquic_null_connection_id,
-                                                   (struct sockaddr*)&test_ctx->server_addr, 0,
-                                                   0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+                                                   (struct sockaddr *)&test_ctx->server_addr, 0, 0,
+                                                   PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
         if (test_ctx->cnx_client == NULL) {
             ret = -1;
@@ -5553,17 +5556,15 @@ int request_client_authentication_test()
 
     if (ret == 0) {
         picoquic_set_client_authentication(test_ctx->qserver, 1);
-        
+
         /* Proceed with the connection loop. */
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
-  
+
     /* Check that both the client and server are ready. */
     if (ret == 0) {
-        if (test_ctx->cnx_client == NULL
-            || test_ctx->cnx_server == NULL
-            || !TEST_CLIENT_READY
-            || !TEST_SERVER_READY) {
+        if (test_ctx->cnx_client == NULL || test_ctx->cnx_server == NULL || !TEST_CLIENT_READY ||
+            !TEST_SERVER_READY) {
             ret = -1;
         }
     }
@@ -5571,6 +5572,97 @@ int request_client_authentication_test()
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int request_client_authentication_test()
+{
+    char test_client_cert_file[512];
+    char test_client_key_file[512];
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_ca_cert_store_file[512];
+    int ret = 0;
+
+    ret = picoquic_get_input_path(test_client_cert_file, sizeof(test_client_cert_file),
+                                  picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT_RSA);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_client_key_file, sizeof(test_client_key_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY_RSA);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_ca_cert_store_file, sizeof(test_ca_cert_store_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret == 0) {
+        ret = request_client_authentication_test_one(test_client_cert_file, test_client_key_file,
+                                                     test_server_cert_file, test_server_key_file,
+                                                     test_ca_cert_store_file);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "mTLS client-auth test failed RSA\n");
+    }
+
+    return ret;
+}
+
+int request_client_authentication_25519_test()
+{
+    char test_client_cert_file[512];
+    char test_client_key_file[512];
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_ca_cert_store_file[512];
+    int ret = 0;
+
+    ret = picoquic_get_input_path(test_client_cert_file, sizeof(test_client_cert_file),
+                                  picoquic_solution_dir, PICOQUIC_TEST_FILE_CLIENT_CERT_ED25519);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_client_key_file, sizeof(test_client_key_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_CLIENT_KEY_ED25519);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file),
+                                      picoquic_solution_dir,
+                                      PICOQUIC_TEST_FILE_SERVER_CERT_ED25519);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY_ED25519);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_ca_cert_store_file, sizeof(test_ca_cert_store_file),
+                                      picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE_ED25519);
+    }
+
+    if (ret == 0) {
+        ret = request_client_authentication_test_one(test_client_cert_file, test_client_key_file,
+                                                     test_server_cert_file, test_server_key_file,
+                                                     test_ca_cert_store_file);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "mTLS client-auth test failed ED25519\n");
     }
 
     return ret;

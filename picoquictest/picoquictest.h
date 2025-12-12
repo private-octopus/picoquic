@@ -153,6 +153,7 @@ int set_certificate_and_key_test();
 int vn_tp_test();
 int vn_compat_test();
 int request_client_authentication_test();
+int request_client_authentication_25519_test();
 int bad_client_certificate_test();
 int nat_rebinding_test();
 int nat_rebinding_loss_test();
