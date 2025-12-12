@@ -802,13 +802,16 @@ void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
+#if 1
+    raw_size = 0;
+#else
     if (err == PICOQUIC_ERROR_AEAD_CHECK) {
         /* Do not log on decryption error, because the buffer was randomized by decryption */
         raw_size = 0;
     } else if (raw_size > 32) {
         raw_size = 32;
     }
-
+#endif
     bytewrite_int32(msg, 0);
     /* Common chunk header */
     binlog_compose_event_header(msg, &cnx->initial_cnxid, current_time, binlog_get_path_id(cnx, path_x),

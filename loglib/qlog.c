@@ -563,8 +563,16 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_dropped");
+#if 1
+    if (err_code != PICOQUIC_ERROR_PADDING_PACKET){
+        fprintf(f, "\n    \"packet_type\" : \"%s\",", ptype2str((picoquic_packet_type_enum)packet_type));
+    }
+    fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
+
+#else
     fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
     fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
+#endif
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
         str = "dos_prevention";
@@ -589,6 +597,9 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
         break;
     case PICOQUIC_ERROR_STATELESS_RESET:
         str = "stateless_reset";
+        break;
+    case PICOQUIC_ERROR_PADDING_PACKET:
+        str = "padding_packet";
         break;
     default:
         str = "protocol_violation";
@@ -698,8 +709,6 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
         char const* ecn_s = ecn_strings[ecn & 3];
         fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
     }
-
-
 
     fprintf(f, "}]");
     ctx->event_count++;
