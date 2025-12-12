@@ -5662,7 +5662,7 @@ int request_client_authentication_25519_test()
     }
 
     if (ret != 0) {
-        DBG_PRINTF("%s", "mTLS client-auth test failed RSA\n");
+        DBG_PRINTF("%s", "mTLS client-auth test failed ED25519\n");
     }
 
     return ret;
