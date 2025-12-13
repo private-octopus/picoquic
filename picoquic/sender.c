@@ -4115,11 +4115,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
             }
 
             if (is_initial_sent &&
-#if 1
                 cnx->cnx_state < picoquic_state_client_almost_ready &&
-#else
-                cnx->cnx_state < picoquic_state_client_handshake_start &&
-#endif 
                 coalesced_packet_size > 0 &&
                 coalesced_packet_size < PICOQUIC_ENFORCED_INITIAL_MTU) {
                 /* This is bad */

@@ -546,14 +546,12 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     uint64_t packet_type = 0;
     uint64_t err_code;
     uint64_t packet_size = 0;
-    uint64_t raw_len = 0;
     char const* str;
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
     ret |= byteread_vint(s, &packet_size);
     ret |= byteread_vint(s, &err_code);
-    ret |= byteread_vint(s, &raw_len);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -563,16 +561,11 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_dropped");
-#if 1
     if (err_code != PICOQUIC_ERROR_PADDING_PACKET){
         fprintf(f, "\n    \"packet_type\" : \"%s\",", ptype2str((picoquic_packet_type_enum)packet_type));
     }
     fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
 
-#else
-    fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
-    fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
-#endif
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
         str = "dos_prevention";
@@ -607,10 +600,6 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
     fprintf(f, ",\n    \"trigger\": \"%s\"", str);
 
-    if (ret == 0 && raw_len > 0) {
-        fprintf(f, ",\n    \"raw\": ");
-        qlog_string(f, s, raw_len);
-    }
     fprintf(f, "}]");
 
     ctx->event_count++;
