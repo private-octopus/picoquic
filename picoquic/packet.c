@@ -2145,7 +2145,7 @@ int picoquic_incoming_segment(
 
         if (ret == PICOQUIC_ERROR_CNXID_SEGMENT && *first_cnx != cnx && *first_cnx != NULL) {
             /* Log the drop segment information in the context of the first connection */
-            picoquic_log_dropped_packet(*first_cnx, NULL, &ph, length, ret, bytes, current_time);
+            picoquic_log_dropped_packet(*first_cnx, NULL, &ph, length, PICOQUIC_ERROR_PADDING_PACKET, bytes, current_time);
         }
     }
 

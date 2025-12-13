@@ -1892,9 +1892,10 @@ void logger_test_packets(picoquic_cnx_t* cnx)
 {
     uint64_t current_time = 1234567890ull;
     picoquic_connection_id_t srce_cnx_id = { { 0 }, 0 };
+    struct st_picoquic_packet_header_t ph = { 0 };
 
     for (size_t i = 0; i < nb_logger_sample_packets; i++) {
-        struct st_picoquic_packet_header_t ph = { 0 };
+        memset(&ph, 0, sizeof(struct st_picoquic_packet_header_t));
 
         ph.ptype = logger_sample_packets[i].p_type;
         ph.dest_cnx_id = logger_test_cid;
@@ -1907,6 +1908,20 @@ void logger_test_packets(picoquic_cnx_t* cnx)
             logger_sample_packets[i].p_bytes, logger_sample_packets[i].p_size);
 
     }
+
+    /* Report that a packet was dropped due to padding error */
+    memset(&ph, 0, sizeof(struct st_picoquic_packet_header_t));
+    picoquic_log_dropped_packet(cnx, cnx->path[0], &ph, 543,
+        PICOQUIC_ERROR_PADDING_PACKET, NULL, current_time);
+    /* Report that a packet was dropped due to non error */
+    ph.ptype = picoquic_packet_initial;
+    ph.dest_cnx_id = logger_test_cid;
+    ph.srce_cnx_id = srce_cnx_id;
+    ph.pn64 = 123456;
+    ph.pn = (uint32_t)123456;
+    ph.payload_length = 227;
+    picoquic_log_dropped_packet(cnx, cnx->path[0], &ph, 227,
+        PICOQUIC_ERROR_AEAD_CHECK, NULL, current_time);
 }
 
 void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)

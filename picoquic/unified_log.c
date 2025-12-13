@@ -129,11 +129,11 @@ void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, s
 {
     if (picoquic_cnx_is_still_logging(cnx)) {
         if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, raw_data, current_time);
+            cnx->quic->text_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, raw_data, current_time);
+            cnx->quic->bin_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
         }
     }
 }

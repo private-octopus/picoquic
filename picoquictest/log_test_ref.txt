@@ -126,6 +126,13 @@
 0b0c0d0e0f101112:     Token length: 8, Checksum length: 16
 0b0c0d0e0f101112:     Token: 1f20212223242526
 
+0b0c0d0e0f101112: Dropped padding packet, size: 543.
+
+0b0c0d0e0f101112: Receiving packet type: 2 (initial), S0, Q1, Version 0,
+0b0c0d0e0f101112:     <0b0c0d0e0f101112>, <>, Seq: 123456, pl: 0
+0b0c0d0e0f101112:     Token length: 0
+0b0c0d0e0f101112:    Header or encryption error: 403.
+
 0b0c0d0e0f101112: Receiving 1234 bytes from [2020:2020:2020:2020:2020:2020:2020:2020]:443 at T=12.345000 (8182bbd)
 0b0c0d0e0f101112: Sending 55 bytes to 1.1.1.1:443 at T=12.345000 (8182bbd)
 123456789abcdef0: Sending 1234 bytes to [2020:0:0:0:0:0:0:ffff]:12345 at T=135.801789 (8182bbd)

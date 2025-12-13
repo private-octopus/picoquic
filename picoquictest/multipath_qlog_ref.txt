@@ -5,9 +5,8 @@
 "common_fields": { "protocol_type": "QUIC_HTTP3", "reference_time": "11001"},
 "events": [
 [0, 0, "transport", "datagram_received", { "byte_length": 1252, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}, "addr_to" : {"ip_v4": "10.0.0.1", "port_v4":4321}}],
-[0, 0, "transport", "packet_received", { "packet_type": "initial", "header": { "packet_size": 1252, "packet_number": 0, "version": "50435130", "payload_length": 1206, "scid": "0908070605040302", "dcid": "0807060504030201" }, "frames": [{ 
-    "frame_type": "crypto", "offset": 0, "length": 295}, { 
-    "frame_type": "padding"}]}],
+[0, 0, "transport", "packet_received", { "packet_type": "initial", "header": { "packet_size": 345, "packet_number": 0, "version": "50435130", "payload_length": 299, "scid": "0908070605040302", "dcid": "0807060504030201" }, "frames": [{ 
+    "frame_type": "crypto", "offset": 0, "length": 295}]}],
 [0, 0, "info", "message", { "message": "ALPN[0] matches default alpn (picoquic-test)"}],
 [0, 0, "transport", "parameters_set", {
     "owner": "remote",
@@ -50,6 +49,9 @@
     "min_ack_delay" : 1000,
     "enable_time_stamp" : "03",
     "initial_max_path_id" : 2}],
+[0, 0, "transport", "packet_dropped", {
+    "packet_size" : 907,
+    "trigger": "padding_packet"}],
 [0, 0, "transport", "packet_sent", { "packet_type": "initial", "header": { "packet_size": 162, "packet_number": 0, "payload_length": 132, "scid": "0a09080706050403", "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "crypto", "offset": 0, "length": 123}]}],
