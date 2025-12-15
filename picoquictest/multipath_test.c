@@ -891,7 +891,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
 
-        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1; 
         test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
     }
 

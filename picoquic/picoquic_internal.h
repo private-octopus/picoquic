@@ -554,44 +554,6 @@ int picoquic_remember_issued_ticket(picoquic_quic_t* quic,
 picoquic_issued_ticket_t* picoquic_retrieve_issued_ticket(picoquic_quic_t* quic,
     uint64_t ticket_id);
 
-/*
- * Transport parameters, as defined by the QUIC transport specification.
- * The initial code defined the type as an enum, but the binary representation
- * of the enum type is not strictly defined in C. Values like "0xff02de1"
- * could end up represented as a negative integer, and then converted to
- * the 64 bit representation "0xffffffffff02de1", which is not good.
- * We changed that to using macro for definition.
- */
-typedef uint64_t picoquic_tp_enum;
-#define picoquic_tp_original_connection_id 0 
-#define picoquic_tp_idle_timeout 1 
-#define picoquic_tp_stateless_reset_token 2 
-#define picoquic_tp_max_packet_size 3 
-#define picoquic_tp_initial_max_data 4 
-#define picoquic_tp_initial_max_stream_data_bidi_local 5 
-#define picoquic_tp_initial_max_stream_data_bidi_remote 6 
-#define picoquic_tp_initial_max_stream_data_uni 7 
-#define picoquic_tp_initial_max_streams_bidi 8 
-#define picoquic_tp_initial_max_streams_uni 9 
-#define picoquic_tp_ack_delay_exponent 10 
-#define picoquic_tp_max_ack_delay 11 
-#define picoquic_tp_disable_migration 12 
-#define picoquic_tp_server_preferred_address 13 
-#define picoquic_tp_active_connection_id_limit 14 
-#define picoquic_tp_handshake_connection_id 15 
-#define picoquic_tp_retry_connection_id 16 
-#define picoquic_tp_max_datagram_frame_size 32 /* per draft-pauly-quic-datagram-05 */ 
-#define picoquic_tp_test_large_chello 3127 
-#define picoquic_tp_enable_loss_bit 0x1057 
-#define picoquic_tp_min_ack_delay 0xff04de1bull 
-#define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
-#define picoquic_tp_grease_quic_bit 0x2ab2
-#define picoquic_tp_version_negotiation 0x11
-#define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
-#define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
-#define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
-
 /* Callback for converting binary log to quic log at the end of a connection. 
  * This is kept private for now; and will only be set through the "set quic log"
  * API.

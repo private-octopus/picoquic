@@ -1063,7 +1063,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-           cnx->local_parameters.is_multipath_enabled);
+           cnx->local_parameters.initial_max_path_id > 0);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;

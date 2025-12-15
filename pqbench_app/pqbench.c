@@ -18,7 +18,7 @@
 #include <picosocks.h>
 #include <picoquic_config.h>
 #include <picoquic_packet_loop.h>
-#include <picoquic_internal.h>
+/* #include <picoquic_internal.h> */
 #include <autoqlog.h>
 #include <quicperf.h>
 #include <performance_log.h>
@@ -172,7 +172,7 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
             if (pqb_ctx->is_client) {
                 while (pqb_ctx->nb_closed < pqb_ctx->nb_clients) {
                     if (pqb_ctx->cnx_table[pqb_ctx->nb_closed] == NULL ||
-                        pqb_ctx->cnx_table[pqb_ctx->nb_closed]->cnx_state >= picoquic_state_disconnected) {
+                        picoquic_get_cnx_state(pqb_ctx->cnx_table[pqb_ctx->nb_closed]) >= picoquic_state_disconnected) {
                         pqb_ctx->nb_closed++;
                     }
                     else {
@@ -220,7 +220,7 @@ typedef struct st_pqbench_iovec_t {
 size_t pqb_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* ptls_list, size_t count)
 {
     size_t ret = count;
-    picoquic_cnx_t* cnx = quic->cnx_in_progress;
+    picoquic_cnx_t* cnx = picoquic_get_cnx_in_progress(quic);
     ptls_pqbench_t* list = (ptls_pqbench_t*)ptls_list;
 
     for (size_t i = 0; i < count; i++) {
@@ -268,7 +268,11 @@ int pqb_server(picoquic_quic_config_t* config)
         {
             ret = picoquic_perflog_setup(qserver, config->performance_log);
         }
-        qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+        if (ret == 0) {
+            ret = picoquic_set_default_tp_value(qserver,
+                picoquic_tp_max_datagram_frame_size,
+                PICOQUIC_MAX_PACKET_SIZE);
+        }
     }
     if (ret == 0) {
         ret = picoquic_packet_loop(qserver, server_port, 0, 0, 0, 0,
@@ -424,7 +428,6 @@ int pqb_client(picoquic_quic_config_t* config, char const* server_name, int serv
             {
                 ret = picoquic_perflog_setup(qclient, config->performance_log);
             }
-            qclient->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
         }
     }
 
