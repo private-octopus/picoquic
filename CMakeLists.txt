@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.42.0
+        VERSION 1.1.43.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -19,6 +19,7 @@ option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
 option(BUILD_DEMO "Build picoquicdemo" ON)
 option(BUILD_HTTP "Build picohttp" ON)
+option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 
@@ -437,6 +438,22 @@ if (BUILD_DEMO)
             picohttp-core)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
+endif()
+
+if (BUILD_PQBENCH)
+    add_executable(pqbench
+        pqbench_app/pqbench.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(picoquicdemo
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core)
+    target_include_directories(pqbench PRIVATE picohttp)
+    set_picoquic_compile_settings(pqbench)
 endif()
 
 if (BUILD_LOGREADER)
