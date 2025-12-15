@@ -23,10 +23,8 @@
 #include <quicperf.h>
 #include <performance_log.h>
 
-/* Server port is first 4 hex digits of
-/* MD5("PICOQUIC QPERF BENCH SERVER PORT")
-/* 2214774391762663187258f8a4719ba1*/
-#define PQBENCH_DEFAULT_SERVER_PORT 8724 /* 0x2214 */
+/* first 2 bytes of MD5("PICOQUIC QPERF BENCH SERVER PORT") = 0x2214, 8724 */
+#define PQBENCH_DEFAULT_SERVER_PORT 8724 
 
 void usage()
 {
@@ -51,9 +49,7 @@ int main(int argc, char ** argv)
     int opt;
     const char* server_name = NULL;
     int server_port = 0;
-
     char* qperf_scenario = NULL;
-    int is_client = 0;
     int nb_clients = 0;
     int ret;
 
@@ -83,7 +79,6 @@ int main(int argc, char ** argv)
     }
 
     if (optind == argc) {
-        is_client = 0;
         /* Get the server key, server port, server cert
          * from the configuration.
          * If not set, use the test certificate and key
@@ -95,7 +90,6 @@ int main(int argc, char ** argv)
     }
     else if (optind + 3 == argc) {
         /* Well formed request */
-        is_client = 1;
         server_name = argv[optind];
         nb_clients = atoi(argv[optind+1]);
         qperf_scenario = argv[optind+2];

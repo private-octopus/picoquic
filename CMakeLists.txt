@@ -444,7 +444,7 @@ if (BUILD_PQBENCH)
     add_executable(pqbench
         pqbench_app/pqbench.c
         picoquicfirst/getopt.c)
-    target_link_libraries(picoquicdemo
+    target_link_libraries(pqbench
         PUBLIC
             ${PTLS_LIBRARIES}
             ${OPENSSL_LIBRARIES}
