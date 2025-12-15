@@ -452,7 +452,7 @@ if (BUILD_PQBENCH)
             picoquic-log
             picoquic-core
             picohttp-core)
-    target_include_directories(pqbench PRIVATE picohttp)
+    target_include_directories(pqbench PRIVATE picohttp loglib picoquic)
     set_picoquic_compile_settings(pqbench)
 endif()
 
