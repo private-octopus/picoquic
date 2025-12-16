@@ -441,7 +441,7 @@ char * picoquic_strsep(char **stringp, const char *delim)
 }
 
 /*
- * mp_config is consisted with src_if and alt_ip, seperated by "/" and ","
+ * mp_config is consisted of src_if and alt_ip, seperated by "/" and ","
  * e.g. 10.0.0.2/3,10.0.0.3/4,10.0.0.4/5
  * where src_if is an int list, and alt_ip is a string list.
  * alt_ip is the ip of the alternative path

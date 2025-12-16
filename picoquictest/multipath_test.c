@@ -891,7 +891,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
 
-        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1; 
         test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
     }
 
@@ -1204,7 +1204,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             ret = -1;
         }
         else if (test_ctx->cnx_client->nb_paths != 2) {
-            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
+            DBG_PRINTF("After break and back, %d paths on client connection.\n", test_ctx->cnx_client->nb_paths);
             ret = -1;
         }
     }
@@ -1289,7 +1289,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 }
 
 /* Basic multipath test. Set up two links in parallel, verify that both are used and that
- * the overall transmission is shorterthan if only one link was used.
+ * the overall transmission is shorter than if only one link was used.
  */
 
 int multipath_basic_test()

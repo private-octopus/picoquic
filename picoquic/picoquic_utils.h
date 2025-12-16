@@ -390,6 +390,13 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_ECH_CERT "certs\\ech\\ech_cert.pem"
 #define PICOQUIC_TEST_ECH_RR_REF "certs\\ech\\ech_rr.txt"
 #define PICOQUIC_TEST_ECH_CONFIG_REF "certs\\ech\\ech_config.txt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_RSA "certs\\rsa\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_RSA "certs\\rsa\\key.pem"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ED25519 "certs\\mtls_ed25519\\server.crt"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ED25519 "certs\\mtls_ed25519\\server.key"
+#define PICOQUIC_TEST_FILE_CLIENT_CERT_ED25519 "certs\\mtls_ed25519\\client.crt"
+#define PICOQUIC_TEST_FILE_CLIENT_KEY_ED25519 "certs\\mtls_ed25519\\client.key"
+#define PICOQUIC_TEST_FILE_CERT_STORE_ED25519 "certs\\mtls_ed25519\\ca.crt"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
@@ -403,6 +410,13 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_ECH_CERT "certs/ech/ech_cert.pem"
 #define PICOQUIC_TEST_ECH_RR_REF "certs/ech/ech_rr.txt"
 #define PICOQUIC_TEST_ECH_CONFIG_REF "certs/ech/ech_config.txt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_RSA "certs/rsa/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_RSA "certs/rsa/key.pem"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ED25519 "certs/mtls_ed25519/server.crt"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ED25519 "certs/mtls_ed25519/server.key"
+#define PICOQUIC_TEST_FILE_CLIENT_CERT_ED25519 "certs/mtls_ed25519/client.crt"
+#define PICOQUIC_TEST_FILE_CLIENT_KEY_ED25519 "certs/mtls_ed25519/client.key"
+#define PICOQUIC_TEST_FILE_CERT_STORE_ED25519 "certs/mtls_ed25519/ca.crt"
 #endif
 
  /* To set the solution directory for tests */

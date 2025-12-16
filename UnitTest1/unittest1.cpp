@@ -787,6 +787,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(transport_param_default) {
+            int ret = transport_param_default_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_rank)
         {
             int ret = stream_rank_test();
@@ -1378,6 +1384,13 @@ namespace UnitTest1
         TEST_METHOD(client_auth)
         {
           int ret = request_client_authentication_test();
+
+          Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(client_auth_25519)
+        {
+          int ret = request_client_authentication_25519_test();
 
           Assert::AreEqual(ret, 0);
         }
