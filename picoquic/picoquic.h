@@ -287,7 +287,19 @@ typedef struct st_picoquic_connection_id_t {
 
 
 /* forward definition to avoid full dependency on picotls.h */
-typedef struct st_ptls_iovec_t ptls_iovec_t; 
+typedef struct st_ptls_iovec_t ptls_iovec_t;
+
+/* Alternate structure when applications need to access 
+ * content of an iovec without developing a dependency on picotls.h.
+ * They can use something like:
+ *     ....... ptls_iovec_t * list ...
+ *     picoquic_iovec_t * my_list = (picoquic_iovec_t *) list;
+ */
+
+typedef struct st_picoquic_iovec_t {
+    uint8_t* base;
+    size_t len;
+} picoquic_iovec_t;
 
 /* Detect whether error occured in TLS
  */
@@ -443,6 +455,15 @@ typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* l
  * issues a callback of type 
  */
 int picoquic_add_proposed_alpn(void* tls_context, const char* alpn);
+
+/* After the handshake, get the value of the negotiated ALPN.
+* This can be used when the client proposes a list of supported
+* ALPN, and then need to adapt the code to the server's selection.
+ */
+char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
+
+/* After the handshake, get the value of the SNI. */
+char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
 /* Callback function for producing a connection ID compatible
  * with the server environment.

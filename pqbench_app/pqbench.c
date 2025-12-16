@@ -211,17 +211,12 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
 * Simple qperf server.
 */
 
-typedef struct st_pqbench_iovec_t {
-    uint8_t* base;
-    size_t len;
-} ptls_pqbench_t;
-
 /* Callback from the TLS stack upon receiving a list of proposed ALPN in the Client Hello */
 size_t pqb_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* ptls_list, size_t count)
 {
     size_t ret = count;
     picoquic_cnx_t* cnx = picoquic_get_cnx_in_progress(quic);
-    ptls_pqbench_t* list = (ptls_pqbench_t*)ptls_list;
+    picoquic_iovec_t* list = (picoquic_iovec_t*)ptls_list;
 
     for (size_t i = 0; i < count; i++) {
         if ((const char*)list[i].base != NULL &&
@@ -367,7 +362,7 @@ int pqb_client(picoquic_quic_config_t* config, char const* server_name, int serv
     pqb_callback_t pqb_cb_ctx = { 0 };
     struct sockaddr_storage server_address;
     char const* sni = NULL;
-    uint64_t current_time = picoquic_current_time();
+    uint64_t start_time = picoquic_current_time();
     picoquic_quic_t* qclient = NULL;
 
     pqb_cb_ctx.is_client = 1;
@@ -442,7 +437,7 @@ int pqb_client(picoquic_quic_config_t* config, char const* server_name, int serv
             ret = -1;
         }
         else if ((pqb_cb_ctx.cnx_table[i] = picoquic_create_cnx(qclient, picoquic_null_connection_id,
-            picoquic_null_connection_id, (struct sockaddr*)&server_address, current_time,
+            picoquic_null_connection_id, (struct sockaddr*)&server_address, start_time,
             config->proposed_version, server_name, QUICPERF_ALPN, 1)) == NULL) {
             ret = -1;
         }
@@ -458,6 +453,11 @@ int pqb_client(picoquic_quic_config_t* config, char const* server_name, int serv
         fprintf(stdout, "Ready to run QUICPERF\n");
         ret = picoquic_packet_loop(qclient, 0, 0, 0, 0, 0, 
             server_loop_cb, (void*)&pqb_cb_ctx);
+    }
+
+    if (ret == 0) {
+        printf("Processed %d clients in %" PRIu64 "us.\n",
+            nb_clients, picoquic_current_time() - start_time);
     }
 
     /* Clean up! */
