@@ -71,7 +71,7 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, uint64_t path_
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
+void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph, size_t packet_size, int err, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
 void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);

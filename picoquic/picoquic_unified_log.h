@@ -67,7 +67,7 @@ typedef void (*picoquic_log_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t * pa
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-typedef void (*picoquic_log_dropped_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint8_t* raw_data, uint64_t current_time);
+typedef void (*picoquic_log_dropped_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
 typedef void (*picoquic_log_buffered_packet_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);

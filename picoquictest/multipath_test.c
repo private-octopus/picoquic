@@ -1204,7 +1204,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             ret = -1;
         }
         else if (test_ctx->cnx_client->nb_paths != 2) {
-            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
+            DBG_PRINTF("After break and back, %d paths on client connection.\n", test_ctx->cnx_client->nb_paths);
             ret = -1;
         }
     }

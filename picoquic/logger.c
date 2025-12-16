@@ -2355,10 +2355,27 @@ static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int rec
 }
 
 static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph,
-    size_t packet_size, int ret, uint8_t* raw_data, uint64_t current_time)
+    size_t packet_size, int ret, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, raw_data, packet_size, ret);
+        FILE* F = cnx->quic->F_log;
+
+        if (ret == PICOQUIC_ERROR_PADDING_PACKET) {
+            uint64_t log_cnxid64 = 0;
+
+            if (cnx == NULL) {
+                log_cnxid64 = picoquic_val64_connection_id(ph->srce_cnx_id);
+            }
+            else {
+                log_cnxid64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
+            }
+            textlog_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "Dropped padding packet, size: %zu.\n", packet_size);
+            fprintf(F, "\n");
+        }
+        else {
+            textlog_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, NULL, packet_size, ret);
+        }
     }
 }
 
