@@ -252,7 +252,7 @@ int pqb_server(picoquic_quic_config_t* config)
     else {
         picoquic_set_key_log_file_from_env(qserver);
 
-        picoquic_set_alpn_select_fn(qserver, pqb_server_callback_select_alpn);
+        picoquic_set_alpn_select_fn_v2(qserver, pqb_server_callback_select_alpn);
 
         if (config->qlog_dir != NULL)
         {

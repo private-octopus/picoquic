@@ -316,7 +316,7 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
             else {
                 picoquic_set_key_log_file_from_env(qserver);
 
-                picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+                picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
 
                 picoquic_use_unique_log_names(qserver, 1);
 

@@ -575,6 +575,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picomask_fns_t* picomask_fns;
     char const* default_alpn;
     picoquic_alpn_select_fn alpn_select_fn;
+    picoquic_alpn_select_fn_v2 alpn_select_fn_v2;
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
     uint8_t retry_seed[PICOQUIC_RETRY_SECRET_SIZE];
     uint64_t* p_simulated_time;
