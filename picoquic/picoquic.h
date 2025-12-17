@@ -450,7 +450,7 @@ typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
  *
  * The callback is only called if no default ALPN is specified in the Quic context.
  */
-typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
+typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count);
 
 /* Function used during callback to provision an ALPN context. The stack 
  * issues a callback of type 

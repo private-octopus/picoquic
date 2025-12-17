@@ -600,7 +600,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
 }
 
 /* Callback from the TLS stack upon receiving a list of proposed ALPN in the Client Hello */
-size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count)
+size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count)
 {
     size_t ret = count;
     picoquic_alpn_enum alpn_code = picoquic_alpn_undef;

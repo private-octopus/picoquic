@@ -212,11 +212,10 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
 */
 
 /* Callback from the TLS stack upon receiving a list of proposed ALPN in the Client Hello */
-size_t pqb_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* ptls_list, size_t count)
+size_t pqb_server_callback_select_alpn(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count)
 {
     size_t ret = count;
     picoquic_cnx_t* cnx = picoquic_get_cnx_in_progress(quic);
-    picoquic_iovec_t* list = (picoquic_iovec_t*)ptls_list;
 
     for (size_t i = 0; i < count; i++) {
         if ((const char*)list[i].base != NULL &&
