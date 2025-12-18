@@ -4642,6 +4642,9 @@ void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_
         quic->default_alpn = NULL;
     }
     quic->alpn_select_fn_v2 = alpn_select_fn;
+    if (alpn_select_fn != NULL) {
+        quic->alpn_select_fn = NULL;
+    }
 }
 
 void picoquic_set_default_callback(picoquic_quic_t* quic,
