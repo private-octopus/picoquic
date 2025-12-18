@@ -78,6 +78,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/select.h>
+#define PICOQUIC_USE_POLL
+#ifdef PICOQUIC_USE_POLL
+#include <poll.h>
+#endif
 
 #ifndef __APPLE__
 #ifdef __LINUX__
@@ -572,7 +576,83 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
     }
     return bytes_recv;
 }
-#else 
+#else
+#ifdef PICOQUIC_USE_POLL
+int picoquic_packet_loop_poll(
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct pollfd* poll_list,
+    int nb_pollfd,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    int* is_wake_up_event,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    int* socket_rank)
+{
+    int delta_t_ms = (int)((delta_t + 999) / 1000);
+    int bytes_recv = 0;
+    int ret_poll = poll(poll_list, nb_pollfd, delta_t_ms);
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+
+
+    if (ret_poll < 0) {
+        bytes_recv = -1;
+        DBG_PRINTF("Error: poll returns %d\n", ret_poll);
+    }
+    else if (ret_poll > 0) {
+        /* Check if the 'wake up' pipe is full. If it is, read the data on it,
+         * set the is_wake_up_event flag, and ignore the other file descriptors. */
+        if (thread_ctx->wake_up_defined && poll_list[nb_sockets].revent != 0) {
+            /* Something was written on the "wakeup" pipe. Read it. */
+            uint8_t eventbuf[8];
+            int pipe_recv;
+            if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
+                bytes_recv = -1;
+                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+            }
+            else {
+                *is_wake_up_event = 1;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < nb_sockets; i++) {
+                if (poll_list[i].revent != 0) {
+                    *socket_rank = i;
+                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                        addr_dest, dest_if, received_ecn,
+                        buffer, buffer_max);
+
+                    if (bytes_recv <= 0) {
+                        DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                            i, (int)s_ctx[i].fd);
+                        break;
+                    }
+                    else {
+                        /* Document incoming port */
+                        if (addr_dest->ss_family == AF_INET6) {
+                            ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                        }
+                        else if (addr_dest->ss_family == AF_INET) {
+                            ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return bytes_recv;
+}
+#else
 int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     struct sockaddr_storage* addr_from,
@@ -677,6 +757,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     return bytes_recv;
 }
 #endif
+#endif
 
 static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_duration, uint64_t current_time, uint64_t previous_time)
 {
@@ -747,6 +828,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
+#else
+#ifdef PICOQUIC_USE_POLL
+    struct pollfd* poll_list = NULL;
+    int nb_pollfd = 0;
+#endif
 #endif
 
     if (thread_ctx->thread_name != NULL) {
@@ -776,6 +862,29 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
+#ifndef _WINDOWS
+#ifdef PICOQUIC_USE_POLL
+    if (ret == 0) {
+        nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined)?1:0;
+        poll_list = (struct pollfd*)malloc(sizeof(struct pollfd) * nb_pollfd);
+        if (poll_list == NULL) {
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        }
+        else
+        {
+            memset(poll_list, 0, sizeof(struct pollfd) * nb_pollfd);
+            for (int i = 0; i < nb_sockets; i++) {
+                poll_list[i].fd = (int)s_ctx[i].fd;
+                poll_list[i].events = POLLIN;
+            }
+            if (thread_ctx->wake_up_defined) {
+                poll_list[nb_sockets].fd = (int)thread_ctx->wake_up_pipe_fd[0];
+                poll_list[nb_sockets].events = POLLIN;
+            }
+        }
+    }
+#endif
+#endif
 
     if (ret == 0) {
         nb_sockets_available = nb_sockets;
@@ -848,12 +957,23 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
+#ifdef PICOQUIC_USE_POLL
+        bytes_recv = picoquic_packet_loop_poll(
+            s_ctx, nb_sockets_available,
+            poll_list, nb_pollfd,
+            & addr_from,
+            & addr_to, & if_index_to, & received_ecn,
+            buffer, sizeof(buffer),
+            delta_t, & is_wake_up_event, thread_ctx, & socket_rank);
+        received_buffer = buffer;
+#else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
         received_buffer = buffer;
+#endif
 #endif
         current_time = picoquic_current_time();
         if (options.do_system_call_duration && delta_t == 0 &&
@@ -1112,6 +1232,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef _WINDOWS
     return (DWORD)ret;
 #else
+#ifdef PICOQUIC_USE_POLL
+    if (poll_list != NULL) {
+        free(poll_list);
+    }
+#endif
     if (thread_ctx->is_threaded) {
         pthread_exit((void*)&thread_ctx->return_code);
     }
