@@ -872,6 +872,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
         else
         {
+            DBG_PRINTF("Allocated %zu time %d bytes for poll_list (nb sockets: %d)",
+                sizeof(struct pollfd), nb_pollfd, nb_sockets);
             memset(poll_list, 0, sizeof(struct pollfd) * nb_pollfd);
             for (int i = 0; i < nb_sockets; i++) {
                 poll_list[i].fd = (int)s_ctx[i].fd;
