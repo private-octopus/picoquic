@@ -1159,9 +1159,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                     if ((ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx)) != 0){
                                         break;
                                     }
-                                    else {
-                                        nb_pollfd_available = nb_pollfd;
-                                    }
 #endif
 #endif
                                 }
