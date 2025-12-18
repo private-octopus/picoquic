@@ -82,6 +82,10 @@
 #ifndef __APPLE__
 #ifdef __LINUX__
 #include <linux/prctl.h>  /* Definition of PR_* constants */
+#ifdef PICOQUIC_WITH_IO_URING
+#include <linux/io_uring.h>
+#include <liburing.h>
+#endif
 #else
 #include <sys/prctl.h>
 #endif
@@ -705,6 +709,37 @@ static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_d
 
     return shall_notify;
 }
+
+#ifdef PICOQUIC_WITH_IO_URING
+/* Support for IO URING
+* 
+* 1- Before the main loop:
+* 
+* Declare shared buffers: one for each send/recv potential call,
+* and one for the select -- or poll -- call.
+* Declare a pool, get a send queue and a receive queue.
+* 
+* 2- Rewriting the loop:
+* 
+* - Queue a "select" request. This is just another system call.
+*   This is very much the same code as the current select call. 
+* 
+* - Wait for completion of all requests, up to the select request.
+* - Process all the complete send/recv requests.
+* - Format send requests as allowed by poll
+* - Queue recv requests as allowed by poll
+* 
+* 3- Freeing resource
+* 
+* Progressive development: 
+* start with just loading the include files.
+* then the select call.
+* Then the send calls
+* Then the recv calls.
+ */
+
+
+#endif
 
 
 #ifdef _WINDOWS
