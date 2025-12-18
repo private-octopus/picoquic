@@ -609,6 +609,8 @@ int picoquic_packet_loop_set_fds(struct pollfd ** poll_list, int * nb_pollfd,
         }
         DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
     }
+
+    return ret;
 }
 
 
