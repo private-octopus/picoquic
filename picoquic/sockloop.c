@@ -613,11 +613,14 @@ int picoquic_packet_loop_poll(
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
             int pipe_recv;
+            DBG_PRINTF("Waking up -- defined: %d, nb_sockets: %d",
+                (thread_ctx->wake_up_defined) ? 1 : 0, nb_sockets);
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
                 bytes_recv = -1;
                 DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
             }
             else {
+                DBG_PRINTF("Waking up -- received: %d", pipe_recv);
                 *is_wake_up_event = 1;
             }
         }
