@@ -871,6 +871,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
     struct pollfd * poll_list = NULL;
     int nb_pollfd = 0;
+    int nb_pollfd_available = 0;
 #endif
 #endif
 
@@ -905,6 +906,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
         ret = picoquic_packet_loop_set_fds(&poll_list, & nb_pollfd, s_ctx, nb_sockets, thread_ctx);
+        nb_pollfd_available = nb_pollfd;
     }
 #endif
 #endif
@@ -973,7 +975,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         loop_immediate = 0;
         /* Remember the time before the select call, so it duration be monitored */
         previous_time = current_time;
-        /* Initialize the dest addr family to UNSPEC yo handle systems that cannot set it. */
+        /* Initialize the dest addr family to UNSPEC to handle systems that cannot set it. */
         addr_to.ss_family = AF_UNSPEC;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
@@ -981,6 +983,20 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
 #ifdef PICOQUIC_USE_POLL
+
+#ifndef _WINDOWS
+#ifdef PICOQUIC_USE_POLL
+        if (ret == 0) {
+            if (nb_pollfd_available != (nb_sockets_available + (thread_ctx->wake_up_defined) ? 1 : 0)) {
+                ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets_available, thread_ctx);
+                nb_pollfd_available = nb_pollfd;
+            }
+            if (ret == 0) {
+                ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx);
+            }
+        }
+#endif
+#endif
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
             poll_list, nb_pollfd,
@@ -1075,6 +1091,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      * memorized for that path.
                      */
                     nb_sockets_available = nb_sockets / 2;
+
                 }
                 ret = 0;
             }
@@ -1153,6 +1170,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
                                     if ((ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx)) != 0){
                                         break;
+                                    }
+                                    else {
+                                        nb_pollfd_available = nb_pollfd;
                                     }
 #endif
 #endif
