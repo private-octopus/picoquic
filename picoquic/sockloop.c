@@ -1147,6 +1147,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;
                                 if (nb_sockets < nb_sockets_available) {
+                                    DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
                                     nb_sockets = nb_sockets_available;
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
@@ -1171,6 +1172,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             sock_ret = -1;
                             sock_err = EIO;
                             param->simulate_eio = 0;
+                            DBG_PRINTF("Simulating EIO, send length = %zu", send_length);
                         }
                         else {
                             sock_ret = picoquic_sendmsg(send_socket,
@@ -1203,6 +1205,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 size_t packet_size = send_msg_size;
 
                                 while (packet_index < send_length) {
+                                    DBG_PRINTF("EIO, length= %zu/%zu", packet_index, send_length);
                                     if (packet_index + packet_size > send_length) {
                                         packet_size = send_length - packet_index;
                                     }
@@ -1213,6 +1216,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                         packet_index += packet_size;
                                     }
                                     else {
+                                        DBG_PRINTF("Retry with packet size=%zu fails at index %zu, ret=%d, err=%d.",
+                                            packet_size, packet_index, sock_ret, sock_err);
                                         picoquic_log_app_message(last_cnx, "Retry with packet size=%zu fails at index %zu, ret=%d, err=%d.",
                                             packet_size, packet_index, sock_ret, sock_err);
                                         break;
