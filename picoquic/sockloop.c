@@ -609,7 +609,7 @@ int picoquic_packet_loop_poll(
     else if (ret_poll > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
          * set the is_wake_up_event flag, and ignore the other file descriptors. */
-        if (thread_ctx->wake_up_defined && poll_list[nb_sockets].revent != 0) {
+        if (thread_ctx->wake_up_defined && poll_list[nb_sockets].revents != 0) {
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
             int pipe_recv;
@@ -624,7 +624,7 @@ int picoquic_packet_loop_poll(
         else
         {
             for (int i = 0; i < nb_sockets; i++) {
-                if (poll_list[i].revent != 0) {
+                if (poll_list[i].revents != 0) {
                     *socket_rank = i;
                     bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
                         addr_dest, dest_if, received_ecn,
