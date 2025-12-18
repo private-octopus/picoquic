@@ -578,6 +578,40 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
 }
 #else
 #ifdef PICOQUIC_USE_POLL
+int picoquic_packet_loop_set_fds(struct pollfd ** poll_list, int * nb_pollfd,
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    picoquic_network_thread_ctx_t* thread_ctx)
+{
+    int ret = 0;
+    size_t pollfd_size;
+    if (*poll_list != NULL) {
+        free(*poll_list);
+    }
+    *nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined) ? 1 : 0;
+    pollfd_size = sizeof(struct pollfd) * (*nb_pollfd);
+    *poll_list = (struct pollfd*)malloc(pollfd_size);
+    if (*poll_list == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else
+    {
+        DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
+            pollfd_size, sizeof(struct pollfd), *nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
+        memset(poll_list, 0, sizeof(struct pollfd) * nb_pollfd);
+        for (int i = 0; i < nb_sockets; i++) {
+            (*poll_list)[i].fd = (int)s_ctx[i].fd;
+            (*poll_list)[i].events = POLLIN;
+        }
+        if (thread_ctx->wake_up_defined) {
+            (*poll_list)[nb_sockets].fd = (int)thread_ctx->wake_up_pipe_fd[0];
+            (*poll_list)[nb_sockets].events = POLLIN;
+        }
+        DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
+    }
+}
+
+
 int picoquic_packet_loop_poll(
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
@@ -868,28 +902,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
-        size_t pollfd_size;
-        nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined)?1:0;
-        pollfd_size = sizeof(struct pollfd) * nb_pollfd;
-        poll_list = (struct pollfd*)malloc(pollfd_size);
-        if (poll_list == NULL) {
-            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-        }
-        else
-        {
-            DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
-                pollfd_size, sizeof(struct pollfd), nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
-            memset(poll_list, 0, sizeof(struct pollfd) * nb_pollfd);
-            for (int i = 0; i < nb_sockets; i++) {
-                poll_list[i].fd = (int)s_ctx[i].fd;
-                poll_list[i].events = POLLIN;
-            }
-            if (thread_ctx->wake_up_defined) {
-                poll_list[nb_sockets].fd = (int)thread_ctx->wake_up_pipe_fd[0];
-                poll_list[nb_sockets].events = POLLIN;
-            }
-            DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
-        }
+        ret = picoquic_packet_loop_set_fds(&poll_list, & nb_pollfd, s_ctx, nb_sockets, thread_ctx);
     }
 #endif
 #endif
@@ -1039,7 +1052,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
                 /* If the number of packets received in immediate mode has not
                 * reached the threshold, set the "immediate" flag and bypass
-                * the sending code. 
+                * the sending code.
                  */
                 if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
                     loop_immediate = 1;
@@ -1133,6 +1146,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 nb_sockets_available++;
                                 if (nb_sockets < nb_sockets_available) {
                                     nb_sockets = nb_sockets_available;
+#ifndef _WINDOWS
+#ifdef PICOQUIC_USE_POLL
+                                    if ((ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx)) != 0){
+                                        break;
+                                    }
+#endif
+#endif
                                 }
                             }
                         }
@@ -1144,7 +1164,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     }
                     else
                     {
-
                         if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
                             /* Test hook, simulating a driver that does not support GSO */
                             sock_ret = -1;
