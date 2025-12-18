@@ -596,16 +596,20 @@ int picoquic_packet_loop_set_fds(struct pollfd ** poll_list, int * nb_pollfd,
     }
     else
     {
+        int i_poll = 0;
         DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
             pollfd_size, sizeof(struct pollfd), *nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
         memset(*poll_list, 0, pollfd_size);
-        for (int i = 0; i < nb_sockets; i++) {
-            (*poll_list)[i].fd = (int)s_ctx[i].fd;
-            (*poll_list)[i].events = POLLIN;
-        }
+
         if (thread_ctx->wake_up_defined) {
-            (*poll_list)[nb_sockets].fd = (int)thread_ctx->wake_up_pipe_fd[0];
-            (*poll_list)[nb_sockets].events = POLLIN;
+            (*poll_list)[0].fd = (int)thread_ctx->wake_up_pipe_fd[0];
+            (*poll_list)[0].events = POLLIN;
+            i_poll = 1;
+        }
+
+        for (int i = 0; i < nb_sockets; i++) {
+            (*poll_list)[i + i_poll].fd = (int)s_ctx[i].fd;
+            (*poll_list)[i + i_poll].events = POLLIN;
         }
         DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
     }
@@ -618,7 +622,6 @@ int picoquic_packet_loop_poll(
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     struct pollfd* poll_list,
-    int nb_pollfd,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
@@ -631,7 +634,8 @@ int picoquic_packet_loop_poll(
 {
     int delta_t_ms = (int)((delta_t + 999) / 1000);
     int bytes_recv = 0;
-    int ret_poll = poll(poll_list, nb_pollfd, delta_t_ms);
+    int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
+    int ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
 
     if (received_ecn != NULL) {
         *received_ecn = 0;
@@ -645,7 +649,7 @@ int picoquic_packet_loop_poll(
     else if (ret_poll > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
          * set the is_wake_up_event flag, and ignore the other file descriptors. */
-        if (thread_ctx->wake_up_defined && poll_list[nb_sockets].revents != 0) {
+        if (thread_ctx->wake_up_defined && poll_list[0].revents != 0) {
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
             int pipe_recv;
@@ -663,7 +667,7 @@ int picoquic_packet_loop_poll(
         else
         {
             for (int i = 0; i < nb_sockets; i++) {
-                if (poll_list[i].revents != 0) {
+                if (poll_list[i+i_poll].revents != 0) {
                     *socket_rank = i;
                     bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
                         addr_dest, dest_if, received_ecn,
@@ -871,7 +875,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
     struct pollfd * poll_list = NULL;
     int nb_pollfd = 0;
-    int nb_pollfd_available = 0;
 #endif
 #endif
 
@@ -906,7 +909,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
         ret = picoquic_packet_loop_set_fds(&poll_list, & nb_pollfd, s_ctx, nb_sockets, thread_ctx);
-        nb_pollfd_available = nb_pollfd;
     }
 #endif
 #endif
@@ -983,23 +985,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
 #ifdef PICOQUIC_USE_POLL
-
-#ifndef _WINDOWS
-#ifdef PICOQUIC_USE_POLL
-        if (ret == 0) {
-            if (nb_pollfd_available != (nb_sockets_available + (thread_ctx->wake_up_defined) ? 1 : 0)) {
-                ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets_available, thread_ctx);
-                nb_pollfd_available = nb_pollfd;
-            }
-            if (ret == 0) {
-                ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx);
-            }
-        }
-#endif
-#endif
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
-            poll_list, nb_pollfd,
+            poll_list,
             & addr_from,
             & addr_to, & if_index_to, & received_ecn,
             buffer, sizeof(buffer),
