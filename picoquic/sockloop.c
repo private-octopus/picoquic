@@ -600,7 +600,7 @@ int picoquic_packet_loop_poll(
     if (received_ecn != NULL) {
         *received_ecn = 0;
     }
-
+    *is_wake_up_event = 0;
 
     if (ret_poll < 0) {
         bytes_recv = -1;
