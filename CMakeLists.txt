@@ -321,8 +321,9 @@ ENDIF ()
 
 OPTION(WITH_IO_URING "enable IO_URING" OFF)
 IF (WITH_IO_URING)
+    message(STATUS "Enabling IO_URING support")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_IO_URING)
-ENDIF
+ENDIF ()
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
