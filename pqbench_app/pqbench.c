@@ -155,6 +155,9 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
     else {
         switch (cb_mode) {
         case picoquic_packet_loop_ready:
+#ifdef PICOQUIC_WITH_IO_URING
+            fprintf(stdout, "Compiled with IO_URING.\n");
+#endif
             fprintf(stdout, "Waiting for packets.\n");
             break;
         case picoquic_packet_loop_after_receive:
