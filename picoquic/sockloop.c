@@ -830,7 +830,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #else
 #ifdef PICOQUIC_USE_POLL
-    struct pollfd poll_list * = NULL;
+    struct pollfd * poll_list = NULL;
     int nb_pollfd = 0;
 #endif
 #endif
