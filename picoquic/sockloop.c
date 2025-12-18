@@ -830,7 +830,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #else
 #ifdef PICOQUIC_USE_POLL
-    struct pollfd* poll_list = NULL;
+    struct pollfd poll_list[] = NULL;
     int nb_pollfd = 0;
 #endif
 #endif
@@ -865,15 +865,17 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
+        size_t pollfd_size;
         nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined)?1:0;
-        poll_list = (struct pollfd*)malloc(sizeof(struct pollfd) * nb_pollfd);
+        pollfd_size = sizeof(struct pollfd) * nb_pollfd;
+        poll_list = (struct pollfd*)malloc(pollfd_size);
         if (poll_list == NULL) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
         else
         {
-            DBG_PRINTF("Allocated %zu time %d bytes for poll_list (nb sockets: %d)",
-                sizeof(struct pollfd), nb_pollfd, nb_sockets);
+            DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
+                pollfd_size, sizeof(struct pollfd), nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
             memset(poll_list, 0, sizeof(struct pollfd) * nb_pollfd);
             for (int i = 0; i < nb_sockets; i++) {
                 poll_list[i].fd = (int)s_ctx[i].fd;
@@ -883,6 +885,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 poll_list[nb_sockets].fd = (int)thread_ctx->wake_up_pipe_fd[0];
                 poll_list[nb_sockets].events = POLLIN;
             }
+            DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
         }
     }
 #endif
