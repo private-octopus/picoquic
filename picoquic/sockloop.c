@@ -598,7 +598,7 @@ int picoquic_packet_loop_set_fds(struct pollfd ** poll_list, int * nb_pollfd,
     {
         DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
             pollfd_size, sizeof(struct pollfd), *nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
-        memset(poll_list, 0, pollfd_size);
+        memset(*poll_list, 0, pollfd_size);
         for (int i = 0; i < nb_sockets; i++) {
             (*poll_list)[i].fd = (int)s_ctx[i].fd;
             (*poll_list)[i].events = POLLIN;
