@@ -1843,7 +1843,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
      * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, NULL, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (ret == 0) {
@@ -3153,7 +3153,7 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
             ret = -1;
         }
         else {
-            picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
             if (initial_random) {
                 picoquic_set_random_initial(qserver, 1);
             }
@@ -3679,7 +3679,7 @@ static int h3_grease_test_one(int server_test)
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (ret == 0) {
