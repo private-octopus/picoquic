@@ -604,7 +604,7 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
 
     ctx->event_count++;
 
-    return 0;
+    return ret;
 }
 
 int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)

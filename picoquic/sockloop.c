@@ -77,8 +77,12 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sys/select.h>
+
+#ifndef PICOQUIC_USES_SELECT
 #include <poll.h>
+#else
+#include <sys/select.h>
+#endif
 
 #ifndef __APPLE__
 #ifdef __LINUX__
@@ -574,6 +578,7 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
     return bytes_recv;
 }
 #else
+#ifndef PICOQUIC_USES_SELECT
 void picoquic_packet_loop_set_fds(struct pollfd * poll_list, 
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
@@ -595,7 +600,6 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
         poll_list[i_poll].fd = -1;
     }
 }
-
 
 int picoquic_packet_loop_poll(
     picoquic_socket_ctx_t* s_ctx,
@@ -674,6 +678,114 @@ int picoquic_packet_loop_poll(
 
     return bytes_recv;
 }
+#else 
+int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    int* is_wake_up_event,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    int* socket_rank)
+{
+    fd_set readfds;
+    struct timeval tv;
+    int ret_select = 0;
+    int bytes_recv = 0;
+    int sockmax = 0;
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+
+    FD_ZERO(&readfds);
+
+    for (int i = 0; i < nb_sockets; i++) {
+        if (sockmax < (int)s_ctx[i].fd) {
+            sockmax = (int)s_ctx[i].fd;
+        }
+        FD_SET(s_ctx[i].fd, &readfds);
+    }
+
+    *is_wake_up_event = 0;
+    if (thread_ctx->wake_up_defined) {
+        if (sockmax < (int)thread_ctx->wake_up_pipe_fd[0]) {
+            sockmax = (int)thread_ctx->wake_up_pipe_fd[0];
+        }
+        FD_SET(thread_ctx->wake_up_pipe_fd[0], &readfds);
+    }
+
+    if (delta_t <= 0) {
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+    }
+    else {
+        if (delta_t > 10000000) {
+            tv.tv_sec = (long)10;
+            tv.tv_usec = 0;
+        }
+        else {
+            tv.tv_sec = (long)(delta_t / 1000000);
+            tv.tv_usec = (long)(delta_t % 1000000);
+        }
+    }
+
+    ret_select = select(sockmax + 1, &readfds, NULL, NULL, &tv);
+
+    if (ret_select < 0) {
+        bytes_recv = -1;
+        DBG_PRINTF("Error: select returns %d\n", ret_select);
+    }
+    else if (ret_select > 0) {
+        /* Check if the 'wake up' pipe is full. If it is, read the data on it,
+         * set the is_wake_up_event flag, and ignore the other file descriptors. */
+        if (thread_ctx->wake_up_defined && FD_ISSET(thread_ctx->wake_up_pipe_fd[0], &readfds)) {
+            /* Something was written on the "wakeup" pipe. Read it. */
+            uint8_t eventbuf[8];
+            int pipe_recv;
+            if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
+                bytes_recv = -1;
+                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+            }
+            else {
+                *is_wake_up_event = 1;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < nb_sockets; i++) {
+                if (FD_ISSET(s_ctx[i].fd, &readfds)) {
+                    *socket_rank = i;
+                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                        addr_dest, dest_if, received_ecn,
+                        buffer, buffer_max);
+
+                    if (bytes_recv <= 0) {
+                        DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                            i, (int)s_ctx[i].fd);
+                        break;
+                    }
+                    else {
+                        /* Document incoming port */
+                        if (addr_dest->ss_family == AF_INET6) {
+                            ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                        }
+                        else if (addr_dest->ss_family == AF_INET) {
+                            ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return bytes_recv;
+}
+#endif
 #endif
 
 static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_duration, uint64_t current_time, uint64_t previous_time)
@@ -746,7 +858,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #else
+#ifndef PICOQUIC_USES_SELECT
     struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
+#endif
 #endif
 
     if (thread_ctx->thread_name != NULL) {
@@ -777,9 +891,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         }
     }
 #ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
     if (ret == 0) {
         picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
     }
+#endif
 #endif
 
     if (ret == 0) {
@@ -853,6 +969,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
+#ifndef PICOQUIC_USES_SELECT
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
             poll_list,
@@ -860,6 +977,14 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             & addr_to, & if_index_to, & received_ecn,
             buffer, sizeof(buffer),
             delta_t, & is_wake_up_event, thread_ctx, & socket_rank);
+        received_buffer = buffer;
+#else
+        bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
+            &addr_from,
+            &addr_to, &if_index_to, &received_ecn,
+            buffer, sizeof(buffer),
+            delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
+#endif
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
@@ -938,7 +1063,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      */
                     nb_sockets_available = nb_sockets / 2;
 #ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
                     picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
 #endif
                 }
                 ret = 0;
@@ -1015,7 +1142,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                     DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
                                     nb_sockets = nb_sockets_available;
 #ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
                                     picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
 #endif
                                 }
                             }

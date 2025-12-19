@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.43.0
+        VERSION 1.1.44.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -298,6 +298,13 @@ if(WITH_OPENSSL)
 else()
     message(STATUS "Building without picotls-openssl")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
+endif()
+
+
+OPTION(WITH_SELECT "build with select" OFF)
+if(WITH_SELECT)
+    message(STATUS "Building without select() instead of poll()")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_USES_SELECT)
 endif()
 
 OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
