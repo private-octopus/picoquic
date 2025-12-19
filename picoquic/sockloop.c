@@ -888,14 +888,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
-    if (param->extra_socket_required) {
-        DBG_PRINTF("Extra: %d, nb_sockets= %d, nb_sockets_available= %d, wake_up: %d",
-            param->extra_socket_required, nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
-    }
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
-        ret = picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
+        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
     }
 #endif
 #endif
