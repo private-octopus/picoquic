@@ -578,43 +578,27 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
 }
 #else
 #ifdef PICOQUIC_USE_POLL
-int picoquic_packet_loop_set_fds(struct pollfd ** poll_list, int * nb_pollfd,
+void picoquic_packet_loop_set_fds(struct pollfd * poll_list, 
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     picoquic_network_thread_ctx_t* thread_ctx)
 {
-    int ret = 0;
-    size_t pollfd_size;
-    if (*poll_list != NULL) {
-        free(*poll_list);
-    }
-    *nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined) ? 1 : 0;
-    pollfd_size = sizeof(struct pollfd) * (*nb_pollfd);
-    *poll_list = (struct pollfd*)malloc(pollfd_size);
-    if (*poll_list == NULL) {
-        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-    }
-    else
-    {
-        int i_poll = 0;
-        DBG_PRINTF("Allocated %zu bytes (%zu times %d) for poll_list (nb sockets: %d, wakeup: %d)",
-            pollfd_size, sizeof(struct pollfd), *nb_pollfd, nb_sockets, (thread_ctx->wake_up_defined) ? 1 : 0);
-        memset(*poll_list, 0, pollfd_size);
+    int nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined) ? 1 : 0;
+    memset(poll_list, 0, sizeof(struct pollfd)* (PICOQUIC_PACKET_LOOP_SOCKETS_MAX+1));
+    int i_poll = 0;
 
-        if (thread_ctx->wake_up_defined) {
-            (*poll_list)[0].fd = (int)thread_ctx->wake_up_pipe_fd[0];
-            (*poll_list)[0].events = POLLIN;
-            i_poll = 1;
-        }
-
-        for (int i = 0; i < nb_sockets; i++) {
-            (*poll_list)[i + i_poll].fd = (int)s_ctx[i].fd;
-            (*poll_list)[i + i_poll].events = POLLIN;
-        }
-        DBG_PRINTF("Initialized %zu bytes for poll_list", pollfd_size);
+    if (thread_ctx->wake_up_defined) {
+        poll_list[0].fd = (int)thread_ctx->wake_up_pipe_fd[0];
+        poll_list[0].events = POLLIN;
+        i_poll = 1;
     }
-
-    return ret;
+    for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++, i_poll++) {
+        poll_list[i_poll].fd = (int)s_ctx[i].fd;
+        poll_list[i_poll].events = POLLIN;
+    }
+    for (; i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
+        poll_list[i_poll].fd = -1;
+    }
 }
 
 
@@ -858,7 +842,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
-    picoquic_socket_ctx_t s_ctx[4];
+    picoquic_socket_ctx_t s_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
     int nb_sockets = 0;
     int nb_sockets_available = 0;
     picoquic_cnx_t* last_cnx = NULL;
@@ -873,8 +857,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #else
 #ifdef PICOQUIC_USE_POLL
-    struct pollfd * poll_list = NULL;
-    int nb_pollfd = 0;
+    struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
 #endif
 #endif
 
@@ -912,7 +895,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
-        ret = picoquic_packet_loop_set_fds(&poll_list, & nb_pollfd, s_ctx, nb_sockets, thread_ctx);
+        ret = picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
     }
 #endif
 #endif
@@ -983,10 +966,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         previous_time = current_time;
         /* Initialize the dest addr family to UNSPEC to handle systems that cannot set it. */
         addr_to.ss_family = AF_UNSPEC;
-        if (nb_sockets < nb_sockets_available) {
-            DBG_PRINTF("Overflow! nb_sockets= %d, nb_sockets_available= %d, wake_up: %d",
-                nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
-        }
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
@@ -1085,6 +1064,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      * memorized for that path.
                      */
                     nb_sockets_available = nb_sockets / 2;
+#ifndef _WINDOWS
+#ifdef PICOQUIC_USE_POLL
+                        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
+#endif
                 }
                 ret = 0;
             }
@@ -1161,9 +1145,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                     nb_sockets = nb_sockets_available;
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
-                                    if ((ret = picoquic_packet_loop_set_fds(&poll_list, &nb_pollfd, s_ctx, nb_sockets, thread_ctx)) != 0){
-                                        break;
-                                    }
+                                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
 #endif
 #endif
                                 }
@@ -1276,11 +1258,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef _WINDOWS
     return (DWORD)ret;
 #else
-#ifdef PICOQUIC_USE_POLL
-    if (poll_list != NULL) {
-        free(poll_list);
-    }
-#endif
     if (thread_ctx->is_threaded) {
         pthread_exit((void*)&thread_ctx->return_code);
     }
