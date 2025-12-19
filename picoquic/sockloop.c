@@ -905,6 +905,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
+    if (param->extra_socket_required) {
+        DBG_PRINTF("Extra: %d, nb_sockets= %d, nb_sockets_available= %d, wake_up: %d",
+            param->extra_socket_required, nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
+    }
 #ifndef _WINDOWS
 #ifdef PICOQUIC_USE_POLL
     if (ret == 0) {
@@ -979,16 +983,16 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         previous_time = current_time;
         /* Initialize the dest addr family to UNSPEC to handle systems that cannot set it. */
         addr_to.ss_family = AF_UNSPEC;
+        if (nb_sockets < nb_sockets_available) {
+            DBG_PRINTF("Overflow! nb_sockets= %d, nb_sockets_available= %d, wake_up: %d",
+                nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
+        }
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
 #ifdef PICOQUIC_USE_POLL
-        if (nb_pollfd < nb_sockets_available + (thread_ctx->wake_up_defined) ? 1 : 0) {
-            DBG_PRINTF("Overflow! nb_pollfd= %d, nb_socks= %d, nb_sockets_available= %d, wake_up: %d",
-                nb_pollfd, nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
-        }
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
             poll_list,
@@ -1053,8 +1057,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     &last_cnx, current_time);
 #endif
-
-
                 if (loop_callback != NULL) {
                     size_t b_recvd = (size_t)bytes_recv;
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
