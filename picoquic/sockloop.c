@@ -583,7 +583,6 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
     int nb_sockets,
     picoquic_network_thread_ctx_t* thread_ctx)
 {
-    int nb_pollfd = nb_sockets + (thread_ctx->wake_up_defined) ? 1 : 0;
     memset(poll_list, 0, sizeof(struct pollfd)* (PICOQUIC_PACKET_LOOP_SOCKETS_MAX+1));
     int i_poll = 0;
 
