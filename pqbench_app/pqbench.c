@@ -60,7 +60,7 @@ int main(int argc, char ** argv)
     picoquic_register_all_congestion_control_algorithms();
     picoquic_config_init(&config);
     memcpy(option_string, "S:", 2);
-    ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
+    ret = picoquic_config_option_letters(option_string + 2, sizeof(option_string) - 2, NULL);
 
     if (ret == 0) {
         /* Get the parameters */

@@ -4265,7 +4265,6 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
                 /* Set the multipath option at both client and server */
                 multipath_init_params(&server_parameters, 0);
                 picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
-                test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
                 test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
             }
