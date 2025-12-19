@@ -842,7 +842,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
-    picoquic_socket_ctx_t s_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
+    picoquic_socket_ctx_t s_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
     int nb_sockets_available = 0;
     picoquic_cnx_t* last_cnx = NULL;
@@ -857,7 +857,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #else
 #ifdef PICOQUIC_USE_POLL
-    struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
+    struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
 #endif
 #endif
 
