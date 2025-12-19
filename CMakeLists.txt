@@ -303,7 +303,7 @@ endif()
 
 OPTION(WITH_SELECT "build with select" OFF)
 if(WITH_SELECT)
-    message(STATUS "Building without select() instead of poll()")
+    message(STATUS "Building with select() instead of poll()")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_USES_SELECT)
 endif()
 
