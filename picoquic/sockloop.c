@@ -615,7 +615,7 @@ int picoquic_packet_loop_poll(
     picoquic_network_thread_ctx_t* thread_ctx,
     int* socket_rank)
 {
-    int delta_t_ms = (int)((delta_t + 999) / 1000);
+    int delta_t_ms = (int)((delta_t + 500) / 1000);
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
     int ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
