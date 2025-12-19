@@ -985,6 +985,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
 #ifdef PICOQUIC_USE_POLL
+        if (nb_pollfd < nb_sockets_available + (thread_ctx->wake_up_defined) ? 1 : 0) {
+            DBG_PRINTF("Overflow! nb_pollfd= %d, nb_socks= %d, nb_sockets_available= %d, wake_up: %d",
+                nb_pollfd, nb_socks, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
+        }
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
             poll_list,
@@ -1079,7 +1083,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      * memorized for that path.
                      */
                     nb_sockets_available = nb_sockets / 2;
-
                 }
                 ret = 0;
             }
