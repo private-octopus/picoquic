@@ -987,7 +987,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef PICOQUIC_USE_POLL
         if (nb_pollfd < nb_sockets_available + (thread_ctx->wake_up_defined) ? 1 : 0) {
             DBG_PRINTF("Overflow! nb_pollfd= %d, nb_socks= %d, nb_sockets_available= %d, wake_up: %d",
-                nb_pollfd, nb_socks, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
+                nb_pollfd, nb_sockets, nb_sockets_available, (thread_ctx->wake_up_defined) ? 1 : 0);
         }
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
