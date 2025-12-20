@@ -618,7 +618,7 @@ int picoquic_packet_loop_poll(
     /* Picoquic expresses times in microseconds, but the timeout 
      * parameter of poll() is in milliseconds. The code below converts
      * the microsecond delay to the nearest millisecond, which is a
-     * compromise. Return a smaller value that the timer incurs the
+     * compromise. Return a smaller value than the timer incurs the
      * risk of waking up too soon, e.g., waiting "0" ms instead of
      * 499us, probably leading to an extra call to "poll". Returning a
      * larger value carries the opposite risk, waiting to long and thus
