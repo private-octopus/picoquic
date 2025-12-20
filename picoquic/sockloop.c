@@ -77,7 +77,12 @@
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+
+#ifndef PICOQUIC_USES_SELECT
+#include <poll.h>
+#else
 #include <sys/select.h>
+#endif
 
 #ifndef __APPLE__
 #ifdef __LINUX__
@@ -576,18 +581,128 @@ int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx,
     }
     return bytes_recv;
 }
+#else
+#ifndef PICOQUIC_USES_SELECT
+void picoquic_packet_loop_set_fds(struct pollfd * poll_list, 
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    picoquic_network_thread_ctx_t* thread_ctx)
+{
+    memset(poll_list, 0, sizeof(struct pollfd)* (PICOQUIC_PACKET_LOOP_SOCKETS_MAX+1));
+    int i_poll = 0;
+
+    if (thread_ctx->wake_up_defined) {
+        poll_list[0].fd = (int)thread_ctx->wake_up_pipe_fd[0];
+        poll_list[0].events = POLLIN;
+        i_poll = 1;
+    }
+    for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++, i_poll++) {
+        poll_list[i_poll].fd = (int)s_ctx[i].fd;
+        poll_list[i_poll].events = POLLIN;
+    }
+    for (; i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
+        poll_list[i_poll].fd = -1;
+    }
+}
+
+int picoquic_packet_loop_poll(
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct pollfd* poll_list,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    int64_t delta_t,
+    int* is_wake_up_event,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    int* socket_rank)
+{
+    /* Picoquic expresses times in microseconds, but the timeout 
+     * parameter of poll() is in milliseconds. The code below converts
+     * the microsecond delay to the nearest millisecond, which is a
+     * compromise. Return a smaller value than the timer incurs the
+     * risk of waking up too soon, e.g., waiting "0" ms instead of
+     * 499us, probably leading to an extra call to "poll". Returning a
+     * larger value carries the opposite risk, waiting to long and thus
+     * slowing down operations. We may need to change this code later
+     * based on experience */
+    int delta_t_ms = (int)((delta_t + 500) / 1000);
+    int bytes_recv = 0;
+    int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
+    int ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+    *is_wake_up_event = 0;
+
+    if (ret_poll < 0) {
+        bytes_recv = -1;
+        DBG_PRINTF("Error: poll returns %d\n", ret_poll);
+    }
+    else if (ret_poll > 0) {
+        /* Check if the 'wake up' pipe is full. If it is, read the data on it,
+         * set the is_wake_up_event flag, and ignore the other file descriptors. */
+        if (thread_ctx->wake_up_defined && poll_list[0].revents != 0) {
+            /* Something was written on the "wakeup" pipe. Read it. */
+            uint8_t eventbuf[8];
+            int pipe_recv;
+            DBG_PRINTF("Waking up -- defined: %d, nb_sockets: %d",
+                (thread_ctx->wake_up_defined) ? 1 : 0, nb_sockets);
+            if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
+                bytes_recv = -1;
+                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+            }
+            else {
+                DBG_PRINTF("Waking up -- received: %d", pipe_recv);
+                *is_wake_up_event = 1;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < nb_sockets; i++) {
+                if (poll_list[i+i_poll].revents != 0) {
+                    *socket_rank = i;
+                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                        addr_dest, dest_if, received_ecn,
+                        buffer, buffer_max);
+
+                    if (bytes_recv <= 0) {
+                        DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                            i, (int)s_ctx[i].fd);
+                        break;
+                    }
+                    else {
+                        /* Document incoming port */
+                        if (addr_dest->ss_family == AF_INET6) {
+                            ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                        }
+                        else if (addr_dest->ss_family == AF_INET) {
+                            ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return bytes_recv;
+}
 #else 
 int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    unsigned char * received_ecn,
+    unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
-    int * is_wake_up_event,
-    picoquic_network_thread_ctx_t * thread_ctx,
-    int * socket_rank)
+    int* is_wake_up_event,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    int* socket_rank)
 {
     fd_set readfds;
     struct timeval tv;
@@ -619,11 +734,13 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     if (delta_t <= 0) {
         tv.tv_sec = 0;
         tv.tv_usec = 0;
-    } else {
+    }
+    else {
         if (delta_t > 10000000) {
             tv.tv_sec = (long)10;
             tv.tv_usec = 0;
-        } else {
+        }
+        else {
             tv.tv_sec = (long)(delta_t / 1000000);
             tv.tv_usec = (long)(delta_t % 1000000);
         }
@@ -634,7 +751,8 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     if (ret_select < 0) {
         bytes_recv = -1;
         DBG_PRINTF("Error: select returns %d\n", ret_select);
-    } else if (ret_select > 0) {
+    }
+    else if (ret_select > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
          * set the is_wake_up_event flag, and ignore the other file descriptors. */
         if (thread_ctx->wake_up_defined && FD_ISSET(thread_ctx->wake_up_pipe_fd[0], &readfds)) {
@@ -643,7 +761,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             int pipe_recv;
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
                 bytes_recv = -1;
-                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0)?EPIPE:errno);
+                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
             }
             else {
                 *is_wake_up_event = 1;
@@ -680,6 +798,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
 
     return bytes_recv;
 }
+#endif
 #endif
 
 static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_duration, uint64_t current_time, uint64_t previous_time)
@@ -769,7 +888,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
-    picoquic_socket_ctx_t s_ctx[4];
+    picoquic_socket_ctx_t s_ctx[PICOQUIC_PACKET_LOOP_SOCKETS_MAX];
     int nb_sockets = 0;
     int nb_sockets_available = 0;
     picoquic_cnx_t* last_cnx = NULL;
@@ -782,6 +901,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
+#else
+#ifndef PICOQUIC_USES_SELECT
+    struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
+#endif
 #endif
 
     if (thread_ctx->thread_name != NULL) {
@@ -811,6 +934,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
+#ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
+    if (ret == 0) {
+        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
+    }
+#endif
+#endif
 
     if (ret == 0) {
         nb_sockets_available = nb_sockets;
@@ -876,18 +1006,29 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         loop_immediate = 0;
         /* Remember the time before the select call, so it duration be monitored */
         previous_time = current_time;
-        /* Initialize the dest addr family to UNSPEC yo handle systems that cannot set it. */
+        /* Initialize the dest addr family to UNSPEC to handle systems that cannot set it. */
         addr_to.ss_family = AF_UNSPEC;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #else
+#ifndef PICOQUIC_USES_SELECT
+        bytes_recv = picoquic_packet_loop_poll(
+            s_ctx, nb_sockets_available,
+            poll_list,
+            & addr_from,
+            & addr_to, & if_index_to, & received_ecn,
+            buffer, sizeof(buffer),
+            delta_t, & is_wake_up_event, thread_ctx, & socket_rank);
+        received_buffer = buffer;
+#else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
             &addr_from,
             &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer),
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
+#endif
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
@@ -937,8 +1078,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     &last_cnx, current_time);
 #endif
-
-
                 if (loop_callback != NULL) {
                     size_t b_recvd = (size_t)bytes_recv;
                     ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
@@ -946,7 +1085,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
                 /* If the number of packets received in immediate mode has not
                 * reached the threshold, set the "immediate" flag and bypass
-                * the sending code. 
+                * the sending code.
                  */
                 if (ret == 0 && nb_loop_immediate < PICOQUIC_PACKET_LOOP_RECV_MAX) {
                     loop_immediate = 1;
@@ -967,6 +1106,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      * memorized for that path.
                      */
                     nb_sockets_available = nb_sockets / 2;
+#ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
+                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
+#endif
                 }
                 ret = 0;
             }
@@ -1039,7 +1183,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;
                                 if (nb_sockets < nb_sockets_available) {
+                                    DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
                                     nb_sockets = nb_sockets_available;
+#ifndef _WINDOWS
+#ifndef PICOQUIC_USES_SELECT
+                                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
+#endif
                                 }
                             }
                         }
@@ -1051,12 +1201,12 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     }
                     else
                     {
-
                         if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
                             /* Test hook, simulating a driver that does not support GSO */
                             sock_ret = -1;
                             sock_err = EIO;
                             param->simulate_eio = 0;
+                            DBG_PRINTF("Simulating EIO, send length = %zu", send_length);
                         }
                         else {
                             sock_ret = picoquic_sendmsg(send_socket,
@@ -1089,6 +1239,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 size_t packet_size = send_msg_size;
 
                                 while (packet_index < send_length) {
+                                    DBG_PRINTF("EIO, length= %zu/%zu", packet_index, send_length);
                                     if (packet_index + packet_size > send_length) {
                                         packet_size = send_length - packet_index;
                                     }
@@ -1099,6 +1250,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                         packet_index += packet_size;
                                     }
                                     else {
+                                        DBG_PRINTF("Retry with packet size=%zu fails at index %zu, ret=%d, err=%d.",
+                                            packet_size, packet_index, sock_ret, sock_err);
                                         picoquic_log_app_message(last_cnx, "Retry with packet size=%zu fails at index %zu, ret=%d, err=%d.",
                                             packet_size, packet_index, sock_ret, sock_err);
                                         break;

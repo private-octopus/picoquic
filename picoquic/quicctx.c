@@ -925,7 +925,6 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     quic->default_multipath_option = multipath_option;
 
     if (multipath_option & 1) {
-        /* quic->default_tp.is_multipath_enabled = 1;*/
         quic->default_tp.initial_max_path_id = 2;
     }
 }
