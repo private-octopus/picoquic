@@ -925,7 +925,6 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     quic->default_multipath_option = multipath_option;
 
     if (multipath_option & 1) {
-        /* quic->default_tp.is_multipath_enabled = 1;*/
         quic->default_tp.initial_max_path_id = 2;
     }
 }
@@ -4633,6 +4632,18 @@ void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn 
         quic->default_alpn = NULL;
     }
     quic->alpn_select_fn = alpn_select_fn;
+}
+
+void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn)
+{
+    if (quic->default_alpn != NULL) {
+        free((void *)quic->default_alpn);
+        quic->default_alpn = NULL;
+    }
+    quic->alpn_select_fn_v2 = alpn_select_fn;
+    if (alpn_select_fn != NULL) {
+        quic->alpn_select_fn = NULL;
+    }
 }
 
 void picoquic_set_default_callback(picoquic_quic_t* quic,

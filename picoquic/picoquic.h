@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.43.1"
+#define PICOQUIC_VERSION "1.1.44.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -381,7 +381,6 @@ typedef struct st_picoquic_tp_t {
     int do_grease_quic_bit;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
-    int is_multipath_enabled;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
@@ -451,6 +450,9 @@ typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
  * The callback is only called if no default ALPN is specified in the Quic context.
  */
 typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
+
+/* V2 callback using picoquic_iovec_t instead of ptls_iovec_t */
+typedef size_t (*picoquic_alpn_select_fn_v2)(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count);
 
 /* Function used during callback to provision an ALPN context. The stack 
  * issues a callback of type 
@@ -848,6 +850,9 @@ void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
 /* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
+
+/* V2 API using picoquic_iovec_t */
+void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn);
 
 /* Set the default callback function for new connections.
  * This must be defined for every server implementation.

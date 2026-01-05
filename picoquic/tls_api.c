@@ -1025,8 +1025,14 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
             }
         }
     }
-    else if (quic->alpn_select_fn != NULL) {
-        size_t selected = quic->alpn_select_fn(quic, params->negotiated_protocols.list, params->negotiated_protocols.count);
+    else {
+        size_t selected = params->negotiated_protocols.count;
+        if (quic->alpn_select_fn != NULL) {
+            selected = quic->alpn_select_fn(quic, params->negotiated_protocols.list, params->negotiated_protocols.count);
+        }
+        else if (quic->alpn_select_fn_v2 != NULL) {
+            selected = quic->alpn_select_fn_v2(quic, (picoquic_iovec_t*)params->negotiated_protocols.list, params->negotiated_protocols.count);
+        }
 
         if (selected < params->negotiated_protocols.count) {
             alpn_found = params->negotiated_protocols.list[selected].base;

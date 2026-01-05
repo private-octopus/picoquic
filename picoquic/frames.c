@@ -5303,8 +5303,8 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
 
         if (frame_content[0] == picoquic_frame_type_datagram_l) {
             /* It might be possible to squeeze the size by removing the length */
-            size_t header_length = picoquic_varint_skip(frame_content + 1);
-            size_t data_length = cnx->first_datagram->length - header_length - 1;
+            size_t header_length = 1 + picoquic_varint_skip(frame_content + 1);
+            size_t data_length = cnx->first_datagram->length - header_length;
             size_t min_length = data_length + 1;
 
             if (bytes + min_length <= bytes_max) {
