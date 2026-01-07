@@ -181,7 +181,7 @@ static int picowt_baton_test_one(
             server_param.path_table = path_item_list;
             server_param.path_table_nb = 1;
 
-            picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
             picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         }
     }

@@ -72,7 +72,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
  * according to the ALPN selected by the client
  */
 
-size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
+size_t picoquic_demo_server_callback_select_alpn(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count);
 
 int demo_server_is_path_sane(const uint8_t* path, size_t path_length);
 

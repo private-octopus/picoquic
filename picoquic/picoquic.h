@@ -451,6 +451,9 @@ typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
  */
 typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
 
+/* V2 callback using picoquic_iovec_t instead of ptls_iovec_t */
+typedef size_t (*picoquic_alpn_select_fn_v2)(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count);
+
 /* Function used during callback to provision an ALPN context. The stack 
  * issues a callback of type 
  */
@@ -847,6 +850,9 @@ void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
 /* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
+
+/* V2 API using picoquic_iovec_t */
+void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn);
 
 /* Set the default callback function for new connections.
  * This must be defined for every server implementation.
