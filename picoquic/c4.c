@@ -576,6 +576,17 @@ static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state
 static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
     c4_state->nb_packets_in_startup += 1;
+    /* We implement Reno style slow start, doubling the CWND every RTT, by
+    * incrementing CWND by the number of new bytes acknowledged.
+    * However, this is too aggressive at the end of the initial phase.
+    * The exit test is "3 successive RTT with no data rate increase".
+    * If the CWND keeps increasing after noticing the first increase,
+    * it grows too much and the queues build up too much. But then, the first
+    * notice can also be due to a jitter event, which causes rate measurment to be low,
+    * in which case we need  to increase the CWND to eventually catch with a new RTT.
+    * The 'shift' in the formula is a compromise, kinda similar to "Hystart++",
+    * causing the CWND to increase slower if we may be close to the exit.
+    */
     c4_state->initial_cwnd += ack_state->nb_bytes_acknowledged >> (3 * c4_state->nb_eras_no_increase);
     if (c4_state->use_seed_cwin && c4_state->seed_rate > 0 &&
         c4_state->nominal_rate >= c4_state->seed_rate) {
@@ -820,7 +831,15 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         if (c4_era_check(path_x, c4_state)) {
             /* Update max rtt and running min rtt */
             c4_update_min_max_rtt(path_x, c4_state);
-            /* test needed to reenter initial if conditions did change */
+            /* The initial phase may have exited too early if we have both high jitter and competition
+            * from other flows. Finding an RTT higher than the previous max is an indication that
+            * the previous initial might have exited too soon, especially if the difference between
+            * max RTT and min RTT is large. Reentering Initial remedies that.
+            * However, reentering Initial is a bit of a hack. It is OK in the high jitter or
+            * competition secnarios, but it can backfire and cause congestion and losses. So we don't
+            * do that if the RTT is low (lower than 50ms) or if the data rate is high enough
+            * (higher than 1Mbps, i.e., 8Mbps). And we only do that once per connection.
+            */
             if (!c4_state->initial_after_jitter &&
                 c4_state->nominal_max_rtt > 50000 &&
                 c4_state->nominal_rate < 1000000 &&
