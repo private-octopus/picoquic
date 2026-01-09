@@ -1039,7 +1039,17 @@ void c4_notify(
             c4_state->ecn_threshold = c4_ecn_threshold(c4_state);
             c4_update_ecn_alpha(path_x, c4_state, current_time);
             if (c4_state->ecn_alpha > c4_state->ecn_threshold) {
-                c4_notify_congestion(path_x, c4_state, 0, c4_congestion_ecn, current_time);
+                if (c4_state->alg_state == c4_initial) {
+                    if (c4_state->recent_delay_excess > 0
+                        && c4_state->nb_eras_no_increase > 1
+                        && c4_state->push_rate_old >= c4_state->nominal_rate) {
+
+                        c4_exit_initial(path_x, c4_state, c4_congestion_ecn, current_time);
+                    }
+                }
+                else {
+                    c4_notify_congestion(path_x, c4_state, 0, c4_congestion_ecn, current_time);
+                }
             }
             break;
         case picoquic_congestion_notification_repeat:
