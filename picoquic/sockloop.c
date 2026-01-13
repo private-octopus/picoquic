@@ -373,9 +373,11 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 #endif
 
     if (s_ctx->fd == INVALID_SOCKET ||
+#ifndef ESP_PLATFORM
         /* TODO: set option IPv6 only */
         picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
         picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
+#endif
         picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
@@ -390,7 +392,8 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         else if (local_address.ss_family == AF_INET) {
             s_ctx->port = ntohs(((struct sockaddr_in*)&local_address)->sin_port);
         }
-
+        
+#ifndef ESP_PLATFORM
         if (socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
@@ -422,6 +425,8 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
                 ret = -1;
             }
         }
+#endif
+
 #ifdef _WINDOWS
         if (ret == 0) {
             ret = picoquic_packet_set_windows_socket(send_coalesced, recv_coalesced, s_ctx);
@@ -443,9 +448,14 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
     int sock_ret = 0;
 
     if (local_af == 0) {
+#ifdef ESP_PLATFORM
+        nb_af = 1;
+        af[0] = AF_INET;
+#else
         nb_af = 2;
         af[0] = AF_INET;
         af[1] = AF_INET6;
+#endif
     }
     else {
         nb_af = 1;
@@ -1311,6 +1321,57 @@ int picoquic_packet_loop(picoquic_quic_t* quic,
 }
 
 /* Management of background thread. */
+
+#ifdef ESP_PLATFORM
+/* ESP32 doesn't have pipe(), so we use a UDP socket pair instead */
+#define pipe esp_pipe
+static int esp_pipe(int fd[2])
+{
+    struct sockaddr_in addr;
+    socklen_t addrlen = sizeof(addr);
+    int listener = -1;
+
+    /* Create listener socket on loopback */
+    listener = socket(AF_INET, SOCK_DGRAM, 0);
+    if (listener < 0) {
+        return -1;
+    }
+
+    /* Bind to loopback on any available port */
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+
+    if (bind(listener, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Get the bound port */
+    if (getsockname(listener, (struct sockaddr*)&addr, &addrlen) < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Create sender socket */
+    fd[1] = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd[1] < 0) {
+        close(listener);
+        return -1;
+    }
+
+    /* Connect sender to listener */
+    if (connect(fd[1], (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(fd[1]);
+        close(listener);
+        return -1;
+    }
+
+    fd[0] = listener;
+    return 0;
+}
+#endif
 
 static void picoquic_close_network_wake_up(picoquic_network_thread_ctx_t* thread_ctx)
 {
