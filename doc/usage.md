@@ -10,12 +10,12 @@ On Linux after building, the following executables are available in the project 
 ## HTTP Client and Server Usage
 * client: ./picoquicdemo servername serverportnumber HTTPpath
   * downloaded files will be in current directory. use -o for another folder 
-  * exemple: ./picoquicdemo -o ../received 192.0.2.1 4433 index.html
+  * example: ./picoquicdemo -o ../received 192.0.2.1 4433 index.html
 * server: ./picoquicdemo -p portnumber
   * -p argument tells the program that it is acting as a server
   * HTML root folder is current directory by default. use -w for another folder
   * keys and certs are specified by -k and -c. See -h for more details.
-  * exemple: ./picoquicdemo -w ../htmlroot -p 4433
+  * example: ./picoquicdemo -w ../htmlroot -p 4433
 * additional useful information for HTTP usage is available at:
   * [Without DNS Names Or Certs](https://github.com/private-octopus/picoquic/wiki/Testing-without-DNS-names-or-Certificates)
   * [Certs Using Lets Encrypt](https://github.com/private-octopus/picoquic/wiki/Import-key-and-cert-on-server-from-Let's-encrypt)

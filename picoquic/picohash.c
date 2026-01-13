@@ -23,14 +23,17 @@
  * Basic hash implementation, like we have seen tons off already.
  */
 #include "picohash.h"
+#include "siphash.h"
 #include <stdlib.h>
 #include <string.h>
 
 picohash_table* picohash_create_ex(size_t nb_bin,
-    uint64_t (*picohash_hash)(const void*),
+    uint64_t (*picohash_hash)(const void*, const uint8_t *),
     int (*picohash_compare)(const void*, const void*),
-    picohash_item * (*picohash_key_to_item)(const void*))
+    picohash_item * (*picohash_key_to_item)(const void*),
+    const uint8_t* hash_seed)
 {
+    static const uint8_t null_seed[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     picohash_table* t = (picohash_table*)malloc(sizeof(picohash_table));
     size_t items_length = sizeof(picohash_item*) * nb_bin;
     t->hash_bin = NULL;
@@ -48,21 +51,22 @@ picohash_table* picohash_create_ex(size_t nb_bin,
         t->picohash_hash = picohash_hash;
         t->picohash_compare = picohash_compare;
         t->picohash_key_to_item = picohash_key_to_item;
+        t->hash_seed = (hash_seed == NULL)? null_seed: hash_seed;
     }
 
     return t;
 }
 
 picohash_table* picohash_create(size_t nb_bin,
-    uint64_t(*picohash_hash)(const void*),
+    uint64_t(*picohash_hash)(const void*, const uint8_t*),
     int (*picohash_compare)(const void*, const void*))
 {
-    return picohash_create_ex(nb_bin, picohash_hash, picohash_compare, NULL);
+    return picohash_create_ex(nb_bin, picohash_hash, picohash_compare, NULL, NULL);
 }
 
 picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key)
 {
-    uint64_t hash = hash_table->picohash_hash(key);
+    uint64_t hash = hash_table->picohash_hash(key, hash_table->hash_seed);
     uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
     picohash_item* item = hash_table->hash_bin[bin];
 
@@ -79,7 +83,7 @@ picohash_item* picohash_retrieve(picohash_table* hash_table, const void* key)
 
 int picohash_insert(picohash_table* hash_table, const void* key)
 {
-    uint64_t hash = hash_table->picohash_hash(key);
+    uint64_t hash = hash_table->picohash_hash(key, hash_table->hash_seed);
     uint32_t bin = (uint32_t)(hash % hash_table->nb_bin);
     int ret = 0;
     picohash_item* item;
@@ -150,19 +154,21 @@ void picohash_delete_key(picohash_table* hash_table, void* key, int delete_key_t
 
 void picohash_delete(picohash_table* hash_table, int delete_key_too)
 {
-    for (uint32_t i = 0; i < hash_table->nb_bin; i++) {
-        picohash_item* item = hash_table->hash_bin[i];
-        while (item != NULL) {
-            picohash_item* tmp = item;
-            const void* key_to_delete = tmp->key;
+    if (hash_table->count > 0) {
+        for (uint32_t i = 0; i < hash_table->nb_bin; i++) {
+            picohash_item* item = hash_table->hash_bin[i];
+            while (item != NULL) {
+                picohash_item* tmp = item;
+                const void* key_to_delete = tmp->key;
 
-            item = item->next_in_bin;
+                item = item->next_in_bin;
 
-            if (hash_table->picohash_key_to_item == NULL) {
-                free(tmp);
-            }
-            if (delete_key_too) {
-                free((void*)key_to_delete);
+                if (hash_table->picohash_key_to_item == NULL) {
+                    free(tmp);
+                }
+                if (delete_key_too) {
+                    free((void*)key_to_delete);
+                }
             }
         }
     }
@@ -171,23 +177,43 @@ void picohash_delete(picohash_table* hash_table, int delete_key_too)
     free(hash_table);
 }
 
-uint64_t picohash_hash_mix(uint64_t hash, uint64_t h2)
+uint64_t picohash_bytes(const uint8_t* bytes, size_t length, const uint8_t* hash_seed)
 {
-    h2 ^= (hash << 17) ^ (hash >> 37);
-    hash ^= ((h2 << 31) ^ (h2 >> 17));
-
-    return hash;
-}
-
-uint64_t picohash_bytes(const uint8_t* key, uint32_t length)
-{
-    uint64_t hash = 0xDEADBEEF;
+    uint64_t hash =
+        ((uint64_t)hash_seed[8]) +
+        (((uint64_t)hash_seed[9]) << 8) +
+        (((uint64_t)hash_seed[10]) << 16) +
+        (((uint64_t)hash_seed[11]) << 24) +
+        (((uint64_t)hash_seed[12]) << 32) +
+        (((uint64_t)hash_seed[13]) << 40) +
+        (((uint64_t)hash_seed[14]) << 48) +
+        (((uint64_t)hash_seed[15]) << 56);
+    int rotate = 11;
 
     for (uint32_t i = 0; i < length; i++) {
-        hash ^= key[i];
-        hash ^= ((hash << 31) ^ (hash >> 17));
+        hash ^= bytes[i];
+        hash ^= hash_seed[i & 15];
+        hash ^= (hash << 8);
+        hash += (hash >> rotate);
+        rotate = (int)(hash & 31) + 11;
     }
-
+    hash ^= (hash >> rotate);
     return hash;
 }
 
+uint64_t picohash_siphash(const uint8_t* bytes, size_t length, const uint8_t* hash_seed)
+{
+    uint8_t sip_out[8];
+    uint64_t hash;
+    (void)siphash(bytes, length, hash_seed, sip_out, 8);
+    hash =
+        (uint64_t)sip_out[0] +
+        (((uint64_t)sip_out[1]) << 8) +
+        (((uint64_t)sip_out[2]) << 16) +
+        (((uint64_t)sip_out[3]) << 24) +
+        (((uint64_t)sip_out[4]) << 32) +
+        (((uint64_t)sip_out[5]) << 40) +
+        (((uint64_t)sip_out[6]) << 48) +
+        (((uint64_t)sip_out[7]) << 56);
+    return hash;
+}

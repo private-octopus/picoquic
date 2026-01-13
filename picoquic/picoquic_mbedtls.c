@@ -23,6 +23,12 @@
 * required variables and function pointers so they can be used by picoquic.
 */
 
+
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#endif
 #include "picotls.h"
 #ifndef PICOQUIC_WITH_MBEDTLS
 void picoquic_mbedtls_load(int unload)
@@ -94,7 +100,8 @@ void picoquic_mbedtls_load(int unload)
         picoquic_register_tls_key_provider_fn(
             ptls_mbedtls_load_private_key,
             ptls_mbedtls_dispose_sign_certificate,
-            picoquic_mbedtls_get_certs_from_file);
+            picoquic_mbedtls_get_certs_from_file,
+            NULL);
 
         picoquic_register_verify_certificate_fn(
             picoquic_mbedtls_get_certificate_verifier,

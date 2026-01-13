@@ -28,6 +28,7 @@
 #include "picoquic_binlog.h"
 #include "logreader.h"
 #include "qlog.h"
+#include "picoquic_bbr.h"
 
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
@@ -170,8 +171,8 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage old_dest;
 
     /* Check the selected path */
-    picoquic_store_addr(&old_srce, (struct sockaddr*)&test_ctx->cnx_client->path[0]->local_addr);
-    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr);
+    picoquic_store_addr(&old_srce, (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr);
+    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr);
 
 
     while (*simulated_time < time_out &&
@@ -179,11 +180,11 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_trials < 1024 &&
         nb_inactive < 64 &&
         ret == 0 && (
-            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0)
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr) == 0)
             ||
-            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
-                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0))){
+            (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr) == 0 &&
+                picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr) == 0))){
         was_active = 0;
         nb_trials++;
 
@@ -198,11 +199,11 @@ int wait_client_migration_done(picoquic_test_tls_api_ctx_t* test_ctx,
     }
 
     if (ret != 0 || (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
-        (picoquic_compare_addr((struct sockaddr*) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr) == 0))
+        (picoquic_compare_addr((struct sockaddr*) & old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr) == 0))
         ||
-        (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr) == 0 &&
-            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr) == 0)){
+        (picoquic_compare_addr((struct sockaddr *) & old_srce, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr) == 0 &&
+            picoquic_compare_addr((struct sockaddr*) & old_dest, (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr) == 0)){
         DBG_PRINTF("Could not complete migration, client state = %d\n",
             test_ctx->cnx_client->cnx_state);
         ret = -1;
@@ -389,8 +390,8 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage old_dest;
 
     /* Check the selected path */
-    picoquic_store_addr(&old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->local_addr);
-    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->peer_addr);
+    picoquic_store_addr(&old_srce, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->local_addr);
+    picoquic_store_addr(&old_dest, (struct sockaddr*) & test_ctx->cnx_client->path[0]->first_tuple->peer_addr);
 
     while (*simulated_time < time_out &&
         ret == 0 &&
@@ -398,9 +399,9 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
         nb_trials < 5000 &&
         nb_inactive < 64 &&
         (test_ctx->cnx_client->nb_paths != 2 ||
-        !test_ctx->cnx_client->path[1]->challenge_verified ||
+        !test_ctx->cnx_client->path[1]->first_tuple->challenge_verified ||
         (test_ctx->cnx_server == NULL || (test_ctx->cnx_server->nb_paths != 2 ||
-        !test_ctx->cnx_server->path[1]->challenge_verified)))){
+        !test_ctx->cnx_server->path[1]->first_tuple->challenge_verified)))){
         nb_trials++;
 
         ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
@@ -415,9 +416,9 @@ int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
 
     if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_ready ||
         (test_ctx->cnx_client->nb_paths != 2 ||
-            !test_ctx->cnx_client->path[1]->challenge_verified) ||
+            !test_ctx->cnx_client->path[1]->first_tuple->challenge_verified) ||
             (test_ctx->cnx_server == NULL || (test_ctx->cnx_server->nb_paths != 2 ||
-                !test_ctx->cnx_server->path[1]->challenge_verified)))) {
+                !test_ctx->cnx_server->path[1]->first_tuple->challenge_verified)))) {
         DBG_PRINTF("Could not establish multipath, client state = %d\n",
             test_ctx->cnx_client->cnx_state);
         ret = -1;
@@ -446,12 +447,13 @@ typedef enum {
     multipath_test_abandon,
     multipath_test_datagram,
     multipath_test_dg_af,
-    multipath_test_standby,
+    multipath_test_backup,
     multipath_test_standup,
     multipath_test_tunnel,
     multipath_test_fail,
     multipath_test_ab1,
-    multipath_test_discovery
+    multipath_test_discovery,
+    multipath_test_keep_alive
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -901,9 +903,9 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 DBG_PRINTF("Cannot set stream affinity, ret = %d", ret);
             }
         }
-        else if (test_id == multipath_test_standby ||
+        else if (test_id == multipath_test_backup ||
             test_id == multipath_test_standup) {
-            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_standby);
+            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
         }
     }
 
@@ -936,7 +938,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
                 if (test_id == multipath_test_nat_challenge) {
-                    test_ctx->cnx_client->path[0]->challenge_required = 1;
+                    test_ctx->cnx_client->path[0]->first_tuple->challenge_required = 1;
                 }
             }
             else if (test_id == multipath_test_abandon) {
@@ -1012,6 +1014,36 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    if (ret == 0 && test_id == multipath_test_keep_alive) {
+        uint8_t ping_frame[1] = { (uint8_t)picoquic_frame_type_ping };
+
+        while (ret == 0 && simulated_time < 200000000) {
+            uint64_t previous_time = simulated_time;
+            if (ret == 0) {
+                ret = picoquic_queue_misc_frame(test_ctx->cnx_client, ping_frame, sizeof(ping_frame), 0, picoquic_packet_context_application);
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot queue ping frame, ret = 0x%x", ret);
+                    break;
+                }
+            }
+
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 10000000);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot wait 10 seconds, ret = 0x%x", ret);
+                break;
+            }
+
+            if (!(TEST_CLIENT_READY && TEST_SERVER_READY) || simulated_time < previous_time + 1000000) {
+                DBG_PRINTF("Connection stalled at t=%" PRIu64, simulated_time);
+                ret = -1;
+                break;
+            }
+        }
+        if (ret != 0) {
+            DBG_PRINTF("Keep awake test fails at t=%" PRIu64 ", ret = 0x%x", simulated_time, ret);
+        }
+    }
+
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_microsec);
@@ -1037,14 +1069,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && test_id == multipath_test_renew) {
-        if (test_ctx->cnx_client->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+        if (test_ctx->cnx_client->path[1]->first_tuple->p_remote_cnxid->sequence == original_r_cid_sequence) {
             DBG_PRINTF("Remote CID on client path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
             ret = -1;
-        } else if (test_ctx->cnx_server->path[1]->p_remote_cnxid->sequence == original_r_cid_sequence) {
+        } else if (test_ctx->cnx_server->path[1]->first_tuple->p_remote_cnxid->sequence == original_r_cid_sequence) {
             DBG_PRINTF("Remote CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
             ret = -1;
         }
-        else if (test_ctx->cnx_server->path[1]->p_local_cnxid->sequence == original_r_cid_sequence) {
+        else if (test_ctx->cnx_server->path[1]->first_tuple->p_local_cnxid->sequence == original_r_cid_sequence) {
             DBG_PRINTF("Local CID on server path 1 is still %" PRIu64 "\n", original_r_cid_sequence);
             ret = -1;
         }
@@ -1068,11 +1100,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", reuse!", i, test_ctx->cnx_client->path[i]->unique_path_id);
                 ret = -1;
             }
-            else if (test_ctx->cnx_client->path[i]->p_local_cnxid != NULL && test_ctx->cnx_client->path[i]->unique_path_id !=
-                test_ctx->cnx_client->path[i]->p_local_cnxid->path_id) {
+            else if (test_ctx->cnx_client->path[i]->first_tuple->p_local_cnxid != NULL && test_ctx->cnx_client->path[i]->unique_path_id !=
+                test_ctx->cnx_client->path[i]->first_tuple->p_local_cnxid->path_id) {
                 DBG_PRINTF("Path ID[%d] = %" PRIu64 ", vs. local CID path id: %" PRIu64,
                     i, test_ctx->cnx_client->path[i]->unique_path_id,
-                    i, test_ctx->cnx_client->path[i]->p_local_cnxid->path_id);
+                    i, test_ctx->cnx_client->path[i]->first_tuple->p_local_cnxid->path_id);
                 ret = -1;
             }
         }
@@ -1085,7 +1117,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             test_ctx->cnx_client->nb_paths < 2 ||
             test_ctx->cnx_server->path[0]->unique_path_id != 0 ||
             test_ctx->cnx_client->path[0]->unique_path_id != 0 ||
-            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->peer_addr,
+            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
                 (struct sockaddr*)&test_ctx->client_addr_natted) != 0) {
             DBG_PRINTF("%s", "NAT traversal looks wrong.\n");
             ret = -1;
@@ -1134,13 +1166,13 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = multipath_verify_datagram_sent(&dg_ctx, test_id);
     }
 
-    /* In the standby scenario, verify that the flag is set
+    /* In the backup scenario, verify that the flag is set
     * correctly at the server, and that not too much data is
-    * sent on standby path.
+    * sent on backup path.
     */
-    if (ret == 0 && (test_id == multipath_test_standby)) {
-        if (!test_ctx->cnx_server->path[1]->path_is_standby) {
-            DBG_PRINTF("Standby not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_standby);
+    if (ret == 0 && (test_id == multipath_test_backup)) {
+        if (!test_ctx->cnx_server->path[1]->path_is_backup) {
+            DBG_PRINTF("Backup not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_backup);
             ret = -1;
         }
         else if (test_ctx->cnx_server->path[1]->delivered > 50000) {
@@ -1156,14 +1188,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         for (int p = 0; p < 2; p++) {
             if (picoquic_compare_addr(
-                (struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr,
-                (struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr) != 0) {
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->local_addr,
+                (struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->observed_addr) != 0) {
                 char text1[256];
                 char text2[256];
 
                 DBG_PRINTF("Path %d, Local: %s, observed: %s", p,
-                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->local_addr, text1, sizeof(text1)),
-                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->observed_addr, text2, sizeof(text2)));
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->local_addr, text1, sizeof(text1)),
+                    picoquic_addr_text((struct sockaddr*)&test_ctx->cnx_client->path[p]->first_tuple->observed_addr, text2, sizeof(text2)));
                 ret = -1;
             }
         }
@@ -1378,11 +1410,11 @@ int multipath_dg_af_test()
     return multipath_test_one(max_completion_microsec, multipath_test_dg_af);
 }
 
-int multipath_standby_test()
+int multipath_backup_test()
 {
     uint64_t max_completion_microsec = 2000000;
 
-    return multipath_test_one(max_completion_microsec, multipath_test_standby);
+    return multipath_test_one(max_completion_microsec, multipath_test_backup);
 }
 
 int multipath_standup_test()
@@ -1398,6 +1430,14 @@ int multipath_discovery_test()
 
     return multipath_test_one(max_completion_microsec, multipath_test_discovery);
 }
+
+int multipath_keep_alive_test()
+{
+    uint64_t max_completion_microsec = 210000000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_keep_alive);
+}
+
 
 /* Monopath tests:
  * Enable the multipath option, but use only a single path. The gal of the tests is to verify that
@@ -1750,10 +1790,10 @@ int multipath_trace_test_one()
         uint8_t p[256];
 
         memset(p, 0, sizeof(p));
-        memcpy(p + 1, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->p_local_cnxid->cnx_id.id_len);
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
         p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
     }
 
     /* Delete the context, which will close the log file. */
@@ -1824,9 +1864,9 @@ int multipath_tunnel_test()
  * Key values include:
  * cnx->path[i]->status_set_by_peer
  * cnx->path[i]->path_is_demoted
- * cnx->path[i]->challenge_failed (leads to demotion)
- * cnx->path[i]->response_required (set challenge path)
- * cnx->path[i]->challenge_verified (and next challenge time)
+ * cnx->path[i]->first_tuple->challenge_failed (leads to demotion)
+ * cnx->path[i]->first_tuple->response_required (set challenge path)
+ * cnx->path[i]->first_tuple->challenge_verified (and next challenge time)
  * cnx->path[i]->challenge_repeat_count
  * cnx->path[i]->nb_retransmit
  * cnx->path[i]->rtt_min

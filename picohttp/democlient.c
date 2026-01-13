@@ -633,6 +633,9 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
 
         break;
     }
+    case picoquic_callback_next_path_allowed:
+        /* This event should be handled according to the application's requirements */
+        break;
     default:
         /* unexpected */
         break;

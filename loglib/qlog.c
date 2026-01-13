@@ -641,11 +641,13 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     struct sockaddr_storage addr_peer = { 0 };
     struct sockaddr_storage addr_local = { 0 };
     uint64_t byte_length = 0;
+    uint64_t unique_path_id = 0;
     int ret_local;
 
     byteread_addr(s, &addr_peer);
     byteread_vint(s, &byte_length);
     ret_local = byteread_addr(s, &addr_local);
+    byteread_vint(s, &unique_path_id);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -654,7 +656,7 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
         fprintf(f, "\n");
     }
 
-    qlog_event_header(f, ctx, delta_time, 0, "transport", (rxtx == 0) ? "datagram_sent" : "datagram_received");
+    qlog_event_header(f, ctx, delta_time, unique_path_id, "transport", (rxtx == 0) ? "datagram_sent" : "datagram_received");
 
     fprintf(f, " \"byte_length\": %" PRIu64, byte_length);
 
@@ -833,8 +835,11 @@ void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
+    uint64_t next_sequence_number = 0;
     byteread_vint(s, &path_id);
+    byteread_vint(s, &next_sequence_number);
     fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)

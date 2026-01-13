@@ -422,7 +422,6 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
         else {
             /* We need to send a PTO. */
             int packet_is_pure_ack = 1;
-
             /* Parse the old packet, queue frames for retransmit, perhaps copy some
             * frames into the new packet, dequeue from packet queue and if needed
             * copy to "retransmitted", return old_p = 0 if freed.
@@ -468,12 +467,12 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                                 }
                             }
                             if (!all_paths_dubious) {
-                                old_path->challenge_failed = 1;
+                                old_path->first_tuple->challenge_failed = 1;
                                 cnx->path_demotion_needed = 1;
                             }
                         }
                         else {
-                            old_path->challenge_failed = 1;
+                            old_path->first_tuple->challenge_failed = 1;
                             cnx->path_demotion_needed = 1;
                         }
                     }
@@ -899,7 +898,7 @@ static void picoquic_count_and_notify_loss(
     if (timer_based_retransmit < 2) {
         picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
             (timer_based_retransmit) ? "timer" : "repeat",
-            (old_p->send_path == NULL || old_p->send_path->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->p_remote_cnxid->cnx_id,
+            (old_p->send_path == NULL || old_p->send_path->first_tuple->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->first_tuple->p_remote_cnxid->cnx_id,
             old_p->length, current_time);
 
         if (!old_p->is_preemptive_repeat) {

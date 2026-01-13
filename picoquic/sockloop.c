@@ -371,6 +371,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 #ifndef ESP_PLATFORM
         /* TODO: set option IPv6 only */
         picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
+#endif
         picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
 #endif
         picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
@@ -392,7 +393,6 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         int tos = 0xb8; // 0x88 = AF41, 0xb8 == EF
 
         if (local_address.ss_family == AF_INET6) {
-
 #ifndef LWIP_IPV6
             if(setsockopt(s_ctx->fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos)) < 0) {
                 DBG_PRINTF("setsockopt IPv46 TC CLASS (0x%x) fails, errno: %d\n", tos, errno);
@@ -878,6 +878,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         loop_immediate = 0;
         /* Remember the time before the select call, so it duration be monitored */
         previous_time = current_time;
+        /* Initialize the dest addr family to UNSPEC yo handle systems that cannot set it. */
+        addr_to.ss_family = AF_UNSPEC;
 #ifdef _WINDOWS
         bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,

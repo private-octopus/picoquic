@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.30.1
+        VERSION 1.1.35.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -81,6 +81,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
+    picoquic/ech.c
     picoquic/fastcc.c
     picoquic/frames.c
     picoquic/intformat.c
@@ -90,6 +91,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/newreno.c
     picoquic/pacing.c
     picoquic/packet.c
+    picoquic/paths.c
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
@@ -102,9 +104,11 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/port_blocking.c
     picoquic/prague.c
     picoquic/quicctx.c
+    picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
+    picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
     picoquic/ticket_store.c
@@ -124,7 +128,14 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_logger.h
      picoquic/picoquic_binlog.h
      picoquic/picoquic_config.h
-     picoquic/picoquic_lb.h)
+     picoquic/picoquic_lb.h
+     picoquic/picoquic_newreno.h
+     picoquic/picoquic_cubic.h
+     picoquic/picoquic_bbr.h
+     picoquic/picoquic_bbr1.h
+     picoquic/picoquic_fastcc.h
+     picoquic/picoquic_prague.h
+     picoquic/siphash.h)
 
 set(LOGLIB_LIBRARY_FILES
     loglib/autoqlog.c
@@ -157,7 +168,9 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
+    picoquictest/ech_test.c
     picoquictest/edge_cases.c
+    picoquictest/flow_control_test.c
     picoquictest/getter_test.c
     picoquictest/hashtest.c
     picoquictest/high_latency_test.c
@@ -203,6 +216,8 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_common.c
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
+    picohttp/h3zero_url_template.c
+    picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
@@ -211,15 +226,18 @@ set(PICOHTTP_HEADERS
      picohttp/h3zero.h
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
+     picohttp/h3zero_url_template.h
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picomask.h
      picohttp/wt_baton.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
     picoquictest/h3zero_stream_test.c
     picoquictest/h3zero_uri_test.c
+    picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
@@ -228,7 +246,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             5a4461d8a3948d9d26bf861e7d90cb80d8093515)
+        GIT_TAG             f350eab60742138ac62b42ee444adf04c7898b0d)
     FetchContent_MakeAvailable(picotls)
 endif()
 

@@ -22,7 +22,11 @@
 /* This module interfaces with the minicrypto libraries. It loads the
 * required variables and function pointers so they can be used by picoquic.
 */
-
+#ifdef _WINDOWS
+#include "wincompat.h"
+#include "ws2ipdef.h"
+#pragma warning(disable:4100)
+#endif
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"
 #include "picotls/minicrypto.h"
@@ -66,7 +70,7 @@ void picoquic_ptls_minicrypto_load(int unload)
 
         picoquic_register_tls_key_provider_fn(
             set_minicrypto_private_key_from_key_file,
-            NULL, NULL);
+            NULL, NULL, NULL);
 #if 0
         picoquic_register_verify_certificate_fn(picoquic_openssl_get_certificate_verifier,
             picoquic_openssl_dispose_certificate_verifier,

@@ -34,6 +34,7 @@
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include "picoquic_config.h"
+#include "picoquic_bbr.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -64,7 +65,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_DisablePortBlocking, 'X', "disable_block", 0, "", "Disable the check for blocked ports"},
     { picoquic_option_SOLUTION_DIR, 'S', "solution_dir", 1, "folder", "Set the path to the source files to find the default files" },
     { picoquic_option_CC_ALGO, 'G', "cc_algo", 1, "cc_algorithm",
-    "Use the specified congestion control algorithm: reno, cubic, bbr or fast. Defaults to bbr." },
+    "Use the specified congestion control algorithm. Defaults to bbr. Supported values are:" },
+    { picoquic_option_CC_OPTION, 'H', "cco", 1, "option", "Set option string if required by congestion control algorithm."},
     { picoquic_option_SPINBIT, 'P', "spinbit", 1, "number", "Set the default spinbit policy" },
     { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
     { picoquic_option_MULTIPATH, 'M', "multipath", 0, "", "Enable QUIC multipath extension" },
@@ -100,6 +102,9 @@ static option_table_line_t option_table[] = {
     { picoquic_option_SSLKEYLOG, '8', "sslkeylog", 0, "", "Enable SSLKEYLOG" },
 #endif
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
+    { picoquic_option_ECH_server, 'E' , "ech_s", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
+    { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
+    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded,"},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -292,6 +297,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_CC_ALGO:
         ret = config_set_string_param(&config->cc_algo_id, params, nb_params, 0);
         break;
+    case picoquic_option_CC_OPTION:
+        ret = config_set_string_param(&config->cc_algo_option_string, params, nb_params, 0);
+        break;
     case picoquic_option_SPINBIT: {
         int v = config_atoi(params, nb_params, 0, &ret);
         if (ret != 0 || v < 0 || v > (int)picoquic_spinbit_on) {
@@ -449,6 +457,31 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_ECH_server: {
+        ret = config_set_string_param(&config->ech_key_file, params, nb_params, 0);
+        if (ret == 0) {
+            ret = config_set_string_param(&config->ech_config_file, params, nb_params, 1);
+        }
+        break;
+    }
+    case picoquic_option_ECH_init: {
+        ret = config_set_string_param(&config->ech_public_name, params, nb_params, 0);
+        break;
+    }
+    case picoquic_option_ECH_client: {
+        if (nb_params != 1) {
+            ret = -1;
+        }
+        else {
+            ret = picoquic_base64_decode(&config->ech_target, &config->ech_target_len, params[0].param);
+        }
+        if (ret != 0) {
+            fprintf(stderr, "Incorrect base64 format: %s\n", params[0].param);
+            ret = (ret == 0) ? -1 : ret;
+        }
+        break;
+    }
+
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -494,6 +527,22 @@ void picoquic_config_usage_file(FILE* F)
             putc(' ', F);
         }
         fprintf(F, " %s\n", option_table[i].option_help);
+        if (option_table[i].option_num == picoquic_option_CC_ALGO){
+            if (picoquic_congestion_control_algorithms != NULL &&
+                picoquic_nb_congestion_control_algorithms > 0) {
+                /* Add a line with supported values. */
+                for (size_t j = 0; j < 18; j++) {
+                    putc(' ', F);
+                }
+                for (size_t k = 0; k < picoquic_nb_congestion_control_algorithms; k++) {
+                    if (k != 0) {
+                        fprintf(F, ", ");
+                    }
+                    fprintf(F, "%s", picoquic_congestion_control_algorithms[k]->congestion_algorithm_id);
+                }
+                fprintf(F, ".\n");
+            }
+        }
     }
 }
 
@@ -802,7 +851,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             cc_algo = picoquic_bbr_algorithm;
         }
 
-        picoquic_set_default_congestion_algorithm(quic, cc_algo);
+        picoquic_set_default_congestion_algorithm_ex(quic, cc_algo, config->cc_algo_option_string);
 
         picoquic_set_default_spinbit_policy(quic, config->spinbit_policy);
         picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
@@ -890,6 +939,18 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
 
         picoquic_set_default_bdp_frame_option(quic, config->bdp_frame_option);
 
+        if (config->ech_public_name != NULL) {
+            if (config->ech_key_file == NULL || config->ech_config_file) {
+                fprintf(stderr, "Cannot create a configuration if key and config file are not specified.\n");
+            } else {
+                ret = picoquic_ech_create_config_file(config->ech_public_name, config->ech_key_file, config->ech_config_file);
+            }
+        }
+
+        if (ret == 0) {
+            ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
+        }
+
         if (ret != 0) {
             /* Something went wrong */
             DBG_PRINTF("QUIC configuration fails, ret = %d (0x%x)", ret, ret);
@@ -914,74 +975,71 @@ void picoquic_config_init(picoquic_quic_config_t* config)
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
 {
-    if (config->solution_dir != NULL)
-    {
+    if (config->solution_dir != NULL) {
         free((void*)config->solution_dir);
     }
-    if (config->server_cert_file != NULL)
-    {
+    if (config->server_cert_file != NULL) {
         free((void*)config->server_cert_file);
     }
-    if (config->server_key_file != NULL)
-    {
+    if (config->server_key_file != NULL) {
         free((void*)config->server_key_file);
     }
-    if (config->log_file != NULL)
-    {
+    if (config->log_file != NULL) {
         free((void*)config->log_file);
     }
-    if (config->bin_dir != NULL)
-    {
+    if (config->bin_dir != NULL) {
         free((void*)config->bin_dir);
     }
-    if (config->qlog_dir != NULL)
-    {
+    if (config->qlog_dir != NULL) {
         free((void*)config->qlog_dir);
     }
-    if (config->performance_log != NULL)
-    {
+    if (config->performance_log != NULL) {
         free((void*)config->performance_log);
     }
-    if (config->cc_algo_id != NULL)
-    {
+    if (config->cc_algo_id != NULL) {
         free((void*)config->cc_algo_id);
     }
-    if (config->cnx_id_cbdata != NULL)
-    {
+    if (config->cc_algo_option_string != NULL) {
+        free((void*)config->cc_algo_option_string);
+    }
+    if (config->cnx_id_cbdata != NULL) {
         free((void*)config->cnx_id_cbdata);
     }
-    if (config->multipath_alt_config != NULL)
-    {
+    if (config->multipath_alt_config != NULL) {
         free((void*)config->multipath_alt_config);
     }
-    if (config->www_dir != NULL)
-    {
+    if (config->www_dir != NULL) {
         free((void*)config->www_dir);
     }
-    /* TODO:  const uint8_t* ticket_encryption_key; Or maybe consider this a PEM file */
-    if (config->ticket_file_name != NULL)
-    {
+    if (config->ticket_file_name != NULL) {
         free((void*)config->ticket_file_name);
     }
-    if (config->token_file_name != NULL)
-    {
+    if (config->token_file_name != NULL) {
         free((void*)config->token_file_name);
     }
-    if (config->sni != NULL)
-    {
+    if (config->sni != NULL) {
         free((void*)config->sni);
     }
-    if (config->alpn != NULL)
-    {
+    if (config->alpn != NULL) {
         free((void*)config->alpn);
     }
-    if (config->out_dir != NULL)
-    {
+    if (config->out_dir != NULL) {
         free((void*)config->out_dir);
     }
-    if (config->root_trust_file != NULL)
-    {
+    if (config->root_trust_file != NULL) {
         free((void*)config->root_trust_file);
+    }
+    if (config->ech_key_file != NULL) {
+        free((void*)config->ech_key_file);
+    }
+    if (config->ech_config_file != NULL) {
+        free((void*)config->ech_config_file);
+    }
+    if (config->ech_public_name != NULL) {
+        free((void*)config->ech_public_name);
+    }
+    if (config->ech_target != NULL) {
+        free((void*)config->ech_target);
     }
     picoquic_config_init(config);
 }

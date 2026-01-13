@@ -58,6 +58,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_prepare_qpack", h3zero_prepare_qpack_test },
     { "h3zero_user_agent", h3zero_user_agent_test },
     { "h3zero_uri", h3zero_uri_test },
+    { "h3zero_url_template", h3zero_url_template_test },
     { "h3zero_null_sni", h3zero_null_sni_test },
     { "h3zero_qpack_fuzz", h3zero_qpack_fuzz_test },
     { "h3zero_stream_test", h3zero_stream_test },
@@ -93,6 +94,8 @@ static const picoquic_test_def_t test_table[] = {
     { "http_corrupt", http_corrupt_test},
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},
     { "http_drop", http_drop_test},
+    { "picomask_udp", picomask_udp_test },
+    { "picomask_udp_path", picomask_udp_path_test },
     { "picowt_baton_basic", picowt_baton_basic_test },
     { "picowt_baton_error", picowt_baton_error_test },
     { "picowt_baton_long", picowt_baton_long_test },
@@ -110,7 +113,18 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_overflow", quicperf_overflow_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
-    { "cc_compete_d_cubic", cc_compete_d_cubic_test }
+    { "cc_compete_d_cubic", cc_compete_d_cubic_test },
+    { "cc_ns_asym", cc_ns_asym_test },
+    { "cc_ns_blackhole", cc_ns_blackhole_test },
+    { "cc_ns_drop_and_back", cc_ns_drop_and_back_test },
+    { "cc_ns_low_and_up", cc_ns_low_and_up_test },
+    { "cc_ns_wifi_fade", cc_ns_wifi_fade_test },
+    { "cc_ns_wifi_suspension", cc_ns_wifi_suspension_test },
+    { "cc_ns_wifi_bad_cubic", cc_ns_wifi_bad_cubic_test },
+    { "cc_ns_wifi_bad_bbr", cc_ns_wifi_bad_bbr_test },
+    { "cc_ns_varylink", cc_ns_varylink_test },
+    { "cc_ns_satellite", cc_ns_satellite_test },
+    { "cc_ns_media", cc_ns_media_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

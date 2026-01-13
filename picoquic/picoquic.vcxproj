@@ -150,6 +150,7 @@
     <ClCompile Include="cc_common.c" />
     <ClCompile Include="config.c" />
     <ClCompile Include="cubic.c" />
+    <ClCompile Include="ech.c" />
     <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
     <ClCompile Include="intformat.c" />
@@ -158,6 +159,7 @@
     <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="pacing.c" />
+    <ClCompile Include="paths.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
     <ClCompile Include="picoquic_mbedtls.c" />
@@ -171,10 +173,12 @@
     <ClCompile Include="quicctx.c" />
     <ClCompile Include="packet.c" />
     <ClCompile Include="picohash.c" />
+    <ClCompile Include="register_all_cc_algorithms.c" />
     <ClCompile Include="sacks.c" />
     <ClCompile Include="sender.c" />
     <ClCompile Include="bbr.c" />
     <ClCompile Include="sim_link.c" />
+    <ClCompile Include="siphash.c" />
     <ClCompile Include="sockloop.c" />
     <ClCompile Include="spinbit.c" />
     <ClCompile Include="ticket_store.c" />

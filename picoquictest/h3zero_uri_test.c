@@ -24,6 +24,7 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "h3zero_uri.h"
+#include "h3zero_url_template.h"
 
 #define abempty_one_char '/'
 #define abempty_one_name '/','e','x','a','m','p','l','e'
@@ -152,5 +153,203 @@ int h3zero_uri_test()
             break;
         }
     }
+    return ret;
+}
+
+
+/* Tests of URL template
+ */
+
+typedef struct st_template_test_var_t {
+    char const* var_name;
+    char const* instances[4];
+} template_test_var_t;
+
+template_test_var_t tt_vars[] = {
+    { "count", {"one", "two", "three", NULL }},
+    { "dom", {"example", "com", NULL }},
+    { "dub", {"me/too", NULL }},
+    { "hello", {"Hello World!", NULL }},
+    { "half", {"50%", NULL }},
+    { "var", {"value", NULL }},
+    { "who", {"fred", NULL }},
+    { "base", {"http://example.com/home/", NULL }},
+    { "path", {"/foo/bar", NULL }},
+    { "list", {"red", "green", "blue", NULL }},
+    { "empty", {"", NULL}},
+    { "undef", {NULL}},
+    { "x", { "1024", NULL}},
+    { "y", { "768", NULL}},
+    { "ip6", { "2001:234::42", NULL }}
+};
+
+typedef struct st_expansion_test_case_t {
+    char const* expression;
+    char const* expansion;
+} template_test_case_t;
+
+template_test_case_t template_test_cases[] = {
+    { "{count}",   "one,two,three"},
+    { "{count*}",  "one,two,three"},
+    { "{/count}",  "/one,two,three"},
+    { "{/count*}", "/one/two/three"},
+    { "{;count}",  ";count=one,two,three"},
+    { "{;count*}", ";count=one;count=two;count=three"},
+    { "{?count}",  "?count=one,two,three"},
+    { "{?count*}", "?count=one&count=two&count=three"},
+    { "{&count*}", "&count=one&count=two&count=three"},
+    { "{.dom*}",   ".example.com" },
+    {"{var}", "value"},
+    {"{hello}", "Hello%20World%21"},
+    {"{half}", "50%25"},
+    {"O{empty}X", "OX"},
+    {"O{undef}X", "OX"},
+    {"{x,y}", "1024,768"},
+    {"{x,hello,y}", "1024,Hello%20World%21,768"},
+    {"?{x,empty}", "?1024,"},
+    {"?{x,undef}", "?1024"},
+    {"?{undef,y}", "?768"},
+    {"{var:3}", "val"},
+    {"{var:30}", "value"},
+    {"{list}", "red,green,blue"},
+    {"{list*}", "red,green,blue"},
+    {"{ip6}", "2001%3A234%3A%3A42"}
+};
+
+template_test_case_t template_error_cases[] = {
+    { "{count",   "one,two,three"}, /* Missing final } */
+    { "{count**}",   "one,two,three"}, /* unexpected * } */
+    { "{count:0}",   "one,two,three"}, /* zero length prefix */
+    { "{count:abcd}",   "one,two,three"}, /* non number prefix */
+    { "{}",   "one,two,three"}, /* zero length variable  */
+    { "{:123}",   "one,two,three"}, /* zero length variable */
+    { "{a,count",   "one,two,three"}, /* Missing final after 2  */
+    { "{a,count**}",   "one,two,three"}, /* unexpected * on second variable */
+    { "{a,count:0}",   "one,two,three"}, /* zero length prefix on second variable */
+    { "{a,count:abcd}",   "one,two,three"}, /* non number prefix on second variable */
+    { "{a,}",   "one,two,three"}, /* zero length second variable */
+    { "{a,:123}",   "one,two,three"}, /* zero length second variable */
+};
+
+size_t template_test_get_params(const template_test_var_t* table, size_t nb_lines, h3zero_url_expression_param_t* params, size_t params_max)
+{
+    size_t nb_params = 0;
+    size_t n_line = 0;
+    size_t n_instance = 0;
+
+    while (n_line < nb_lines && nb_params < params_max) {
+        if (table[n_line].instances[n_instance] == NULL) {
+            n_line++;
+            n_instance = 0;
+        }
+        else {
+            params[nb_params].variable = table[n_line].var_name;
+            params[nb_params].variable_length = strlen(params[nb_params].variable);
+            params[nb_params].instance = table[n_line].instances[n_instance];
+            params[nb_params].instance_length = strlen(params[nb_params].instance);
+            n_instance++;
+            nb_params++;
+        }
+    }
+    return nb_params;
+}
+
+static int template_test_one_template(const template_test_case_t* test_case, const h3zero_url_expression_param_t* params, size_t nb_params)
+{
+    char expanded[256];
+    size_t write_index = 0;
+    int ret = h3zero_expand_template(expanded, sizeof(expanded), &write_index, test_case->expression, params, nb_params);
+
+    if (ret == 0) {
+        if (write_index != strlen(test_case->expansion)) {
+            ret = -1;
+        }
+        else {
+            expanded[write_index] = 0;
+            if (strcmp(expanded, test_case->expansion) != 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+static int template_test_short_length(const template_test_case_t* test_case, const h3zero_url_expression_param_t* params, size_t nb_params, size_t short_length)
+{
+    int ret = 0;
+    char expanded[256];
+    size_t write_index = 0;
+
+    if (short_length > sizeof(expanded)) {
+        ret = -1;
+    }
+    else if (h3zero_expand_template(expanded, short_length, &write_index, test_case->expression, params, nb_params) == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int template_test_templates(const template_test_case_t* test_cases, size_t nb_cases, const h3zero_url_expression_param_t* params, size_t nb_params)
+{
+    int ret = 0;
+
+    for (size_t n_case = 0; n_case < nb_cases && ret == 0; n_case++) {
+        ret = template_test_one_template(&test_cases[n_case], params, nb_params);
+    }
+
+    return ret;
+}
+
+static int template_test_error_templates(const template_test_case_t* test_cases, size_t nb_cases, const h3zero_url_expression_param_t* params, size_t nb_params)
+{
+    int ret = 0;
+
+    for (size_t n_case = 0; n_case < nb_cases && ret == 0; n_case++) {
+        if (template_test_one_template(&test_cases[n_case], params, nb_params) == 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+static int template_test_error_length(const template_test_case_t* test_cases, size_t nb_cases, const h3zero_url_expression_param_t* params, size_t nb_params)
+{
+    int ret = 0;
+
+    for (size_t n_case = 0; n_case < nb_cases && ret == 0; n_case++) {
+        for (size_t short_length = 0; short_length <= strlen(test_cases[n_case].expansion); short_length++) {
+            ret = template_test_short_length(&test_cases[n_case], params, nb_params, short_length);
+        }
+    }
+
+    return ret;
+}
+
+int h3zero_url_template_test()
+{
+    int ret = 0;
+    /* First, build a list of parameters */
+    h3zero_url_expression_param_t params[32] = { 0 };
+    size_t nb_params = template_test_get_params(tt_vars,
+        sizeof(tt_vars) / sizeof(template_test_var_t),
+        params, 32);
+    if (nb_params != 19) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = template_test_templates(template_test_cases, sizeof(template_test_cases) / sizeof(template_test_case_t), params, nb_params);
+    }
+
+    if (ret == 0) {
+        ret = template_test_error_templates(template_error_cases, sizeof(template_error_cases) / sizeof(template_test_case_t), params, nb_params);
+    }
+
+    if (ret == 0) {
+        ret = template_test_error_length(template_test_cases, sizeof(template_test_cases) / sizeof(template_test_case_t), params, nb_params);
+    }
+
     return ret;
 }

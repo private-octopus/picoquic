@@ -117,8 +117,8 @@ int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
 int sockloop_test_verify_extra_socket(picoquic_cnx_t* cnx_client, struct sockaddr* server_address)
 {
     int ret = 0;
-    if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->peer_addr, server_address) != 0 ||
-        picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->local_addr, server_address) == 0) {
+    if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->first_tuple->peer_addr, server_address) != 0 ||
+        picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->first_tuple->local_addr, server_address) == 0) {
         ret = -1;
     }
 
@@ -171,10 +171,10 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                 DBG_PRINTF("%s", "Almost ready!");
                 cb_ctx->notified_ready = 1;
                 /* Store the initial versions of address and CID */
-                picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*)&cnx_client->path[0]->local_addr);
-                picoquic_store_addr(&cb_ctx->server_address, (struct sockaddr*)&cnx_client->path[0]->peer_addr);
-                cb_ctx->client_cid_before_migration = cnx_client->path[0]->p_local_cnxid->cnx_id;
-                cb_ctx->server_cid_before_migration = cnx_client->path[0]->p_remote_cnxid->cnx_id;
+                picoquic_store_addr(&cb_ctx->client_address, (struct sockaddr*)&cnx_client->path[0]->first_tuple->local_addr);
+                picoquic_store_addr(&cb_ctx->server_address, (struct sockaddr*)&cnx_client->path[0]->first_tuple->peer_addr);
+                cb_ctx->client_cid_before_migration = cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id;
+                cb_ctx->server_cid_before_migration = cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id;
             }
             else if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready) {
                 /* Handle migration tests */
@@ -204,17 +204,17 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                             * socket.
                             */
                             cb_ctx->migration_started = 1;
-                            if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
-                                ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = htons(cb_ctx->param->local_port);
+                            if (cnx_client->path[0]->first_tuple->local_addr.ss_family == AF_INET6) {
+                                ((struct sockaddr_in6*)&cnx_client->path[0]->first_tuple->local_addr)->sin6_port = htons(cb_ctx->param->local_port);
                             }
                             else {
-                                ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = htons(cb_ctx->param->local_port);
+                                ((struct sockaddr_in*)&cnx_client->path[0]->first_tuple->local_addr)->sin_port = htons(cb_ctx->param->local_port);
                             }
                             ret = PICOQUIC_NO_ERROR_SIMULATE_NAT;
                         }
                     }
                     else if (cb_ctx->migration_started && !cb_ctx->address_updated) {
-                        if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->local_addr, (struct sockaddr*)&cb_ctx->server_address) == 0) {
+                        if (picoquic_compare_addr((struct sockaddr*)&cnx_client->path[0]->first_tuple->local_addr, (struct sockaddr*)&cb_ctx->server_address) == 0) {
                             cb_ctx->address_updated = 1;
                         }
                     }
@@ -260,16 +260,16 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
             cb_ctx->alt_port = *((uint16_t*)callback_arg);
             if (cb_ctx->force_migration && cb_ctx->force_migration == 1 &&
                 cb_ctx->test_ctx->cnx_client != NULL &&
-                cb_ctx->test_ctx->cnx_client->path[0]->local_addr.ss_family == AF_UNSPEC) {
-                memcpy(&cb_ctx->test_ctx->cnx_client->path[0]->local_addr,
-                    &cb_ctx->test_ctx->cnx_client->path[0]->peer_addr,
+                cb_ctx->test_ctx->cnx_client->path[0]->first_tuple->local_addr.ss_family == AF_UNSPEC) {
+                memcpy(&cb_ctx->test_ctx->cnx_client->path[0]->first_tuple->local_addr,
+                    &cb_ctx->test_ctx->cnx_client->path[0]->first_tuple->peer_addr,
                     sizeof(struct sockaddr_storage));
 
-                if (cnx_client->path[0]->local_addr.ss_family == AF_INET6) {
-                    ((struct sockaddr_in6*)&cnx_client->path[0]->local_addr)->sin6_port = cb_ctx->alt_port;
+                if (cnx_client->path[0]->first_tuple->local_addr.ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*)&cnx_client->path[0]->first_tuple->local_addr)->sin6_port = cb_ctx->alt_port;
                 }
                 else {
-                    ((struct sockaddr_in*)&cnx_client->path[0]->local_addr)->sin_port = cb_ctx->alt_port;
+                    ((struct sockaddr_in*)&cnx_client->path[0]->first_tuple->local_addr)->sin_port = cb_ctx->alt_port;
                 }
 
             }
@@ -362,7 +362,7 @@ int sockloop_test_addr_config(struct sockaddr_storage* addr,
         sa6->sin6_family = AF_INET6;
     }
     else if (af == AF_INET) {
-        /* set server IPv6 to loopback */
+        /* set server IPv4 to loopback */
         struct sockaddr_in* sa4 = (struct sockaddr_in*)addr;
         ((uint8_t*)(&sa4->sin_addr))[0] = 127;
         ((uint8_t*)(&sa4->sin_addr))[3] = 1;
@@ -408,18 +408,18 @@ int sockloop_test_verify_migration(sockloop_test_cb_t * loop_cb, picoquic_cnx_t*
     }
     else {
         int source_addr_cmp = picoquic_compare_addr(
-            (struct sockaddr*) & cnx_client->path[0]->local_addr,
+            (struct sockaddr*) & cnx_client->path[0]->first_tuple->local_addr,
             (struct sockaddr*) & loop_cb->client_address);
         int dest_cid_cmp = picoquic_compare_connection_id(
-            &cnx_client->path[0]->p_remote_cnxid->cnx_id,
+            &cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id,
             &loop_cb->server_cid_before_migration);
-        if (cnx_client->path[0]->p_local_cnxid == NULL) {
+        if (cnx_client->path[0]->first_tuple->p_local_cnxid == NULL) {
             DBG_PRINTF("%s", "Local CID is NULL!\n");
             ret = -1;
         }
         else {
             int source_cid_cmp = picoquic_compare_connection_id(
-                &cnx_client->path[0]->p_local_cnxid->cnx_id,
+                &cnx_client->path[0]->first_tuple->p_local_cnxid->cnx_id,
                 &loop_cb->client_cid_before_migration);
 
             if (loop_cb->force_migration == 1 || loop_cb->force_migration == 3) {
