@@ -403,6 +403,9 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
 {
     /* Set input parameter defaults */
     /* DualQ Coupled framework parameters */
+#if 1
+    dualq->limit = PICOQUIC_BYTES_FROM_RATE(link->queue_delay_max, DUALQ_MAX_LINK_RATE); /* Dual buffer size */
+#else
     if (link->queue_delay_max <= link->microsec_latency || link->picosec_per_byte == 0) {
         dualq->limit = PICOQUIC_BYTES_FROM_RATE(250ull, DUALQ_MAX_LINK_RATE); /* Dual buffer size */
     }
@@ -410,6 +413,7 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
         uint64_t queue_delay = link->queue_delay_max - link->microsec_latency;
         dualq->limit = (queue_delay * 1000000) / link->picosec_per_byte;
     }
+#endif
     dualq->k = 2.0; /* Coupling factor */
     /* NOT SHOWN % scheduler - dependent weight or equival't parameter */
     /* PI2 Classic AQM parameters */
@@ -430,6 +434,15 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
     dualq->pi2_alpha = (0.1 * (double)dualq->Tupdate) / ((double)RTT_max * (double)RTT_max);
     dualq->pi2_beta = (0.3) / RTT_max; /* PI proportional gain in Hz */
     /* L4S ramp AQM parameters */
+#if 1
+    if (l4s_max == 0) {
+        dualq->minTh = 1000;
+    }
+    else {
+        dualq->minTh = l4s_max;
+    }
+    dualq->maxTh = link->queue_delay_max;
+#else
     dualq->minTh = 800; /* L4S min marking threshold in micros seconds */
     if (l4s_max == 0) {
         dualq->maxTh = 1200;
@@ -444,6 +457,7 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
             dualq->minTh = l4s_max / 3;
         }
     }
+#endif
     dualq->range = dualq->maxTh - dualq->minTh; /* Range of L4S ramp in time units */
 
     /* 19 : Th_len = 1 pkt % Min L4S marking threshold in packets */
