@@ -209,6 +209,8 @@ typedef struct st_h3zero_header_parts_t {
 #define h3zero_setting_h3_datagram 0x33
 #define h3zero_settings_webtransport_max_sessions 0x14e9cd29
 #define h3zero_settings_webtransport_max_sessions_old 0xc671706aull
+/* Chrome compatibility: SETTINGS_ENABLE_WEBTRANSPORT from older draft */
+#define h3zero_settings_enable_webtransport 0x2b603742
 
 typedef struct st_h3zero_settings_t {
     uint64_t webtransport_max_sessions;
