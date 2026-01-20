@@ -99,6 +99,7 @@
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_RTT_MARGIN_5PERCENT 51
 #define C4_RTT_MARGIN_DELAY 15000
+#define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
 #define C4_KAPPA ((double)(1.0/4.0))
 #define C4_ECN_SHIFT_G 4 /* g = 1/2^4, gain parameter for alpha EWMA */
@@ -431,7 +432,7 @@ static void c4_growth_evaluate(c4_state_t* c4_state)
         c4_state->nb_push_no_congestion++;
         c4_state->nb_eras_no_increase = 0;
     }
-    else if (c4_state->push_was_not_limited) {
+    else if (c4_state->push_was_not_limited && c4_state->nominal_rate > 0) {
         c4_state->nb_push_no_congestion = 0;
         c4_state->nb_eras_no_increase++;
     }
@@ -540,12 +541,18 @@ void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_
 
 static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t current_time)
 {
-    /* We assume that any required correction is done prior to calling this */
-    uint64_t ssthresh = c4_state->initial_cwnd / 2;
-    c4_state->nominal_max_rtt = ssthresh * 1000000 / c4_state->nominal_rate;
-    c4_state->nb_eras_no_increase = 0;
-    c4_state->nb_push_no_congestion = 0;
-    c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
+    if (c4_state->nominal_rate > 0) {
+        /* We assume that any required correction is done prior to calling this */
+        uint64_t ssthresh = c4_state->initial_cwnd / 2;
+        c4_state->nominal_max_rtt = ssthresh * 1000000 / c4_state->nominal_rate;
+        if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
+            c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
+        }
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
+        c4_state->nb_eras_no_increase = 0;
+        c4_state->nb_push_no_congestion = 0;
+        c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
+    }
 }
 
 static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t rtt_measurement, uint64_t current_time)
@@ -719,7 +726,16 @@ static void c4_enter_cruise(
     else {
         c4_state->nb_cruise_left_before_push = C4_NB_CRUISE_BEFORE_PUSH;
     }
-    c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
+    if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
+        /* When operating in a CPU limited environment, pacing is too
+         * conservative, and should be loosened. Ideally, we would detect
+         * the CPU limited condition by comparing pacing rate and the actual
+         * send rate, but that requires some amount of testing. In practice,
+         * we have only tested this loosening in loopback tests, so we only
+         * apply it if the RTT is below 1ms.
+         */
+        c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024 + 48;
+    }
     c4_state->alg_state = c4_cruising;
 }
 
@@ -789,6 +805,11 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     else if (c4_state->nominal_max_rtt == 0) {
         /* Initialize the max RTT and the delay threshold. */
         c4_state->nominal_max_rtt = c4_state->era_max_rtt;
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
+    }
+
+    if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
+        c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
     }
 }
@@ -948,6 +969,9 @@ static void c4_notify_congestion(
             c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
             if (c_mode == c4_congestion_loss) {
                 c4_state->nominal_max_rtt -= MULT1024(beta, c4_state->nominal_max_rtt);
+                if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
+                    c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
+                }
                 c4_state->delay_threshold = c4_delay_threshold(c4_state);
             }
             C4_LOGGER(path_x, 0, c4_state, NULL, beta, c_mode);
@@ -982,6 +1006,10 @@ static void c4_update_rtt(
     }
     if (c4_state->nominal_max_rtt == 0) {
         c4_state->nominal_max_rtt = rtt_measurement;
+        if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
+            c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
+        }
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->recent_delay_excess = 0;
     }
     else {
