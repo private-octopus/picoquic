@@ -22,6 +22,7 @@
 #include <autoqlog.h>
 #include <quicperf.h>
 #include <performance_log.h>
+#include "auto_memlog.h"
 
 /* first 2 bytes of MD5("PICOQUIC QPERF BENCH SERVER PORT") = 0x2214, 8724 */
 #define PQBENCH_DEFAULT_SERVER_PORT 8724 
@@ -37,7 +38,7 @@ void usage()
     fprintf(stderr, "server, and run the pqbench scenario on each one.\n");
 }
 
-int pqb_server(picoquic_quic_config_t* config);
+int pqb_server(picoquic_quic_config_t* config, int do_memory_log);
 int pqb_client(picoquic_quic_config_t* config, char const* server_name, int server_port,
     int nb_clients, char const* scenario);
 int pqb_locate_default_file(char const** param, char const* default_file_name);
@@ -50,6 +51,7 @@ int main(int argc, char ** argv)
     const char* server_name = NULL;
     int server_port = 0;
     char* qperf_scenario = NULL;
+    int do_memory_log = 0;
     int nb_clients = 0;
     int ret;
 
@@ -59,13 +61,17 @@ int main(int argc, char ** argv)
 #endif
     picoquic_register_all_congestion_control_algorithms();
     picoquic_config_init(&config);
-    memcpy(option_string, "S:", 2);
+    memcpy(option_string, "LS:", 2);
     ret = picoquic_config_option_letters(option_string + 2, sizeof(option_string) - 2, NULL);
 
     if (ret == 0) {
         /* Get the parameters */
         while ((opt = getopt(argc, argv, option_string)) != -1) {
             switch (opt) {
+            case 'L':
+                do_memory_log = 1;
+                printf("Doing memory log\n");
+                break;
             case 'S':
                 picoquic_set_solution_dir(optarg);
                 break;
@@ -85,7 +91,7 @@ int main(int argc, char ** argv)
          */
         if ((ret = pqb_locate_default_file(&config.server_cert_file, PICOQUIC_TEST_FILE_SERVER_CERT)) == 0 &&
             (ret = pqb_locate_default_file(&config.server_key_file, PICOQUIC_TEST_FILE_SERVER_KEY)) == 0) {
-            ret = pqb_server(&config);
+            ret = pqb_server(&config, do_memory_log);
         }
     }
     else if (optind + 3 == argc) {
@@ -139,6 +145,7 @@ typedef struct st_pqb_callback_t {
     int nb_clients;
     int nb_closed;
     int connection_done;
+    int do_memory_log;
     picoquic_cnx_t** cnx_table;
     quicperf_ctx_t** qperf_table;
 } pqb_callback_t;
@@ -185,14 +192,14 @@ static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb
             }
             else {
                 if (pqb_ctx->nb_connections_max == 0 && picoquic_get_first_cnx(quic) != NULL) {
-#ifdef PICOQUIC_MEMORY_LOG
-                    if (memlog_init(picoquic_get_first_cnx(quic), 1000000, "./memlog.csv") != 0) {
-                        fprintf(stderr, "Could not initialize memlog as ./memlog.csv\n");
+                    if (pqb_ctx->do_memory_log) {
+                        if (memlog_init(picoquic_get_first_cnx(quic), 1000000, "./memlog.csv") != 0) {
+                            fprintf(stderr, "Could not initialize memlog as ./memlog.csv\n");
+                        }
+                        else {
+                            fprintf(stdout, "Initialized memlog as ./memlog.csv\n");
+                        }
                     }
-                    else {
-                        fprintf(stdout, "Initialized memlog as ./memlog.csv\n");
-                    }
-#endif
                     pqb_ctx->nb_connections_max = 1;
                     fprintf(stdout, "First connection noticed.\n");
                 }
@@ -230,7 +237,7 @@ size_t pqb_server_callback_select_alpn(picoquic_quic_t* quic, picoquic_iovec_t* 
     return ret;
 }
 
-int pqb_server(picoquic_quic_config_t* config)
+int pqb_server(picoquic_quic_config_t* config, int do_memory_log)
 {
     uint16_t server_port = config->server_port;
     picoquic_quic_t* qserver;
@@ -250,6 +257,7 @@ int pqb_server(picoquic_quic_config_t* config)
         ret = -1;
     }
     else {
+        pqb_cb_ctx.do_memory_log = do_memory_log;
         picoquic_set_key_log_file_from_env(qserver);
 
         picoquic_set_alpn_select_fn_v2(qserver, pqb_server_callback_select_alpn);
@@ -257,6 +265,8 @@ int pqb_server(picoquic_quic_config_t* config)
         if (config->qlog_dir != NULL)
         {
             picoquic_set_qlog(qserver, config->qlog_dir);
+            picoquic_set_log_level(qserver, 1);
+            
         }
         if (config->performance_log != NULL)
         {
