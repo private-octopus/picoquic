@@ -443,7 +443,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
     ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
-    ret |= config_test_compare_int("flow_control_max", expected->flow_control_max, actual->flow_control_max);
+    ret |= config_test_compare_uint64("flow_control_max", expected->flow_control_max, actual->flow_control_max);
 
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
