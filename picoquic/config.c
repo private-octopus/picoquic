@@ -971,7 +971,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
-    config->flow_control_max = PICOQUIC_FLOW_CONTROL_MAX;
+    config->flow_control_max = PICOQUIC_INITIAL_FLOW_CONTROL_MAX;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
