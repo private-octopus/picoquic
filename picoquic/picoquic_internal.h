@@ -1432,6 +1432,7 @@ typedef struct st_picoquic_cnx_t {
     /* Flow control information */
     uint64_t data_sent;
     uint64_t data_received;
+    uint64_t offset_received;
     uint64_t maxdata_local; /* Highest value sent to the peer */
     uint64_t maxdata_local_acked; /* Highest value acked by the peer */
     uint64_t maxdata_remote; /* Highest value received from the peer */
