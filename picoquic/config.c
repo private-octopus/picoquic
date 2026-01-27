@@ -35,6 +35,7 @@
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
+#include "picoquic_internal.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -477,7 +478,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = (ret == 0) ? -1 : ret;
         }
         else {
-            config->flow_control_max = (v==0)?UINT64_MAX:v;
+            config->flow_control_max = (v==0)?PICOQUIC_INITIAL_FLOW_CONTROL_MAX:v;
         }
         break;
     }
