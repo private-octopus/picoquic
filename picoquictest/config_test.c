@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:h";
 #endif
 int config_option_letters_test()
 {
@@ -126,7 +126,8 @@ static picoquic_quic_config_t param1 = {
     "ech_config.pem",
     "test.example.com",
     NULL, /* ech_target */
-    0 /* ech_target_len */
+    0, /* ech_target_len */
+    1000001 /* flow_control_max */
 };
 
 static char const* config_argv1[] = {
@@ -159,6 +160,7 @@ static char const* config_argv1[] = {
     "-J", "2",
     "-E", "ech_key.pem", "ech_config.pem",
     "-y", "test.example.com",
+    "-Z", "1000001",
     NULL
 };
 
@@ -221,7 +223,8 @@ static picoquic_quic_config_t param2 = {
     NULL,
     NULL, /* ECH public name */
     (uint8_t *)ech_test_config_bin, /* ech_target */
-    sizeof(ech_test_config_bin) /* ech_target_len */
+    sizeof(ech_test_config_bin), /* ech_target_len */
+    1000001 /* flow control max */
 };
 
 static const char* config_argv2[] = {
@@ -245,6 +248,7 @@ static const char* config_argv2[] = {
     "-U", "00000002",
     "-W", "1000000",
     "-K", ECH_TEST_CONFIG,
+    "-Z", "1000001",
     NULL
 };
 
@@ -269,6 +273,7 @@ static const char * config_two[] = {
     "--version_upgrade", "00000002",
     "--cwin_max", "1000000",
     "--ech_c", ECH_TEST_CONFIG,
+    "--flow_control_max", "1000001",
     NULL
 };
 
@@ -310,6 +315,7 @@ static config_error_test_t config_errors[] = {
     { 2, { "-U", "XY000002" }},
     { 2, { "-W", "cwin" }},
     { 2, { "-d", "idle" }},
+    { 1, { "-Z" }},
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif
@@ -437,6 +443,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("ech_key_file", expected->ech_key_file, actual->ech_key_file);
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
     ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
+    ret |= config_test_compare_int("flow_control_max", expected->flow_control_max, actual->flow_control_max);
 
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {

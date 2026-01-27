@@ -103,7 +103,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
     { picoquic_option_ECH_server, 'E' , "ech_s", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
     { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
-    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded,"},
+    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded."},
+    { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -469,7 +470,17 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
-
+    case picoquic_option_FLOW_CONTROL_MAX: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0) {
+            fprintf(stderr, "Invalid flow control max option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->flow_control_max = (v==0)?UINT64_MAX:v;
+        }
+        break;
+    }
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -939,6 +950,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
         }
 
+        picoquic_set_max_data_control(quic, config->flow_control_max);
+
         if (ret != 0) {
             /* Something went wrong */
             DBG_PRINTF("QUIC configuration fails, ret = %d (0x%x)", ret, ret);
@@ -958,6 +971,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
+    config->flow_control_max = PICOQUIC_FLOW_CONTROL_MAX;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
