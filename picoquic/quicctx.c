@@ -1359,7 +1359,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_stream_data_bidi_local = 0x200000;
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
-    tp->initial_max_data = 0x100000;
+    tp->initial_max_data = PICOQUIC_INITIAL_FLOW_CONTROL_MAX;
     tp->initial_max_stream_id_bidir = 512;
     tp->initial_max_stream_id_unidir = 512;
     tp->max_idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
