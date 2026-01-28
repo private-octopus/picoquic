@@ -224,7 +224,7 @@ static picoquic_quic_config_t param2 = {
     NULL, /* ECH public name */
     (uint8_t *)ech_test_config_bin, /* ech_target */
     sizeof(ech_test_config_bin), /* ech_target_len */
-    1000001 /* flow control max */
+    0 /* flow control max */
 };
 
 static const char* config_argv2[] = {
@@ -248,7 +248,7 @@ static const char* config_argv2[] = {
     "-U", "00000002",
     "-W", "1000000",
     "-K", ECH_TEST_CONFIG,
-    "-Z", "1000001",
+    "-Z", "0",
     NULL
 };
 
@@ -273,7 +273,7 @@ static const char * config_two[] = {
     "--version_upgrade", "00000002",
     "--cwin_max", "1000000",
     "--ech_c", ECH_TEST_CONFIG,
-    "--flow_control_max", "1000001",
+    "--flow_control_max", "0",
     NULL
 };
 
@@ -316,6 +316,9 @@ static config_error_test_t config_errors[] = {
     { 2, { "-W", "cwin" }},
     { 2, { "-d", "idle" }},
     { 1, { "-Z" }},
+    { 2, { "-Z", "0123456789abcdexyedcba9876543210" }},
+    /* INT_MAX + 1. config_atoi() currently only supports 32-bit integers. */
+    { 2, { "-Z", "2147483648"}}
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif
@@ -720,6 +723,13 @@ int config_quic_test_one(picoquic_quic_config_t* config)
         if (config->cc_algo_id != NULL &&
             (quic->default_congestion_alg == NULL ||
                 strcmp(quic->default_congestion_alg->congestion_algorithm_id, config->cc_algo_id) != 0)) {
+            ret = -1;
+        }
+        if ((config->flow_control_max != 0 &&
+            (config->flow_control_max != quic->max_data_limit || config->flow_control_max != quic->default_tp.initial_max_data)) ||
+            (config->flow_control_max == 0 &&
+            (quic->max_data_limit != 0 || quic->default_tp.initial_max_data != 0x100000))) /* Default value for initial max data tp parameter. */
+        {
             ret = -1;
         }
         picoquic_free(quic);

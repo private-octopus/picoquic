@@ -35,7 +35,6 @@
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
-#include "picoquic_internal.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -478,7 +477,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = (ret == 0) ? -1 : ret;
         }
         else {
-            config->flow_control_max = (v==0)?PICOQUIC_INITIAL_FLOW_CONTROL_MAX:v;
+            config->flow_control_max = v;
         }
         break;
     }
@@ -951,7 +950,10 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
         }
 
-        picoquic_set_max_data_control(quic, config->flow_control_max);
+        if (ret == 0 && config->flow_control_max > 0)
+        {
+            picoquic_set_max_data_control(quic, config->flow_control_max);
+        }
 
         if (ret != 0) {
             /* Something went wrong */
@@ -972,7 +974,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
-    config->flow_control_max = PICOQUIC_INITIAL_FLOW_CONTROL_MAX;
+    config->flow_control_max = 0;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
