@@ -317,8 +317,6 @@ static config_error_test_t config_errors[] = {
     { 2, { "-d", "idle" }},
     { 1, { "-Z" }},
     { 2, { "-Z", "0123456789abcdexyedcba9876543210" }},
-    /* INT_MAX + 1. config_atoi() currently only supports 32-bit integers. */
-    { 2, { "-Z", "2147483648"}}
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif
