@@ -763,11 +763,19 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 * set a maximum value for the "max data" option, thus limiting the
 * amount of data that the peer will be able to send before data is
 * acknowledged.
+* 
 * This option can be used to control the amount of memory that the
 * receiver will use to reorder received data frames. This control is
 * indirect: the receiver always allocate a full packet size for incoming
-* packets, even if they are small. In tests, we see the allocated memory
-* per connection vary between 2 and 3 times the max data value.
+* packets, even if they are small. If we want to ensure continuous
+* transmission without slowdowns, the `max_data` parameter should
+* be set to twice the bandwidth delay product (2*BDP). However,
+* in presence of packet losses, the receiver will wait and extra
+* RTT to receive correction for lost packets. If we foresee
+* packet losses, `max_data` should be set to 3*BDP, or maybe
+* even 4*BDP if the loss rate is high enough to anticipate
+* a significant loss rate of packets correcting a previous loss.
+* 
 * Setting the value to 0 (default) means that the "max data" limit
 * will rapidly increase to let transmission proceed quickly.
 */
