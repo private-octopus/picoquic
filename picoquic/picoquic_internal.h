@@ -50,6 +50,7 @@ extern "C" {
 #define PICOQUIC_NB_PATH_DEFAULT 2
 #define PICOQUIC_MAX_PACKETS_IN_POOL 0x2000
 #define PICOQUIC_STORED_IP_MAX 16
+#define PICOQUIC_INITIAL_FLOW_CONTROL_MAX 0x100000
 
 #define PICOQUIC_INITIAL_RTT 250000ull /* 250 ms */
 #define PICOQUIC_TARGET_RENO_RTT 100000ull /* 100 ms */
@@ -1432,6 +1433,7 @@ typedef struct st_picoquic_cnx_t {
     /* Flow control information */
     uint64_t data_sent;
     uint64_t data_received;
+    uint64_t offset_received;
     uint64_t maxdata_local; /* Highest value sent to the peer */
     uint64_t maxdata_local_acked; /* Highest value acked by the peer */
     uint64_t maxdata_remote; /* Highest value received from the peer */
