@@ -1885,7 +1885,8 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&
@@ -3719,7 +3720,8 @@ static int h3_grease_test_one(int server_test)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&
