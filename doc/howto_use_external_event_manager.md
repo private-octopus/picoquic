@@ -176,7 +176,8 @@ After each iteration, continue polling until `send_length` becomes zero so that 
 
 ### Handling Multiple Paths or Alternate Ports
 
-If your application binds multiple sockets (for multipath or alternate ports), call `picoquic_prepare_next_packet_ex` once per writable socket and respect the returned `addr_from` / interface hints. Packet production is coordinated with each path’s congestion controller during `picoquic_prepare_packet_ex`, which chooses the path tuple providing the datagram (`picoquic/sender.c:4055`).
+If your application binds multiple sockets (for multipath or alternate ports), call `picoquic_prepare_next_packet_ex` and send the packet that was produced on
+the socket corresponding to the returned `addr_from` / interface. The code will determine the outgoing interface and source address based on the internal path selection logic. It does not monitor the "available for sending" API per socket; instead, it relies on per-path congestion control to ensure that each interface only gets a reasonable amount of traffic.
 
 ## 5. End-to-End Example with libevent
 
