@@ -275,6 +275,8 @@ The exception is if we have an internal error, indicating that picoquic has lost
 2. Register UDP sockets with your event manager and pass received datagrams into `picoquic_incoming_packet_ex`.
 3. Poll `picoquic_prepare_next_packet_ex` after every receive or wake-up and send any returned datagrams immediately.
 4. Reschedule a timer using `picoquic_get_next_wake_delay` so PTOs trigger correctly.
-5. Use Picoquic’s logging (`picoquic_log_packet`) or your own instrumentation to monitor traffic.
+5. Free the QUIC context using `void picoquic_free(picoquic_quic_t* quic)` when closing the event loop. This will
+    trigger the appropriate "connection close" callbacks, allowing the application to properly close its connection
+    contexts and ensuring that log files are properly flushed and closed.
 
 Following these steps yields the same behavior as Picoquic’s internal socket loop while letting you reuse the rest of your networking infrastructure.
