@@ -247,7 +247,16 @@ Because `picoquic_prepare_next_packet_ex` checks the stateless packet queue firs
 ### Packet Coalescing and Maximum MTU
 
 For best throughput, keep the send buffer at least `PICOQUIC_MAX_PACKET_SIZE` bytes. Picoquic will coalesce multiple QUIC packets into a single UDP datagram when GSO is available (`picoquic/sockloop.c:1006`), but falling back to standard `sendto` still works—the function simply returns the exact length to transmit.
+UDP GSO allows picoquic to prepare several UDP packets on a single call. All these packets will have the "addr_from", "addr_to" and "interface" parameters. All but the last one will have the same packet size. To use UDP GSO, the application should provide a buffer capable of holding the payload of multiple packets -- a size of at least 16K is nice, the current code uses 64K. UDP GSO is controlled by the parameter send_msg_size in:
 
+~~~
+int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    struct sockaddr_storage* p_addr_to, struct sockaddr_storage* p_addr_from, int* if_index,
+    size_t* send_msg_size);
+~~~
+
+If that parameter is a NULL pointer, UDP GSO is not used. Otherwise, the code will attempt to format multiple packets in the send_buffer. The send_length will return the combined length of all these packets, and the send_msg_size will return the length of the first packet. The packets after the first will have the same length, except for the last one which may be shorter, and would carry the remaining bytes in the send_buffer.
 ### Error Handling and Connection Cleanup
 
 If `picoquic_prepare_next_packet_ex` returns an error, inspect the connection (`last_cnx`) and call `picoquic_close` or `picoquic_free` as needed. Connection states progress through `picoquic_state_client_ready`, `picoquic_state_disconnected`, etc., just as they do in the built-in loop (`sample/sample_client.c:380`).
