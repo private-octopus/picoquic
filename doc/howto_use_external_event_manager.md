@@ -46,7 +46,10 @@ Picoquic’s socket loop allocates up to four sockets and performs send/receive 
 2. Set them to non-blocking mode.
 3. Register read events with the event manager so that the loop is notified when datagrams arrive.
 
-Your callback should read all available packets. Picoquic accepts full datagrams (including coalesced QUIC packets). For each datagram, call `picoquic_incoming_packet_ex` with the raw bytes, source/destination addresses, interface index (if available), ECN bits, and the current timestamp (`picoquic/packet.c:2369`).
+Your callback should read all available packets,
+defined as the entire payload of an UDP packet (it might include several coalesced QUIC packets).
+For each datagram, call `picoquic_incoming_packet_ex` with the raw bytes, source/destination addresses,
+interface index (if available), ECN bits, and the current timestamp (`picoquic/packet.c:2369`).
 
 ### Example: Read Callback Skeleton
 
