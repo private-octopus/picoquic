@@ -408,8 +408,8 @@
 [106719, 0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 17, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "connection_close", "error_space": "transport", "error_code": 0}]}],
 [106719, 0, "transport", "datagram_sent", { "byte_length": 31}],
-[199668, 0, "transport", "datagram_received", { "byte_length": 256}],
-[199668, 0, "transport", "packet_dropped", {
+[226320, 0, "transport", "datagram_received", { "byte_length": 256}],
+[226320, 0, "transport", "packet_dropped", {
     "packet_type" : "1RTT",
     "packet_size" : 256,
     "trigger": "payload_decrypt_error"}]]}]}

@@ -1658,7 +1658,7 @@ int picoquic_incoming_server_initial(
                     int ack_needed = 0;
                     int skip_ret = 0;
 
-                    while (skip_ret == 0 && byte_index < ph->payload_length) {
+                    while (skip_ret == 0 && byte_index < ph->offset + ph->payload_length) {
                         size_t frame_length = 0;
                         int frame_is_pure_ack = 0;
                         skip_ret = picoquic_skip_frame(&bytes[byte_index],

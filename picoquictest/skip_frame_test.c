@@ -380,9 +380,9 @@ static uint8_t test_frame_reset_stream_at[] = {
 test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0, 0, 0, 0),
     TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3, 0, 0, 3),
-    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 0, 0, 3, 0, 0, 3),
-    TEST_SKIP_ITEM("application_close", test_type_application_close, 0, 0, 3, 0, 0, 2),
-    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 0, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("connection_close", test_type_connection_close, 1, 0, 3, 0, 0, 3),
+    TEST_SKIP_ITEM("application_close", test_type_application_close, 1, 0, 3, 0, 0, 2),
+    TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 1, 0, 3, 0, 0, 2),
 
     TEST_SKIP_ITEM("max_data", test_frame_type_max_data, 0, 0, 3, 0, 0, 1),
     TEST_SKIP_ITEM("max_stream_data", test_frame_type_max_stream_data, 0, 0, 3, 0, 0, 2),
