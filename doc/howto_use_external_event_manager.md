@@ -259,7 +259,15 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 If that parameter is a NULL pointer, UDP GSO is not used. Otherwise, the code will attempt to format multiple packets in the send_buffer. The send_length will return the combined length of all these packets, and the send_msg_size will return the length of the first packet. The packets after the first will have the same length, except for the last one which may be shorter, and would carry the remaining bytes in the send_buffer.
 ### Error Handling and Connection Cleanup
 
-If `picoquic_prepare_next_packet_ex` returns an error, inspect the connection (`last_cnx`) and call `picoquic_close` or `picoquic_free` as needed. Connection states progress through `picoquic_state_client_ready`, `picoquic_state_disconnected`, etc., just as they do in the built-in loop (`sample/sample_client.c:380`).
+The event management does not have to concern itself with connection handling. If a connection fails, the application will receive a callback such as:
+
+~~~
+    picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
+    picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
+~~~
+
+The exception is if we have an internal error, indicating that picoquic has lost its internal state and must terminate. In that case, calling picoquic_free to free the quic context is appropriate.
 
 ## 7. Checklist
 
