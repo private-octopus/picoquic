@@ -130,7 +130,12 @@ Call `quic_reschedule_timer` once after creating the QUIC context and again afte
 
 ## 4. Producing Packets for Transmission
 
-Whenever the UDP socket becomes writable (or immediately after processing inbound packets), call `picoquic_prepare_next_packet_ex`. The function returns either a stateless packet (retry/close) or the next connection’s datagram (`picoquic/sender.c:4227`). You pass in buffers and Picoquic fills in the destination address and interface index.
+Whenever the UDP socket becomes writable (or immediately after processing inbound packets),
+call `picoquic_prepare_next_packet_ex`.
+The function returns either a stateless packet (retry/close) or the next connection’s datagram
+(`picoquic/sender.c:4227`). You pass in buffers and Picoquic fills in the destination address and interface index.
+In some case, the function will return nothing (send_length == 0) -- the application just needs to update its
+timers, as explained in the "scheduling timers" section.
 
 ```c
 static void quic_schedule_send(struct quic_loop_ctx *ctx) {
