@@ -496,15 +496,25 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             ${MBEDTLS_LIBRARIES}
             picoquic-test
             picoquic-log
-            picoquic-core
-            picohttp-core)
+            picohttp-core
+            picoquic-core)
 
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c
         ${PICOHTTP_TEST_LIBRARY_FILES})
-    target_link_libraries(picohttp_ct PRIVATE picohttp-core picoquic-test)
+        
+    target_link_libraries(picohttp_ct
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-test
+            picoquic-log
+            picohttp-core
+            picoquic-core)
+
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 
