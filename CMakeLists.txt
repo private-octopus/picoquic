@@ -118,6 +118,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
+    picoquic/tp_names.c
     picoquic/transport.c
     picoquic/unified_log.c
     picoquic/util.c)
@@ -487,7 +488,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     set_picoquic_compile_settings(picoquic-test)
 
     add_executable(picoquic_ct picoquic_t/picoquic_t.c)
-    target_link_libraries(picoquic_ct PRIVATE picoquic-test ${MBEDTLS_LIBRARIES})
+    target_link_libraries(picoquic_ct PRIVATE picoquic-test picoquic-core ${MBEDTLS_LIBRARIES})
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct

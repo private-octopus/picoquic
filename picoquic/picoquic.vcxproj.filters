@@ -156,6 +156,9 @@
     <ClCompile Include="c4.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tp_names.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

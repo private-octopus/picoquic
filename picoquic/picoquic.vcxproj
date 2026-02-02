@@ -187,6 +187,7 @@
     <ClCompile Include="timing.c" />
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="token_store.c" />
+    <ClCompile Include="tp_names.c" />
     <ClCompile Include="transport.c" />
     <ClCompile Include="unified_log.c">
       <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</PreprocessToFile>
