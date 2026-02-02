@@ -497,7 +497,8 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             picoquic-test
             picoquic-log
             picoquic-core
-            picohttp-core))
+            picohttp-core)
+
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct
