@@ -45,6 +45,7 @@ typedef enum {
 static const picoquic_test_def_t test_table[] = {
     { "connection_id_print", util_connection_id_print_test },
     { "connection_id_parse", util_connection_id_parse_test },
+    { "error_name", error_name_test },
     { "util_sprintf", util_sprintf_test },
     { "util_debug_print", util_debug_print_test },
     { "util_uint8_to_str", util_uint8_to_str_test },
@@ -546,7 +547,6 @@ static const picoquic_test_def_t test_table[] = {
     { "config_option_letters", config_option_letters_test },
     { "config_quic", config_quic_test },
     { "config_usage", config_usage_test }
-    
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

@@ -617,6 +617,7 @@ int quicperf_media_test();
 int quicperf_multi_test();
 int quicperf_overflow_test();
 int cplusplustest();
+int error_name_test();
 
 #ifdef __cplusplus
 }

@@ -546,7 +546,10 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     uint64_t packet_type = 0;
     uint64_t err_code;
     uint64_t packet_size = 0;
+#if 1
+#else
     char const* str;
+#endif
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
@@ -566,6 +569,9 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
     fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
 
+#if 1
+    fprintf(f, ",\n    \"trigger\": \"%s\"", picoquic_error_name(err_code));
+#else
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
         str = "dos_prevention";
@@ -599,6 +605,7 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
         break;
     }
     fprintf(f, ",\n    \"trigger\": \"%s\"", str);
+#endif
 
     fprintf(f, "}]");
 

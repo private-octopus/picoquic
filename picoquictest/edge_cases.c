@@ -2029,3 +2029,142 @@ int reset_stream_at_loss_test()
 {
     return reset_stream_at_test_one(rsat_loss);
 }
+
+/* Unit test for picoquic_error_name() */
+
+typedef struct {
+    uint64_t code;
+    const char* expected;
+} error_name_case_t;
+
+int error_name_test()
+{
+    int ret = 0;
+    int failures = 0;
+
+    // Table of error codes and expected names
+    static const error_name_case_t cases[] = {
+        // Protocol errors (all switch cases)
+        { PICOQUIC_TRANSPORT_INTERNAL_ERROR, "internal" },
+        { PICOQUIC_TRANSPORT_SERVER_BUSY, "server busy" },
+        { PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR, "flow control" },
+        { PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, "stream limit" },
+        { PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, "stream state" },
+        { PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, "final offset" },
+        { PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, "frame format" },
+        { PICOQUIC_TRANSPORT_PARAMETER_ERROR, "parameter" },
+        { PICOQUIC_TRANSPORT_CONNECTION_ID_LIMIT_ERROR, "connection_id limit" },
+        { PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, "protocol violation" },
+        { PICOQUIC_TRANSPORT_INVALID_TOKEN, "invalid token" },
+        { PICOQUIC_TRANSPORT_APPLICATION_ERROR, "application" },
+        { PICOQUIC_TRANSPORT_CRYPTO_BUFFER_EXCEEDED, "crypto buffer exceeded" },
+        { PICOQUIC_TRANSPORT_KEY_UPDATE_ERROR, "key update" },
+        { PICOQUIC_TRANSPORT_AEAD_LIMIT_REACHED, "aead limit" },
+        { PICOQUIC_TLS_ALERT_WRONG_ALPN, "wrong alpn" },
+        { PICOQUIC_TLS_HANDSHAKE_FAILED, "tls handshake failed" },
+        { PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR, "version negotiation" },
+        { PICOQUIC_TRANSPORT_APPLICATION_ABANDON, "application abandon" },
+        { PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED, "resource limit reached" },
+        { PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, "unstable interface" },
+        { PICOQUIC_TRANSPORT_NO_CID_AVAILABLE, "no CID available" },
+
+        // Picoquic local error codes (all switch cases)
+        { PICOQUIC_ERROR_DUPLICATE, "duplicate" },
+        { PICOQUIC_ERROR_AEAD_CHECK, "payload_decrypt_error" },
+        { PICOQUIC_ERROR_UNEXPECTED_PACKET, "unexpected packet" },
+        { PICOQUIC_ERROR_MEMORY, "memory" },
+        { PICOQUIC_ERROR_CNXID_CHECK, "connection ID check" },
+        { PICOQUIC_ERROR_INITIAL_TOO_SHORT, "" },
+        { PICOQUIC_ERROR_VERSION_NEGOTIATION_SPOOFED, "version negotation spoofed" },
+        { PICOQUIC_ERROR_MALFORMED_TRANSPORT_EXTENSION, "malformed transport extension" },
+        { PICOQUIC_ERROR_EXTENSION_BUFFER_TOO_SMALL, "extension buffer too small" },
+        { PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION, "illegal transport extension" },
+        { PICOQUIC_ERROR_CANNOT_RESET_STREAM_ZERO, "cannot reset the crypto stream" },
+        { PICOQUIC_ERROR_INVALID_STREAM_ID, "invalid stream id" },
+        { PICOQUIC_ERROR_STREAM_ALREADY_CLOSED, "stream already closed" },
+        { PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL, "frame buffer too small" },
+        { PICOQUIC_ERROR_INVALID_FRAME, "invalid frame" },
+        { PICOQUIC_ERROR_CANNOT_CONTROL_STREAM_ZERO, "cannot control the crypto stream" },
+        { PICOQUIC_ERROR_RETRY, "retry" },
+        { PICOQUIC_ERROR_DISCONNECTED, "disconnected" },
+        { PICOQUIC_ERROR_DETECTED, "error detected" },
+        { PICOQUIC_ERROR_INVALID_TICKET, "invalid ticket" },
+        { PICOQUIC_ERROR_INVALID_FILE, "invalid file" },
+        { PICOQUIC_ERROR_SEND_BUFFER_TOO_SMALL, "send buffer too small" },
+        { PICOQUIC_ERROR_UNEXPECTED_STATE, "unexpected state" },
+        { PICOQUIC_ERROR_UNEXPECTED_ERROR, "unexpected error" },
+        { PICOQUIC_ERROR_TLS_SERVER_CON_WITHOUT_CERT, "server configuration without cert" },
+        { PICOQUIC_ERROR_NO_SUCH_FILE, "no such file" },
+        { PICOQUIC_ERROR_STATELESS_RESET, "stateless reset" },
+        { PICOQUIC_ERROR_CONNECTION_DELETED, "connection deleted" },
+        { PICOQUIC_ERROR_CNXID_SEGMENT, "connection ID segment error" },
+        { PICOQUIC_ERROR_CNXID_NOT_AVAILABLE, "connection ID not available" },
+        { PICOQUIC_ERROR_MIGRATION_DISABLED, "migration disabled" },
+        { PICOQUIC_ERROR_CANNOT_COMPUTE_KEY, "cannot compute key" },
+        { PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM, "cannot set active stream" },
+        { PICOQUIC_ERROR_CANNOT_CHANGE_ACTIVE_CONTEXT, "cannot change active context" },
+        { PICOQUIC_ERROR_INVALID_TOKEN, "invalid token" },
+        { PICOQUIC_ERROR_INITIAL_CID_TOO_SHORT, "initial CID too short" },
+        { PICOQUIC_ERROR_KEY_ROTATION_NOT_READY, "key rotation not ready" },
+        { PICOQUIC_ERROR_AEAD_NOT_READY, "aead not ready" },
+        { PICOQUIC_ERROR_NO_ALPN_PROVIDED, "no ALPN provided" },
+        { PICOQUIC_ERROR_NO_CALLBACK_PROVIDED, "no callback provided" },
+        { PICOQUIC_STREAM_RECEIVE_COMPLETE, "stream receive complete" },
+        { PICOQUIC_ERROR_PACKET_HEADER_PARSING, "packet header parsing" },
+        { PICOQUIC_ERROR_QUIC_BIT_MISSING, "QUIC bit missing" },
+        { PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP, "terminate packet loop (not an error)" },
+        { PICOQUIC_NO_ERROR_SIMULATE_NAT, "simulate NAT (not an error)" },
+        { PICOQUIC_NO_ERROR_SIMULATE_MIGRATION, "simulate migration (not an error)" },
+        { PICOQUIC_ERROR_VERSION_NOT_SUPPORTED, "version not supported" },
+        { PICOQUIC_ERROR_IDLE_TIMEOUT, "idle timeout" },
+        { PICOQUIC_ERROR_REPEAT_TIMEOUT, "repeat timeout" },
+        { PICOQUIC_ERROR_HANDSHAKE_TIMEOUT, "handshake timeout" },
+        { PICOQUIC_ERROR_SOCKET_ERROR, "socket" },
+        { PICOQUIC_ERROR_VERSION_NEGOTIATION, "version negotiation" },
+        { PICOQUIC_ERROR_PACKET_TOO_LONG, "packet too long" },
+        { PICOQUIC_ERROR_PACKET_WRONG_VERSION, "wrong version" },
+        { PICOQUIC_ERROR_PORT_BLOCKED, "port blocked" },
+        { PICOQUIC_ERROR_DATAGRAM_TOO_LONG, "datagram too long" },
+        { PICOQUIC_ERROR_PATH_ID_INVALID, "invalid path ID" },
+        { PICOQUIC_ERROR_RETRY_NEEDED, "retry needed" },
+        { PICOQUIC_ERROR_SERVER_BUSY, "server busy" },
+        { PICOQUIC_ERROR_PATH_DUPLICATE, "duplicate path" },
+        { PICOQUIC_ERROR_PATH_ID_BLOCKED, "blocked by lack of path ID" },
+        { PICOQUIC_ERROR_PATH_CID_BLOCKED, "blocked by lack of CID" },
+        { PICOQUIC_ERROR_PATH_ADDRESS_FAMILY, "path address family" },
+        { PICOQUIC_ERROR_PATH_NOT_READY, "path not ready" },
+        { PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED, "path limit exceeded" },
+        { PICOQUIC_ERROR_REDIRECTED, "redirected to proxy (not an error)" },
+        { PICOQUIC_ERROR_PADDING_PACKET, "padding_packet" },
+
+        // Crypto error alert range (default branch)
+        { 0x101, "crypto error alert" },
+        { 0x150, "crypto error alert" },
+        { 0x1FF, "crypto error alert" },
+
+        // Unknown picoquic error range (default branch)
+        { 0x450, "unknown picoquic error" },
+        { 0x4FF, "unknown picoquic error" },
+
+        // Unknown error (default branch)
+        { 0x0, "unknown" },
+        { 0x200, "unknown" },
+        { 0x500, "unknown" },
+        { 0xFFFFFFFFFFFFFFFFull, "unknown" }
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        const char* got = picoquic_error_name(cases[i].code);
+        if (strcmp(got, cases[i].expected) != 0) {
+            fprintf(stderr, "FAIL: error_code=0x%llx got=\"%s\" expected=\"%s\"\n",
+                (unsigned long long)cases[i].code, got, cases[i].expected);
+            ret = -1;
+            failures++;
+        }
+    }
+
+    if (failures == 0) {
+        printf("All error_name_test cases passed.\n");
+    }
+    return ret;
+}
