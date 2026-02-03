@@ -153,6 +153,7 @@
     <ClCompile Include="logreader.c" />
     <ClCompile Include="memory_log.c" />
     <ClCompile Include="qlog.c" />
+    <ClCompile Include="qlog_fns.c" />
     <ClCompile Include="qlog_frames.c" />
     <ClCompile Include="svg.c" />
   </ItemGroup>
