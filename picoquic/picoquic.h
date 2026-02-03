@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.44.2"
+#define PICOQUIC_VERSION "1.1.44.3"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -497,7 +497,10 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 char const* picoquic_error_name(uint64_t error_code);
 
 /* Obtain the text value of transport parameters names */
-char const* tp_name(picoquic_tp_enum tp_number);
+char const* picoquic_tp_name(picoquic_tp_enum tp_number);
+
+/* Obtain the text value of frame types */
+char const* picoquic_frame_name(uint64_t frame_type);
 
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set

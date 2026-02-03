@@ -114,6 +114,7 @@ int skip_frame_test();
 int keep_alive_test();
 int logger_test();
 int binlog_test();
+int qlog_frames_test();
 int app_message_overflow_test();
 int socket_test();
 int test_stateless_blowback();

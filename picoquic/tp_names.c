@@ -1,6 +1,6 @@
 #include "picoquic.h"
 
-char const* tp_name(picoquic_tp_enum tp_number)
+char const* picoquic_tp_name(picoquic_tp_enum tp_number)
 {
     char const* tp_name = "unknown";
 

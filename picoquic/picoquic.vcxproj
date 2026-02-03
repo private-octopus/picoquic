@@ -155,6 +155,7 @@
     <ClCompile Include="error_names.c" />
     <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
+    <ClCompile Include="frame_names.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="logwriter.c" />

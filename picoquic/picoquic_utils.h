@@ -1,6 +1,6 @@
 /*
-* Author: Igor Lubashev
-* Copyright (c) 2017, Private Octopus, Inc.
+* Author: Christan Huitema
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any

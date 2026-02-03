@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.44.2
+        VERSION 1.1.44.3
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -87,6 +87,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
+    picoquic/frame_names.c
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
@@ -164,6 +165,7 @@ set(LOGLIB_LIBRARY_FILES
     loglib/logreader.c
     loglib/memory_log.c
     loglib/qlog.c
+    loglib/qlog_frames.c
     loglib/svg.c)
 
 set(PICOQUIC_LOGLIB_HEADERS
@@ -211,6 +213,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/picoquic_lb_test.c
     picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
+    picoquictest/qlog_frames_test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
     picoquictest/red_aqm.c

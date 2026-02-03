@@ -83,6 +83,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_format", frames_format_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
+    { "qlog_frames", qlog_frames_test },
     { "app_message_overflow", app_message_overflow_test },
     { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },

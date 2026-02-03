@@ -313,28 +313,28 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_initial_max_path_id:
                 case picoquic_tp_address_discovery:
                 case picoquic_tp_reset_stream_at:
-                    qlog_vint_transport_extension(f, tp_name((picoquic_tp_enum)extension_type), s, extension_length);
+                    qlog_vint_transport_extension(f, picoquic_tp_name(extension_type), s, extension_length);
                     break;
 
                 case picoquic_tp_stateless_reset_token:
                 case picoquic_tp_original_connection_id:
                 case picoquic_tp_retry_connection_id:
                 case picoquic_tp_handshake_connection_id:
-                    fprintf(f, "\"%s\": ", tp_name((picoquic_tp_enum)extension_type));
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_string(f, s, extension_length);
                     break;
                 case picoquic_tp_server_preferred_address: 
-                    fprintf(f, "\"%s\": ", tp_name((picoquic_tp_enum)extension_type));
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_preferred_address(f, s, extension_length);
                     fprintf(f, "}");
                     break;
                 case picoquic_tp_disable_migration:
                 case picoquic_tp_enable_time_stamp:
                 case picoquic_tp_grease_quic_bit:
-                    qlog_boolean_transport_extension(f, tp_name((picoquic_tp_enum)extension_type), s, extension_length);
+                    qlog_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), s, extension_length);
                     break;
                 case picoquic_tp_version_negotiation:
-                    fprintf(f, "\"%s\": ", tp_name((picoquic_tp_enum)extension_type));
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_tp_version_negotiation(f, s, extension_length);
                     break;
                 default:
@@ -884,7 +884,7 @@ void qlog_closing_frame(uint64_t ftype, FILE* f, bytestream* s)
     if (ftype == picoquic_frame_type_connection_close &&
         error_code != 0) {
         byteread_vint(s, &offending_frame_type);
-        offensive_type_name = ftype2str(offending_frame_type);
+        offensive_type_name = picoquic_frame_name(offending_frame_type);
         if (strcmp(offensive_type_name, "unknown") == 0) {
             fprintf(f, ", \"trigger_frame_type\": \"%"PRIx64"\"", offending_frame_type);
         }
@@ -1224,7 +1224,7 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     size_t ptr_before_type = s->ptr;
     byteread_vint(s, &ftype);
 
-    fprintf(f, "\n    \"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
+    fprintf(f, "\n    \"frame_type\": \"%s\"", picoquic_frame_name((picoquic_frame_type_enum_t)ftype));
 
     if (ftype >= picoquic_frame_type_stream_range_min &&
         ftype <= picoquic_frame_type_stream_range_max) {

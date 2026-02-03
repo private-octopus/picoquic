@@ -335,6 +335,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_frames)
+        {
+            int ret = qlog_frames_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_message_overflow)
         {
             int ret = app_message_overflow_test();

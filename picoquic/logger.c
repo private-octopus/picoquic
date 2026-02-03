@@ -1892,7 +1892,7 @@ void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64
                         textlog_prefix_initial_cid64(F, cnx_id_64);
                     }
                     fprintf(F, "        Extension type: %" PRIu64 " (%s), length %d%s",
-                        extension_type, tp_name((picoquic_tp_enum)extension_type), (int)extension_length,
+                        extension_type, picoquic_tp_name((picoquic_tp_enum)extension_type), (int)extension_length,
                         (extension_length == 0) ? "" : ", ");
 
                     if (byte_index + extension_length > extensions_end) {
