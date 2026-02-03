@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
