@@ -213,7 +213,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/picoquic_lb_test.c
     picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
-    picoquictest/qlog_frames_test.c
+    picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
     picoquictest/red_aqm.c
