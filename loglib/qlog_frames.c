@@ -89,7 +89,7 @@ const uint8_t* qlog_frame_stream(FILE* f, const uint8_t* first_byte, const uint8
     uint64_t stream_id;
     size_t data_length;
     uint64_t offset;
-    uint64_t consumed;
+    size_t consumed;
     const uint8_t* bytes = first_byte;
     int fin;
     int ret = picoquic_parse_stream_header(
