@@ -104,6 +104,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_krome", picowt_baton_krome_test },
     { "picowt_baton_uri", picowt_baton_uri_test },
     { "picowt_baton_wrong", picowt_baton_wrong_test },
+    { "picowt_baton_reset", picowt_baton_reset_test },
     { "picowt_drain", picowt_drain_test },
     { "picowt_tp", picowt_tp_test },
     { "quicperf_parse", quicperf_parse_test },

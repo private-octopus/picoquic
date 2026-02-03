@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 3, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 0, 1
+    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 2, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 1, 4, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 2, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,17 +117,17 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
+    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
@@ -488,11 +488,6 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     else if (param->enable_bdp_frame != ref->enable_bdp_frame) {
         DBG_PRINTF("enable_bdp_frame: got %d, expected %d\n",
             param->enable_bdp_frame, ref->enable_bdp_frame);
-        ret = -1;
-    }
-    else if (param->is_multipath_enabled != ref->is_multipath_enabled) {
-        DBG_PRINTF("is_multipath_enabled: got %d, expected %d\n",
-            param->is_multipath_enabled, ref->is_multipath_enabled);
         ret = -1;
     }
     else if (param->initial_max_path_id != ref->initial_max_path_id) {
@@ -1226,4 +1221,187 @@ int vn_tp_test()
         }
     }
     return ret;
+}
+
+/* Testing of the default param setting API
+ */
+
+typedef struct st_tp_default_set_t {
+    uint64_t tp_id;
+    uint64_t tp_val;
+    int ret;
+} tp_default_set_t;
+
+tp_default_set_t tp_default_test_case[] = {
+    { picoquic_tp_original_connection_id, 0, -1 },
+    { picoquic_tp_idle_timeout, 12345, 0 },
+    { picoquic_tp_stateless_reset_token, 0, -1 },
+    { picoquic_tp_max_packet_size, 1234, 0 },
+    { picoquic_tp_initial_max_data, 12345, 0 },
+
+    { picoquic_tp_initial_max_stream_data_bidi_local, 12345, 0 },
+    { picoquic_tp_initial_max_stream_data_bidi_remote, 12345, 0 },
+    { picoquic_tp_initial_max_stream_data_uni, 12345, 0 },
+    { picoquic_tp_initial_max_streams_bidi, 12345, 0 },
+    { picoquic_tp_initial_max_streams_uni, 12345, 0 },
+
+    { picoquic_tp_ack_delay_exponent, 5, 0 },
+    { picoquic_tp_max_ack_delay, 12345, 0 },
+    { picoquic_tp_disable_migration, 1, 0 },
+    { picoquic_tp_server_preferred_address, 0, -1 },
+    { picoquic_tp_active_connection_id_limit, 12345, 0 },
+
+    { picoquic_tp_handshake_connection_id, 0, -1 },
+    { picoquic_tp_retry_connection_id, 0, -1 },
+    { picoquic_tp_max_datagram_frame_size, 12345, 0 },
+    { picoquic_tp_test_large_chello, 0, -1 },
+    { picoquic_tp_enable_loss_bit, 1, 0 },
+
+    { picoquic_tp_min_ack_delay, 12345, 0 },
+    { picoquic_tp_enable_time_stamp, 1, 0 },
+    { picoquic_tp_grease_quic_bit, 1, 0 },
+    { picoquic_tp_version_negotiation, 0, -1 },
+    { picoquic_tp_enable_bdp_frame, 1, 0 },
+
+    { picoquic_tp_initial_max_path_id, 12345, 0 },
+    { picoquic_tp_address_discovery, 1, 0 },
+    { picoquic_tp_reset_stream_at, 1, 0 }
+};
+
+size_t nb_default_test_case = sizeof(tp_default_test_case) / sizeof(tp_default_set_t);
+
+int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
+{
+    int ret = 0;
+    switch (tp_type) {
+    case picoquic_tp_idle_timeout:
+        if (quic->default_tp.max_idle_timeout != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_max_packet_size:
+        if (quic->default_tp.max_packet_size != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_data:
+        if (quic->default_tp.initial_max_data != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_local:
+        if (quic->default_tp.initial_max_stream_data_bidi_local != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_remote:
+        if (quic->default_tp.initial_max_stream_data_bidi_remote != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_stream_data_uni:
+        if (quic->default_tp.initial_max_stream_data_uni != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_streams_bidi:
+        if (quic->default_tp.initial_max_stream_id_bidir != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_streams_uni:
+        if (quic->default_tp.initial_max_stream_id_unidir != tp_value) {
+            ret = -1;
+        }break;
+    case picoquic_tp_ack_delay_exponent:
+        if (quic->default_tp.ack_delay_exponent != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_max_ack_delay:
+        if (quic->default_tp.max_ack_delay != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_disable_migration:
+        if (quic->default_tp.migration_disabled != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_active_connection_id_limit:
+        if (quic->default_tp.active_connection_id_limit != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_max_datagram_frame_size:
+        if (quic->default_tp.max_datagram_frame_size != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_enable_loss_bit:
+        if (quic->default_tp.enable_loss_bit != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_min_ack_delay:
+        if (quic->default_tp.min_ack_delay != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_enable_time_stamp:
+        if (quic->default_tp.enable_time_stamp != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_grease_quic_bit:
+        if (quic->default_tp.max_idle_timeout != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_enable_bdp_frame:
+        if (quic->default_tp.enable_bdp_frame != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_initial_max_path_id:
+        if (quic->default_tp.initial_max_path_id != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_address_discovery:
+        if (quic->default_tp.max_idle_timeout != tp_value) {
+            ret = -1;
+        }
+        break;
+    case picoquic_tp_reset_stream_at:
+        if (quic->default_tp.is_reset_stream_at_enabled != tp_value) {
+            ret = -1;
+        }
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
+int transport_param_default_test()
+{
+    int ret = 0;
+    for (size_t i = 0; ret == 0 && i < nb_default_test_case; i++) {
+        picoquic_quic_t quic = { 0 };
+        int r = picoquic_set_default_tp_value(&quic, tp_default_test_case[i].tp_id, tp_default_test_case[i].tp_val);
+
+        if (r != tp_default_test_case[i].ret) {
+            ret = -1;
+        }
+        else if (r == 0) {
+            ret = tp_value_check(&quic, tp_default_test_case[i].tp_id, tp_default_test_case[i].tp_val);
+        }
+        if (ret != 0) {
+            DBG_PRINTF("param default test fails for test %zu: 0x%" PRIu64 ", 0x%"  PRIu64,
+                i, tp_default_test_case[i].tp_id, tp_default_test_case[i].tp_val);
+        }
+    }
+    return ret;        
 }

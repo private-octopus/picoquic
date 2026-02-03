@@ -384,7 +384,6 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(test_parameters, 1);
-    test_parameters->is_multipath_enabled = 1;
     test_parameters->initial_max_path_id = 2;
     test_parameters->enable_time_stamp = 3;
 }
@@ -891,7 +890,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
         test_ctx->cnx_client->local_parameters.enable_time_stamp = 3;
 
-        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
         test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
     }
 
@@ -1204,7 +1202,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             ret = -1;
         }
         else if (test_ctx->cnx_client->nb_paths != 2) {
-            DBG_PRINTF("After break and back, %d paths on server connection.\n", test_ctx->cnx_client->nb_paths);
+            DBG_PRINTF("After break and back, %d paths on client connection.\n", test_ctx->cnx_client->nb_paths);
             ret = -1;
         }
     }
@@ -1289,7 +1287,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
 }
 
 /* Basic multipath test. Set up two links in parallel, verify that both are used and that
- * the overall transmission is shorterthan if only one link was used.
+ * the overall transmission is shorter than if only one link was used.
  */
 
 int multipath_basic_test()
@@ -1702,12 +1700,12 @@ int monopath_rotation_test()
 /* The zero RTT test uses the unipath code, with a special parameter.
  * Test both regular 0RTT set up, and case of losses.
  */
-int zero_rtt_test_one(int use_badcrypt, int hardreset, uint64_t early_loss,
-    unsigned int no_coal, unsigned int long_data, uint64_t extra_delay, int do_multipath);
 
 int monopath_0rtt_test()
 {
-    return zero_rtt_test_one(0, 0, 0, 0, 0, 0, 1);
+    zero_rtt_test_t zrt = { 0 };
+    zrt.do_multipath = 1;
+    return zero_rtt_test_one(&zrt);
 }
 
 int monopath_0rtt_loss_test()
@@ -1715,8 +1713,10 @@ int monopath_0rtt_loss_test()
     int ret = 0;
 
     for (unsigned int i = 1; ret == 0 && i < 16; i++) {
-        uint64_t early_loss = 1ull << i;
-        ret = zero_rtt_test_one(0, 0, early_loss, 0, 0, 0, 1);
+        zero_rtt_test_t zrt = { 0 };
+        zrt.early_loss = 1ull << i;
+        zrt.do_multipath = 1;
+        ret = zero_rtt_test_one(&zrt);
         if (ret != 0) {
             DBG_PRINTF("Monopath 0 RTT test fails when packet #%d is lost.\n", i);
         }

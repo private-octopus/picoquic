@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.40.0"
+#define PICOQUIC_VERSION "1.1.44.2"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -111,6 +111,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_NOT_READY (PICOQUIC_ERROR_CLASS + 67)
 #define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
 #define PICOQUIC_ERROR_REDIRECTED (PICOQUIC_ERROR_CLASS + 69) /* Not an error: the packet was captured by a proxy, no further processing needed */
+#define PICOQUIC_ERROR_PADDING_PACKET (PICOQUIC_ERROR_CLASS + 70)
 
 /*
  * Protocol errors defined in the QUIC spec
@@ -188,6 +189,44 @@ typedef enum {
     picoquic_state_disconnected
 } picoquic_state_enum;
 
+/*
+ * Transport parameters, as defined by the QUIC transport specification.
+ * The initial code defined the type as an enum, but the binary representation
+ * of the enum type is not strictly defined in C. Values like "0xff02de1"
+ * could end up represented as a negative integer, and then converted to
+ * the 64 bit representation "0xffffffffff02de1", which is not good.
+ * We changed that to using macro for definition.
+ */
+typedef uint64_t picoquic_tp_enum;
+#define picoquic_tp_original_connection_id 0 
+#define picoquic_tp_idle_timeout 1 
+#define picoquic_tp_stateless_reset_token 2 
+#define picoquic_tp_max_packet_size 3 
+#define picoquic_tp_initial_max_data 4 
+#define picoquic_tp_initial_max_stream_data_bidi_local 5 
+#define picoquic_tp_initial_max_stream_data_bidi_remote 6 
+#define picoquic_tp_initial_max_stream_data_uni 7 
+#define picoquic_tp_initial_max_streams_bidi 8 
+#define picoquic_tp_initial_max_streams_uni 9 
+#define picoquic_tp_ack_delay_exponent 10 
+#define picoquic_tp_max_ack_delay 11 
+#define picoquic_tp_disable_migration 12 
+#define picoquic_tp_server_preferred_address 13 
+#define picoquic_tp_active_connection_id_limit 14 
+#define picoquic_tp_handshake_connection_id 15 
+#define picoquic_tp_retry_connection_id 16 
+#define picoquic_tp_max_datagram_frame_size 32 /* per draft-pauly-quic-datagram-05 */ 
+#define picoquic_tp_test_large_chello 3127 
+#define picoquic_tp_enable_loss_bit 0x1057 
+#define picoquic_tp_min_ack_delay 0xff04de1bull 
+#define picoquic_tp_enable_time_stamp 0x7158  /* x&1 */
+#define picoquic_tp_grease_quic_bit 0x2ab2
+#define picoquic_tp_version_negotiation 0x11
+#define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
+#define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
+#define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
+#define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
+
 /* Packet contexts */
 typedef enum {
     picoquic_packet_context_application = 0,
@@ -250,7 +289,19 @@ typedef struct st_picoquic_connection_id_t {
 
 
 /* forward definition to avoid full dependency on picotls.h */
-typedef struct st_ptls_iovec_t ptls_iovec_t; 
+typedef struct st_ptls_iovec_t ptls_iovec_t;
+
+/* Alternate structure when applications need to access 
+ * content of an iovec without developing a dependency on picotls.h.
+ * They can use something like:
+ *     ....... ptls_iovec_t * list ...
+ *     picoquic_iovec_t * my_list = (picoquic_iovec_t *) list;
+ */
+
+typedef struct st_picoquic_iovec_t {
+    uint8_t* base;
+    size_t len;
+} picoquic_iovec_t;
 
 /* Detect whether error occured in TLS
  */
@@ -331,7 +382,6 @@ typedef struct st_picoquic_tp_t {
     int do_grease_quic_bit;
     picoquic_tp_version_negotiation_t version_negotiation;
     int enable_bdp_frame;
-    int is_multipath_enabled;
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
@@ -402,10 +452,22 @@ typedef int (*picoquic_stream_data_cb_fn)(picoquic_cnx_t* cnx,
  */
 typedef size_t (*picoquic_alpn_select_fn)(picoquic_quic_t* quic, ptls_iovec_t* list, size_t count);
 
+/* V2 callback using picoquic_iovec_t instead of ptls_iovec_t */
+typedef size_t (*picoquic_alpn_select_fn_v2)(picoquic_quic_t* quic, picoquic_iovec_t* list, size_t count);
+
 /* Function used during callback to provision an ALPN context. The stack 
  * issues a callback of type 
  */
 int picoquic_add_proposed_alpn(void* tls_context, const char* alpn);
+
+/* After the handshake, get the value of the negotiated ALPN.
+* This can be used when the client proposes a list of supported
+* ALPN, and then need to adapt the code to the server's selection.
+ */
+char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
+
+/* After the handshake, get the value of the SNI. */
+char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
 /* Callback function for producing a connection ID compatible
  * with the server environment.
@@ -618,6 +680,8 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id);
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t* tp);
 /* Read default parameters per quic context */
 picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic);
+/* Set default value of a scalar transport parameter in quic context */
+int picoquic_set_default_tp_value(picoquic_quic_t* quic, uint64_t tp_type, uint64_t tp_value);
 /* Set the transport parameters per connection */
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp);
 /* Get the transport parameters per connection */
@@ -700,11 +764,19 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 * set a maximum value for the "max data" option, thus limiting the
 * amount of data that the peer will be able to send before data is
 * acknowledged.
+* 
 * This option can be used to control the amount of memory that the
 * receiver will use to reorder received data frames. This control is
 * indirect: the receiver always allocate a full packet size for incoming
-* packets, even if they are small. In tests, we see the allocated memory
-* per connection vary between 2 and 3 times the max data value.
+* packets, even if they are small. If we want to ensure continuous
+* transmission without slowdowns, the `max_data` parameter should
+* be set to twice the bandwidth delay product (2*BDP). However,
+* in presence of packet losses, the receiver will wait and extra
+* RTT to receive correction for lost packets. If we foresee
+* packet losses, `max_data` should be set to 3*BDP, or maybe
+* even 4*BDP if the loss rate is high enough to anticipate
+* a significant loss rate of packets correcting a previous loss.
+* 
 * Setting the value to 0 (default) means that the "max data" limit
 * will rapidly increase to let transmission proceed quickly.
 */
@@ -787,6 +859,9 @@ void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max);
 
 /* Set the ALPN function used to verify incoming ALPN */
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn);
+
+/* V2 API using picoquic_iovec_t */
+void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn);
 
 /* Set the default callback function for new connections.
  * This must be defined for every server implementation.
@@ -1003,7 +1078,7 @@ int picoquic_get_path_addr(picoquic_cnx_t* cnx, uint64_t unique_path_id, int loc
 * `picoquic_get_default_path_quality` at any time. The application can
 * also subscribe to the `quality change` callback, and only call
 * the path quality API after the callback signalled a path
-* qualiy change.
+* quality change.
 * 
 * The application subscribes to the path quality update
 * using "picoquic_subscribe_to_quality_update" API
@@ -1066,6 +1141,7 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
 uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_time);
 
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx);
+picoquic_cnx_t * picoquic_get_cnx_in_progress(picoquic_quic_t* quic);
 
 void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize);
 void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize);
@@ -1603,6 +1679,7 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t inflight_prior;
     uint64_t lost_packet_number;
     uint64_t lost_packet_sent_time;
+    int pc; /* Using int type instead of pc enum to avoid include dependencies */
     unsigned int is_app_limited : 1; /* App marked limited at time of ACK? */
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;

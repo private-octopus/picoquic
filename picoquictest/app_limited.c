@@ -500,7 +500,8 @@ static int app_limited_test_one(app_limited_test_config_t * config)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-            al_ctx.nb_client_streams_completed >= 3) {
+            al_ctx.nb_client_streams_completed >= 3 &&
+            picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
             ret = picoquic_close(test_ctx->cnx_client, 0);
         }
 

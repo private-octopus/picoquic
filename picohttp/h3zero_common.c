@@ -1895,15 +1895,16 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			if (stream_ctx != NULL) {
 				if (stream_ctx->path_callback != NULL) {
 					/* reset post callback. */
-					ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
+					ret = stream_ctx->path_callback(cnx, NULL, 0, (fin_or_event == picoquic_callback_stream_reset)?
+						picohttp_callback_reset:picohttp_callback_stop_sending, stream_ctx, stream_ctx->path_callback_ctx);
 				}
 				else {
 					/* If a file is open on a client, close and do the accounting. */
 					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+					if (IS_BIDIR_STREAM_ID(stream_id)) {
+						picoquic_reset_stream(cnx, stream_id, 0);
+					}
 				}
-			}
-			if (IS_BIDIR_STREAM_ID(stream_id)) {
-				picoquic_reset_stream(cnx, stream_id, 0);
 			}
 			break;
 		case picoquic_callback_stateless_reset:
@@ -2008,7 +2009,9 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_connect_protocol, settings->enable_connect_protocol, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_h3_datagram, settings->h3_datagram, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL &&
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions_old, settings->webtransport_max_sessions, 0)) != NULL) {
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions_old, settings->webtransport_max_sessions, 0)) != NULL &&
+				/* Chrome compatibility: also send SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) */
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_webtransport, (settings->webtransport_max_sessions > 0) ? 1 : 0, 0)) != NULL) {
 				size_t actual_length = bytes - bytes_after_length;
 				uint8_t* bytes_final_length = picoquic_frames_varint_encode(bytes_of_length, bytes_after_length, actual_length);
 				if (bytes_final_length == NULL) {
@@ -2050,6 +2053,12 @@ const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uin
 		case h3zero_settings_webtransport_max_sessions:
 		case h3zero_settings_webtransport_max_sessions_old:
 			settings->webtransport_max_sessions = component_value;
+			break;
+		case h3zero_settings_enable_webtransport:
+			/* Chrome sends SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) instead of WT_MAX_SESSIONS */
+			if (component_value > 0 && settings->webtransport_max_sessions == 0) {
+				settings->webtransport_max_sessions = 1;
+			}
 			break;
 		default:
 			break;

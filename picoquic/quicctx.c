@@ -802,6 +802,85 @@ picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic)
     return &quic->default_tp;
 }
 
+static int picoquic_set_tp_value_by_type(picoquic_tp_t* tp, uint64_t tp_type, uint64_t tp_value)
+{
+    int ret = 0;
+    switch (tp_type) {
+    case picoquic_tp_idle_timeout:
+        tp->max_idle_timeout = tp_value;
+        break;
+    case picoquic_tp_max_packet_size:
+        tp->max_packet_size = (uint32_t)tp_value;
+        break;
+    case picoquic_tp_initial_max_data:
+        tp->initial_max_data = tp_value;
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_local:
+        tp->initial_max_stream_data_bidi_local = tp_value;
+        break;
+    case picoquic_tp_initial_max_stream_data_bidi_remote:
+        tp->initial_max_stream_data_bidi_remote = tp_value;
+        break;
+    case picoquic_tp_initial_max_stream_data_uni:
+        tp->initial_max_stream_data_uni = tp_value;
+        break;
+    case picoquic_tp_initial_max_streams_bidi:
+        tp->initial_max_stream_id_bidir = tp_value;
+        break;
+    case picoquic_tp_initial_max_streams_uni:
+        tp->initial_max_stream_id_unidir = tp_value;
+        break;
+    case picoquic_tp_ack_delay_exponent:
+        tp->ack_delay_exponent = (uint8_t)tp_value;
+        break;
+    case picoquic_tp_max_ack_delay:
+        tp->max_ack_delay = (uint32_t)tp_value;
+        break;
+    case picoquic_tp_disable_migration:
+        tp->migration_disabled = (tp_value != 0);
+        break;
+    case picoquic_tp_active_connection_id_limit:
+        tp->active_connection_id_limit = (uint32_t)tp_value;
+        break;
+    case picoquic_tp_max_datagram_frame_size:
+        tp->max_datagram_frame_size = (uint32_t)tp_value;
+        break;
+    case picoquic_tp_enable_loss_bit:
+        tp->enable_loss_bit = (tp_value != 0);
+        break;
+    case picoquic_tp_min_ack_delay:
+        tp->min_ack_delay = tp_value;
+        break;
+    case picoquic_tp_enable_time_stamp:
+        tp->enable_time_stamp = (int)tp_value;
+        break;
+    case picoquic_tp_grease_quic_bit:
+        tp->max_idle_timeout = (tp_value != 0);
+        break;
+    case picoquic_tp_enable_bdp_frame:
+        tp->enable_bdp_frame = (tp_value != 0);
+        break;
+    case picoquic_tp_initial_max_path_id:
+        tp->initial_max_path_id = tp_value;
+        break;
+    case picoquic_tp_address_discovery:
+        tp->max_idle_timeout = (int)tp_value;
+        break;
+    case picoquic_tp_reset_stream_at:
+        tp->is_reset_stream_at_enabled = (tp_value != 0);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
+int picoquic_set_default_tp_value(picoquic_quic_t* quic, uint64_t tp_type, uint64_t tp_value)
+{
+    return picoquic_set_tp_value_by_type(&quic->default_tp, tp_type, tp_value);
+}
+
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize)
 {
     quic->padding_minsize_default = padding_minsize;
@@ -846,7 +925,6 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
     quic->default_multipath_option = multipath_option;
 
     if (multipath_option & 1) {
-        quic->default_tp.is_multipath_enabled = 1;
         quic->default_tp.initial_max_path_id = 2;
     }
 }
@@ -1281,7 +1359,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->initial_max_stream_data_bidi_local = 0x200000;
     tp->initial_max_stream_data_bidi_remote = 65635;
     tp->initial_max_stream_data_uni = 65535;
-    tp->initial_max_data = 0x100000;
+    tp->initial_max_data = PICOQUIC_INITIAL_FLOW_CONTROL_MAX;
     tp->initial_max_stream_id_bidir = 512;
     tp->initial_max_stream_id_unidir = 512;
     tp->max_idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX/1000;
@@ -4348,6 +4426,11 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
     return cnx->cnx_state;
 }
 
+picoquic_cnx_t * picoquic_get_cnx_in_progress(picoquic_quic_t* quic)
+{
+    return quic->cnx_in_progress;
+}
+
 int picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
     return (cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt == NULL) ? 0 : 1;
@@ -4549,6 +4632,18 @@ void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn 
         quic->default_alpn = NULL;
     }
     quic->alpn_select_fn = alpn_select_fn;
+}
+
+void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn)
+{
+    if (quic->default_alpn != NULL) {
+        free((void *)quic->default_alpn);
+        quic->default_alpn = NULL;
+    }
+    quic->alpn_select_fn_v2 = alpn_select_fn;
+    if (alpn_select_fn != NULL) {
+        quic->alpn_select_fn = NULL;
+    }
 }
 
 void picoquic_set_default_callback(picoquic_quic_t* quic,

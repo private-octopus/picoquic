@@ -696,7 +696,7 @@ static uint64_t binlog_get_path_id(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 
 void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id)
+    uint64_t unique_path_id, unsigned char ecn)
 {
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -709,6 +709,7 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     bytewrite_vint(msg, packet_length);
     bytewrite_addr(msg, addr_local);
     bytewrite_vint(msg, unique_path_id);
+    bytewrite_int8(msg, ecn);
 
     uint8_t head[4] = { 0 };
     picoformat_32(head, (uint32_t)bytestream_length(msg));
@@ -719,11 +720,11 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
 
 static void binlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id)
+    uint64_t unique_path_id, unsigned char ecn)
 {
     if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
         binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length,
-            unique_path_id);
+            unique_path_id, ecn);
     }
 }
 
@@ -793,20 +794,11 @@ static void binlog_packet_ex(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int 
 }
 
 void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_packet_header* ph,  size_t packet_size, int err,
-    uint8_t * raw_data, uint64_t current_time)
+    picoquic_packet_header* ph, size_t packet_size, int err, uint64_t current_time)
 {
     FILE* f = cnx->f_binlog;
-    size_t raw_size = packet_size;
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
-
-    if (err == PICOQUIC_ERROR_AEAD_CHECK) {
-        /* Do not log on decryption error, because the buffer was randomized by decryption */
-        raw_size = 0;
-    } else if (raw_size > 32) {
-        raw_size = 32;
-    }
 
     bytewrite_int32(msg, 0);
     /* Common chunk header */
@@ -816,8 +808,6 @@ void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     bytewrite_vint(msg, ph->ptype);
     bytewrite_vint(msg, packet_size);
     bytewrite_vint(msg, err);
-    bytewrite_vint(msg, raw_size);
-    (void)bytewrite_buffer(msg, raw_data, raw_size);
 
     /* write the frame length at the reserved spot, and save to log file*/
     picoformat_32(msg->data, (uint32_t)(msg->ptr - 4));
@@ -1062,7 +1052,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 
     if (ret == 0) {
         cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
-           cnx->local_parameters.is_multipath_enabled);
+           cnx->local_parameters.initial_max_path_id > 0);
         if (cnx->f_binlog == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;

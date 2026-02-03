@@ -38,25 +38,31 @@
 #include <picoquic_config.h>
 #include "wt_baton.h"
 #include "pico_webtransport.h"
-
+#include "picoquic_internal.h"
 
 #ifdef _WINDOWS
 #include <getopt.c>
 #endif 
 
+int wt_baton_server(char const* path, picoquic_quic_config_t* config);
 int wt_baton_client(char const* server_name, int server_port, char const* path, picoquic_quic_config_t * config);
 int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* callback_arg);
+static int  baton_server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void* callback_arg);
 
 static void usage(char const * sample_name)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [options] server_name port path\n", sample_name);
+    fprintf(stderr, "    %s [options] { server_name port path} | { path }\n", sample_name);
     fprintf(stderr, "The path argument may include parameters:\n");
     fprintf(stderr, " - version: baton protocol version,\n");
     fprintf(stderr, " - baton: initial version value,\n");
     fprintf(stderr, " - count: number of rounds,\n");
     fprintf(stderr, " - inject: inject error for testing\n");
+    fprintf(stderr, "If running as server, you must specify port, key and certs using -p, -k, -c,\n");
+    fprintf(stderr, "and the URL path at which the server listens for the baton app (e.g. `/baton`)\n");
+    fprintf(stderr, "If running as client, you need to specify server name and port, and the path.\n");
     fprintf(stderr, "For example, set a path like /baton?count=17 to have 17 rounds of baton exchange.");
     picoquic_config_usage();
     exit(1);
@@ -95,21 +101,37 @@ int main(int argc, char** argv)
             }
         }
     }
+    if (ret == 0) {
+        if (optind + 1 == argc) {
+            if (config.server_key_file == NULL || config.server_cert_file == NULL) {
+                fprintf(stderr, "You did not provide server key and certificate!");
+                usage(argv[0]);
+                ret = -1;
+            }
+            else {
+                printf("Starting a baton server.");
+                ret = wt_baton_server(argv[optind], &config);
+            }
+        }
+        else if (optind + 3 != argc) {
+            usage(argv[0]);
+            ret = -1;
+        }
+        else {
+            char const* server_name = argv[optind++];
+            int server_port = get_port(argv[0], argv[optind++]);
+            char const* path = argv[optind];
 
-    if (optind + 3 != argc){
-        usage(argv[0]);
-    }
-    else {
-        char const* server_name = argv[optind++];
-        int server_port = get_port(argv[0], argv[optind++]);
-        char const * path = argv[optind];
+            ret = wt_baton_client(server_name, server_port, path, &config);
 
-        ret = wt_baton_client(server_name, server_port, path, &config);
-
-        if (ret != 0) {
-            fprintf(stderr, "Baton dropped, ret=%d\n", ret);
+            if (ret != 0) {
+                fprintf(stderr, "Baton dropped, ret=%d\n", ret);
+            }
         }
     }
+
+    picoquic_config_clear(&config);
+
     exit(ret);
 }
 
@@ -385,5 +407,127 @@ int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_
             break;
         }
     }
+    return ret;
+}
+
+/* Sample server.
+* The baton server is an HTTP3 server.
+* It can server web pages like a regular server, but will
+* also respond to a webtransport "connect" request and start
+* a baton connection.
+* The server parameters are set using the configuration
+* arguments standard for the picoquic library.
+*/
+char const* baton_ticket_store = "baton_ticket_store.bin";
+char const* baton_token_store = "baton_token_store.bin";
+
+int wt_baton_server(char const* path, picoquic_quic_config_t* config)
+{
+    int ret = 0;
+    picohttp_server_path_item_t path_item_list[1] = { { 0 } };
+
+    /* Start: start the QUIC process with cert and key files */
+    picoquic_quic_t* qserver = NULL;
+    uint64_t current_time = 0;
+    picohttp_server_parameters_t picoquic_file_param;
+
+    /* set the transport parameters to a proper value */
+    memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
+
+    /* Configure the web server parameters, including the "path table"
+    * with a path item describing the baton app.
+    * The "path_app_context" is null because the baton app does not use it.
+     */
+    picoquic_file_param.web_folder = config->www_dir;
+    path_item_list[0].path = path;
+    path_item_list[0].path_length = strlen(path);
+    path_item_list[0].path_callback = wt_baton_callback;
+    path_item_list[0].path_app_ctx = NULL; 
+    picoquic_file_param.path_table = path_item_list;
+    picoquic_file_param.path_table_nb = 1;
+
+    /* Setup the server context */
+    if (ret == 0) {
+        current_time = picoquic_current_time();
+        /* Create QUIC context */
+        /* Set the default ALPN to H3, unless the user has other ideas (which is unsupported). */
+        if (config->alpn == NULL) {
+            ret = picoquic_config_set_option(config, picoquic_option_ALPN, "h3");
+        }
+        /* Set the QUIC "ticket store" and "token store" so we can support 0RTT and "retry" */
+        if (config->ticket_file_name == NULL) {
+            ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, baton_ticket_store);
+        }
+        if (ret == 0 && config->token_file_name == NULL) {
+            ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, baton_token_store);
+        }
+        if (ret == 0) {
+            qserver = picoquic_create_and_configure(config, h3zero_callback, &picoquic_file_param, current_time, NULL);
+            if (qserver == NULL) {
+                ret = -1;
+            }
+            else {
+                picoquic_set_key_log_file_from_env(qserver);
+
+                picoquic_use_unique_log_names(qserver, 1);
+
+                if (config->qlog_dir != NULL)
+                {
+                    picoquic_set_qlog(qserver, config->qlog_dir);
+                }
+                if (config->performance_log != NULL)
+                {
+                    ret = picoquic_perflog_setup(qserver, config->performance_log);
+                }
+                picowt_set_default_transport_parameters(qserver);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Wait for packets */
+        ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
+            config->socket_buffer_size, config->do_not_use_gso, baton_server_loop_cb, NULL);
+    }
+
+    /* And exit */
+    printf("Server exit, ret = 0x%x\n", ret);
+
+    /* Clean up */
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}
+
+/* server loop call back management -- place holder, really. */
+static int  baton_server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* callback_arg)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(callback_arg);
+#endif
+
+    switch (cb_mode) {
+    case picoquic_packet_loop_ready:
+        fprintf(stdout, "Waiting for packets.\n");
+        break;
+    case picoquic_packet_loop_after_receive:
+        fprintf(stdout, "!");
+        fflush(stdout);
+        break;
+    case picoquic_packet_loop_after_send:
+        fprintf(stdout, ".");
+        fflush(stdout);
+        break;
+    case picoquic_packet_loop_port_update:
+        break;
+    default:
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        break;
+    }
+
     return ret;
 }

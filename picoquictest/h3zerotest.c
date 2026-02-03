@@ -1843,8 +1843,8 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
      * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, server_callback_fn, server_param);
+        picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_default_callback(test_ctx->qserver, NULL, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -1885,7 +1885,8 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&
@@ -2168,21 +2169,21 @@ int generic_server_test()
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
     char const* alpn_3 = PICOHTTP_ALPN_H3_LATEST;
-    int ret = demo_server_test(alpn_09, picoquic_demo_server_callback, NULL, demo_test_scenario,
+    int ret = demo_server_test(alpn_09, NULL, NULL, demo_test_scenario,
         nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
-        ret = demo_server_test(alpn_3, picoquic_demo_server_callback, NULL, demo_test_scenario,
+        ret = demo_server_test(alpn_3, NULL, NULL, demo_test_scenario,
             nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
         }
         else {
-            ret = demo_server_test(NULL, picoquic_demo_server_callback, NULL, demo_test_scenario,
+            ret = demo_server_test(NULL, NULL, NULL, demo_test_scenario,
                 nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 
             if (ret != 0) {
@@ -2535,7 +2536,7 @@ int demo_server_file_test()
         ret = file_test_compare(&file_param, &file_test_scenario[0]);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, picoquic_demo_server_callback, (void*)&file_param,
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_H3_LATEST, NULL, (void*)&file_param,
         file_test_scenario, nb_file_test_scenario, demo_file_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_H3_LATEST, ret);
     }
@@ -2543,7 +2544,7 @@ int demo_server_file_test()
         ret = file_test_compare(&file_param, &file_test_scenario[0]);
     }
 
-    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_demo_server_callback, (void*)&file_param,
+    if (ret == 0 && (ret = demo_server_test(PICOHTTP_ALPN_HQ_LATEST, NULL, (void*)&file_param,
         file_test_scenario, nb_file_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0)) != 0) {
         DBG_PRINTF("Demo server (%s) file test fails, ret = %d\n", PICOHTTP_ALPN_HQ_LATEST, ret);
     }
@@ -3146,14 +3147,14 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
         /* Make sure that the server is configured to handle all required clients.
         */
         qserver = picoquic_create((uint32_t)nb_stress_clients, test_server_cert_file, test_server_key_file, NULL, NULL,
-            picoquic_demo_server_callback, &file_param,
+            NULL, &file_param,
             NULL, NULL, reset_seed, simulated_time, &simulated_time, NULL, NULL, 0);
         if (qserver == NULL) {
             DBG_PRINTF("%s", "Cannot create http_stress server");
             ret = -1;
         }
         else {
-            picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+            picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
             if (initial_random) {
                 picoquic_set_random_initial(qserver, 1);
             }
@@ -3679,7 +3680,7 @@ static int h3_grease_test_one(int server_test)
     * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (ret == 0) {
@@ -3719,7 +3720,8 @@ static int h3_grease_test_one(int server_test)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&

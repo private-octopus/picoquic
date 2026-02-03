@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.40.0
+        VERSION 1.1.44.2
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -19,6 +19,7 @@ option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan) for debugging" OFF)
 option(BUILD_DEMO "Build picoquicdemo" ON)
 option(BUILD_HTTP "Build picohttp" ON)
+option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 
@@ -81,7 +82,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/cc_common.c
     picoquic/config.c
     picoquic/cubic.c
-    c4/src/c4.c
+    picoquic/c4.c
     picoquic/ech.c
     picoquic/error_names.c
     picoquic/fastcc.c
@@ -134,7 +135,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_bbr1.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
-     #c4/src/c4.h
+     picoquic/c4.h
      picoquic/siphash.h)
 
 set(PICOQUIC_CORE_HEADERS_PRIVATE
@@ -300,6 +301,13 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
+
+OPTION(WITH_SELECT "build with select" OFF)
+if(WITH_SELECT)
+    message(STATUS "Building with select() instead of poll()")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_USES_SELECT)
+endif()
+
 OPTION(WITH_MBEDTLS "enable MBEDTLS" OFF)
 
 IF (WITH_MBEDTLS)
@@ -438,6 +446,22 @@ if (BUILD_DEMO)
             picohttp-core)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
+endif()
+
+if (BUILD_PQBENCH)
+    add_executable(pqbench
+        pqbench_app/pqbench.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(pqbench
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core)
+    target_include_directories(pqbench PRIVATE picohttp loglib picoquic)
+    set_picoquic_compile_settings(pqbench)
 endif()
 
 if (BUILD_LOGREADER)

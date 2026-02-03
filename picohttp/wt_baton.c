@@ -632,7 +632,29 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             /* Any reset results in the abandon of the context */
             baton_ctx->baton_state = wt_baton_state_closed;
             if (baton_ctx->is_client) {
-                ret = picoquic_close(cnx, 0);
+                (void)picoquic_close(cnx, 0);
+            }
+            h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, baton_ctx->control_stream_id);
+        }
+
+        return ret;
+    }
+
+    int wt_baton_stream_stop(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
+        void* path_app_ctx)
+    {
+        int ret = 0;
+        wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+
+        picoquic_log_app_message(cnx, "Received stop sending on stream %" PRIu64 ", closing the session", stream_ctx->stream_id);
+
+        if (baton_ctx != NULL) {
+            ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_GAME_OVER, NULL);
+
+            /* Any reset results in the abandon of the context */
+            baton_ctx->baton_state = wt_baton_state_closed;
+            if (baton_ctx->is_client) {
+                (void)picoquic_close(cnx, 0);
             }
             h3zero_delete_stream_prefix(cnx, baton_ctx->h3_ctx, baton_ctx->control_stream_id);
         }
@@ -792,6 +814,9 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         case picohttp_callback_reset: /* Stream has been abandoned. */
             /* If control stream: abandon the whole connection. */
             ret = wt_baton_stream_reset(cnx, stream_ctx, path_app_ctx);
+            break;
+        case picohttp_callback_stop_sending: /* peer wants to abandon the stream */
+            ret = wt_baton_stream_stop(cnx, stream_ctx, path_app_ctx);
             break;
         case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
             /* Free the memory attached to the stream */
