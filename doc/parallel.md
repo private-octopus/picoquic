@@ -313,6 +313,67 @@ numbers be explicitly open in the firewall. We could imagine opening a
 range of port numbers, but then we would need to ensure that the
 nework threads use port numbers in that range.
 
+# Managing tokens and tickets
+
+In QUIC, tokens and session resumption tickets are used to speed up the
+establishment of new sessions. They are created by the server, passed to
+the client over a connection, and used by the client to start a new connection.
+If we have multiple servers, we must assume that the server processing the
+new connection is not the same as the server that created the token or the ticket.
+We can manage that using a Session Ticket Encryption key (STEK) shared by all
+servers in the cluster, but we have to be concerned with potential attacks
+in which the same token or ticket is used multiple times. We also need to
+be concerned with management of tokens and tickets for clients.
+
+## Preventing token reuse attacks
+
+Token reuse would allow attackers to bypass address validation and amplification
+limits. A valid token could be distributed to a botnet and used in a denial of
+service attack against the server cluster, or also as a reflection attack against
+a third party target. Picoquic prevents that by keeping track of used tokens in
+the QUIC context, but we need to use a separate QUIC context for each thread.
+Without a global check, the botnet would be able to use the
+same token once per server, process and thread.
+
+We could use a shared database of used tokens, or maybe a simple
+Bloom filter if we are only concerned with threads on a single server.
+Each server thread would check the database of the filter
+before accepting the token. If a taken is already used, address validation will
+remained required. This solves the problem, but requires some kind of
+remote procedure call (RPC) to a central database, or some shared memory
+and locking mechanism to access the Bloom filter, neither of which is
+very attractive.
+
+## Mitigating session ticket reuse
+
+Session ticket reuse is probably not very interesting as a denial-of-service
+attack because the botnet could just as well start a series of new sessions.
+Reusing the session ticket would just make the new sessions easier to
+process by the server, which means the DOS attack would be weaker.
+But if the session ticket is use as a zero RTT replay, the reuse will
+allow for multiple "zero RTT replays" which will only be limited by the
+standard protection built in TLS 1.3: the ticket can only be replayed
+for a very short time window after the capture the capture of the zero RTT
+exchange.
+
+The zero RTT attack is of course mitigated if the server application does
+not use zero RTT, or if the zero RTT data is designed to be replayable
+without changing the state of the system.
+
+## Enabling client more tokens and tickets
+
+If the service assumes that servers will perform client mode connections,
+these client mode connections will need to retrieve previously obtained
+sessions and tickets. A general solution would require managing a centralized
+data base of tokens and tickets, accessible by all server threads.
+
+However, it may be sufficient to build an "affinity" mechanism, in which
+the service will try to reuse the same thread or process for its outgoing
+connection to a given server. For example, the client could pick the
+thread or process from a hash of the server name. If the affinity
+mechanism works well enough, the chosen thread or process will have
+a valid store of tickets and tokens for the selected server name.
+
 # API discussion
 
 The previous part of this document discussed network connectivity issues,
