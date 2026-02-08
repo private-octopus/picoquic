@@ -429,7 +429,7 @@ typedef struct st_picoquic_tp_t {
 * quic context was initialized.
 */
 
-uint64_t picoquic_current_time(); /* wall time */
+uint64_t picoquic_current_time(void); /* wall time */
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 /* Callback function for providing stream data to the application,
@@ -1699,7 +1699,7 @@ extern size_t picoquic_nb_congestion_control_algorithms;
 /* Register a custom table of congestion control algorithms */
 void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms);
 /* Register a full list of congestion control algorithms */
-void picoquic_register_all_congestion_control_algorithms();
+void picoquic_register_all_congestion_control_algorithms(void);
 
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_id);
 
