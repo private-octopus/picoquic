@@ -708,6 +708,12 @@ void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic,
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
+/* Set TLS exporter flag in the master TLS context */
+void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
+
+/* Export keying material from the TLS connection using the given exporter label */
+int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
+
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
  * will also have certificaye and key. In that case, the function "enforce_client_only"

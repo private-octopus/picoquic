@@ -67,6 +67,7 @@ int tls_api_connect_test();
 #endif
 int tls_api_test();
 int tls_api_inject_hs_ack_test();
+int tls_exporter_test();
 int tls_api_silence_test();
 int tls_api_loss_test(uint64_t mask);
 int tls_api_client_first_loss_test();

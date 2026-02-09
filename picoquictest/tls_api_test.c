@@ -2332,6 +2332,96 @@ int tls_api_inject_hs_ack_test()
     return ret;
 }
 
+int tls_exporter_test()
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t *test_ctx = NULL;
+
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI,
+                               PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        if (test_ctx->qclient != NULL) {
+            picoquic_free(test_ctx->qclient);
+            test_ctx->qclient = NULL;
+            test_ctx->cnx_client = NULL;
+        }
+
+        test_ctx->qclient = picoquic_create(8, NULL, NULL, NULL, NULL, test_api_callback,
+                                            (void *)&test_ctx->client_callback, NULL, NULL, NULL,
+                                            simulated_time, &simulated_time, NULL, NULL, 0);
+
+        if (test_ctx->qclient == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_set_use_exporter(test_ctx->qclient, 1);
+        picoquic_set_use_exporter(test_ctx->qserver, 1);
+    }
+
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, picoquic_null_connection_id,
+                                                   picoquic_null_connection_id,
+                                                   (struct sockaddr *)&test_ctx->server_addr, 0, 0,
+                                                   PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        const char *label = "tls api test";
+        const size_t export_key_len = 16;
+        unsigned char client_export_key[16] = { 0 };
+        unsigned char server_export_key[16] = { 0 };
+
+        picoquic_cnx_t *client_cnx = test_ctx->cnx_client;
+        picoquic_cnx_t *server_cnx = test_ctx->cnx_server;
+
+        if (client_cnx == NULL || server_cnx == NULL) {
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            int r = picoquic_export_secret(client_cnx, label, client_export_key, export_key_len);
+            if (r != 0) {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            int r = picoquic_export_secret(server_cnx, label, server_export_key, export_key_len);
+            if (r != 0) {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            if (memcmp(client_export_key, server_export_key, export_key_len) != 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int tls_api_silence_test()
 {
     uint64_t loss_mask = 0;
