@@ -336,7 +336,7 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
 
 void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
 
-picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet(void);
 
 uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
 
