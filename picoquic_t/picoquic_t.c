@@ -123,6 +123,7 @@ static const picoquic_test_def_t test_table[] = {
 #endif
     { "tls_api", tls_api_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
+    { "tls_exporter", tls_exporter_test },
     { "null_sni", null_sni_test },
     { "silence_test", tls_api_silence_test },
     { "code_version", code_version_test },
