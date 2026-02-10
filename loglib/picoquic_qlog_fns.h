@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2019, Private Octopus, Inc.
+* Copyright (c) 2020, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -18,22 +18,20 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef LOGCONVERT_H
-#define LOGCONVERT_H
 
-#include "picoquic_internal.h"
-
+#ifndef PICOQUIC_QLOG_FNS_H
+#define PICOQUIC_QLOG_FNS_H
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-const char * ptype2str(picoquic_packet_type_enum ptype);
-#if 0
-const char * ftype2str(picoquic_frame_type_enum_t ftype);
-#endif
+#include "picoquic.h"
+    /* Set the qlog directory and start streaming qlog traces for
+    * each connection.
+    */
+    int picoquic_fns_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* LOGCONVERT_H */
+#endif /* PICOQUIC_QLOG_FNS_H */

@@ -1873,6 +1873,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_fns)
+        {
+            int ret = qlog_fns_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_fns_ecn)
+        {
+            int ret = qlog_fns_ecn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();

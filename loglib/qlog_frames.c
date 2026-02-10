@@ -36,6 +36,10 @@ static void qlog_json_str(FILE* f, const char* key, const char* value) {
     fprintf(f, "\"%s\": \"%s\"", key, value);
 }
 
+static void qlog_json_boolean(FILE* f, const char* key, int value) {
+    fprintf(f, "\"%s\": %s", key, (value == 0) ? "false" : "true");
+}
+
 /* Helper: write a binary string parameter */
 const uint8_t * qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l)
 {
@@ -98,15 +102,33 @@ const uint8_t* qlog_frame_stream(FILE* f, const uint8_t* first_byte, const uint8
         bytes = NULL;
     }
     else {
+        size_t extra_bytes = 8;
         bytes += consumed;
         fprintf(f, ", ");
-        qlog_json_uint(f, "stream_id", stream_id);
+        qlog_json_uint(f, "id", stream_id);
         fprintf(f, ", ");
         qlog_json_uint(f, "offset", offset);
         fprintf(f, ", ");
         qlog_json_uint(f, "length", data_length);
         fprintf(f, ", ");
-        qlog_json_uint(f, "fin", fin);
+        qlog_json_boolean(f, "fin", fin);
+#if 1
+        /* Bug compatibility with old version */
+        fprintf(f, " ");
+#endif
+
+        if ((*first_byte & 2) == 0) {
+            fprintf(f, ", \"has_length\": false");
+        }
+        if (extra_bytes > data_length) {
+            extra_bytes = data_length;
+        }
+
+        if (extra_bytes > 0) {
+            fprintf(f, ", \"begins_with\": ");
+            qlog_frame_hex_string(f, bytes, bytes_max, extra_bytes);
+        }
+        bytes += data_length;
     }
     return bytes;
 }
@@ -150,6 +172,7 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
             else {
                 if (i != 0) {
                     /* Skip the gap */
+                    skip++;
                     largest -= skip;
                     fprintf(f, ", ");
                 }
@@ -212,12 +235,12 @@ const uint8_t* qlog_frame_connection_close(FILE* f, const uint8_t* bytes, const 
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &error_code)) != NULL &&
         (app_error || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &trigger_frame_type)) != NULL) &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reason_length)) != NULL) {
-        fprintf(f, ", ");
+        fprintf(f, ", \"error_space\": \"%s\", ",
+            (app_error) ? "application" : "transport");
         qlog_json_uint(f, "error_code", error_code);
-        if (!app_error) {
-            /* Documment the offending frame type */
-            char const* trigger_frame_type_name = picoquic_frame_name(trigger_frame_type);
-            fprintf(f, ", "); 
+        if (!app_error && trigger_frame_type != 0) {
+            /* Document the offending frame type */
+            char const* trigger_frame_type_name = picoquic_frame_name(trigger_frame_type); 
             if (strcmp(trigger_frame_type_name, "unknown") == 0) {
                 fprintf(f, ", \"trigger_frame_type\": \"%"PRIx64"\"", trigger_frame_type);
             }
@@ -292,7 +315,7 @@ const uint8_t* picoquic_frame_new_connection_id(FILE* f, const uint8_t* bytes, c
     fprintf(f, "\"connection_id\": ");
     bytes = qlog_frame_hex_string(f, bytes, bytes_max, cid_length);
     if (bytes != NULL) {
-        fprintf(f, ",\"stateless_reset_token\": ");
+        fprintf(f, ", \"reset_token\": ");
         bytes = qlog_frame_hex_string(f, bytes, bytes_max, 16);
     }
     return bytes;
@@ -366,11 +389,11 @@ const uint8_t* qlog_frame_ack_frequency(FILE* f, const uint8_t* bytes, const uin
     uint64_t sequence_number;
     uint64_t packet_tolerance;
     uint64_t max_ack_delay;
-    uint8_t ignore_order;
+    uint64_t reordering_threshold;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &sequence_number)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &packet_tolerance)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &max_ack_delay)) == NULL ||
-        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &ignore_order)) == NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reordering_threshold)) == NULL) {
         return NULL;
     }
     fprintf(f, ", ");
@@ -380,7 +403,7 @@ const uint8_t* qlog_frame_ack_frequency(FILE* f, const uint8_t* bytes, const uin
     fprintf(f, ", ");
     qlog_json_uint(f, "max_ack_delay", max_ack_delay);
     fprintf(f, ", ");
-    qlog_json_uint(f, "ignore_order", ignore_order);
+    qlog_json_uint(f, "reordering_threshold", reordering_threshold);
     return bytes;
 }
 
@@ -467,7 +490,7 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
     return bytes;
 }
 
-void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding)
 {
     int ret = 0;
     char const* comma_if_needed = "";
@@ -478,8 +501,15 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id)) == NULL) {
             break;
         }
+        /* For compatibility with the old version, do not log padding */
+        if (frame_id == picoquic_frame_type_padding && skip_padding) {
+            while (bytes < bytes_max && *bytes == picoquic_frame_type_padding) {
+                bytes++;
+            }
+            continue;
+        }
         /* Open the logging line for the frame */
-        fprintf(f, "%s{ \"frame_type\": \"%s\"", comma_if_needed, picoquic_frame_name(frame_id));
+        fprintf(f, "%s{ \n    \"frame_type\": \"%s\"", comma_if_needed, picoquic_frame_name(frame_id));
         comma_if_needed = ", ";
 
         if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
@@ -608,6 +638,7 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
                 bytes = qlog_frame_observed_address(f, bytes, bytes_max, frame_id);
                 break;
             default:
+                fprintf(f, ", ");
                 qlog_json_uint(f, "unknown_frame_type", frame_id);
             }
         }

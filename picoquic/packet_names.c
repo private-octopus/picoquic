@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2019, Private Octopus, Inc.
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -18,22 +18,29 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef LOGCONVERT_H
-#define LOGCONVERT_H
 
+#include "picoquic.h"
 #include "picoquic_internal.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-const char * ptype2str(picoquic_packet_type_enum ptype);
-#if 0
-const char * ftype2str(picoquic_frame_type_enum_t ftype);
-#endif
-
-#ifdef __cplusplus
+const char* picoquic_packet_type_name(uint64_t ptype)
+{
+    switch (ptype) {
+    case picoquic_packet_error:
+        return "error";
+    case picoquic_packet_version_negotiation:
+        return "version_negotiation";
+    case picoquic_packet_initial:
+        return "initial";
+    case picoquic_packet_retry:
+        return "retry";
+    case picoquic_packet_handshake:
+        return "handshake";
+    case picoquic_packet_0rtt_protected:
+        return "0RTT";
+    case picoquic_packet_1rtt_protected:
+        return "1RTT";
+    case picoquic_packet_type_max:
+    default:
+        return "unknown";
+    }
 }
-#endif
-
-#endif /* LOGCONVERT_H */

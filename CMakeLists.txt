@@ -95,6 +95,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/newreno.c
     picoquic/pacing.c
     picoquic/packet.c
+    picoquic_packet_names.c
     picoquic/paths.c
     picoquic/performance_log.c
     picoquic/picohash.c

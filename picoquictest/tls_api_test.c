@@ -35,6 +35,7 @@
 #include "csv.h"
 #include "qlog.h"
 #include "autoqlog.h"
+#include "picoquic_qlog_fns.h"
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
@@ -8955,6 +8956,114 @@ int qlog_trace_auto_test()
 int qlog_trace_ecn_test()
 {
     return qlog_trace_test_one(0, 1, 0x02);
+}
+
+#define QLOG_FNS_QLOG "0102030405060708.server.qlog"
+
+int qlog_fns_test_one(uint8_t recv_ecn)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {1, 2, 3, 4, 5, 6, 7, 8}, 8 };
+    picoquic_connection_id_t cnxfn_data_client = { {1, 1, 1, 1, 1, 1, 1, 1}, 8 };
+    picoquic_connection_id_t cnxfn_data_server = { {2, 2, 2, 2, 2, 2, 2, 2}, 8 };
+    uint8_t reset_seed_client[PICOQUIC_RESET_SECRET_SIZE] = { 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
+    uint8_t reset_seed_server[PICOQUIC_RESET_SECRET_SIZE] = { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 };
+    char const* qlog_target = QLOG_FNS_QLOG;
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    (void)picoquic_file_delete(QLOG_TRACE_BIN, NULL);
+    (void)picoquic_file_delete(qlog_target, NULL);
+
+    /* Set the logging policy on the server side, to store data in the
+     * current working directory, and run a basic test scenario */
+    if (ret == 0) {
+        test_ctx->recv_ecn_client = recv_ecn;
+        test_ctx->recv_ecn_server = recv_ecn;
+
+        picoquic_fns_set_qlog(test_ctx->qserver, ".");
+        
+        (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
+        (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
+        picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
+        picoquic_set_default_lossbit_policy(test_ctx->qclient, picoquic_lossbit_send_receive);
+        test_ctx->qserver->cnx_id_callback_ctx = (void*)&cnxfn_data_server;
+        test_ctx->qserver->cnx_id_callback_fn = qlog_trace_cid_fn;
+        test_ctx->qclient->cnx_id_callback_ctx = (void*)&cnxfn_data_client;
+        test_ctx->qclient->cnx_id_callback_fn = qlog_trace_cid_fn;
+        memcpy(test_ctx->qclient->reset_seed, reset_seed_client, PICOQUIC_RESET_SECRET_SIZE);
+        memcpy(test_ctx->qserver->reset_seed, reset_seed_server, PICOQUIC_RESET_SECRET_SIZE);
+
+        /* Force ciphersuite to AES128, so Client Hello has a constant format */
+        if (picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AES_128_GCM_SHA256) != 0) {
+            DBG_PRINTF("Could not set ciphersuite to 0x%04x", PICOQUIC_AES_128_GCM_SHA256);
+        }
+        if (picoquic_set_key_exchange(test_ctx->qclient, PICOQUIC_GROUP_SECP256R1) != 0) {
+            DBG_PRINTF("Could not set key exchange to %d", PICOQUIC_GROUP_SECP256R1);
+        }
+        /* Delete the old connection */
+        picoquic_delete_cnx(test_ctx->cnx_client);
+
+        /* re-create a client connection, this time picking up the required connection ID */
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+            initial_cid, picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00010a04, 0, 20000, 2000000);
+    }
+
+    /* Add a gratuitous bad packet to test "packet dropped" log */
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        uint8_t p[256];
+
+        memset(p, 0, sizeof(p));
+        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
+        p[0] |= 64;
+        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+    }
+
+    /* Free the resource, which will close the log file.
+     */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    /* compare the log file to the expected value */
+    if (ret == 0)
+    {
+        char qlog_trace_test_ref[512];
+
+        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref), picoquic_solution_dir,
+            (recv_ecn == 0) ? QLOG_TRACE_TEST_REF : QLOG_TRACE_ECN_TEST_REF);
+
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
+        }
+        else {
+            ret = picoquic_test_compare_text_files(qlog_target, qlog_trace_test_ref);
+        }
+    }
+
+    return ret;
+}
+
+int qlog_fns_test()
+{
+    return qlog_fns_test_one(0);
+}
+
+int qlog_fns_ecn_test()
+{
+    return qlog_fns_test_one(0x02);
 }
 
 /*

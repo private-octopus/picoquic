@@ -32,7 +32,7 @@
 
 // Forward declaration for the QLOG frame logging dispatcher
 // Adjust the signature if your implementation differs
-extern const uint8_t* qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
+extern const uint8_t* qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding);
 
 int qlog_frames_test()
 {
@@ -53,7 +53,7 @@ int qlog_frames_test()
         need_comma = ",\n";
 
         // Write one line per frame
-        qlog_frames(F, bytes, bytes_max);
+        qlog_frames(F, bytes, bytes_max, 0);
         fprintf(F, "}");
     }
     fprintf(F, "\n]\n");
