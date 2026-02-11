@@ -32,9 +32,9 @@
 { "test": "stop_sending", "frame": { 
     "frame_type": "stop_sending", "stream_id": 17, "error_code": 23}},
 { "test": "challenge", "frame": { 
-    "frame_type": "path_challenge", "data": "0102030405060708"}},
+    "frame_type": "path_challenge", "path_challenge": "0102030405060708"}},
 { "test": "response", "frame": { 
-    "frame_type": "path_response", "data": "0102030405060708"}},
+    "frame_type": "path_response", "path_response": "0102030405060708"}},
 { "test": "new_token", "frame": { 
     "frame_type": "new_token", "new_token": "0102030405060708090a0b0c0d0e0f1011"}},
 { "test": "ack", "frame": { 

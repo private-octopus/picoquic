@@ -534,6 +534,7 @@ int multipath_keep_alive_test();
 int multipath_just_one_test();
 int multipath_break_both_test();
 int multipath_qlog_test();
+int multipath_qlog_fns_test();
 int multipath_tunnel_test();
 int token_reuse_api_test();
 int get_hash_test();

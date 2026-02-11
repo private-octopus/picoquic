@@ -37,6 +37,7 @@ typedef struct st_qlog_fns_path_context_t {
     uint64_t rtt_min;
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
+    uint64_t smoothed_rtt_for_bug;
 
     unsigned int last_bw_estimate_path_limited : 1;
 } qlog_fns_path_context_t;
@@ -840,7 +841,9 @@ void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_
 
         if (path->smoothed_rtt != path_ctx->smoothed_rtt) {
             fprintf(f, "%s\"smoothed_rtt\": %" PRIu64, comma, path->smoothed_rtt);
-#if 0
+#if 1
+            path_ctx->smoothed_rtt_for_bug = path->smoothed_rtt;
+#else
             /* Bug compatibility with first implementation */
             path_ctx->smoothed_rtt = path->smoothed_rtt;
 #endif
@@ -873,12 +876,41 @@ void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_
 void qlog_fns_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)cnx->qlog_ctx;
-    picoquic_path_t* path = cnx->path[0];
-    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-    qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx, path->unique_path_id);
 
-    if (path_ctx != NULL) {
-        qlog_fns_cc_dump_path(cnx, path, pkt_ctx, ctx, path_ctx, current_time);
+    for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
+    {
+        picoquic_path_t* path = cnx->path[path_index];
+        if (!path->is_cc_data_updated) {
+            continue;
+        }
+        else {
+            qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx,
+#if 1
+                /* Bug compatibility with first version */
+                cnx->path[0]->unique_path_id
+#else
+                path->unique_path_id
+#endif
+            );
+#if 1
+            int smoothed_rtt_updated = 0;
+            if (path_ctx != NULL && path->smoothed_rtt != path_ctx->smoothed_rtt_for_bug) {
+                smoothed_rtt_updated = 1;
+            }
+#endif
+            picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+            if (cnx->is_multipath_enabled) {
+                pkt_ctx = &cnx->path[path_index]->pkt_ctx;
+            }
+            if (path_ctx != NULL) {
+                qlog_fns_cc_dump_path(cnx, path, pkt_ctx, ctx, path_ctx, current_time);
+            }
+            path->is_cc_data_updated = 0;
+#if 1
+            /* Bug compatibility with first implementation */
+            break;
+#endif
+        }
     }
 }
 
@@ -951,7 +983,7 @@ void qlog_fns_new_connection(picoquic_cnx_t* cnx)
     /* Initialize */
     memset(ctx, 0, sizeof(qlog_fns_context_t));
     ctx->start_time = cnx->start_time;
-    
+    ctx->trace_flow_id = cnx->local_parameters.initial_max_path_id > 0;
     /* Try to create the log. */
     if (qlog_fns_set_file_name(cnx, log_filename, sizeof(log_filename),
         cid_name, sizeof(cid_name)) != 0 ||

@@ -3059,6 +3059,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_qlog_fns) {
+            int ret = multipath_qlog_fns_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_tunnel) {
             int ret = multipath_tunnel_test();
 

@@ -353,13 +353,13 @@ const uint8_t* qlog_frame_new_token(FILE* f, const uint8_t* bytes, const uint8_t
     return bytes;
 }
 
-const uint8_t* qlog_frame_path_challenge_response(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* qlog_frame_path_challenge_response(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int is_challenge)
 {
     if (bytes + 8 > bytes_max) {
         bytes = NULL;
     }
     else {
-        fprintf(f, ", \"data\": ");
+        fprintf(f, ", \"%s\": ", (is_challenge)?"path_challenge":"path_response");
         bytes = qlog_frame_hex_string(f, bytes, bytes_max, 8);
     }
     return bytes;
@@ -582,10 +582,10 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int sk
                 bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "error_code");
                 break;
             case picoquic_frame_type_path_challenge:
-                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max);
+                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 1);
                 break;
             case picoquic_frame_type_path_response:
-                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max);
+                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 0);
                 break;
             case picoquic_frame_type_crypto_hs:
                 bytes = qlog_frame_crypto_hs(f, bytes, bytes_max);
