@@ -19,27 +19,19 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef AUTOQLOG_H
-#define AUTOQLOG_H
+#ifndef PICOQUIC_QLOG_FNS_H
+#define PICOQUIC_QLOG_FNS_H
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "picoquic.h"
-#include "picoquic_qlog.h"
-/* Set the qlog log folder and start generating per connection qlog traces into it.
-    * Set to NULL value to stop binary tracing.
-    * If the binary folder is not set, binary traces will be generated temporarily in
-    * the qlog folder during the connection, and then deleted after the connection
-    * is closed and the binary trace has been converted to qlog.
-    * This conversion from binary to qlog consumes resource and can affect performance.
-    * Applications that are concerned about the performance issues should not use this
-    * option, and should instead use binary logs, from which qlogs can be extracted
-    * using the picolog_t app.
+    /* Set the qlog directory and start streaming qlog traces for
+    * each connection.
     */
-int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
+    int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* AUTOQLOG_H */
+#endif /* PICOQUIC_QLOG_FNS_H */

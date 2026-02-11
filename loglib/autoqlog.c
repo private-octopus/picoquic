@@ -33,11 +33,11 @@
 #include "picoquic_binlog.h"
 #include "picoquic.h"
 #if 1
-#include "picoquic_qlog_fns.h"
+#include "picoquic_qlog.h"
 
-int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
+int picoquic_set_qlog_bogus(picoquic_quic_t* quic, char const* qlog_dir)
 {
-    picoquic_fns_set_qlog(quic, qlog_dir);
+    picoquic_set_qlog(quic, qlog_dir);
     return 0;
 }
 

@@ -35,7 +35,7 @@
 #include "csv.h"
 #include "qlog.h"
 #include "autoqlog.h"
-#include "picoquic_qlog_fns.h"
+#include "picoquic_qlog.h"
 #include "picoquic_logger.h"
 #include "performance_log.h"
 #include "picoquictest.h"
@@ -8947,7 +8947,7 @@ int qlog_fns_test_one(uint8_t recv_ecn)
         test_ctx->recv_ecn_client = recv_ecn;
         test_ctx->recv_ecn_server = recv_ecn;
 
-        picoquic_fns_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);

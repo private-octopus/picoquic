@@ -29,7 +29,7 @@
 #include "logreader.h"
 #include "qlog.h"
 #include "picoquic_bbr.h"
-#include "picoquic_qlog_fns.h"
+#include "picoquic_qlog.h"
 
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
@@ -1838,7 +1838,7 @@ int multipath_trace_test_one(int use_qlog_streaming)
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
         if (use_qlog_streaming) {
-            picoquic_fns_set_qlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
         }
         else {
             (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
