@@ -800,13 +800,15 @@ void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_
     FILE* f = ctx->f_txtlog;
     /* TODO: manage the path_ctx values! Create new paths? */
 
-    if (path->cwin != path_ctx->cwin || path->rtt_sample != path_ctx->rtt_sample ||
+    if (path->cwin != path_ctx->cwin ||
+        path->rtt_sample != path_ctx->rtt_sample ||
 #if 1
         /* Bug compatibility with first implementation */
 #else
         path->smoothed_rtt != path_ctx->smoothed_rtt ||
 #endif
-            path->rtt_min != path_ctx->rtt_min || path->bytes_in_transit != path_ctx->bytes_in_transit ||
+            path->rtt_min != path_ctx->rtt_min || 
+            path->bytes_in_transit != path_ctx->bytes_in_transit ||
             path->pacing.packet_time_microsec != path_ctx->pacing_packet_time
 #if 1
         /* Bug compatibility with first implementation */

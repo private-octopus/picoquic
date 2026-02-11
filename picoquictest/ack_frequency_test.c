@@ -25,7 +25,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "logreader.h"
 #include "qlog.h"
 
@@ -90,14 +90,12 @@ static int ackfrq_test_one(ackfrq_test_spec_t * spec)
         }
 
         /* set the binary logs on both sides */
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         picoquic_set_log_level(test_ctx->qserver, 1);
         picoquic_set_log_level(test_ctx->qclient, 1);
         test_ctx->qclient->use_long_log = 1;
         test_ctx->qserver->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
         /* Initialize the client connection */
         picoquic_start_client_cnx(test_ctx->cnx_client);
     }

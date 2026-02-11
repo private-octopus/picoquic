@@ -26,7 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "logreader.h"
 #include "qlog.h"
 #include "picoquic_newreno.h"
@@ -460,9 +460,9 @@ static int app_limited_test_one(app_limited_test_config_t * config)
             picoquic_set_default_congestion_algorithm(test_ctx->qserver, config->ccalgo);
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, config->ccalgo);
 
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
-            picoquic_set_binlog(test_ctx->qclient, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
             if (config->do_preemptive_repeat) {
                 picoquic_set_preemptive_repeat_policy(test_ctx->qserver, 1);
                 picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, 1);

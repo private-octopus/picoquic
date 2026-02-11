@@ -4867,7 +4867,7 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
         test_ctx->s_to_c_link->picosec_per_byte = picosec_1mbps;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -5810,11 +5810,10 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
             test_ctx->s_to_c_link->microsec_latency = latency;
         }
         picoquic_set_log_level(test_ctx->qserver, 1);
-        ret = picoquic_set_binlog(test_ctx->qserver, ".");
+        ret = picoquic_set_qlog(test_ctx->qserver, ".");
         picoquic_set_log_level(test_ctx->qclient, 1);
         if (ret == 0) {
-            ret = picoquic_set_binlog(test_ctx->qclient, ".");
-            binlog_new_connection(test_ctx->cnx_client);
+            ret = picoquic_set_qlog(test_ctx->qclient, ".");
         }
     }
 
@@ -5955,9 +5954,8 @@ int fast_nat_rebinding_test()
 
     if (ret == 0) {
         /* Set up logging */ 
-        picoquic_set_binlog(test_ctx->qserver, ".");
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        binlog_new_connection(test_ctx->cnx_client);
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
     }
 
     if (ret == 0) {
@@ -6248,9 +6246,8 @@ int client_only_test()
         /* First, try enforcement. We do set log on the server side, but it is expected to be empty */
         int connection_ret = 0;
         picoquic_enforce_client_only(test_ctx->qserver, 1);
-        picoquic_set_binlog(test_ctx->qserver, ".");
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        binlog_new_connection(test_ctx->cnx_client);
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         connection_ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
         if (connection_ret == 0 && test_ctx->cnx_client->cnx_state < picoquic_state_disconnected) {
             DBG_PRINTF("Connection unexpectedly succeeds, state=%d, ret=%d (0x%x)",
@@ -8748,7 +8745,7 @@ int packet_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
         picoquic_set_default_lossbit_policy(test_ctx->qclient, picoquic_lossbit_send_receive);
         test_ctx->qserver->use_long_log = 1;
@@ -8821,7 +8818,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
     }
 }
 
-int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
+int qlog_trace_test_one(uint8_t recv_ecn)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -8831,17 +8828,12 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
     picoquic_connection_id_t cnxfn_data_server = { {2, 2, 2, 2, 2, 2, 2, 2}, 8 };
     uint8_t reset_seed_client[PICOQUIC_RESET_SECRET_SIZE] = { 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
     uint8_t reset_seed_server[PICOQUIC_RESET_SECRET_SIZE] = { 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 };
-    char const* qlog_target = (auto_qlog) ? QLOG_TRACE_AUTO_QLOG : ((recv_ecn != 0) ? QLOG_TRACE_ECN_QLOG : QLOG_TRACE_QLOG);
+    char const* qlog_target = QLOG_TRACE_AUTO_QLOG;
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
 
-    if (!auto_qlog && !keep_binlog) {
-        ret = -1;
-    }
-
-    (void)picoquic_file_delete(QLOG_TRACE_BIN, NULL);
     (void)picoquic_file_delete(qlog_target, NULL);
 
     /* Set the logging policy on the server side, to store data in the
@@ -8849,12 +8841,7 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
     if (ret == 0) {
         test_ctx->recv_ecn_client = recv_ecn;
         test_ctx->recv_ecn_server = recv_ecn;
-        if (auto_qlog) {
-            picoquic_set_qlog(test_ctx->qserver, ".");
-        }
-        if (keep_binlog) {
-            picoquic_set_binlog(test_ctx->qserver, ".");
-        }
+        picoquic_set_qlog(test_ctx->qserver, ".");
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
@@ -8905,20 +8892,6 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
         test_ctx = NULL;
     }
 
-    /* Create a QLOG file from the .bin log file */
-    if (ret == 0 && !auto_qlog) {
-        uint64_t log_time = 0;
-        uint16_t flags;
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(QLOG_TRACE_BIN, &flags, &log_time);
-        if (f_binlog == NULL) {
-            ret = -1;
-        }
-        else {
-            ret = qlog_convert(&initial_cid, f_binlog, QLOG_TRACE_BIN, qlog_target, NULL, flags);
-            picoquic_file_close(f_binlog);
-        }
-    }
-
     /* compare the log file to the expected value */
     if (ret == 0)
     {
@@ -8940,22 +8913,12 @@ int qlog_trace_test_one(int auto_qlog, int keep_binlog, uint8_t recv_ecn)
 
 int qlog_trace_test()
 {
-    return qlog_trace_test_one(0, 1, 0);
-}
-
-int qlog_trace_only_test()
-{
-    return qlog_trace_test_one(1, 0, 0);
-}
-
-int qlog_trace_auto_test()
-{
-    return qlog_trace_test_one(1, 1, 0);
+    return qlog_trace_test_one(0);
 }
 
 int qlog_trace_ecn_test()
 {
-    return qlog_trace_test_one(0, 1, 0x02);
+    return qlog_trace_test_one(0x02);
 }
 
 #define QLOG_FNS_QLOG "0102030405060708.server.qlog"
@@ -8976,7 +8939,6 @@ int qlog_fns_test_one(uint8_t recv_ecn)
         ret = -1;
     }
 
-    (void)picoquic_file_delete(QLOG_TRACE_BIN, NULL);
     (void)picoquic_file_delete(qlog_target, NULL);
 
     /* Set the logging policy on the server side, to store data in the
@@ -9432,7 +9394,7 @@ int long_rtt_test()
         test_ctx->c_to_s_link->microsec_latency = latency;
         test_ctx->s_to_c_link->microsec_latency = latency;
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
 
         /* The transmission delay cannot be less than 2.6 sec:
          * 3 handshakes at 1 RTT each = 1.8 sec, plus
@@ -9480,7 +9442,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         /* set the optimistic ack policy to the default value */
         picoquic_set_optimistic_ack_policy(test_ctx->qserver, PICOQUIC_DEFAULT_HOLE_PERIOD);
         /* add a log request for debugging */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
 
         /* Reset the uniform random test */
         picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
@@ -10883,7 +10845,7 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
         test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         /* Setting the RED threshold to the latency target, for simplification. */
         if ((ret = red_aqm_configure(test_ctx->c_to_s_link, latency_target, queue_max_red)) == 0) {
@@ -10990,7 +10952,7 @@ static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint
         test_ctx->s_to_c_link->picosec_per_byte = picosec_per_byte;
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -11107,7 +11069,7 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
     if (ret == 0) {
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, picoquic_bbr_algorithm);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -12131,7 +12093,7 @@ int random_padding_test_one(size_t pad_length, uint64_t* random_context, uint8_t
     if (ret == 0) {
         /* Start logging on the server */
         picoquic_set_textlog(test_ctx->qserver, random_padding_text_log);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -12519,7 +12481,7 @@ int immediate_ack_test()
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
     }
 
     if (ret == 0) {

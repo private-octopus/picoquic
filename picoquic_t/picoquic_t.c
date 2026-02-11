@@ -307,8 +307,6 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_auto", qlog_auto_test },
     { "qlog_error", qlog_error_test },
     { "qlog_trace", qlog_trace_test },
-    { "qlog_trace_auto", qlog_trace_auto_test },
-    { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
     { "qlog_fns", qlog_fns_test },
     { "qlog_fns_ecn", qlog_fns_ecn_test },

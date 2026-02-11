@@ -124,8 +124,6 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
         /* set the binary log on the client side */
         picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,

@@ -26,7 +26,7 @@
 #include <string.h>
 
 #include "logreader.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "picoquic_logger.h"
 #include "qlog.h"
 
@@ -90,7 +90,7 @@ static int congestion_control_test(picoquic_congestion_algorithm_t* ccalgo, uint
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->s_to_c_link->jitter = jitter;
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             test_scenario_congestion, sizeof(test_scenario_congestion), 0, 0, 0, 20000 + 2 * jitter, max_completion_time);
@@ -172,7 +172,7 @@ static int congestion_long_test(picoquic_congestion_algorithm_t* ccalgo)
         test_ctx->s_to_c_link->jitter = 0;
         test_ctx->c_to_s_link->picosec_per_byte = 8000000; /* Simulate 1 Mbps */
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
         ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
@@ -287,8 +287,8 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         test_ctx->qserver->use_long_log = 1;
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
 
         test_ctx->c_to_s_link->jitter = jitter;
         test_ctx->c_to_s_link->microsec_latency = latency;
@@ -567,7 +567,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             picoquic_set_default_bdp_frame_option(test_ctx->qclient, 1);
             picoquic_set_default_bdp_frame_option(test_ctx->qserver, 1);
             test_ctx->qserver->use_long_log = 1;
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
             /* Set parameters */
             picoquic_init_transport_parameters(&server_parameters, 0);
             picoquic_init_transport_parameters(&client_parameters, 1);
@@ -769,7 +769,7 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         test_ctx->blackhole_start = 5000000;
 
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);
@@ -796,8 +796,7 @@ int blackhole_test()
 * The application is set to limit the max data values to stay lower than a set flow control window.
 * We verify that in these scenario the CWIN does not grow too much above the flow control window.
 */
-#define APP_LIMIT_TRACE_CSV "app_limit_trace.csv"
-#define APP_LIMIT_TRACE_BIN "acc1020304050607.server.log"
+#define APP_LIMIT_TRACE_QLOG "acc1020304050607.server.qlog"
 
 int app_limit_cc_test_one(
     picoquic_congestion_algorithm_t* ccalgo, uint64_t max_completion_time)
@@ -811,7 +810,7 @@ int app_limit_cc_test_one(
     picoquic_connection_id_t initial_cid = { {0xac, 0xc1, 2, 3, 4, 5, 6, 7}, 8 };
     int ret = 0;
 
-    (void)picoquic_file_delete(APP_LIMIT_TRACE_BIN, NULL);
+    (void)picoquic_file_delete(APP_LIMIT_TRACE_QLOG, NULL);
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
@@ -828,7 +827,7 @@ int app_limit_cc_test_one(
 
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
 
@@ -853,57 +852,14 @@ int app_limit_cc_test_one(
         test_ctx = NULL;
     }
 
-    /* Create a CSV file from the .bin log file */
+
+    /* Get the max bytes in flight from QLOG file, and check it is under the limit */
     if (ret == 0) {
-        ret = picoquic_cc_log_file_to_csv(APP_LIMIT_TRACE_BIN, APP_LIMIT_TRACE_CSV);
-    }
-
-    /* Compute the max CWIN from the trace file */
-    if (ret == 0)
-    {
-        FILE* F = picoquic_file_open(APP_LIMIT_TRACE_CSV, "r");
-        uint64_t transit_max = 0;
-
-        if (F == NULL) {
-            DBG_PRINTF("Cannot open <%s>", APP_LIMIT_TRACE_CSV);
+        uint64_t bytes_in_flight_max;
+        ret = picoquic_check_bytes_in_flight(APP_LIMIT_TRACE_QLOG, &bytes_in_flight_max);
+        if (ret == 0 && bytes_in_flight_max > cwin_limit) {
+            DBG_PRINTF("MAX In Flight = %" PRIu64 ", larger than %" PRIu64, bytes_in_flight_max, cwin_limit);
             ret = -1;
-        }
-        else {
-            char buffer[512];
-
-            while (fgets(buffer, 512, F) != NULL) {
-                /* only consider number lines line */
-                if (buffer[0] >= '0' && buffer[0] <= '9') {
-                    uint64_t transit = 0;
-                    int nb_comma = 0;
-                    int c_index = 0;
-
-                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
-                        if (buffer[c_index] == ',') {
-                            nb_comma++;
-                        }
-                        c_index++;
-                    }
-                    while (c_index < 512 && buffer[c_index] == ' ') {
-                        c_index++;
-                    }
-                    while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
-                        transit *= 10;
-                        transit += (uint64_t)buffer[c_index] - '0';
-                        c_index++;
-                    }
-                    if (transit > transit_max) {
-                        transit_max = transit;
-                    }
-                }
-            }
-
-            (void)picoquic_file_close(F);
-
-            if (transit_max > cwin_limit) {
-                DBG_PRINTF("MAX Transit = %" PRIu64 ", larger than %" PRIu64, transit_max, cwin_limit);
-                ret = -1;
-            }
         }
     }
 
@@ -944,8 +900,53 @@ int app_limit_cc_test()
 /* Test the effectiveness of the CWIN MAX option
  */
 
-#define CWIN_MAX_TRACE_CSV "cwin_max_trace.csv"
-#define CWIN_MAX_TRACE_BIN "c9149a0102030405.server.log"
+#define CWIN_MAX_TRACE_QLOG "c9149a0102030405.server.qlog"
+
+int picoquic_check_bytes_in_flight(char const * qlog_file, uint64_t* max_bytes_in_flight)
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open(qlog_file, "r");
+
+    if (F == NULL) {
+        DBG_PRINTF("Cannot open <%s>", qlog_file);
+        ret = -1;
+    }
+    else {
+        *max_bytes_in_flight = 0;
+        while (ret == 0 && F != NULL) {
+            char buffer[512];
+            int c_index = 0;
+            if (fgets(buffer, 512, F) == NULL) {
+                break;
+            }
+            /* Look for bytes_in_flight property */
+            while (buffer[c_index] != 0 && (
+                buffer[c_index] != '\"' ||
+                strcmp("\"bytes_in_flight\":", &buffer[c_index]) != 0)) {
+                c_index++;
+            }
+            if (buffer[c_index] != 0) {
+                uint64_t bytes_in_flight = 0;
+                while (buffer[c_index] != 0 && buffer[c_index] != ':') {
+                    c_index++;
+                }
+                while (buffer[c_index] != 0 && (buffer[c_index] < '0' || buffer[c_index] > '9')) {
+                    c_index++;
+                }
+                while (buffer[c_index] >= '0' && buffer[c_index] <= '9') {
+                    bytes_in_flight *= 10;
+                    bytes_in_flight += (uint64_t)buffer[c_index] - '0';
+                    c_index++;
+                }
+                if (bytes_in_flight > *max_bytes_in_flight) {
+                    *max_bytes_in_flight = bytes_in_flight;
+                }
+            }
+        }
+        picoquic_file_close(F);
+    }
+    return ret;
+}
 
 int cwin_max_test_one(
     picoquic_congestion_algorithm_t* ccalgo, uint64_t cwin_limit, uint64_t max_completion_time)
@@ -958,7 +959,7 @@ int cwin_max_test_one(
     picoquic_connection_id_t initial_cid = { {0xc9, 0x14, 0x9a, 1, 2, 3, 4, 5}, 8 };
     int ret = 0;
 
-    (void)picoquic_file_delete(APP_LIMIT_TRACE_BIN, NULL);
+    (void)picoquic_file_delete(CWIN_MAX_TRACE_QLOG, NULL);
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
     picoquic_init_transport_parameters(&client_parameters, 1);
@@ -971,11 +972,10 @@ int cwin_max_test_one(
     }
 
     if (ret == 0) {
-
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         picoquic_set_cwin_max(test_ctx->qserver, 0x10000);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         picoquic_set_max_data_control(test_ctx->qclient, client_parameters.initial_max_data);
 
@@ -1000,57 +1000,13 @@ int cwin_max_test_one(
         test_ctx = NULL;
     }
 
-    /* Create a CSV file from the .bin log file */
+    /* Get the max bytes in flight from QLOG file, and check it is under the limit */
     if (ret == 0) {
-        ret = picoquic_cc_log_file_to_csv(CWIN_MAX_TRACE_BIN, CWIN_MAX_TRACE_CSV);
-    }
-
-    /* Compute the max CWIN from the trace file */
-    if (ret == 0)
-    {
-        FILE* F = picoquic_file_open(CWIN_MAX_TRACE_CSV, "r");
-
-        if (F == NULL) {
-            DBG_PRINTF("Cannot open <%s>", CWIN_MAX_TRACE_CSV);
+        uint64_t bytes_in_flight_max;
+        ret = picoquic_check_bytes_in_flight(CWIN_MAX_TRACE_QLOG, &bytes_in_flight_max);
+        if (ret == 0 && bytes_in_flight_max > cwin_limit) {
+            DBG_PRINTF("MAX In Flight = %" PRIu64 ", larger than %" PRIu64, bytes_in_flight_max, cwin_limit);
             ret = -1;
-        }
-        else {
-            char buffer[512];
-            uint64_t bytes_in_flight_max = 0;
-
-            while (fgets(buffer, 512, F) != NULL) {
-                /* only consider number lines line */
-                if (buffer[0] >= '0' && buffer[0] <= '9') {
-                    uint64_t bytes_in_flight = 0;
-                    int nb_comma = 0;
-                    int c_index = 0;
-
-                    while (nb_comma < 24 && c_index < 512 && buffer[c_index] != 0) {
-                        if (buffer[c_index] == ',') {
-                            nb_comma++;
-                        }
-                        c_index++;
-                    }
-                    while (c_index < 512 && buffer[c_index] == ' ') {
-                        c_index++;
-                    }
-                    while (c_index < 512 && buffer[c_index] >= '0' && buffer[c_index] <= '9') {
-                        bytes_in_flight *= 10;
-                        bytes_in_flight += (uint64_t)buffer[c_index] - '0';
-                        c_index++;
-                    }
-                    if (bytes_in_flight > bytes_in_flight_max) {
-                        bytes_in_flight_max = bytes_in_flight;
-                    }
-                }
-            }
-
-            (void)picoquic_file_close(F);
-
-            if (bytes_in_flight_max > cwin_limit) {
-                DBG_PRINTF("MAX In Flight = %" PRIu64 ", larger than %" PRIu64, bytes_in_flight_max, cwin_limit);
-                ret = -1;
-            }
         }
     }
 

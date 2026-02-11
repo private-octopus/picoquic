@@ -1011,7 +1011,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 {
     char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
 
-    if (bin_dir == NULL) {
+    if (bin_dir == NULL || cnx->quic->bin_log_fns == NULL) {
         return;
     }
 

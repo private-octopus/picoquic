@@ -873,7 +873,6 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         /* set the binary log on the client side */
         picoquic_set_binlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        binlog_new_connection(test_ctx->cnx_client);
         /* Set the multipath option at both client and server */
         multipath_init_params(&server_parameters, is_sat_test);
         if (test_id == multipath_test_datagram || test_id == multipath_test_dg_af) {
@@ -1595,8 +1594,6 @@ int monopath_test_one(monopath_test_enum_t test_case)
         /* set the binary log on the client side */
         picoquic_set_binlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         if (test_case == monopath_test_hole) {
             /* set the optimistic ack policy, to trigger hole insertion at the server */

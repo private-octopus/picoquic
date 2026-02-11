@@ -30,7 +30,16 @@
 #include "picoquic_internal.h"
 #include "picoquic_binlog.h"
 #include "picoquic.h"
+#if 1
+#include "picoquic_qlog_fns.h"
 
+int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
+{
+    picoquic_fns_set_qlog(quic, qlog_dir);
+    return 0;
+}
+
+#else
 int autoqlog(picoquic_cnx_t* cnx)
 {
     int ret = 0;
@@ -108,3 +117,4 @@ int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
     quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
     return 0;
 }
+#endif

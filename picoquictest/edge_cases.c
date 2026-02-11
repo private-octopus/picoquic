@@ -26,7 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "logreader.h"
 #include "qlog.h"
 
@@ -88,8 +88,8 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
     }
     /* Set the binlog */
     if (ret == 0) {
-        picoquic_set_binlog((*p_test_ctx)->qclient, ".");
-        picoquic_set_binlog((*p_test_ctx)->qserver, ".");
+        picoquic_set_qlog((*p_test_ctx)->qclient, ".");
+        picoquic_set_qlog((*p_test_ctx)->qserver, ".");
     }
     /* Set the link latency */
     if (ret == 0) {
@@ -640,8 +640,8 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
     }
     /* Set the binlog */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         /* Set the timeout */
         picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
         picoquic_set_default_idle_timeout(test_ctx->qserver, server_timeout);
@@ -771,7 +771,7 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
 
     /* Set the binlog */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         /* Set the timeout */
         picoquic_set_default_idle_timeout(test_ctx->qclient, client_timeout);
         if (handshake_timeout > 0) {
@@ -1030,7 +1030,7 @@ int reset_repeat_test_one(uint8_t test_id)
 
     /* Set the binlog */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
@@ -1360,7 +1360,7 @@ int initial_pto_test()
     }
     else {
         /* Set the binlog */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         /* start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -1513,7 +1513,7 @@ int initial_pto_srv_test()
     }
     else {
         /* Set the binlog */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         /* start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -1591,7 +1591,7 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
     }
     else {
         /* Set the binlog */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         /* start the client connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
@@ -1919,10 +1919,9 @@ int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
         test_ctx->cnx_client->local_parameters.is_reset_stream_at_enabled = 1;
         /* request logs */
         test_ctx->qserver->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qclient->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        binlog_new_connection(test_ctx->cnx_client);
+        picoquic_set_qlog(test_ctx->qclient, ".");
         /* start connection */
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
