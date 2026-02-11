@@ -167,6 +167,7 @@ set(LOGLIB_LIBRARY_FILES
     loglib/memory_log.c
     loglib/qlog.c
     loglib/qlog_frames.c
+    loglib/qlog_fns.c
     loglib/svg.c)
 
 set(PICOQUIC_LOGLIB_HEADERS
