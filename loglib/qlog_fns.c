@@ -1039,9 +1039,11 @@ picoquic_unified_logging_t qlog_fns = {
     qlog_fns_cc_dump
 };
 
-void picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
+int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
 {
     quic->qlog_fns = &qlog_fns;
     quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
     quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
+
+    return 0;
 }
