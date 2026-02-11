@@ -308,7 +308,7 @@ void qlog_fns_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "transport",
         (receiving == 0) ? "datagram_sent" : "datagram_received");
 
-    fprintf(f, " \"byte_length\": %" PRIu64, packet_length);
+    fprintf(f, " \"byte_length\": %zu", packet_length);
 
     if (addr_peer->sa_family != 0 &&
         picoquic_compare_addr(addr_peer, (struct sockaddr*)&ctx->addr_peer) != 0) {
@@ -362,7 +362,7 @@ void qlog_fns_packet_start(qlog_fns_context_t* ctx,
 
     qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", (receiving == 0) ? "packet_sent" : "packet_received");
 
-    fprintf(f, " \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64, picoquic_packet_type_name(ph->ptype),
+    fprintf(f, " \"packet_type\": \"%s\", \"header\": { \"packet_size\": %zu", picoquic_packet_type_name(ph->ptype),
         byte_length);
 
     if (ph->ptype != picoquic_packet_version_negotiation &&
@@ -464,7 +464,7 @@ void qlog_fns_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struc
         fprintf(f, "\n    \"packet_type\" : \"%s\",",
             picoquic_packet_type_name((picoquic_packet_type_enum)ph->ptype));
     }
-    fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
+    fprintf(f, "\n    \"packet_size\" : %zu", packet_size);
     fprintf(f, ",\n    \"trigger\": \"%s\"", picoquic_error_name(err));
     fprintf(f, "}]");
     ctx->event_count++;
@@ -553,7 +553,7 @@ void qlog_fns_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
         fprintf(f, ",\n        \"dcid\" : ");
         qlog_frame_hex_string(f, dcid->id, dcid->id + dcid->id_len, dcid->id_len);
     }
-    fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    fprintf(f, ",\n        \"packet_size\" : %zu" , packet_size);
     fprintf(f, "}}]");
 }
 
