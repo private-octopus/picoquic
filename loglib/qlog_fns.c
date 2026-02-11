@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
@@ -275,7 +276,7 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 
     message_len = (written < 0) ? sizeof(message_text) : written;
 #else
-    written = vsnprintf(message_text, sizeof(message_text), fmt, vargs);
+    size_t written = vsnprintf(message_text, sizeof(message_text), fmt, vargs);
     if (written < 0 || written >= sizeof(message_text)) {
         message_len = sizeof(message_text) - 1;
     }
@@ -892,12 +893,6 @@ void qlog_fns_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
                 path->unique_path_id
 #endif
             );
-#if 1
-            int smoothed_rtt_updated = 0;
-            if (path_ctx != NULL && path->smoothed_rtt != path_ctx->smoothed_rtt_for_bug) {
-                smoothed_rtt_updated = 1;
-            }
-#endif
             picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
             if (cnx->is_multipath_enabled) {
                 pkt_ctx = &cnx->path[path_index]->pkt_ctx;
