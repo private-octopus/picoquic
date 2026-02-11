@@ -8745,7 +8745,7 @@ int packet_trace_test()
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_binlog(test_ctx->qserver, ".");
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
         picoquic_set_default_lossbit_policy(test_ctx->qclient, picoquic_lossbit_send_receive);
         test_ctx->qserver->use_long_log = 1;

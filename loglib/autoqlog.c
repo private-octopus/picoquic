@@ -24,9 +24,11 @@
 */
 
 #include <stdarg.h>
+#if 0
 #include "logreader.h"
 #include "bytestream.h"
 #include "qlog.h"
+#endif
 #include "picoquic_internal.h"
 #include "picoquic_binlog.h"
 #include "picoquic.h"
