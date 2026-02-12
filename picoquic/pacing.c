@@ -190,7 +190,7 @@ void picoquic_update_pacing_window(picoquic_pacing_t * pacing, int slow_start, u
     uint64_t rtt_nanosec = smoothed_rtt * 1000;
 
     if ((cwin < ((uint64_t)send_mtu) * 8) || rtt_nanosec <= 1000) {
-        /* Small windows, should only relie on ACK clocking */
+        /* Small windows, should only rely on ACK clocking */
         pacing->bucket_max = rtt_nanosec;
         pacing->packet_time_nanosec = 1;
         pacing->packet_time_microsec = 1;

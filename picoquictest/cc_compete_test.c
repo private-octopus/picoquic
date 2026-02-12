@@ -101,6 +101,26 @@ int cc_compete_c4c4_test()
     return picoquic_ns(&spec, NULL);
 }
 
+int cc_compete_cubic2_hystart_pp_test()
+{
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xcb, 0xcb, 0, 0, 0, 0}, 8 };
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_cc_options = "Y1";
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_batch_scenario_4M;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 2;
+    spec.main_target_time = 8500000;
+    spec.queue_delay_max = 40000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+
+    return picoquic_ns(&spec, NULL);
+}
+
 int cc_compete_prague2_test()
 {
     picoquic_ns_spec_t spec = { 0 };
@@ -154,7 +174,7 @@ int cc_compete_d_cubic_test()
 /* Check that the picoquic_ns simulations can correctly test asymmetric paths.
  */
 int cc_ns_asym_test()
- {
+{
      picoquic_ns_spec_t spec = { 0 };
      picoquic_connection_id_t icid = { { 0xcc, 0xa5, 0xcb, 0, 0, 0, 0, 0}, 8 };
      spec.main_cc_algo = picoquic_cubic_algorithm;

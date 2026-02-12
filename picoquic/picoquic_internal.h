@@ -993,7 +993,7 @@ typedef struct st_picoquic_pacing_t {
 * On the client side, they are placed in "validated" or "backup" state by
 * local interactions. On the server side, they move from "backup" to
 * "validated" when the client starts using them.
-* 
+*
 * The tuple context contains the data necessary for managing the challenge/response.
  */
 typedef struct st_picoquic_tuple_t {
@@ -1590,7 +1590,7 @@ uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_pa
     picoquic_packet_context_enum pc, int is_nominal_ack_path,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
-    uint64_t current_time, uint64_t* next_wake_time); 
+    uint64_t current_time, uint64_t* next_wake_time);
 void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
@@ -1750,7 +1750,7 @@ size_t picoquic_get_checksum_length(picoquic_cnx_t* cnx, picoquic_epoch_enum is_
 
 void picoquic_protect_packet_header(uint8_t* send_buffer, size_t pn_offset, uint8_t first_mask, void* pn_enc);
 
-size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint8_t* bytes, uint64_t sequence_number, size_t length, size_t header_length, uint8_t* send_buffer, size_t send_buffer_max, void* aead_context, void* pn_enc, 
+size_t picoquic_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_type_enum ptype, uint8_t* bytes, uint64_t sequence_number, size_t length, size_t header_length, uint8_t* send_buffer, size_t send_buffer_max, void* aead_context, void* pn_enc,
     picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 
 uint64_t picoquic_get_packet_number64(uint64_t highest, uint64_t mask, uint32_t pn);

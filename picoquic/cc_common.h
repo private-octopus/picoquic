@@ -35,7 +35,6 @@ extern "C" {
  * HyStart++
  */
 
-/* TODO HyStart++ isn't implemented yet! */
 /* It is RECOMMENDED that a HyStart++ implementation use the following constants: */
 /* MIN_RTT_THRESH = 4 msec
  * MAX_RTT_THRESH = 16 msec
@@ -45,7 +44,7 @@ extern "C" {
  * CSS_ROUNDS = 5
  * L = infinity if paced, L = 8 if non-paced
  */
-/* Take a look at the draft for more information. */
+/* Take a look at the RFC for more information. */
 #define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* msec */
 #define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* msec */
 #define PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR 8
@@ -80,6 +79,21 @@ uint64_t picoquic_cc_get_lowest_not_ack(picoquic_path_t* path_x);
 
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
+/*
+ * Slow Start
+ * Returns number of bytes CWIN should be increased.
+ */
+
+uint64_t picoquic_cc_slow_start_increase(picoquic_path_t* path_x, uint64_t nb_delivered);
+
+uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css);
+
+uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
+
+/*
+ * HyStart
+ */
+
 void picoquic_cc_filter_rtt_min_max(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt);
 
 int picoquic_cc_hystart_loss_test(picoquic_min_max_rtt_t* rtt_track, picoquic_congestion_notification_t event, uint64_t lost_packet_number, double error_rate_max);
@@ -89,14 +103,37 @@ int picoquic_cc_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, pico
 int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_measurement, uint64_t packet_time, uint64_t current_time, int is_one_way_delay_enabled);
 
 /*
- * Slow Start
- * Returns number of bytes CWIN should be increased.
+ * HyStart++
  */
-uint64_t picoquic_cc_slow_start_increase(picoquic_path_t* path_x, uint64_t nb_delivered);
 
-uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css);
+#define IS_HYSTART_PP(hystart_alg) (hystart_alg == picoquic_hystart_alg_hystart_pp_t)
+#define IS_IN_CSS(hystart_pp_state) (hystart_pp_state.css_baseline_min_rtt != UINT64_MAX)
 
-uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
+typedef struct st_picoquic_hystart_pp_round_t {
+    uint64_t last_round_min_rtt;
+    uint64_t current_round_min_rtt;
+    //uint64_t curr_rtt; /* TODO check if needed */
+    uint64_t rtt_sample_count;
+    uint64_t window_end;
+} picoquic_hystart_pp_round_t;
+
+typedef struct st_picoquic_hystart_pp_state_t {
+    picoquic_hystart_pp_round_t current_round;
+
+    uint64_t rtt_thresh;
+    uint64_t css_baseline_min_rtt;
+    uint64_t css_round_count;
+} picoquic_hystart_pp_state_t;
+
+void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+
+void picoquic_hystart_pp_start_new_round(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
+
+void picoquic_hystart_pp_keep_track(picoquic_hystart_pp_state_t* hystart_pp_state, uint64_t rtt_measurement);
+
+void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state);
+
+int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_measurement);
 
 /*
  * Returns CWIN based on bandwidth estimation if larger than current CWIN. Otherwise, returns current CWIN.
@@ -106,7 +143,7 @@ uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x);
 /*
  * Returns CWIN for long RTT connections if larger than current CWIN. Otherwise, returns current CWIN.
  */
-uint64_t picoquic_cc_update_cwin_for_long_rtt(picoquic_path_t * path_x);
+uint64_t picoquic_cc_update_cwin_for_long_rtt(picoquic_path_t* path_x);
 
 /* Many congestion control algorithms run a parallel version of new reno in order
  * to provide a lower bound estimate of either the congestion window or the

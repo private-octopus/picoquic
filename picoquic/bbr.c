@@ -274,6 +274,9 @@ typedef struct st_picoquic_bbr_state_t {
     picoquic_min_max_rtt_t rtt_filter;
     uint64_t bdp_seed;
     unsigned int probe_bdp_seed;
+    /* HyStart++ */
+    picoquic_hystart_alg_t hystart_alg;
+    picoquic_hystart_pp_state_t hystart_pp_state;
     
     /* Experimental extensions, may or maynot be a good idea. */
     char const* option_string;
@@ -545,6 +548,11 @@ static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
                     break;
                 }
             }
+            case 'Y':
+                /* Reading digits into an uint64_t  */
+                bbr_state->hystart_alg = atoi(x);
+                x++;
+                break;
             case ':':
                 /* Ignore */
                 break;
@@ -556,7 +564,7 @@ static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
 }
 
 /* Initialization of the BBR state */
-static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time, char const * option_string)
+static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, char const * option_string)
 {
     /* TODO:
     init_windowed_max_filter(filter = BBR.MaxBwFilter, value = 0, time = 0)
@@ -593,11 +601,17 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
     BBRInitFullPipe(bbr_state);
     BBRInitPacingRate(bbr_state, path_x);
     BBREnterStartup(bbr_state, path_x);
+
+    /* HyStart++ */
+    memset(&bbr_state->hystart_pp_state, 0, sizeof(picoquic_hystart_pp_state_t));
+    if (IS_HYSTART_PP(bbr_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&bbr_state->hystart_pp_state, cnx, path_x);
+    }
 }
 
-static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    BBROnInit(bbr_state, path_x, current_time, bbr_state->option_string);
+    BBROnInit(bbr_state, cnx, path_x, current_time, bbr_state->option_string);
 }
 
 static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
@@ -607,7 +621,7 @@ static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, cha
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
-        BBROnInit(bbr_state, path_x, current_time, option_string);
+        BBROnInit(bbr_state, cnx, path_x, current_time, option_string);
     }
 }
 
@@ -2125,7 +2139,7 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
     BBRCheckDrain(bbr_state, path_x, current_time);
 }
 
-void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
+void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if ((bbr_state->state == picoquic_bbr_alg_startup ||
         bbr_state->state == picoquic_bbr_alg_startup_resume) &&
@@ -2136,8 +2150,10 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
         return;
     }
 
-    if (picoquic_cc_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
+    if (bbr_state->hystart_alg == picoquic_hystart_alg_hystart_t && picoquic_cc_hystart_test(&bbr_state->rtt_filter, rs->rtt_sample,
         path_x->pacing.packet_time_microsec, current_time, 0)) {
+        BBRExitStartupLongRtt(bbr_state, path_x, current_time);
+    } else if (bbr_state->hystart_alg == picoquic_hystart_alg_hystart_pp_t && picoquic_cc_hystart_pp_test(&bbr_state->hystart_pp_state, cnx, path_x, rs->rtt_sample)) {
         BBRExitStartupLongRtt(bbr_state, path_x, current_time);
     }
     else if (rs->ecn_alpha > BBRExcessiveEcnCE) {
@@ -2155,7 +2171,8 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
 {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-        path_x->cwin += picoquic_cc_slow_start_increase(path_x, rs->newly_acked);
+        path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, rs->newly_acked,
+                            (IS_HYSTART_PP(bbr_state->hystart_alg)) ? IS_IN_CSS(bbr_state->hystart_pp_state) : 0);
     }
 
     uint64_t max_win = PICOQUIC_BYTES_FROM_RATE(bbr_state->min_rtt, path_x->peak_bandwidth_estimate);
@@ -2307,12 +2324,12 @@ static void BBRAdvanceEcnFrac(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
 /* BBRv3 per ACK steps
 * The function BBRUpdateOnACK is executed for each ACK notification on the API 
 */
-static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
+static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
     BBRUpdateLatestDeliverySignals(bbr_state, path_x, rs);
     BBRUpdateCongestionSignals(bbr_state, path_x, rs);
     BBRUpdateACKAggregation(bbr_state, path_x, rs, current_time);
-    BBRCheckStartupLongRtt(bbr_state, path_x, rs, current_time);
+    BBRCheckStartupLongRtt(bbr_state, cnx, path_x, rs, current_time);
     BBRCheckStartupResume(bbr_state, path_x, rs, current_time);
     BBRCheckStartupDone(bbr_state, path_x, rs, current_time);
     BBRCheckRecovery(bbr_state, path_x, rs, current_time);
@@ -2332,9 +2349,9 @@ static void BBRUpdateControlParameters(picoquic_bbr_state_t* bbr_state, picoquic
     BBRSetCwnd(bbr_state, path_x, rs);
 }
 
-void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
+void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
 {
-    BBRUpdateModelAndState(bbr_state, path_x, rs, current_time);
+    BBRUpdateModelAndState(bbr_state, cnx, path_x, rs, current_time);
     if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
         BBRUpdateStartupLongRtt(bbr_state, path_x, rs, current_time);
     }
@@ -2387,6 +2404,7 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
 
 static void picoquic_bbr_notify_ack(
     picoquic_bbr_state_t* bbr_state,
+    picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
     picoquic_per_ack_state_t* ack_state,
     uint64_t current_time)
@@ -2394,7 +2412,7 @@ static void picoquic_bbr_notify_ack(
     bbr_per_ack_state_t rs = { 0 };
     BBRSetRsFromAckState(path_x, ack_state, &rs);
     BBRComputeEcnFrac(bbr_state, path_x, &rs);
-    BBRUpdateOnACK(bbr_state, path_x, &rs, current_time);
+    BBRUpdateOnACK(bbr_state, cnx, path_x, &rs, current_time);
 }
 
 /*
@@ -2439,7 +2457,7 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_acknowledgement:
             BBRExitLostFeedback(bbr_state, path_x);
-            picoquic_bbr_notify_ack(bbr_state, path_x, ack_state, current_time);
+            picoquic_bbr_notify_ack(bbr_state, cnx, path_x, ack_state, current_time);
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
                 picoquic_update_pacing_data(cnx, path_x, 1);
             }
@@ -2451,7 +2469,7 @@ static void picoquic_bbr_notify(
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_bbr_reset(bbr_state, path_x, current_time);
+            picoquic_bbr_reset(bbr_state, cnx, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             BBRSetBdpSeed(bbr_state, ack_state->nb_bytes_acknowledged);

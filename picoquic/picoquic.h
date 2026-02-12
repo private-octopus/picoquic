@@ -245,6 +245,7 @@ typedef enum {
     picoquic_pmtud_delayed = 2, /* only do pmtud if lots of data has to be sent */
     picoquic_pmtud_blocked = 3 /* never do pmtud */
 } picoquic_pmtud_policy_enum;
+
 /*
 * Quic spin bit variants
 */
@@ -1660,6 +1661,18 @@ typedef enum {
     picoquic_congestion_notification_reset,
     picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
 } picoquic_congestion_notification_t;
+
+/** HyStart algorithms:
+ *  - HyStart (https://doi.org/10.1016/j.comnet.2011.01.014)
+ *  - HyStart++ (RFC 9406)
+ *  - disabled (Slow Start)
+ */
+
+typedef enum {
+    picoquic_hystart_alg_hystart_t = 0,
+    picoquic_hystart_alg_hystart_pp_t,
+    picoquic_hystart_alg_disabled_t
+} picoquic_hystart_alg_t;
 
 typedef struct st_picoquic_per_ack_state_t {
     uint64_t rtt_measurement; /* RTT as measured when receiving the ACK */

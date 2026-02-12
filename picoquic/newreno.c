@@ -177,12 +177,49 @@ void picoquic_newreno_sim_notify(
 typedef struct st_picoquic_newreno_state_t {
     picoquic_newreno_sim_state_t nrss;
     picoquic_min_max_rtt_t rtt_filter;
+    picoquic_hystart_alg_t hystart_alg;
+    const char* option_string;
+
+    /* HyStart++. */
+    picoquic_hystart_pp_state_t hystart_pp_state;
 } picoquic_newreno_state_t;
 
-static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_path_t* path_x)
+static void newreno_set_options(picoquic_newreno_state_t* nr_state)
+{
+    const char* x = nr_state->option_string;
+
+    if (x != NULL) {
+        char c;
+        while ((c = *x) != 0) {
+            x++;
+            switch (c) {
+                case 'Y': {
+                    /* Reading digits into an uint64_t  */
+                    nr_state->hystart_alg = atoi(x);
+                    x++;
+                    break;
+                }
+                case ':':
+                default:
+                    break;
+            }
+        }
+    }
+}
+
+static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const *option_string)
 {
     memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
     picoquic_newreno_sim_reset(&nr_state->nrss);
+    nr_state->option_string = option_string;
+    newreno_set_options(nr_state);
+
+    /* HyStart++. */
+    memset(&nr_state->hystart_pp_state, 0, sizeof(nr_state->hystart_pp_state));
+    if (IS_HYSTART_PP(nr_state->hystart_alg)) {
+        picoquic_hystart_pp_reset(&nr_state->hystart_pp_state, cnx, path_x);
+    }
+
     path_x->cwin = nr_state->nrss.cwin;
 }
 
@@ -197,7 +234,7 @@ static void picoquic_newreno_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x,
 #endif
 
     if (nr_state != NULL) {
-        picoquic_newreno_reset(nr_state, path_x);
+        picoquic_newreno_reset(nr_state, cnx, path_x, option_string);
         path_x->congestion_alg_state = nr_state;
     }
     else {
@@ -235,8 +272,19 @@ static void picoquic_newreno_notify(
 
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 /* TODO app limited. */
-                picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
-                path_x->cwin = nr_state->nrss.cwin;
+                /* TODO CSS increase. */
+                if (IS_HYSTART_PP(nr_state->hystart_alg)) {
+                    path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+                            (IS_HYSTART_PP(nr_state->hystart_alg)) ? IS_IN_CSS(nr_state->hystart_pp_state) : 0);
+                    nr_state->nrss.cwin = path_x->cwin;
+
+                    if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {
+                        nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                    }
+                } else {
+                    picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
+                    path_x->cwin = nr_state->nrss.cwin;
+                }
             }
             break;
         case picoquic_congestion_notification_seed_cwin:
@@ -272,18 +320,36 @@ static void picoquic_newreno_notify(
 
                 /* HyStart. */
                 /* Using RTT increases as signal to get out of initial slow start */
-                if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
-                    cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
-                    /* RTT increased too much, get out of slow start! */
-                    nr_state->nrss.ssthresh = nr_state->nrss.cwin;
-                    nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
-                    path_x->cwin = nr_state->nrss.cwin;
-                    path_x->is_ssthresh_initialized = 1;
+                switch (nr_state->hystart_alg) {
+                    case  picoquic_hystart_alg_hystart_t:
+                        if (picoquic_cc_hystart_test(&nr_state->rtt_filter, (cnx->is_time_stamp_enabled) ? ack_state->one_way_delay : ack_state->rtt_measurement,
+                            cnx->path[0]->pacing.packet_time_microsec, current_time, cnx->is_time_stamp_enabled)) {
+                            /* RTT increased too much, get out of slow start! */
+                            nr_state->nrss.ssthresh = nr_state->nrss.cwin;
+                            nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                            path_x->cwin = nr_state->nrss.cwin;
+                            path_x->is_ssthresh_initialized = 1;
+                        }
+                        break;
+                    case picoquic_hystart_alg_hystart_pp_t:
+                        /* HyStart++. */
+                        if (picoquic_cc_hystart_pp_test(&nr_state->hystart_pp_state, cnx, path_x, ack_state->rtt_measurement)) {
+                            /* Enter CA. */
+                            nr_state->nrss.ssthresh = nr_state->nrss.cwin;
+                            nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
+                            path_x->cwin = nr_state->nrss.cwin;
+                            path_x->is_ssthresh_initialized = 1;
+                        }
+                        break;
+                    case picoquic_hystart_alg_disabled_t:
+                        /* do nothing. */
+                    default:
+                        break;
                 }
             }
             break;
         case picoquic_congestion_notification_reset:
-            picoquic_newreno_reset(nr_state, path_x);
+            picoquic_newreno_reset(nr_state, cnx, path_x, nr_state->option_string);
             break;
         default:
             /* ignore */

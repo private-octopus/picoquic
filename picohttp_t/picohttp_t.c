@@ -114,6 +114,7 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_multi", quicperf_multi_test },
     { "quicperf_overflow", quicperf_overflow_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
+    { "cc_compete_cubic2_hystart_pp", cc_compete_cubic2_hystart_pp_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
     { "cc_compete_c4c4", cc_compete_c4c4_test },
     { "cc_compete_d_cubic", cc_compete_d_cubic_test },
