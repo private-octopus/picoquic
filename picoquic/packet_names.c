@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2019, Private Octopus, Inc.
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -18,9 +18,11 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include "picoquic.h"
 #include "picoquic_internal.h"
 
-const char * ptype2str(picoquic_packet_type_enum ptype)
+const char* picoquic_packet_type_name(uint64_t ptype)
 {
     switch (ptype) {
     case picoquic_packet_error:

@@ -6,7 +6,7 @@ Picoquic can produce [QLOG](https://datatracker.ietf.org/doc/draft-marx-qlog-eve
 
 The simple way to enable production of `qlog` is to set `qlog` for the QUIC context,
 by calling `picoquic_set_qlog()` before creating a connection.
-The command is defined in `loglib/autoqlog.h` as:
+The command is defined in `loglib/picoquic_qlog.h` as:
 
 ~~~
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
@@ -22,7 +22,8 @@ are linked (and included in the binary) if the application includes a call to `p
 
 ## Command line
 
-Qlog logging can be enabled on the command line with the `-q` parameter. `-q` expects a path to the binary log file:
+Qlog logging can be enabled on the command line with the `-q` parameter. `-q` expects a path to the
+folder where the qlog files will be created.
 
 
 Qlog logging can be used for clients and for servers.
@@ -78,36 +79,14 @@ logged. Setting the log level to 0 would revert back to the default behavior.
 
 On the command line, use the argument `-L` to force a full log.
 
-## Two steps process
+## What if it breaks
 
-The implementation of `qlog` in picoquic uses a two steps process. The files are generated in a two
-step process. When the program is running, it generates a compact "binary log". After the
-connection is closed, this binary log is converted to the text based `qlog` file.
-
-The second step will not happen if the application stops before the closing
-of the connection -- for example if it crashes, or if an application that runs under
-the debugger is closed by the debugger. In that happens, instead of a `qlog` file,
-the `qlog` directory will ontain a binary log file, such as:
-~~~
-807c38b2c9f96095.client.log
-~~~
-The `.log` file can be converted to `qlog` using the `picolog` utility. Calling
-```
-picolog -f qlog -o <path_to_output_directory> <log file name>
-```
-will create a QLOG file from the log file.
-
-For more information about `picolog` call
-
-```
-picolog -h
-```
-
-It might be better to directly produce a `qlog` file without this two-step process.
-The main issue is that the QLOG format is based on JSON. The file contains
-a preamble, then a vector of `event` records. We would still require a
-second step to properly `close` the JSON record, writing the adequate number
-of closing square and curly brackets at the end of the file, and we would
-need a helper program to `correct` the JSON file if the logging process
-closes abruptly, but we could use generic JSON processing for that.
-Volunteers are welcome
+The QLOG format is based on JSON. The file contains
+a preamble, then a vector of `event` records. These events are
+written as they happen, adding for example a `packet_received` 
+event when a packet is received, and a `packet_sent` event when a packet is sent.
+If the application crashes, the file may be left with an incomplete JSON structure,
+and thus be unreadable by QLOG parsers. In most cases it would suffice to manually
+add the closing brackets to the file, but we cannot exclude weird cases
+in which the file buffer is only partially written. In that case, the best solution
+is to use a JSON recovery tool, many of which are available.

@@ -1011,7 +1011,7 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
 {
     char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
 
-    if (bin_dir == NULL) {
+    if (bin_dir == NULL || cnx->quic->bin_log_fns == NULL) {
         return;
     }
 
@@ -1238,6 +1238,9 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
 
         (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
         (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
+#if 1
+        break;
+#endif
     }
 }
 

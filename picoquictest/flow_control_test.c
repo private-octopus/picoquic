@@ -26,7 +26,7 @@
 #include <string.h>
 
 #include "logreader.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "picoquic_logger.h"
 #include "picoquic_bbr.h"
 #include "qlog.h"
@@ -278,9 +278,9 @@ int fctest_one(fctest_spec_t* spec)
 			picoquic_set_default_congestion_algorithm(test_ctx->qserver, spec->ccalgo);
 			picoquic_set_congestion_algorithm(test_ctx->cnx_client, spec->ccalgo);
 
-			picoquic_set_binlog(test_ctx->qserver, ".");
+			picoquic_set_qlog(test_ctx->qserver, ".");
 			test_ctx->qserver->use_long_log = 1;
-			picoquic_set_binlog(test_ctx->qclient, ".");
+			picoquic_set_qlog(test_ctx->qclient, ".");
 		}
 	}
 

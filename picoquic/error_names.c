@@ -51,7 +51,7 @@ char const* picoquic_error_name(uint64_t error_code)
     case PICOQUIC_TRANSPORT_NO_CID_AVAILABLE: e_name = "no CID available"; break;
         /* Picoquic local error codes. */
     case PICOQUIC_ERROR_DUPLICATE: e_name = "duplicate"; break;
-    case PICOQUIC_ERROR_AEAD_CHECK: e_name = "aead check"; break;
+    case PICOQUIC_ERROR_AEAD_CHECK: e_name = "payload_decrypt_error"; break;
     case PICOQUIC_ERROR_UNEXPECTED_PACKET: e_name = "unexpected packet"; break;
     case PICOQUIC_ERROR_MEMORY: e_name = "memory"; break;
     case PICOQUIC_ERROR_CNXID_CHECK: e_name = "connection ID check"; break;
@@ -116,7 +116,7 @@ char const* picoquic_error_name(uint64_t error_code)
     case PICOQUIC_ERROR_PATH_NOT_READY: e_name = "path not ready"; break;
     case PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED: e_name = "path limit exceeded"; break;
     case PICOQUIC_ERROR_REDIRECTED: e_name = "redirected to proxy (not an error)"; break; /* Not an error: the packet was captured by a proxy, no further processing needed */
-
+    case PICOQUIC_ERROR_PADDING_PACKET: e_name = "padding_packet"; break; /* Random bytes at end of datagram */
     default:
         if (error_code > 0x100 && error_code < 0x200) {
             /* Protocol errors defined in the QUIC spec */

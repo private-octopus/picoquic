@@ -8,7 +8,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.44.2
+        VERSION 1.1.45.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -87,6 +87,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/error_names.c
     picoquic/fastcc.c
     picoquic/frames.c
+    picoquic/frame_names.c
     picoquic/intformat.c
     picoquic/logger.c
     picoquic/logwriter.c
@@ -94,6 +95,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/newreno.c
     picoquic/pacing.c
     picoquic/packet.c
+    picoquic/packet_names.c
     picoquic/paths.c
     picoquic/performance_log.c
     picoquic/picohash.c
@@ -118,6 +120,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/timing.c
     picoquic/token_store.c
     picoquic/tls_api.c
+    picoquic/tp_names.c
     picoquic/transport.c
     picoquic/unified_log.c
     picoquic/util.c)
@@ -163,6 +166,8 @@ set(LOGLIB_LIBRARY_FILES
     loglib/logreader.c
     loglib/memory_log.c
     loglib/qlog.c
+    loglib/qlog_frames.c
+    loglib/qlog_fns.c
     loglib/svg.c)
 
 set(PICOQUIC_LOGLIB_HEADERS
@@ -210,6 +215,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/picoquic_lb_test.c
     picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
+    picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
     picoquictest/quic_tester.c
     picoquictest/red_aqm.c
@@ -487,13 +493,33 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     set_picoquic_compile_settings(picoquic-test)
 
     add_executable(picoquic_ct picoquic_t/picoquic_t.c)
-    target_link_libraries(picoquic_ct PRIVATE picoquic-test ${MBEDTLS_LIBRARIES})
+    
+    target_link_libraries(picoquic_ct
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-test
+            picoquic-log
+            picohttp-core
+            picoquic-core)
+
     set_picoquic_compile_settings(picoquic_ct)
 
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c
         ${PICOHTTP_TEST_LIBRARY_FILES})
-    target_link_libraries(picohttp_ct PRIVATE picohttp-core picoquic-test)
+        
+    target_link_libraries(picohttp_ct
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-test
+            picoquic-log
+            picohttp-core
+            picoquic-core)
+
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 

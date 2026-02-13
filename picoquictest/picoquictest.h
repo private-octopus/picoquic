@@ -115,6 +115,7 @@ int skip_frame_test();
 int keep_alive_test();
 int logger_test();
 int binlog_test();
+int qlog_frames_test();
 int app_message_overflow_test();
 int socket_test();
 int test_stateless_blowback();
@@ -243,9 +244,9 @@ int packet_trace_test();
 int qlog_auto_test();
 int qlog_error_test();
 int qlog_trace_test();
-int qlog_trace_auto_test();
-int qlog_trace_only_test();
 int qlog_trace_ecn_test();
+int qlog_fns_test();
+int qlog_fns_ecn_test();
 int perflog_test();
 int rebinding_stress_test();
 int many_short_loss_test();
@@ -532,6 +533,7 @@ int multipath_keep_alive_test();
 int multipath_just_one_test();
 int multipath_break_both_test();
 int multipath_qlog_test();
+int multipath_qlog_fns_test();
 int multipath_tunnel_test();
 int token_reuse_api_test();
 int get_hash_test();
@@ -618,6 +620,7 @@ int quicperf_media_test();
 int quicperf_multi_test();
 int quicperf_overflow_test();
 int cplusplustest();
+int error_name_test();
 
 #ifdef __cplusplus
 }

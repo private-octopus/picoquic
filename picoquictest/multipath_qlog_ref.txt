@@ -220,7 +220,6 @@
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "padding"}]}],
 [64621, 0, "recovery", "metrics_updated", {"pacing_rate": 7084870,"bytes_in_flight": 8835,"smoothed_rtt": 21673,"latest_rtt": 21800}],
-[64621, 0, "recovery", "metrics_updated", {"smoothed_rtt": 21673}],
 [65579, 1, "transport", "datagram_received", { "byte_length": 1252, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1251}}],
 [65579, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 1252, "packet_number": 1, "dcid": "1209080706050403" }, "frames": [{ 
     "frame_type": "path_response", "path_response": "0000b9720dcc25ae"}, { 
@@ -362,34 +361,34 @@
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 3]]}, { 
     "frame_type": "padding"}]}],
 [93913, 0, "recovery", "metrics_updated", {"cwnd": 18665,"pacing_rate": 8402625,"bytes_in_flight": 2935,"smoothed_rtt": 22207,"min_rtt": 20288,"latest_rtt": 22045}],
-[93913, 0, "recovery", "metrics_updated", {"smoothed_rtt": 22207}],
 [93913, 1, "transport", "datagram_received", { "byte_length": 55, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1251}}],
 [93913, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 8, "dcid": "1209080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 11858}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[12, 13]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 3]]}, { 
     "frame_type": "padding"}]}],
+[93913, 1, "recovery", "metrics_updated", {"cwnd": 15360,"pacing_rate": 6670526,"bytes_in_flight": 3515,"smoothed_rtt": 23025,"min_rtt": 21044}],
 [95364, 0, "transport", "datagram_received", { "byte_length": 55, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}}],
 [95364, 0, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 13, "dcid": "0a09080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 12040}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[12, 15]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 4]]}, { 
     "frame_type": "padding"}]}],
-[95364, 0, "recovery", "metrics_updated", {"cwnd": 21876,"pacing_rate": 9779286,"bytes_in_flight": 55,"smoothed_rtt": 22368,"latest_rtt": 23496}],
-[95364, 0, "recovery", "metrics_updated", {"smoothed_rtt": 22368}],
+[95364, 0, "recovery", "metrics_updated", {"cwnd": 21876,"pacing_rate": 9779286,"bytes_in_flight": 55,"smoothed_rtt": 22368,"min_rtt": 20288,"latest_rtt": 23496}],
 [95364, 1, "transport", "datagram_received", { "byte_length": 55, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1251}}],
 [95364, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 9, "dcid": "1209080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 12040}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[12, 15]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 4]]}, { 
     "frame_type": "padding"}]}],
+[95364, 1, "recovery", "metrics_updated", {"cwnd": 15360,"pacing_rate": 6651270,"bytes_in_flight": 2263,"smoothed_rtt": 23083,"min_rtt": 21044}],
 [96679, 0, "transport", "datagram_received", { "byte_length": 55, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}}],
 [96679, 0, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 14, "dcid": "0a09080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 12204}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[12, 15]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 6]]}, { 
     "frame_type": "padding"}]}],
-[96679, 1, "recovery", "metrics_updated", {"cwnd": 19321,"pacing_rate": 8287769,"smoothed_rtt": 23299,"min_rtt": 21044,"latest_rtt": 24811}],
+[96679, 1, "recovery", "metrics_updated", {"cwnd": 19321,"pacing_rate": 8287769,"bytes_in_flight": 55,"smoothed_rtt": 23299,"latest_rtt": 24811}],
 [96679, 1, "transport", "datagram_received", { "byte_length": 55, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1251}}],
 [96679, 1, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 10, "dcid": "1209080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 12204}, { 
@@ -403,7 +402,6 @@
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[1, 7]]}, { 
     "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
 [106719, 0, "recovery", "metrics_updated", {"cwnd": 22782,"pacing_rate": 9779286,"bytes_in_flight": 0,"smoothed_rtt": 23294,"min_rtt": 20288,"latest_rtt": 29777}],
-[106719, 0, "recovery", "metrics_updated", {"smoothed_rtt": 23294}],
 [106719, 0, "transport", "spin_bit_updated", { "state": false }],
 [106719, 0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 17, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "connection_close", "error_space": "transport", "error_code": 0}]}],

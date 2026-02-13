@@ -53,7 +53,6 @@ int autoqlog_bad_file()
 		ret = picoquic_set_qlog(quic, AUTOQLOG_BAD_QLOG);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}
@@ -99,7 +98,6 @@ int autoqlog_longdir()
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}

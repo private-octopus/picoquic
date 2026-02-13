@@ -45,6 +45,7 @@ typedef enum {
 static const picoquic_test_def_t test_table[] = {
     { "connection_id_print", util_connection_id_print_test },
     { "connection_id_parse", util_connection_id_parse_test },
+    { "error_name", error_name_test },
     { "util_sprintf", util_sprintf_test },
     { "util_debug_print", util_debug_print_test },
     { "util_uint8_to_str", util_uint8_to_str_test },
@@ -82,6 +83,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_format", frames_format_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
+    { "qlog_frames", qlog_frames_test },
     { "app_message_overflow", app_message_overflow_test },
     { "TlsStreamFrame", TlsStreamFrameTest },
     { "StreamZeroFrame", StreamZeroFrameTest },
@@ -306,9 +308,9 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_auto", qlog_auto_test },
     { "qlog_error", qlog_error_test },
     { "qlog_trace", qlog_trace_test },
-    { "qlog_trace_auto", qlog_trace_auto_test },
-    { "qlog_trace_only", qlog_trace_only_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
+    { "qlog_fns", qlog_fns_test },
+    { "qlog_fns_ecn", qlog_fns_ecn_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
@@ -519,6 +521,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_just_one", multipath_just_one_test },
     { "multipath_break_both", multipath_break_both_test },
     { "multipath_qlog", multipath_qlog_test },
+    { "multipath_qlog_fns", multipath_qlog_fns_test },
     { "multipath_tunnel", multipath_tunnel_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
@@ -547,7 +550,6 @@ static const picoquic_test_def_t test_table[] = {
     { "config_option_letters", config_option_letters_test },
     { "config_quic", config_quic_test },
     { "config_usage", config_usage_test }
-    
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

@@ -128,8 +128,6 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
         picoquic_set_log_level(test_ctx->qclient, 1);
         test_ctx->qclient->use_long_log = 1;
         test_ctx->qserver->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
         /* Initialize the client connection */
         picoquic_start_client_cnx(test_ctx->cnx_client);
     }
