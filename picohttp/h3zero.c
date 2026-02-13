@@ -521,7 +521,7 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 break;
             case http_header_proxy_quic_forwarding:
                 bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                    decoded_length, &parts->proxy_quic_forwarding, &parts->proxy_quic_forwarding);
+                    decoded_length, &parts->proxy_quic_forwarding, &parts->proxy_quic_forwarding_length);
                 break;
             case http_header_proxy_port_sharing:
                 bytes = h3zero_parse_qpack_header_value_boolean(bytes, decoded,
@@ -862,7 +862,12 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
 
 uint8_t* h3zero_create_connect_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     char const * authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const * origin, int proxy_quic_forwarding, int proxy_port_sharing, char const* ua_string)
+    char const * origin,
+#if 0
+    int proxy_quic_forwarding, int proxy_port_sharing, 
+#endif
+    char const* ua_string
+)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -899,7 +904,12 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
     char const* origin, char const* ua_string)
 {
-
+    return h3zero_create_connect_header_frame_ex(bytes, bytes_max, authority, path,
+        path_length, protocol, origin,
+#if 0
+        0, 0,
+#endif
+        ua_string);
 }
 
 uint8_t * h3zero_create_post_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
