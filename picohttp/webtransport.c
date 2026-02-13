@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <picoquic.h>
 #include "picoquic_utils.h"
+#include "picoquic_internal.h"
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
 
@@ -87,6 +88,7 @@ static void picowt_set_transport_parameters_values(const picoquic_tp_t* tp_curre
     if (tp_new->max_datagram_frame_size == 0) {
         tp_new->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
     }
+    tp_new->is_reset_stream_at_enabled = 1;
 }
 
 void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
@@ -97,8 +99,15 @@ void picowt_set_transport_parameters(picoquic_cnx_t* cnx)
     picoquic_set_transport_parameters(cnx, &tp_new);
 }
 
-/* Web transport commands */
+void picowt_set_default_transport_parameters(picoquic_quic_t* quic)
+{
+    quic->default_tp.is_reset_stream_at_enabled = 1;
+    if (quic->default_tp.max_datagram_frame_size == 0) {
+        quic->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+    }
+}
 
+/* Web transport commands */
 
 /**
 * Create stream: when a stream is created locally. 
@@ -145,6 +154,37 @@ h3zero_stream_ctx_t* picowt_create_local_stream(picoquic_cnx_t* cnx, int is_bidi
     return(stream_ctx);
 }
 
+
+int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t * stream_ctx, uint64_t local_stream_error)
+{
+    /* Compute the length of the preamble:
+    * if is local:
+    *    varint(h3zero_frame_webtransport_stream or h3zero_stream_type_webtransport): 2 bytes
+    *    + varint (control stream_id)
+    * else if is bidir:
+    *    resetting a remotely created half of a bidir stream. Just reset.
+    * else: can't do that.
+    * 
+    * if both sides of the stream are closed, delete the H3 stream context.
+     */
+    int ret = 0;
+    int is_bidir = IS_BIDIR_STREAM_ID(stream_ctx->stream_id);
+    int is_local = IS_LOCAL_STREAM_ID(stream_ctx->stream_id, cnx->client_mode);
+
+    if (!is_local && !is_bidir) {
+        ret = -1;
+    }
+    else {
+        size_t reliable_size = 0;
+        if (is_local) {
+            reliable_size = 2 + picoquic_frames_varint_encode_length(stream_ctx->ps.stream_state.control_stream_id);
+        }
+        ret = picoquic_reset_stream_at(cnx, stream_ctx->stream_id, local_stream_error, reliable_size);
+        stream_ctx->ps.stream_state.is_fin_sent = 1;
+    }
+
+    return ret;
+}
 
 /* Web transport initiate, client side. Start with two parameters:
 * cnx: an established QUIC connection, set to ALPN=H3.
@@ -206,9 +246,6 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
     {
         picowt_set_transport_parameters(*p_cnx);
         picoquic_set_callback(*p_cnx, h3zero_callback, *p_h3_ctx);
-        /* Perform the initialization, settings and QPACK streams
-         */
-        ret = h3zero_protocol_init(*p_cnx);
     }
     return ret;
 }
@@ -218,8 +255,9 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
 * Connect
 */
 
-int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
-    const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
+    const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
+    uint8_t * extra, size_t extra_length)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
@@ -263,6 +301,13 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
             }
             size_t connect_length = bytes - buffer;
             stream_ctx->ps.stream_state.is_upgrade_requested = 1;
+
+            if (extra != NULL && extra_length > 0 && connect_length + extra_length <= sizeof(buffer)) {
+                memcpy(buffer + connect_length, extra, extra_length);
+                connect_length += extra_length;
+            }
+
+
             ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, buffer, connect_length,
                     0, stream_ctx);
         }
@@ -273,6 +318,12 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stre
         }
     }
     return ret;
+}
+
+int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
+    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+{
+    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, NULL, 0);
 }
 
 /*
@@ -291,7 +342,6 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
     uint8_t buffer[512];
     int ret = 0;
     /* Compute the length */
-    size_t length = 4;
     size_t err_msg_len = 0;
     uint8_t* bytes;
     uint8_t* bytes_max = buffer + sizeof(buffer);
@@ -305,7 +355,6 @@ int picowt_send_close_session_message(picoquic_cnx_t* cnx,
         if (err_msg != NULL) {
             err_msg_len = strlen(err_msg);
         }
-        length += err_msg_len;
 
         if ((bytes = picoquic_frames_uint32_encode(buffer, bytes_max, picowt_err)) == NULL ||
             bytes + err_msg_len > bytes_max) {
@@ -364,7 +413,6 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
     while (ret == 0 && bytes < bytes_max) {
         const uint8_t* bytes_first = bytes;
 
-
         bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule, stream_ctx);
 
         if (bytes == NULL) {
@@ -377,23 +425,31 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
                 switch (capsule->h3_capsule.capsule_type) {
                 case picowt_capsule_drain_webtransport_session:
                 case picowt_capsule_close_webtransport_session:
-                    picoquic_log_app_message(cnx, "Received web transport session capsule, type: 0x%" PRIx64 " (%s)",
-                        capsule->h3_capsule.capsule_type,
-                        (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session)?"close session":"drain session");
                     if (capsule->h3_capsule.capsule_length < 4) {
                         picoquic_log_app_message(cnx, "Web transport capsule too short, %zu bytes", capsule->h3_capsule.capsule_length);
                         ret = -1;
                     }
                     else {
+                        char text[256];
+                        size_t text_len = 0;
                         capsule->error_msg = picoquic_frames_uint32_decode(
                             capsule->h3_capsule.capsule_buffer, capsule->h3_capsule.capsule_buffer + capsule->h3_capsule.capsule_length,
                             &capsule->error_code);
                         capsule->error_msg_len = capsule->h3_capsule.capsule_length - 4;
+                        text_len = (capsule->error_msg_len > 255) ? 255 : capsule->error_msg_len;
+                        if (text_len > 0) {
+                            memcpy(text, capsule->error_msg, text_len);
+                        }
+                        text[text_len] = 0;
+                        picoquic_log_app_message(cnx,
+                            "Received web transport session capsule, type: 0x%" PRIx64 " (%s), error: %" PRIx32 " (%s)",
+                            capsule->h3_capsule.capsule_type,
+                            (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session) ? "close session" : "drain session",
+                            capsule->error_code, text);
                     }
                     break;
                 default:
                     picoquic_log_app_message(cnx, "Unexpected web transport capsule type: 0x%" PRIx64, capsule->h3_capsule.capsule_type);
-                    ret = -1;
                     break;
                 }
             }

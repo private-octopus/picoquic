@@ -84,13 +84,9 @@ int dualq_test_ctx_test()
 
 picoquictest_sim_packet_t* dualq_test_get_packet(uint8_t ecn_mark, size_t length)
 {
-    int ret = 0;
     picoquictest_sim_packet_t* packet = picoquictest_sim_link_create_packet();
 
-    if (packet == NULL) {
-        ret = -1;
-    }
-    else {
+    if (packet != NULL) {
         packet->ecn_mark = ecn_mark;
         packet->length = length;
     }
@@ -108,9 +104,7 @@ int dualq_enqueue_test()
     for (size_t i=0; ret == 0 && i< sizeof(ecn_sequence)/sizeof(uint8_t); i++){
         dualq_queue_t* xq = (queue_id[i] == 0) ? &dqt_ctx.dqs->cq : &dqt_ctx.dqs->lq;
         picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[i], 1000);
-        uint64_t packet_time = picoquictest_sim_link_transmit_time(dqt_ctx.link, packet);
         uint64_t old_bytes = xq->queue_bytes;
-        uint64_t old_time = xq->queue_time;
         picoquictest_sim_packet_t* old_last = xq->queue_last;
         picoquictest_sim_packet_t* old_first = xq->queue_first;
         picoquictest_sim_packet_t* last_in_link = dqt_ctx.link->last_packet;
@@ -119,7 +113,6 @@ int dualq_enqueue_test()
 
         if (xq->queue_last != packet ||
             xq->queue_bytes != old_bytes + packet->length ||
-            xq->queue_time != old_time + packet_time ||
             packet->next_packet != NULL) {
             ret = -1;
         }
@@ -161,9 +154,9 @@ int dualq_dequeue_test()
     }
     /* Perform link departure until all packets sent */
 
-    while ( ret == 0 &&
+    while (ret == 0 &&
         (dqt_ctx.dqs->lq.queue_bytes > 0 ||
-        dqt_ctx.dqs->cq.queue_bytes > 0)) {
+            dqt_ctx.dqs->cq.queue_bytes > 0)) {
         trials++;
         if (trials > 1000) {
             ret = -1;
@@ -186,15 +179,15 @@ int dualq_dequeue_test()
     }
 
     if (ret == 0 &&
-        dqt_ctx.dqs->cq.queue_bytes != 0 ||
-        dqt_ctx.dqs->cq.queue_first != NULL ||
-        dqt_ctx.dqs->cq.queue_last != NULL) {
+        (dqt_ctx.dqs->cq.queue_bytes != 0 ||
+            dqt_ctx.dqs->cq.queue_first != NULL ||
+            dqt_ctx.dqs->cq.queue_last != NULL)) {
         ret = -1;
     }
     if (ret == 0 &&
-        dqt_ctx.dqs->lq.queue_bytes != 0 ||
-        dqt_ctx.dqs->lq.queue_first != NULL ||
-        dqt_ctx.dqs->lq.queue_last != NULL) {
+        (dqt_ctx.dqs->lq.queue_bytes != 0 ||
+            dqt_ctx.dqs->lq.queue_first != NULL ||
+            dqt_ctx.dqs->lq.queue_last != NULL)) {
         ret = -1;
     }
 
@@ -241,8 +234,6 @@ int dualq_submit_test()
         int i_queue = i % 5;
         dualq_queue_t* xq = (queue_id[i_queue] == 0) ? &dqt_ctx.dqs->cq : &dqt_ctx.dqs->lq;
         picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[i_queue], 1000);
-        uint64_t packet_time = picoquictest_sim_link_transmit_time(dqt_ctx.link, packet);
-        int expect_link_queue = dqt_ctx.link->queue_time < dqt_ctx.simulated_time;
         uint64_t old_bytes = xq->queue_bytes;
         uint64_t old_queue_time = dqt_ctx.link->queue_time;
         uint64_t old_total = dqt_ctx.dqs->cq.queue_bytes + dqt_ctx.dqs->lq.queue_bytes + packet->length;
@@ -311,11 +302,16 @@ int dualq_sustain_test_receive(dualq_test_ctx* dqt_ctx, int* nb_received)
     return ret;
 }
 
+void dualq_sustain_test_admit(dualq_test_ctx* dqt_ctx)
+{
+    picoquictest_sim_link_admit_pending(dqt_ctx->link,
+        dqt_ctx->simulated_time);
+}
+
 int dualq_sustain_test_submit(dualq_test_ctx* dqt_ctx, int* nb_sent)
 {
     int ret = 0;
     const uint8_t ecn_sequence[] = { 0, PICOQUIC_ECN_ECT_0, 0, PICOQUIC_ECN_ECT_1, PICOQUIC_ECN_CE };
-    const int queue_id[] = { 0, 0, 0, 1, 1 };
     picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[*nb_sent % 5], 1000);
     if (packet == NULL) {
         ret = -1;
@@ -329,6 +325,13 @@ int dualq_sustain_test_submit(dualq_test_ctx* dqt_ctx, int* nb_sent)
     return ret;
 }
 
+typedef enum {
+    st_none = 0,
+    st_arrival,
+    st_admission,
+    st_submit
+} dualq_sustain_test_enum;
+
 int dualq_sustain_test()
 {
     dualq_test_ctx dqt_ctx;
@@ -339,36 +342,58 @@ int dualq_sustain_test()
     int nb_sent = 0;
 
     while (ret == 0) {
-        int next_action = -1;
-        uint64_t arrival_time = picoquictest_sim_link_next_arrival(dqt_ctx.link, UINT64_MAX);
-        if (arrival_time < UINT64_MAX) {
-            next_action = 1;
+        uint64_t action_time = UINT64_MAX;
+        dualq_sustain_test_enum next_action = st_none;
+        uint64_t admission_time;
+        uint64_t arrival_time = picoquictest_sim_link_next_arrival(dqt_ctx.link, action_time);
+        if (arrival_time < action_time) {
+            next_action = st_arrival;
+            action_time = arrival_time;
         }
+        admission_time = picoquictest_sim_link_next_admission(dqt_ctx.link, dqt_ctx.simulated_time, action_time);
+        if (admission_time < action_time) {
+            next_action = st_admission;
+            action_time = admission_time;
+        }
+
         /* Check whether submit is blocked, or whether the time is right. */
         if (nb_sent < 100 &&
             dqt_ctx.dqs->cq.queue_bytes + dqt_ctx.dqs->lq.queue_bytes + 1000 <= dqt_ctx.dqs->limit &&
-            submit_time < arrival_time) {
-            next_action = 2;
+            submit_time < action_time) {
+            next_action = st_submit;
+            action_time = submit_time;
         }
-        if (next_action == 2) {
-            if (dqt_ctx.simulated_time < submit_time) {
-                dqt_ctx.simulated_time = submit_time;
+        /* Exit if no next action */
+        if (next_action == st_none) {
+            break;
+        }
+        /* Update the time to follow events */
+        if (dqt_ctx.simulated_time < action_time) {
+            if (action_time > dqt_ctx.simulated_time + 4000) {
+                ret = -1;
+                break;
             }
-            else {
-                submit_time = dqt_ctx.simulated_time;
-            }
+            dqt_ctx.simulated_time = action_time;
+        }
+        else {
+            action_time = dqt_ctx.simulated_time;
+        }
+
+        if (next_action == st_submit) {
             dualq_sustain_test_submit(&dqt_ctx, &nb_sent);
             if ((nb_sent % 7) == 0) {
                 submit_time += 4000;
             }
         }
-        else if (next_action == 1) {
-            if (dqt_ctx.simulated_time < arrival_time) {
-                dqt_ctx.simulated_time = arrival_time;
-            }
+        else if (next_action == st_arrival) {
             dualq_sustain_test_receive(&dqt_ctx, &nb_received);
         }
+        else if (next_action == st_admission) {
+            dualq_sustain_test_admit(&dqt_ctx);
+        }
         else {
+            /* This is unexpected! */
+            ret = -1;
             break;
         }
     }

@@ -141,7 +141,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             uint8_t* ip_addr;
             uint8_t ip_addr_length;
             uint64_t estimated_rtt = 2 * latency;
-            uint64_t estimated_bdp = (125000ull * mbps_up) * estimated_rtt / 1000000ull;
+            uint64_t estimated_bdp = PICOQUIC_BYTES_FROM_RATE(estimated_rtt, (125000ull * mbps_up));
             picoquic_get_ip_addr((struct sockaddr*)&test_ctx->server_addr, &ip_addr, &ip_addr_length);
 
             picoquic_seed_bandwidth(test_ctx->cnx_client, estimated_rtt, estimated_bdp,
@@ -240,7 +240,7 @@ int satellite_loss_fc_test()
     /* Should be less than 10 sec per draft etosat.
      * The flow control option sets the "max data" to 2 BDP, with the effect
      * of reducing the memory consumption, while the transmission is slowed. */
-    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 10800000, 250, 3, 0, 1, 0, 0, 0, 1);
+    return satellite_test_one(picoquic_bbr_algorithm, 100000000, 12500000, 250, 3, 0, 1, 0, 0, 0, 1);
 }
 
 int satellite_preemptive_test()
@@ -332,5 +332,5 @@ int satellite_prague_seeded_test()
 int satellite_preemptive_fc_test()
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
-    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 13600000, 20, 2, 0, 1, 1, 0, 1, 0);
+    return satellite_test_one(picoquic_bbr_algorithm, 10000000, 20000000, 20, 2, 0, 1, 1, 0, 1, 0);
 }

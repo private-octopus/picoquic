@@ -871,7 +871,7 @@ static uint64_t BBRBDPMultipleWithBw(picoquic_bbr_state_t* bbr_state, picoquic_p
     if (bbr_state->min_rtt == UINT64_MAX) {
         return PICOQUIC_CWIN_INITIAL*path_x->send_mtu; /* no valid RTT samples yet */
     }
-    bbr_state->bdp = (bw * bbr_state->min_rtt) / 1000000;
+    bbr_state->bdp = PICOQUIC_BYTES_FROM_RATE(bbr_state->min_rtt, bw);
     return (uint64_t)(gain * (double)bbr_state->bdp);
 }
 
@@ -2158,8 +2158,7 @@ void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* p
         path_x->cwin += picoquic_cc_slow_start_increase(path_x, rs->newly_acked);
     }
 
-    uint64_t max_win = path_x->peak_bandwidth_estimate * bbr_state->min_rtt / 1000000;
-
+    uint64_t max_win = PICOQUIC_BYTES_FROM_RATE(bbr_state->min_rtt, path_x->peak_bandwidth_estimate);
     if (max_win < bbr_state->bdp_seed) {
         max_win = bbr_state->bdp_seed;
     }
@@ -2368,7 +2367,7 @@ static void BBRSetRsFromAckState(picoquic_path_t* path_x, picoquic_per_ack_state
         rs->delivery_rate = path_x->bandwidth_estimate;
     }
     else if (ack_state->rtt_measurement > 0) {
-        rs->delivery_rate = 1000000 * ack_state->nb_bytes_delivered_since_packet_sent / ack_state->rtt_measurement;
+        rs->delivery_rate = PICOQUIC_RATE_FROM_BYTES(ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
     }
     else
     {

@@ -309,14 +309,14 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
             ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
         }
         if (ret == 0) {
-            qserver = picoquic_create_and_configure(config, picoquic_demo_server_callback, &picoquic_file_param, current_time, NULL);
+            qserver = picoquic_create_and_configure(config, NULL, &picoquic_file_param, current_time, NULL);
             if (qserver == NULL) {
                 ret = -1;
             }
             else {
                 picoquic_set_key_log_file_from_env(qserver);
 
-                picoquic_set_alpn_select_fn(qserver, picoquic_demo_server_callback_select_alpn);
+                picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
 
                 picoquic_use_unique_log_names(qserver, 1);
 
@@ -344,6 +344,8 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
                 if (ret == 0) {
                     fprintf(stdout, "Accept enable multipath: %d.\n", qserver->default_multipath_option);
                 }
+                qserver->default_tp.is_reset_stream_at_enabled = 1;
+                qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
             }
         }
     }
@@ -439,7 +441,7 @@ char * picoquic_strsep(char **stringp, const char *delim)
 }
 
 /*
- * mp_config is consisted with src_if and alt_ip, seperated by "/" and ","
+ * mp_config is consisted of src_if and alt_ip, seperated by "/" and ","
  * e.g. 10.0.0.2/3,10.0.0.3/4,10.0.0.4/5
  * where src_if is an int list, and alt_ip is a string list.
  * alt_ip is the ip of the alternative path
@@ -945,10 +947,10 @@ int quic_client(const char* ip_address_text, int server_port,
             /* Set PMTUD policy to delayed on the client, leave to default=basic on server */
             picoquic_cnx_set_pmtud_policy(cnx_client, picoquic_pmtud_delayed);
             picoquic_set_default_pmtud_policy(qclient, picoquic_pmtud_delayed);
-
+            cnx_client->local_parameters.max_datagram_frame_size = 1532;
+            cnx_client->local_parameters.is_reset_stream_at_enabled = 1;
             if (is_quicperf) {
                 picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
-                cnx_client->local_parameters.max_datagram_frame_size = 1532;
             }
             else {
                 picoquic_set_callback(cnx_client, picoquic_demo_client_callback, &callback_ctx);
@@ -956,7 +958,6 @@ int quic_client(const char* ip_address_text, int server_port,
                 /* Requires TP grease, for interop tests */
                 cnx_client->grease_transport_parameters = 1;
                 cnx_client->local_parameters.enable_time_stamp = 3;
-                cnx_client->local_parameters.do_grease_quic_bit = 1;
 
                 if (callback_ctx.tp != NULL) {
                     picoquic_set_transport_parameters(cnx_client, callback_ctx.tp);

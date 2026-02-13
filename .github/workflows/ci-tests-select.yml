@@ -1,0 +1,44 @@
+---
+name: "CITestsSelect"
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  citests:
+    name: CI-Tests-Select
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          # We must fetch at least the immediate parents so that if this is
+          # a pull request then we can checkout the head.
+          submodules: 'recursive'
+      
+      - name: Building picotls
+        run: |
+          sudo apt-get install -y libssl-dev
+          ./ci/build_picotls.sh
+
+      - name: Building picoquic
+        run: |
+          sudo apt-get install -y libssl-dev
+          ./ci/build_picotls.sh
+          cmake -S . -B build "-DWITH_SELECT=ON"
+          cmake --build build
+
+      - name: Perform Sockloop Tests
+        run: |
+            ulimit -c unlimited -S
+            cd build
+            ./picoquic_ct -S .. -n sockloop_basic sockloop_migration sockloop_nat && QUICRESULT=$?
+            if [[ ${QUICRESULT} == 0 ]] ; then exit 0; fi;
+            exit 1
+    

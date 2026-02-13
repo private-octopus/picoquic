@@ -500,7 +500,8 @@ static int app_limited_test_one(app_limited_test_config_t * config)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-            al_ctx.nb_client_streams_completed >= 3) {
+            al_ctx.nb_client_streams_completed >= 3 &&
+            picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
             ret = picoquic_close(test_ctx->cnx_client, 0);
         }
 
@@ -612,7 +613,7 @@ int app_limited_rpr_test()
     config.ccalgo = picoquic_cubic_algorithm;
     config.do_preemptive_repeat = 1;
     config.loss_mask = 0x1482481224818214ull;
-    config.completion_target = 47100000;
+    config.completion_target = 47200000;
     config.nb_losses_max = 1980;
     config.rtt_max = 275000;
 

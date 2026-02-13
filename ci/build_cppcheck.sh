@@ -1,10 +1,10 @@
 #!/bin/sh
-#build last cppcheck 1.86 (for Travis)
+# build last cppcheck 1.86 (for Travis)
 
-cd ..
+cd .. || exit
 git clone -b "2.1" --depth 1 https://github.com/danmar/cppcheck.git
-cd cppcheck
+cd cppcheck || exit
 cmake .
-make -j$(nproc) all
+make -j "$(nproc)" all
 sudo make install
-cd ..
+cd .. || exit

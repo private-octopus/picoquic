@@ -105,7 +105,7 @@ static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* cc
             uint8_t* ip_addr;
             uint8_t ip_addr_length;
             uint64_t estimated_rtt = 2 * latency;
-            uint64_t estimated_bdp = (125000ull * mbps_up) * estimated_rtt / 1000000ull;
+            uint64_t estimated_bdp = PICOQUIC_BYTES_FROM_RATE(estimated_rtt, 125000ull * mbps_up);
             picoquic_get_ip_addr((struct sockaddr*)&test_ctx->server_addr, &ip_addr, &ip_addr_length);
 
             picoquic_seed_bandwidth(test_ctx->cnx_client, estimated_rtt, estimated_bdp,

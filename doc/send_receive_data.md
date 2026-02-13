@@ -84,13 +84,13 @@ congestion control and scheduling priorities permit.
 
 With the just in time API, the application:
 
-- marks a stream as `active` using the API "picoquic_mark_active_stream".
+- marks a stream as `active` using the API `picoquic_mark_active_stream`.
 
-- receives the callback `picohttp_callback_provide_data` when the stack is ready
+- receives the callback `picoquic_callback_prepare_to_send` when the stack is ready
 to send data on the stream.
 
 - services the callback by reserving a buffer using the
-API "picoquic_provide_stream_data_buffer", and copying the
+API `picoquic_provide_stream_data_buffer`, and copying the
 application data in that buffer.
 
 The APIs are documented in "picoquic.h":
@@ -197,7 +197,7 @@ to send queued data for that stream, or to issue the callback
 When stream data are received, the contents are queued temporarily until
 it can be delivered in order. At that point, the application will
 receive a callback `picoquic_callback_stream_data` or, if this is
-the last data for a stream, `picoquic_callback_stream_data`.
+the last data for a stream, `picoquic_callback_stream_fin`.
 
 The callback will indicate the stream ID. The `stream_ctx` argument
 will be set to the value associated with the stream in the last call

@@ -602,7 +602,7 @@ void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x
         return;
     }
     /* Compute  bw in bytes per second */
-    bw = (delivered * 1000000) / interval_microsec; 
+    bw = PICOQUIC_RATE_FROM_BYTES(delivered, interval_microsec);
     /* Apply the changes */
     BBR1ltbwIntervalDone(bbr1_state, path_x, bw, current_time);
 }
@@ -624,7 +624,7 @@ void BBR1UpdateBtlBw(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
 
     if (bbr1_state->rt_prop > 0) {
         /* Stop the bandwidth estimate from falling too low. */
-        uint64_t min_bandwidth = (((uint64_t)PICOQUIC_CWIN_MINIMUM) * 1000000) / bbr1_state->rt_prop;
+        uint64_t min_bandwidth = PICOQUIC_RATE_FROM_BYTES(PICOQUIC_CWIN_MINIMUM, bbr1_state->rt_prop);
         if (bandwidth_estimate < min_bandwidth) {
             bandwidth_estimate = min_bandwidth;
         }
@@ -715,7 +715,7 @@ int BBR1IsNextCyclePhase(picoquic_bbr1_state_t* bbr1_state, uint64_t prior_in_fl
 void BBR1SetMinimalGain(picoquic_bbr1_state_t* bbr1_state)
 {
     if (bbr1_state->pacing_gain > 1.0 && bbr1_state->rt_prop > 0) {
-        uint64_t target_cwin = bbr1_state->btl_bw * bbr1_state->rt_prop / 1000000;
+        uint64_t target_cwin = PICOQUIC_BYTES_FROM_RATE(bbr1_state->rt_prop, bbr1_state->btl_bw);
 
         if (target_cwin < 4 * PICOQUIC_MAX_PACKET_SIZE) {
             double d_target = (double)target_cwin;
@@ -861,7 +861,7 @@ void BBR1ExitStartupSeedBDP(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* 
     uint64_t current_time)
 {
     /* Set the BW to the value deduced from the BDP */
-    uint64_t bandwidth_estimate = bdp * 1000000 / path_x->rtt_min;
+    uint64_t bandwidth_estimate = PICOQUIC_RATE_FROM_BYTES(bdp, path_x->rtt_min);
     path_x->cwin = bdp;
     /* Set the parameters */
     if (bandwidth_estimate > bbr1_state->btl_bw_filter[0]) {
@@ -1259,7 +1259,7 @@ static void picoquic_bbr1_notify(
                 }
                 bbr1_state->bytes_delivered = 0;
 
-                max_win = path_x->peak_bandwidth_estimate * bbr1_state->rt_prop / 1000000;
+                max_win = PICOQUIC_BYTES_FROM_RATE(bbr1_state->rt_prop, path_x->peak_bandwidth_estimate);
                 min_win = max_win /= 2;
 
                 if (path_x->cwin < min_win) {

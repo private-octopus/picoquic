@@ -52,6 +52,14 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     return highest_acknowledged;
 }
 
+uint64_t picoquic_cc_get_lowest_not_ack(picoquic_path_t* path_x)
+{
+    picoquic_packet_context_t* pkt_ctx = (path_x->cnx->is_multipath_enabled) ? &path_x->pkt_ctx : &path_x->cnx->pkt_ctx[picoquic_packet_context_application];
+    uint64_t lowest_not_ack = (pkt_ctx->pending_first != NULL) ? pkt_ctx->pending_first->sequence_number : pkt_ctx->highest_acknowledged + 1;
+
+    return lowest_not_ack;
+}
+
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t latest_time_acknowledged;
@@ -241,7 +249,7 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
 
 uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {
     /* RTT measurements will happen after the bandwidth is estimated. */
-    uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+    uint64_t max_win = PICOQUIC_BYTES_FROM_RATE(path_x->smoothed_rtt, path_x->peak_bandwidth_estimate);
     uint64_t min_win = max_win / 2;
 
     /* Return increased cwin, if larger than current cwin. */

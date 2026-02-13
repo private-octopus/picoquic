@@ -586,6 +586,12 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec, FILE* err_fd
     return cc_ctx;
 }
 
+void picoquic_ns_packet_admission(picoquic_ns_ctx_t* cc_ctx, int link_id)
+{
+    picoquictest_sim_link_admit_pending(cc_ctx->link[link_id],
+        cc_ctx->simulated_time);
+}
+
 int picoquic_ns_incoming_packet(picoquic_ns_ctx_t* cc_ctx, int link_id)
 {
     int ret = 0;
@@ -790,6 +796,7 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
         no_action,
         link_transition,
         link_departure,
+        link_admission,
         prepare_packet,
         start_connection
     } next_action = no_action;
@@ -802,6 +809,12 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
 
     /* Check whether there is something to receive */
     for (int i = 0; i < PICOQUIC_NS_NB_LINKS; i++) {
+        uint64_t t_admission = picoquictest_sim_link_next_admission(cc_ctx->link[i], cc_ctx->simulated_time, t_next_action);
+        if (t_admission < t_next_action) {
+            t_next_action = t_admission;
+            link_id_next = i;
+            next_action = link_admission;
+        }
         if (cc_ctx->link[i]->first_packet != NULL) {
             uint64_t t_arrival = picoquictest_sim_link_next_arrival(cc_ctx->link[i], t_next_action);
             if (t_arrival < t_next_action) {
@@ -846,6 +859,10 @@ int picoquic_ns_step(picoquic_ns_ctx_t* cc_ctx, int* is_active)
         break;
     case link_departure:
         ret = picoquic_ns_incoming_packet(cc_ctx, link_id_next);
+        *is_active = 1;
+        break;
+    case link_admission:
+        picoquic_ns_packet_admission(cc_ctx, link_id_next);
         *is_active = 1;
         break;
     case prepare_packet:
@@ -964,7 +981,9 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     int nb_inactive = 0;
 
     if (cc_ctx == NULL) {
-        fprintf(err_fd, "Cannot allocate simulation context.\n");
+        if (err_fd != NULL) {
+            fprintf(err_fd, "Cannot allocate simulation context.\n");
+        }
         ret = -1;
     }
     while (ret == 0) {
@@ -998,7 +1017,7 @@ int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
     }
     if (err_fd != NULL && ret != 0) {
         fprintf(err_fd, "Simulated time %" PRIu64 ", ret = %d(0x%x)\n",
-            cc_ctx->simulated_time, ret, ret);
+            (cc_ctx!=NULL)?cc_ctx->simulated_time:0, ret, ret);
     }
 
     if (ret == 0 &&

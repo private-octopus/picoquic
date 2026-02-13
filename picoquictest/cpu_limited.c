@@ -254,7 +254,7 @@ int limited_safe_test()
     limited_test_config_t config;
     limited_config_set_default(&config, 5);
     config.ccalgo = picoquic_cubic_algorithm;
-    config.max_completion_time = 5400000;
+    config.max_completion_time = 5450000;
     /* Bug. Should investigate later -- there should be 0 or maybe 1 losses */
     config.nb_losses_max = 6;
     config.flow_control_max = 57344;

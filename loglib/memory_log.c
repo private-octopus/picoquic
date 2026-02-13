@@ -55,9 +55,9 @@ typedef struct st_picoquic_memory_line_t {
     uint64_t smoothed_rtt;
     uint64_t rtt_min;
     uint64_t bandwidth_estimate;
+    uint64_t pacing_rate;
     uint64_t receive_rate_estimate;
     uint64_t send_mtu;
-    uint64_t packet_time_microsec;
     uint64_t nb_retransmission_total;
     uint64_t nb_spurious;
     unsigned int cwin_blocked : 1;
@@ -114,9 +114,9 @@ int memlog_fill_line(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_memory
         memline->smoothed_rtt = path->smoothed_rtt;
         memline->rtt_min = path->rtt_min;
         memline->bandwidth_estimate = path->bandwidth_estimate;
+        memline->pacing_rate = path->pacing.rate;
         memline->receive_rate_estimate = path->receive_rate_estimate;
         memline->send_mtu = path->send_mtu;
-        memline->packet_time_microsec = path->pacing.packet_time_microsec;
         if (cnx->is_multipath_enabled) {
             memline->nb_retransmission_total = path->nb_losses_found;
             memline->nb_spurious = path->nb_spurious;
@@ -147,35 +147,35 @@ int memlog_fill_line(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_memory
 
 void memlog_print_header(FILE* F)
 {
-    fprintf(F, "current_time, ");
-    fprintf(F, "send_sequence, ");
+    fprintf(F, "current_time,");
+    fprintf(F, "send_sequence,");
 
-    fprintf(F, "highest_ack, ");
-    fprintf(F, "high_ack_time, ");
-    fprintf(F, "latest_time_ack, ");
+    fprintf(F, "highest_ack,");
+    fprintf(F, "high_ack_time,");
+    fprintf(F, "latest_time_ack,");
 
-    fprintf(F, "cwin, ");
-    fprintf(F, "one_way_delay, ");
-    fprintf(F, "rtt_sample, ");
-    fprintf(F, "smoothed_rtt, ");
-    fprintf(F, "rtt_min, ");
-    fprintf(F, "bw_e, ");
-    fprintf(F, "recv_rate, ");
-    fprintf(F, "send_mtu, ");
-    fprintf(F, "packet_time, ");
+    fprintf(F, "cwin,");
+    fprintf(F, "one_way_delay,");
+    fprintf(F, "rtt_sample,");
+    fprintf(F, "smoothed_rtt,");
+    fprintf(F, "rtt_min,");
+    fprintf(F, "bw_e,");
+    fprintf(F, "pacing_rate,");
+    fprintf(F, "recv_rate,");
+    fprintf(F, "send_mtu,");
 
-    fprintf(F, "nb_retrans, ");
-    fprintf(F, "nb_spurious, ");
+    fprintf(F, "nb_retrans,");
+    fprintf(F, "nb_spurious,");
 
-    fprintf(F, "cwin_blocked, ");
-    fprintf(F, "flow_blocked, ");
-    fprintf(F, "stream_blocked, ");
+    fprintf(F, "cwin_blocked,");
+    fprintf(F, "flow_blocked,");
+    fprintf(F, "stream_blocked,");
 
-    fprintf(F, "cc_state, ");
-    fprintf(F, "cc_param, ");
+    fprintf(F, "cc_state,");
+    fprintf(F, "cc_param,");
 
-    fprintf(F, "peak_bandwidth_estimate, ");
-    fprintf(F, "bytes_in_transit, ");
+    fprintf(F, "peak_bandwidth_estimate,");
+    fprintf(F, "bytes_in_transit,");
     fprintf(F, "bwe_path_limited");
     fprintf(F, "\n");
 }
@@ -196,9 +196,9 @@ void memlog_print_line(FILE* F, picoquic_memory_line_t* memline)
     fprintf(F, "%" PRIu64 ",", memline->smoothed_rtt);
     fprintf(F, "%" PRIu64 ",", memline->rtt_min);
     fprintf(F, "%" PRIu64 ",", memline->bandwidth_estimate);
+    fprintf(F, "%" PRIu64 ",", memline->pacing_rate);
     fprintf(F, "%" PRIu64 ",", memline->receive_rate_estimate);
     fprintf(F, "%" PRIu64 ",", memline->send_mtu);
-    fprintf(F, "%" PRIu64 ",", memline->packet_time_microsec);
 
     fprintf(F, "%" PRIu64 ",", memline->nb_retransmission_total);
     fprintf(F, "%" PRIu64 ",", memline->nb_spurious);

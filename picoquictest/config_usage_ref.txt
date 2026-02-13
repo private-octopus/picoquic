@@ -46,5 +46,6 @@ Picoquic options:
   -J mode         provider (0), receiver (1) or both (2).
   -E key config   ECH private key file, config file. Default= no ECH on server.
   -y public_name  Create an ECH configuration before applying the `ech_s` parameter.
-  -K base64       ECH configuration for the client connection, base64 encoded,
+  -K base64       ECH configuration for the client connection, base64 encoded.
+  -Z bytes        Set the flow control's initial max data.
   -h              This help message

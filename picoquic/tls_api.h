@@ -129,9 +129,6 @@ void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefi
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
 
-char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
-char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
-
 void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
     struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn);
 
@@ -140,6 +137,8 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
+
+void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 
 int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sockaddr* addr_peer, 
     int * is_new_token, const uint8_t* token, size_t token_length, uint8_t* text, size_t* text_length);

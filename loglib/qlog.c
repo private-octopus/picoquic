@@ -37,6 +37,9 @@ typedef struct qlog_context_st {
     const char * cid_name; /*!< Name of the connection, default = initial connection id */
     struct sockaddr_storage addr_peer;
     struct sockaddr_storage addr_local;
+    uint8_t ecn_sent;
+    uint8_t ecn_received;
+
 
     uint64_t start_time;  /*!< Timestamp is very first log event reported. */
     int event_count;
@@ -376,6 +379,9 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_address_discovery:
                     qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
                     break;
+                case picoquic_tp_reset_stream_at:
+                    qlog_vint_transport_extension(f, "reset_stream_at", s, extension_length);
+                    break;
                 default:
                     /* dump unknown extensions */
                     fprintf(f, "\"%" PRIx64 "\": ", extension_type);
@@ -540,14 +546,12 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     uint64_t packet_type = 0;
     uint64_t err_code;
     uint64_t packet_size = 0;
-    uint64_t raw_len = 0;
     char const* str;
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
     ret |= byteread_vint(s, &packet_size);
     ret |= byteread_vint(s, &err_code);
-    ret |= byteread_vint(s, &raw_len);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -557,8 +561,11 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_dropped");
-    fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
-    fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
+    if (err_code != PICOQUIC_ERROR_PADDING_PACKET){
+        fprintf(f, "\n    \"packet_type\" : \"%s\",", ptype2str((picoquic_packet_type_enum)packet_type));
+    }
+    fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
+
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
         str = "dos_prevention";
@@ -584,21 +591,20 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     case PICOQUIC_ERROR_STATELESS_RESET:
         str = "stateless_reset";
         break;
+    case PICOQUIC_ERROR_PADDING_PACKET:
+        str = "padding_packet";
+        break;
     default:
         str = "protocol_violation";
         break;
     }
     fprintf(f, ",\n    \"trigger\": \"%s\"", str);
 
-    if (ret == 0 && raw_len > 0) {
-        fprintf(f, ",\n    \"raw\": ");
-        qlog_string(f, s, raw_len);
-    }
     fprintf(f, "}]");
 
     ctx->event_count++;
 
-    return 0;
+    return ret;
 }
 
 int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
@@ -642,12 +648,15 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     struct sockaddr_storage addr_local = { 0 };
     uint64_t byte_length = 0;
     uint64_t unique_path_id = 0;
+    uint8_t ecn;
+    int log_ecn;
     int ret_local;
 
     byteread_addr(s, &addr_peer);
     byteread_vint(s, &byte_length);
     ret_local = byteread_addr(s, &addr_local);
     byteread_vint(s, &unique_path_id);
+    byteread_int8(s, &ecn);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -674,6 +683,20 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
         qlog_log_addr(f, (struct sockaddr*) & addr_local);
         fprintf(f, "}");
         picoquic_store_addr(&ctx->addr_local, (struct sockaddr*) & addr_local);
+    }
+
+    if (rxtx) {
+        log_ecn = (ecn != ctx->ecn_received);
+        ctx->ecn_received = ecn;
+    }
+    else {
+        log_ecn = (ecn != ctx->ecn_sent);
+        ctx->ecn_sent = ecn;
+    }
+    if (log_ecn) {
+        char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
+        char const* ecn_s = ecn_strings[ecn & 3];
+        fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
     }
 
     fprintf(f, "}]");
@@ -854,6 +877,23 @@ void qlog_reset_stream_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
     byteread_vint(s, &final_size);
     fprintf(f, ", \"final_size\": %"PRIu64"", final_size);
+}
+
+void qlog_reset_stream_at_frame(FILE* f, bytestream* s)
+{
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+    uint64_t final_size = 0;
+    uint64_t reliable_size = 0;
+
+    byteread_vint(s, &stream_id);
+    fprintf(f, ", \"stream_id\": %"PRIu64"", stream_id);
+    byteread_vint(s, &error_code);
+    fprintf(f, ", \"error_code\": %"PRIu64"", error_code);
+    byteread_vint(s, &final_size);
+    fprintf(f, ", \"final_size\": %"PRIu64"", final_size);
+    byteread_vint(s, &reliable_size);
+    fprintf(f, ", \"reliable_size\": %"PRIu64"", final_size);
 }
 
 void qlog_stop_sending_frame(FILE* f, bytestream* s)
@@ -1258,6 +1298,9 @@ int qlog_packet_frame(bytestream * s, void * ptr)
         break;
     case picoquic_frame_type_reset_stream:
         qlog_reset_stream_frame(f, s);
+        break;
+    case picoquic_frame_type_reset_stream_at:
+        qlog_reset_stream_at_frame(f, s);
         break;
     case picoquic_frame_type_stop_sending:
         qlog_stop_sending_frame(f, s);

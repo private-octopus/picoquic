@@ -312,6 +312,18 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 			ret = picoquic_set_stream_priority(cnx, decoder_stream_id, 1);
 		}
 	}
+
+	return ret;
+}
+
+int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+{
+	int ret = 0;
+
+	if (!ctx->settings_sent) {
+		ctx->settings_sent = 1;
+		ret = h3zero_protocol_init(cnx);
+	}
 	return ret;
 }
 
@@ -387,7 +399,8 @@ static void h3zero_reset_control_stream_state(h3zero_data_stream_state_t* stream
 }
 
 static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found)
+	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+	void* opt_cnx)
 {
 	while (bytes != NULL && bytes < bytes_max) {
 		/* If frame type not known yet, get it. */
@@ -443,9 +456,20 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			}
 			/* Process the frame if needed, or free it */
 			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-				if (stream_state->current_frame_type == h3zero_frame_settings) {
+				if (stream_state->current_frame != NULL && stream_state->current_frame_type == h3zero_frame_settings) {
+					const uint8_t* decoded_last = NULL;
+
+					if (opt_cnx != NULL && !ctx->settings.settings_received && stream_state->current_frame_length > 0) {
+						char x[256];
+
+						for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
+							size_t nb_chars = 0;
+							picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
+						}
+						picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
+					}
 					/* TODO: actually parse the settings */
-					const uint8_t* decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
+					decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
 						stream_state->current_frame + stream_state->current_frame_length, &ctx->settings);
 					if (decoded_last == NULL) {
 						*error_found = H3ZERO_SETTINGS_ERROR;
@@ -525,7 +549,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx,
-	uint64_t * error_found)
+	uint64_t * error_found,
+	void* opt_cnx)
 {
 	h3zero_data_stream_state_t* stream_state = &stream_ctx->ps.stream_state;
 
@@ -542,7 +567,7 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 	}
 	switch (stream_state->stream_type) {
 	case h3zero_stream_type_control: /* used to send/receive setting frame and other control frames. */
-		bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found);
+		bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found, opt_cnx);
 		break;
 	case h3zero_stream_type_push: /* Push type not supported in current implementation */
 		bytes = bytes_max;
@@ -569,7 +594,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 uint8_t* h3zero_parse_incoming_remote_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
-	h3zero_callback_ctx_t* ctx)
+	h3zero_callback_ctx_t* ctx,
+	picoquic_cnx_t * opt_cnx)
 {
 	uint64_t error_found = 0;
 
@@ -577,7 +603,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 		bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
 	}
 	else {
-		bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+		bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, opt_cnx);
 	}
 	return bytes;
 }
@@ -906,7 +932,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 			bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
 		}
 		else {
-			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, cnx);
 		}
 
 		if (bytes == NULL) {
@@ -1241,11 +1267,6 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 	return ret;
 }
 
-
-
-
-
-
 int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
@@ -1256,19 +1277,25 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	size_t available_data = 0;
 	uint64_t error_found = 0;
 	uint8_t* bytes_max = bytes + length;
+	uint64_t header_was_found = stream_ctx->ps.stream_state.header_found;
 
 	while (bytes < bytes_max) {
 		bytes = h3zero_parse_data_stream(bytes, bytes_max, &stream_ctx->ps.stream_state, &available_data, &error_found);
 		/* action should depend on what type of frame was read:
-		* web transport: this is the bypass option. make sure that the callback is set. pass any available data. 
-		* data frame: pass the data to the app, which means writing / reading if web, callback otherwise. 
+		* web transport: this is the bypass option. make sure that the callback is set. pass any available data.
+		* data frame: pass the data to the app, which means writing / reading if web, callback otherwise.
 		* post: identify the post context, set the call back.
-		* 
+		*
 		*/
 
 		if (bytes == NULL) {
 			ret = picoquic_close(cnx, error_found);
 			break;
+		}
+		if (!header_was_found && stream_ctx->ps.stream_state.header_found &&
+			stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
+			ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
+			header_was_found = 1;
 		}
 		else if (available_data > 0) {
 			if (stream_ctx->ps.stream_state.is_web_transport) {
@@ -1327,23 +1354,21 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 			bytes += available_data;
 		}
 	}
-	/* Process the header if necessary */
+
 	if (ret == 0 && !process_complete) {
 		if (stream_ctx->ps.stream_state.is_web_transport) {
 			if (fin_or_event == picoquic_callback_stream_fin && available_data == 0 && stream_ctx->path_callback != NULL) {
 				ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 			}
 		}
-		else {
-			if (fin_or_event == picoquic_callback_stream_fin || stream_ctx->ps.stream_state.header.method == h3zero_method_connect) {
-				/* Process the request header. */
-				if (stream_ctx->ps.stream_state.header_found) {
-					ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
-				}
-				else {
-					/* Unexpected end of stream before the header is received */
-					ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
-				}
+		else if (fin_or_event == picoquic_callback_stream_fin && stream_ctx->ps.stream_state.header.method != h3zero_method_connect) {
+			/* For Get or Post methods, we wait the end of the stream to process the header. */
+			if (stream_ctx->ps.stream_state.header_found) {
+				ret = h3zero_process_request_frame(cnx, stream_ctx, ctx);
+			}
+			else {
+				/* Unexpected end of stream before the header is received */
+				ret = picoquic_reset_stream(cnx, stream_id, H3ZERO_FRAME_ERROR);
 			}
 		}
 	}
@@ -1354,11 +1379,11 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 */
 
 int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
-	uint64_t stream_id, uint8_t* bytes, size_t length,
-	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
-	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
+	uint64_t stream_id, uint8_t* bytes, size_t length, int is_fin,
+	h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
 {
 	int ret = 0;
+
 	if (stream_ctx->F == NULL && ctx->no_disk == 0 && stream_ctx->file_path != NULL) {
 		ret = h3zero_client_open_stream_file(cnx, ctx, stream_ctx);
 	}
@@ -1401,7 +1426,9 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 						}
 					}
 					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
-						ret = stream_ctx->path_callback(cnx, bytes, available_data, fin_or_event, stream_ctx, stream_ctx->path_callback_ctx);
+						ret = stream_ctx->path_callback(cnx, bytes, available_data, 
+							(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
+							stream_ctx, stream_ctx->path_callback_ctx);
 					}
 					else
 					{
@@ -1420,7 +1447,7 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 		}
 	}
 
-	if (fin_or_event == picoquic_callback_stream_fin) {
+	if (is_fin) {
 		if (stream_ctx->path_callback != NULL) {
 			stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_post_fin, stream_ctx, stream_ctx->path_callback_ctx);
 		}
@@ -1504,7 +1531,7 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 					}
 					else {
 						/* Perform application callback */
-						ret = h3zero_post_data_or_fin(cnx, bytes, length, fin_or_event, stream_ctx);
+						ret = h3zero_post_data_or_fin(cnx, bytes, length, (fin_or_event == picoquic_callback_stream_fin), stream_ctx);
 					}
 				}
 				else {
@@ -1845,7 +1872,7 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 		}
 		else {
 			picoquic_set_callback(cnx, h3zero_callback, ctx);
-			ret = h3zero_protocol_init(cnx);
+			ret = h3zero_protocol_init_safe(cnx, ctx);
 		}
 	} else{
 		ctx = (h3zero_callback_ctx_t*)callback_ctx;
@@ -1868,15 +1895,16 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			if (stream_ctx != NULL) {
 				if (stream_ctx->path_callback != NULL) {
 					/* reset post callback. */
-					ret = stream_ctx->path_callback(cnx, NULL, 0, picohttp_callback_reset, stream_ctx, stream_ctx->path_callback_ctx);
+					ret = stream_ctx->path_callback(cnx, NULL, 0, (fin_or_event == picoquic_callback_stream_reset)?
+						picohttp_callback_reset:picohttp_callback_stop_sending, stream_ctx, stream_ctx->path_callback_ctx);
 				}
 				else {
 					/* If a file is open on a client, close and do the accounting. */
 					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+					if (IS_BIDIR_STREAM_ID(stream_id)) {
+						picoquic_reset_stream(cnx, stream_id, 0);
+					}
 				}
-			}
-			if (IS_BIDIR_STREAM_ID(stream_id)) {
-				picoquic_reset_stream(cnx, stream_id, 0);
 			}
 			break;
 		case picoquic_callback_stateless_reset:
@@ -1929,7 +1957,9 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			break;
 		case picoquic_callback_almost_ready:
 		case picoquic_callback_ready:
-			/* TODO: Check that the transport parameters are what Http3 expects */
+			/* The H3 settings frame should only be started at this point,
+			* after the limits for unidir streams are known */
+			ret = h3zero_protocol_init_safe(cnx, ctx);
 			break;
 		default:
 			/* unexpected -- just ignore. */
@@ -1978,7 +2008,10 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_qpack_blocked_streams, settings->blocked_streams, UINT64_MAX)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_connect_protocol, settings->enable_connect_protocol, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_h3_datagram, settings->h3_datagram, 0)) != NULL &&
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL) {
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL &&
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions_old, settings->webtransport_max_sessions, 0)) != NULL &&
+				/* Chrome compatibility: also send SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) */
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_webtransport, (settings->webtransport_max_sessions > 0) ? 1 : 0, 0)) != NULL) {
 				size_t actual_length = bytes - bytes_after_length;
 				uint8_t* bytes_final_length = picoquic_frames_varint_encode(bytes_of_length, bytes_after_length, actual_length);
 				if (bytes_final_length == NULL) {
@@ -2018,7 +2051,14 @@ const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uin
 			settings->h3_datagram = (unsigned int)component_value;
 			break;
 		case h3zero_settings_webtransport_max_sessions:
+		case h3zero_settings_webtransport_max_sessions_old:
 			settings->webtransport_max_sessions = component_value;
+			break;
+		case h3zero_settings_enable_webtransport:
+			/* Chrome sends SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) instead of WT_MAX_SESSIONS */
+			if (component_value > 0 && settings->webtransport_max_sessions == 0) {
+				settings->webtransport_max_sessions = 1;
+			}
 			break;
 		default:
 			break;
@@ -2072,6 +2112,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		capsule->capsule_type = 0;
 		capsule->capsule_length = 0;
 		capsule->is_stored = 0;
+		capsule->is_length_known = 0;
 	}
 	if (!capsule->is_length_known) {
 		size_t length_of_type = 0;
@@ -2123,7 +2164,7 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 			capsule->capsule_buffer = capsule_buffer;
 			capsule->capsule_buffer_size = capsule->capsule_length;
 		}
-		if (capsule->capsule_buffer == NULL) {
+ 		if (capsule->capsule_buffer == NULL) {
 			capsule->value_read = 0;
 			capsule->capsule_buffer_size = 0;
 			bytes = NULL;

@@ -36,6 +36,7 @@
 #include "picoquic_bbr1.h"
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
+#include "picoquic_c4.h"
 
 static test_api_stream_desc_t test_scenario_congestion[] = {
     { 4, 0, 257, 1000000 },
@@ -114,6 +115,16 @@ int cubic_test()
 int cubic_jitter_test()
 {
     return congestion_control_test(picoquic_cubic_algorithm, 3550000, 5000, 5);
+}
+
+int c4_test()
+{
+    return congestion_control_test(c4_algorithm, 3600000, 0, 0);
+}
+
+int c4_jitter_test()
+{
+    return congestion_control_test(c4_algorithm, 3650000, 5000, 5);
 }
 
 int fastcc_test()
@@ -227,6 +238,10 @@ int bbr_long_test()
     return congestion_long_test(picoquic_bbr_algorithm);
 }
 
+int c4_long_test()
+{
+    return congestion_long_test(c4_algorithm);
+}
 
 int bbr1_test()
 {

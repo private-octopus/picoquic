@@ -78,9 +78,9 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
 
     if (is_multipath) {
         /* Add negotiation of multipath option */
-        test_ctx->qserver->default_tp.is_multipath_enabled = 1;
-        test_ctx->qclient->default_tp.is_multipath_enabled = 1;
-        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+        test_ctx->qserver->default_tp.initial_max_path_id = 1;
+        test_ctx->qclient->default_tp.initial_max_path_id = 1;
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 1;
     }
 
     if (ret == 0) {

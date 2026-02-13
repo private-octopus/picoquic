@@ -348,6 +348,9 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_observed_address_v6:
         frame_name = "observed_address_v6";
         break;
+    case picoquic_frame_type_reset_stream_at:
+        frame_name = "reset_stream_at";
+        break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
@@ -443,6 +446,9 @@ char const* textlog_tp_name(picoquic_tp_enum tp_number)
         break;
     case picoquic_tp_address_discovery:
         tp_name = "address_discovery";
+        break;
+    case picoquic_tp_reset_stream_at:
+        tp_name = "reset_stream_at";
         break;
     default:
         break;
@@ -780,6 +786,47 @@ size_t textlog_reset_stream_frame(FILE* F, const uint8_t* bytes, size_t bytes_ma
         fprintf(F, "    %s %llu, Error 0x%08x, Offset 0x%llx.\n",
             textlog_frame_names(picoquic_frame_type_reset_stream),
             (unsigned long long)stream_id, (uint32_t)error_code, (unsigned long long)offset);
+    }
+
+    return byte_index;
+}
+
+size_t textlog_reset_stream_at_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
+{
+    size_t byte_index = 1;
+    uint64_t stream_id = 0;
+    uint64_t error_code = 0;
+    uint64_t offset = 0;
+    uint64_t reliable_size = 0;
+
+    size_t l1 = 0, l2 = 0, l3 = 0, l4=0;
+    if (bytes_max > 2) {
+        l1 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &stream_id);
+        byte_index += l1;
+        if (l1 > 0) {
+            l2 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &error_code);
+            byte_index += l2;
+        }
+        if (l2 > 0) {
+            l3 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &offset);
+            byte_index += l3;
+        }
+        if (l3 > 0) {
+            l4 = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &reliable_size);
+            byte_index += l4;
+        }
+    }
+
+    if (l1 == 0 || l2 == 0 || l3 == 0) {
+        fprintf(F, "    Malformed RESET STREAM AT, requires %d bytes out of %d\n", (int)(byte_index + ((l1 == 0) ? (picoquic_varint_skip(bytes + 1) + 3) : picoquic_varint_skip(bytes + byte_index))),
+            (int)bytes_max);
+        byte_index = bytes_max;
+    }
+    else {
+        fprintf(F, "    %s, stream %llu, error 0x%08x, offset 0x%llx, reliable size 0x%llx.\n",
+            textlog_frame_names(picoquic_frame_type_reset_stream_at),
+            (unsigned long long)stream_id, (uint32_t)error_code,
+            (unsigned long long)offset, (unsigned long long)reliable_size);
     }
 
     return byte_index;
@@ -1664,6 +1711,10 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
             byte_index += textlog_reset_stream_frame(F, bytes + byte_index,
                 length - byte_index);
             break;
+        case picoquic_frame_type_reset_stream_at: /* RST_STREAM */
+            byte_index += textlog_reset_stream_at_frame(F, bytes + byte_index,
+                length - byte_index);
+            break;
         case picoquic_frame_type_connection_close: /* CONNECTION_CLOSE */
             byte_index += textlog_connection_close_frame(F, bytes + byte_index,
                 length - byte_index, cnx_id64);
@@ -2280,11 +2331,12 @@ static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curr
 
 static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id)
+    uint64_t unique_path_id, unsigned char ecn)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
     UNREFERENCED_PARAMETER(unique_path_id);
+    UNREFERENCED_PARAMETER(ecn);
 #endif
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_packet_address(cnx->quic->F_log,
@@ -2303,10 +2355,27 @@ static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int rec
 }
 
 static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph,
-    size_t packet_size, int ret, uint8_t* raw_data, uint64_t current_time)
+    size_t packet_size, int ret, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, raw_data, packet_size, ret);
+        FILE* F = cnx->quic->F_log;
+
+        if (ret == PICOQUIC_ERROR_PADDING_PACKET) {
+            uint64_t log_cnxid64 = 0;
+
+            if (cnx == NULL) {
+                log_cnxid64 = picoquic_val64_connection_id(ph->srce_cnx_id);
+            }
+            else {
+                log_cnxid64 = picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx));
+            }
+            textlog_prefix_initial_cid64(F, log_cnxid64);
+            fprintf(F, "Dropped padding packet, size: %zu.\n", packet_size);
+            fprintf(F, "\n");
+        }
+        else {
+            textlog_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, NULL, packet_size, ret);
+        }
     }
 }
 
