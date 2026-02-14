@@ -58,7 +58,7 @@ typedef struct st_picoquic_socket_ctx_t {
     /* Management of sendmsg */
     char cmsg_buffer[1024];
     size_t udp_coalesced_size;
-#ifdef _WINDOWS
+#if defined(_WINDOWS)
     /* Windows specific */
     WSAOVERLAPPED overlap;
     LPFN_WSARECVMSG WSARecvMsg;
@@ -68,6 +68,13 @@ typedef struct st_picoquic_socket_ctx_t {
     int nb_immediate_receive;
     int so_sndbuf;
     int so_rcvbuf;
+#elif defined(PICOQUIC_WITH_IO_URING)
+    /* Declare the buffers required for io_uring */
+    struct msghdr msg;
+    struct sockaddr_storage addr_from;
+    uint8_t* ctrl_buffer;
+    struct iovec data_iovec;
+    int is_io_uring_started;
 #endif
 } picoquic_socket_ctx_t;
 
@@ -176,6 +183,10 @@ typedef struct st_picoquic_network_thread_ctx_t {
     HANDLE wake_up_event;
 #else
     int wake_up_pipe_fd[2];
+#ifdef PICOQUIC_WITH_IO_URING
+    struct iovec pipe_iovec;
+    int is_pipe_io_uring_started;
+#endif
 #endif
     int is_threaded;
     int wake_up_defined;

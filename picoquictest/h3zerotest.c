@@ -2869,9 +2869,8 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
     size_t const name_length = 10;
     size_t const file_length = 32;
     uint64_t const random_seed = 0xab8acadab8aull;
-    picohttp_server_parameters_t file_param;
+    picohttp_server_parameters_t file_param = { 0 };
 
-    memset(&file_param, 0, sizeof(picohttp_server_parameters_t));
     file_param.web_folder = dir_www;
 
     int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
