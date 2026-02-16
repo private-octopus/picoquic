@@ -308,7 +308,7 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 /* Following declarations are used for unit tests. */
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
-    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx);
+    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
 
 #ifdef __cplusplus
 }
