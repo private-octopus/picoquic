@@ -123,6 +123,7 @@ typedef struct st_picoquic_ns_ctx_t {
     size_t vary_link_index;
     uint64_t next_cnx_start_time;
     picoquic_ns_client_t* client_ctx[PICOQUIC_NS_MAX_CLIENTS];
+    int packet_ecn_support;
     uint8_t packet_ecn_default;
 } picoquic_ns_ctx_t;
 
@@ -639,7 +640,8 @@ int picoquic_ns_prepare_packet(picoquic_ns_ctx_t* cc_ctx, int node_id, int* is_a
             if (packet->addr_from.ss_family == 0) {
                 picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&cc_ctx->addr[node_id]);
             }
-            packet->ecn_mark = cc_ctx->packet_ecn_default;
+            packet->ecn_mark = (cc_ctx->q_ctx[node_id]->default_congestion_alg == NULL) ?
+                0 : cc_ctx->q_ctx[node_id]->default_congestion_alg->ecn_mark;
             picoquictest_sim_link_submit(cc_ctx->link[link_id], packet, cc_ctx->simulated_time);
             *is_active = 1;
         }
