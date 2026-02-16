@@ -162,6 +162,11 @@ extern "C" {
 
 #define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
 
+#define PICOQUIC_ECN_ECT_0 0x02
+#define PICOQUIC_ECN_ECT_1 0x01
+#define PICOQUIC_ECN_CE 0x03
+
+
 
 /*
 * Connection states, useful to expose the state to the application.
@@ -1697,6 +1702,7 @@ typedef void (*picoquic_congestion_algorithm_observe)(
 typedef struct st_picoquic_congestion_algorithm_t {
     char const * congestion_algorithm_id;
     uint8_t congestion_algorithm_number;
+    uint8_t ecn_mark;
     picoquic_congestion_algorithm_init alg_init;
     picoquic_congestion_algorithm_notify alg_notify;
     picoquic_congestion_algorithm_delete alg_delete;
