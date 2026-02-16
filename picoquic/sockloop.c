@@ -356,7 +356,7 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 }
 
 int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
-    picoquic_socket_ctx_t* s_ctx)
+    picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     int ret = 0;
     struct sockaddr_storage local_address;
@@ -384,7 +384,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     if (s_ctx->fd == INVALID_SOCKET ||
 #ifndef ESP_PLATFORM
         /* TODO: set option IPv6 only */
-        picoquic_socket_set_ecn_options(s_ctx->fd, s_ctx->af, &recv_set, &send_set) != 0 ||
+        picoquic_socket_set_ecn_options_ex(s_ctx->fd, s_ctx->af, &recv_set, &send_set, ecn_value) != 0 ||
         picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
 #endif
         picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
@@ -447,7 +447,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 }
 
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
-    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx)
+    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
     int nb_sockets = 0;
@@ -475,7 +475,7 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int soc
             s_ctx[nb_sockets].af = af[i_af];
             s_ctx[nb_sockets].port = current_port;
             s_ctx[nb_sockets].n_port = htons(current_port);
-            if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets])) == 0) {
+            if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets], ecn_value)) == 0) {
                 if (current_port == 0) {
                     current_port = s_ctx[nb_sockets].port;
                     s_ctx[nb_sockets].n_port = htons(current_port);
@@ -1118,6 +1118,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_to;
     int if_index_to;
+    uint8_t ecn_value = (quic->default_congestion_alg == NULL) ? 0 : quic->default_congestion_alg->ecn_mark;
 #ifndef _WINDOWS
     uint8_t buffer[1536];
 #endif
@@ -1159,7 +1160,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     memset(s_ctx, 0, sizeof(s_ctx));
     if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port,
         param->local_af, param->socket_buffer_size,
-        param->extra_socket_required, param->do_not_use_gso, s_ctx)) <= 0) {
+        param->extra_socket_required, param->do_not_use_gso, s_ctx, ecn_value)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (loop_callback != NULL) {
@@ -1427,7 +1428,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 new_ctx->port = ntohs(((struct sockaddr_in*)&peer_addr)->sin_port);
                             }
                             new_ctx->n_port = htons(new_ctx->port);
-                            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx) == 0) {
+                            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx, ecn_value) == 0) {
                                 send_socket = new_ctx->fd;
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;
