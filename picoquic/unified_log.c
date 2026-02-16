@@ -39,6 +39,10 @@ void picoquic_log_close_logs(picoquic_quic_t* quic)
     if (quic->bin_log_fns != NULL) {
         quic->bin_log_fns->log_quic_close(quic);
     }
+
+    if (quic->qlog_fns != NULL) {
+        quic->qlog_fns->log_quic_close(quic);
+    }
 }
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
@@ -61,6 +65,10 @@ void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list va
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_app_message(cnx, fmt, vargs);
     }
+
+    if (cnx->qlog_ctx != NULL) {
+        cnx->quic->qlog_fns->log_app_message(cnx, fmt, vargs);
+    }
 }
 
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
@@ -76,6 +84,13 @@ void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
         va_list args;
         va_start(args, fmt);
         cnx->quic->bin_log_fns->log_app_message(cnx, fmt, args);
+        va_end(args);
+    }
+
+    if (cnx->qlog_ctx != NULL) {
+        va_list args;
+        va_start(args, fmt);
+        cnx->quic->qlog_fns->log_app_message(cnx, fmt, args);
         va_end(args);
     }
 }
@@ -102,7 +117,12 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
         }
 
         if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length, 
+            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
+                unique_path_id, ecn);
+        }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
                 unique_path_id, ecn);
         }
     }
@@ -120,6 +140,10 @@ void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int recei
         if (cnx->f_binlog != NULL) {
             cnx->quic->bin_log_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
         }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
+        }
     }
 }
 
@@ -135,6 +159,10 @@ void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, s
         if (cnx->f_binlog != NULL) {
             cnx->quic->bin_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
         }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
+        }
     }
 }
 
@@ -148,6 +176,10 @@ void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
         if (cnx->f_binlog != NULL) {
             cnx->quic->bin_log_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
+        }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
         }
     }
 }
@@ -167,6 +199,11 @@ void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
             cnx->quic->bin_log_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
                 send_buffer, send_length, current_time);
         }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
+                send_buffer, send_length, current_time);
+        }
     }
 }
 
@@ -184,6 +221,10 @@ void picoquic_log_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
         if (cnx->f_binlog != NULL) {
             cnx->quic->bin_log_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
         }
+
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+        }
     }
 }
 
@@ -199,6 +240,10 @@ void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
     }
+
+    if (cnx->qlog_ctx != NULL) {
+        cnx->quic->qlog_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
+    }
 }
 
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
@@ -212,6 +257,10 @@ void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_transport_extension(cnx, is_local, param_length, params);
     }
+
+    if (cnx->qlog_ctx != NULL) {
+        cnx->quic->qlog_fns->log_transport_extension(cnx, is_local, param_length, params);
+    }
 }
 
 /* log TLS ticket */
@@ -223,6 +272,10 @@ void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t tick
 
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_picotls_ticket(cnx, ticket, ticket_length);
+    }
+
+    if (cnx->qlog_ctx != NULL) {
+        cnx->quic->qlog_fns->log_picotls_ticket(cnx, ticket, ticket_length);
     }
 }
 
@@ -236,6 +289,10 @@ void picoquic_log_new_connection(picoquic_cnx_t* cnx)
     if (cnx->quic->bin_log_fns != NULL) {
         cnx->quic->bin_log_fns->log_new_connection(cnx);
     }
+
+    if (cnx->quic->qlog_fns != NULL) {
+        cnx->quic->qlog_fns->log_new_connection(cnx);
+    }
 }
 /* log the end of a connection */
 void picoquic_log_close_connection(picoquic_cnx_t* cnx)
@@ -246,6 +303,10 @@ void picoquic_log_close_connection(picoquic_cnx_t* cnx)
 
     if (cnx->f_binlog != NULL) {
         cnx->quic->bin_log_fns->log_close_connection(cnx);
+    }
+
+    if (cnx->qlog_ctx != NULL) {
+        cnx->quic->qlog_fns->log_close_connection(cnx);
     }
 }
 
@@ -261,6 +322,9 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         }
         if (cnx->f_binlog != NULL) {
             cnx->quic->bin_log_fns->log_cc_dump(cnx, current_time);
+        }
+        if (cnx->qlog_ctx != NULL) {
+            cnx->quic->qlog_fns->log_cc_dump(cnx, current_time);
         }
     }
 }

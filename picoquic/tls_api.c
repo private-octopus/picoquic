@@ -2190,6 +2190,21 @@ int picoquic_add_proposed_alpn(void* tls_context, const char* alpn)
     return ret;
 }
 
+int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen)
+{
+    if (cnx == NULL || label == NULL || out == NULL || outlen == 0) {
+        return -1;
+    }
+
+    picoquic_tls_ctx_t *tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
+    if (tls_ctx == NULL || tls_ctx->tls == NULL) {
+        return PTLS_ERROR_IN_PROGRESS;
+    }
+
+    ptls_t* tls = tls_ctx->tls;
+    return ptls_export_secret(tls, out, outlen, label, ptls_iovec_init(NULL, 0), 0);
+}
+
 /* Prepare the initial message when starting a connection.
  */
 
@@ -2770,6 +2785,10 @@ void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_au
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
     return ((ptls_context_t*)quic->tls_master_ctx)->require_client_authentication;
+}
+
+void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
+    ((ptls_context_t*)quic->tls_master_ctx)->use_exporter = use_exporter;
 }
 
 /* 

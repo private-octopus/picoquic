@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.44.2"
+#define PICOQUIC_VERSION "1.1.45.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -430,7 +430,7 @@ typedef struct st_picoquic_tp_t {
 * quic context was initialized.
 */
 
-uint64_t picoquic_current_time(); /* wall time */
+uint64_t picoquic_current_time(void); /* wall time */
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 /* Callback function for providing stream data to the application,
@@ -496,6 +496,12 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
 /* Obtain the text value of the error names */
 char const* picoquic_error_name(uint64_t error_code);
+
+/* Obtain the text value of transport parameters names */
+char const* picoquic_tp_name(picoquic_tp_enum tp_number);
+
+/* Obtain the text value of frame types */
+char const* picoquic_frame_name(uint64_t frame_type);
 
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set
@@ -708,6 +714,12 @@ void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic,
 
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
+
+/* Set TLS exporter flag in the master TLS context */
+void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
+
+/* Export keying material from the TLS connection using the given exporter label */
+int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
 
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
@@ -1712,7 +1724,7 @@ extern size_t picoquic_nb_congestion_control_algorithms;
 /* Register a custom table of congestion control algorithms */
 void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms);
 /* Register a full list of congestion control algorithms */
-void picoquic_register_all_congestion_control_algorithms();
+void picoquic_register_all_congestion_control_algorithms(void);
 
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_id);
 

@@ -347,10 +347,9 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
         /* request logs */
         test_ctx->qserver->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qclient->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        binlog_new_connection(test_ctx->cnx_client);
+        picoquic_set_qlog(test_ctx->qclient, ".");
         /* set latency to non default, if desired */
         if (dg_ctx->link_latency != 0) {
             test_ctx->c_to_s_link->microsec_latency = dg_ctx->link_latency;
