@@ -1772,6 +1772,20 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                             picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
                             picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
                             packet->ecn_mark = test_ctx->packet_ecn_default;
+#if 1
+                            if (test_ctx->ecn_support) {
+                                if (next_action == sim_action_server_departure) {
+                                    if (test_ctx->qserver->default_congestion_alg != NULL) {
+                                        packet->ecn_mark = test_ctx->qserver->default_congestion_alg->ecn_mark;
+                                    }
+                                }
+                                else {
+                                    if (test_ctx->qclient->default_congestion_alg != NULL) {
+                                        packet->ecn_mark = test_ctx->qclient->default_congestion_alg->ecn_mark;
+                                    }
+                                }
+                            }
+#endif
                             packet->length = send_length - size_sent;
                             if (packet->length > segment_size) {
                                 packet->length = segment_size;

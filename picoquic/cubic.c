@@ -574,7 +574,7 @@ void cubic_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_par
 #define picoquic_dcubic_ID "dcubic" /* DBIC */
 
 picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
-    picoquic_cubic_ID, PICOQUIC_CC_ALGO_NUMBER_CUBIC,
+    picoquic_cubic_ID, PICOQUIC_CC_ALGO_NUMBER_CUBIC, PICOQUIC_ECN_ECT_0,
     cubic_init,
     cubic_notify,
     cubic_delete,
@@ -582,7 +582,7 @@ picoquic_congestion_algorithm_t picoquic_cubic_algorithm_struct = {
 };
 
 picoquic_congestion_algorithm_t picoquic_dcubic_algorithm_struct = {
-    picoquic_dcubic_ID, PICOQUIC_CC_ALGO_NUMBER_DCUBIC,
+    picoquic_dcubic_ID, PICOQUIC_CC_ALGO_NUMBER_DCUBIC, PICOQUIC_ECN_ECT_0,
     cubic_init,
     dcubic_notify,
     cubic_delete,

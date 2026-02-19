@@ -1150,7 +1150,7 @@ void c4_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
 #define C4_ID "c4" 
 
 picoquic_congestion_algorithm_t c4_algorithm_struct = {
-    C4_ID, PICOQUIC_CC_ALGO_NUMBER_C4,
+    C4_ID, PICOQUIC_CC_ALGO_NUMBER_C4, PICOQUIC_ECN_ECT_1,
     c4_init,
     c4_notify,
     c4_delete,

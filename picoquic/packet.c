@@ -1893,15 +1893,15 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
     switch (received_ecn & 0x03) {
     case 0x00:
         break;
-    case 0x01: /* ECN_ECT_1 */
+    case PICOQUIC_ECN_ECT_1: /* ECN_ECT_1 */
         ack_ctx->ecn_ect1_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x02: /* ECN_ECT_0 */
+    case PICOQUIC_ECN_ECT_0: /* ECN_ECT_0 */
         ack_ctx->ecn_ect0_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x03: /* ECN_CE */
+    case PICOQUIC_ECN_CE: /* ECN_CE */
         ack_ctx->ecn_ce_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
