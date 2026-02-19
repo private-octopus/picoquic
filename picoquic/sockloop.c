@@ -1119,7 +1119,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     struct sockaddr_storage addr_to;
     int if_index_to;
     uint8_t ecn_value = (quic->default_congestion_alg == NULL) ? 0 : quic->default_congestion_alg->ecn_mark;
-#ifndef _WINDOWS
+#if !defined(_WINDOWS) && !defined(PICOQUIC_WITH_IO_URING)
     uint8_t buffer[1536];
 #endif
     uint8_t* send_buffer = NULL;
@@ -1260,7 +1260,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #elif defined(PICOQUIC_WITH_IO_URING)
         bytes_recv = picoquic_packet_loop_uring(
-            ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
+            &ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
             &addr_from, &addr_to, &if_index_to, &is_wake_up_event, &received_ecn,
             &received_buffer, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
