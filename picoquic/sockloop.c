@@ -670,7 +670,7 @@ int picoquic_packet_loop_start_recvmsg(struct io_uring* ring, picoquic_socket_ct
 
     if (sqe == NULL ||
         (s_ctx->ctrl_buffer == NULL &&
-            picoquic_packet_loop_recv_buf_uring_init(s_ctx) != 0) {
+            picoquic_packet_loop_recv_buf_uring_init(s_ctx) != 0)) {
         ret = -1;
     }
     else {
