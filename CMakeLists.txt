@@ -336,6 +336,7 @@ OPTION(WITH_IO_URING "enable IO_URING" OFF)
 IF (WITH_IO_URING)
     message(STATUS "Enabling IO_URING support")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_IO_URING)
+    list(APPEND PICOQUIC_LINKER_FLAGS -lliburing)
 ENDIF ()
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
