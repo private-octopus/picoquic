@@ -679,10 +679,10 @@ int picoquic_packet_loop_start_recvmsg(struct io_uring* ring, picoquic_socket_ct
         msg->msg_name = (struct sockaddr*)&s_ctx->addr_from;
         msg->msg_namelen = sizeof(struct sockaddr_storage);
         msg->msg_iov = &s_ctx->data_iovec;
-        msg.msg_iovlen = 1;
-        msg.msg_flags = 0;
-        msg.msg_control = (void*)s_ctx->ctrl_buffer;
-        msg.msg_controllen = 1024;
+        msg->msg_iovlen = 1;
+        msg->msg_flags = 0;
+        msg->msg_control = (void*)s_ctx->ctrl_buffer;
+        msg->msg_controllen = 1024;
         s_ctx->is_io_uring_started = 1;
 
         io_uring_prep_recvmsg(sqe, s_ctx->fd, msg, 0);
@@ -695,9 +695,9 @@ int picoquic_packet_loop_start_recvmsg(struct io_uring* ring, picoquic_socket_ct
 */
 void picoquic_packet_loop_pipe_buffer_uring_free(picoquic_network_thread_ctx_t* thread_ctx)
 {
-    if (s_ctx->data_iovec.iov_base != NULL) {
-        free(s_ctx->data_iovec.iov_base);
-        s_ctx->data_iovec.iov_base = NULL;
+    if (thread_ctx->data_iovec.iov_base != NULL) {
+        free(thread_ctx->data_iovec.iov_base);
+        thread_ctx->data_iovec.iov_base = NULL;
     }
 }
 
@@ -721,8 +721,8 @@ int picoquic_packet_loop_start_pipe_readv(struct io_uring* ring, picoquic_networ
     struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 
     if (sqe == NULL ||
-        (thread_ctx->pipe_buffer == NULL &&
-            picoquic_packet_loop_pipe_buffer_uring_init(thread_ctx) != 0) {
+        (thread_ctx->pipe_iovec.iov_base == NULL &&
+            picoquic_packet_loop_pipe_buffer_uring_init(thread_ctx) != 0)) {
         ret = -1;
     }
     else {
