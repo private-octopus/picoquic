@@ -28,7 +28,9 @@ extern "C" {
 #endif
 
 const char * ptype2str(picoquic_packet_type_enum ptype);
+#if 0
 const char * ftype2str(picoquic_frame_type_enum_t ftype);
+#endif
 
 #ifdef __cplusplus
 }

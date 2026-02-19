@@ -109,10 +109,6 @@
 #endif
 #endif
 
-#define PICOQUIC_ECN_ECT_0 0x02
-#define PICOQUIC_ECN_ECT_1 0x01
-#define PICOQUIC_ECN_CE 0x03
-
 #include "picoquic.h"
 
 #ifdef __cplusplus
@@ -184,6 +180,7 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets);
 
 int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af);
 int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set);
+int picoquic_socket_set_ecn_options_ex(SOCKET_TYPE sd, int af, int* recv_set, int* send_set, uint8_t ecn_value);
 int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af);
 
 int picoquic_select(SOCKET_TYPE* sockets, int nb_sockets,

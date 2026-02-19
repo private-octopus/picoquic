@@ -6743,11 +6743,11 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_connection_close:
                 bytes = picoquic_decode_connection_close_frame(cnx, bytes, bytes_max);
-                ack_needed = 1;
+                ack_needed = 0;
                 break;
             case picoquic_frame_type_application_close:
                 bytes = picoquic_decode_application_close_frame(cnx, bytes, bytes_max);
-                ack_needed = 1;
+                ack_needed = 0;
                 break;
             case picoquic_frame_type_max_data:
                 bytes = picoquic_decode_max_data_frame(cnx, bytes, bytes_max);
@@ -7094,12 +7094,12 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
             break;
         case picoquic_frame_type_connection_close: {
             bytes = picoquic_skip_connection_close_frame(bytes, bytes_max);
-            *pure_ack = 0;
+            *pure_ack = 1;
             break;
         }
         case picoquic_frame_type_application_close: {
             bytes = picoquic_skip_application_close_frame(bytes, bytes_max);
-            *pure_ack = 0;
+            *pure_ack = 1;
             break;
         }
         case picoquic_frame_type_max_data:

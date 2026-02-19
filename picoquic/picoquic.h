@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.44.1"
+#define PICOQUIC_VERSION "1.1.45.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -161,6 +161,11 @@ extern "C" {
 #define PICOQUIC_GROUP_SECP256R1 23
 
 #define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
+
+#define PICOQUIC_ECN_ECT_0 0x02
+#define PICOQUIC_ECN_ECT_1 0x01
+#define PICOQUIC_ECN_CE 0x03
+
 
 
 /*
@@ -429,7 +434,7 @@ typedef struct st_picoquic_tp_t {
 * quic context was initialized.
 */
 
-uint64_t picoquic_current_time(); /* wall time */
+uint64_t picoquic_current_time(void); /* wall time */
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic); /* connection time, compatible with simulations */
 
 /* Callback function for providing stream data to the application,
@@ -495,6 +500,12 @@ void picoquic_set_log_level(picoquic_quic_t* quic, int log_level);
 
 /* Obtain the text value of the error names */
 char const* picoquic_error_name(uint64_t error_code);
+
+/* Obtain the text value of transport parameters names */
+char const* picoquic_tp_name(picoquic_tp_enum tp_number);
+
+/* Obtain the text value of frame types */
+char const* picoquic_frame_name(uint64_t frame_type);
 
 /* By default, the binary log and qlog files are named from the Initial CID
  * chosen by the client. For example, if the initial CID is set
@@ -707,6 +718,12 @@ void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic,
 
 /* Set client authentication in TLS (if enabled, client is required to send certificates). */
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
+
+/* Set TLS exporter flag in the master TLS context */
+void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
+
+/* Export keying material from the TLS connection using the given exporter label */
+int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
 
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
@@ -1685,6 +1702,7 @@ typedef void (*picoquic_congestion_algorithm_observe)(
 typedef struct st_picoquic_congestion_algorithm_t {
     char const * congestion_algorithm_id;
     uint8_t congestion_algorithm_number;
+    uint8_t ecn_mark;
     picoquic_congestion_algorithm_init alg_init;
     picoquic_congestion_algorithm_notify alg_notify;
     picoquic_congestion_algorithm_delete alg_delete;
@@ -1699,7 +1717,7 @@ extern size_t picoquic_nb_congestion_control_algorithms;
 /* Register a custom table of congestion control algorithms */
 void picoquic_register_congestion_control_algorithms(picoquic_congestion_algorithm_t const** alg, size_t nb_algorithms);
 /* Register a full list of congestion control algorithms */
-void picoquic_register_all_congestion_control_algorithms();
+void picoquic_register_all_congestion_control_algorithms(void);
 
 picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char const* alg_id);
 

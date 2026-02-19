@@ -418,7 +418,7 @@ void picoquic_prague_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64
 #define PICOQUIC_PRAGUE_ID "prague" 
 
 picoquic_congestion_algorithm_t picoquic_prague_algorithm_struct = {
-    PICOQUIC_PRAGUE_ID, PICOQUIC_CC_ALGO_NUMBER_PRAGUE,
+    PICOQUIC_PRAGUE_ID, PICOQUIC_CC_ALGO_NUMBER_PRAGUE, PICOQUIC_ECN_ECT_1,
     picoquic_prague_init,
     picoquic_prague_notify,
     picoquic_prague_delete,

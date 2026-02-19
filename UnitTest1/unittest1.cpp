@@ -90,6 +90,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(error_name)
+        {
+            int ret = error_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(util_sprintf)
         {
             int ret = util_sprintf_test();
@@ -328,6 +335,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_frames)
+        {
+            int ret = qlog_frames_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_message_overflow)
         {
             int ret = app_message_overflow_test();
@@ -547,6 +560,12 @@ namespace UnitTest1
         TEST_METHOD(tls_api_inject_hs_ack)
         {
             int ret = tls_api_inject_hs_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(tls_exporter)
+        {
+            int ret = tls_exporter_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1839,23 +1858,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(qlog_trace_auto)
-        {
-            int ret = qlog_trace_auto_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(qlog_trace_only)
-        {
-            int ret = qlog_trace_only_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(qlog_trace_ecn)
         {
             int ret = qlog_trace_ecn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_fns)
+        {
+            int ret = qlog_fns_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_fns_ecn)
+        {
+            int ret = qlog_fns_ecn_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3029,6 +3048,11 @@ namespace UnitTest1
         TEST_METHOD(multipath_qlog) {
             int ret = multipath_qlog_test();
 
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_qlog_fns) {
+            int ret = multipath_qlog_fns_test();
             Assert::AreEqual(ret, 0);
         }
 

@@ -41,7 +41,7 @@
 #include "picoquictest.h"
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
-#include "picoquic_binlog.h"
+#include "autoqlog.h"
 #include "picoquic_logger.h"
 
  /* ech_config_test:
@@ -342,7 +342,7 @@ int ech_e2e_test_one(ech_e2e_spec_t* spec)
 
     if (ret == 0) {
         /* server side configuration */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         if (!spec->no_ech_server) {
             ret = picoquic_ech_configure_quic_ctx(test_ctx->qserver, ech_test_key_file, ech_test_config_file);

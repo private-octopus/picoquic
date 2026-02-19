@@ -26,6 +26,7 @@ extern "C" {
 #endif
 
 #include "picoquic.h"
+#include "picoquic_qlog.h"
 /* Set the qlog log folder and start generating per connection qlog traces into it.
     * Set to NULL value to stop binary tracing.
     * If the binary folder is not set, binary traces will be generated temporarily in

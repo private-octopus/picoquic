@@ -2471,8 +2471,11 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         else {
-            if (*next_wake_time > exit_time) {
-                *next_wake_time = exit_time;
+            if (next_close_time > exit_time) {
+                next_close_time = exit_time;
+            }
+            if (*next_wake_time > next_close_time) {
+                *next_wake_time = next_close_time;
                 SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
             }
         }

@@ -1801,12 +1801,12 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
         if (ret == 0 && server_bin != NULL) {
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
         }
 
         if (ret == 0 && client_bin != NULL) {
-            picoquic_set_binlog(test_ctx->qclient, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
         }
 
         if (ret == 0 && do_sat) {
@@ -1885,7 +1885,8 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&
@@ -3655,12 +3656,12 @@ static int h3_grease_test_one(int server_test)
             PICOQUIC_TEST_SNI, PICOHTTP_ALPN_H3_LATEST, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
         if (ret == 0) {
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
         }
 
         if (ret == 0) {
-            picoquic_set_binlog(test_ctx->qclient, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
         }
 
         /* Question: is there a need to change the server params? */
@@ -3718,7 +3719,8 @@ static int h3_grease_test_one(int server_test)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client)) {
-            if (callback_ctx.nb_open_streams == 0) {
+            if (callback_ctx.nb_open_streams == 0 &&
+                picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
                 ret = picoquic_close(test_ctx->cnx_client, 0);
             }
             else if (simulated_time > callback_ctx.last_interaction_time &&

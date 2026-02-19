@@ -231,6 +231,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int streams_finished;
     int reset_received;
     int immediate_exit;
+    int ecn_support;
     /* Checking that addresses are discovered */
     int nb_address_observed;
 
@@ -404,6 +405,8 @@ typedef struct st_zero_rtt_test_t {
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);
+
+int picoquic_check_bytes_in_flight(char const* qlog_file, uint64_t* max_bytes_in_flight);
 
 #ifdef __cplusplus
 }

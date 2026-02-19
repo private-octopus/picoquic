@@ -85,6 +85,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 
 
         if (do_l4s) {
+            test_ctx->ecn_support = 1;
             test_ctx->packet_ecn_default = PICOQUIC_ECN_ECT_1;
             if ((ret = dualq_configure(test_ctx->c_to_s_link, l4s_max)) == 0) {
                 ret = dualq_configure(test_ctx->s_to_c_link, l4s_max);
@@ -135,7 +136,7 @@ int l4s_reno_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 5600000, 5, 3000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 5600000, 45, 3000, 0, NULL);
 
     return ret;
 }
@@ -153,7 +154,7 @@ int l4s_bbr_test()
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3800000, 13, 3000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3800000, 21, 3000, 0, NULL);
 
     return ret;
 }
@@ -182,7 +183,7 @@ int l4s_bbr_updown_test()
 #else
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 5800000, 56, 3000, nb_l4s_link_updown, l4s_link_updown);
+    int ret = l4s_congestion_test(ccalgo, 1, 5800000, 69, 3000, nb_l4s_link_updown, l4s_link_updown);
 
     return ret;
 #endif

@@ -1332,7 +1332,7 @@ void picoquic_bbr1_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t
 #define picoquic_bbr1_ID "bbr1" /* BBR1 */
 
 picoquic_congestion_algorithm_t picoquic_bbr1_algorithm_struct = {
-    picoquic_bbr1_ID, PICOQUIC_CC_ALGO_NUMBER_BBR1,
+    picoquic_bbr1_ID, PICOQUIC_CC_ALGO_NUMBER_BBR1, PICOQUIC_ECN_ECT_0,
     picoquic_bbr1_init,
     picoquic_bbr1_notify,
     picoquic_bbr1_delete,

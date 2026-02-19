@@ -90,10 +90,11 @@ int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
-int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
+int picoquic_socket_set_ecn_options_ex(SOCKET_TYPE sd, int af, int * recv_set, int * send_set, uint8_t ecn_value)
 {
     int ret = -1;
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(ecn_value);
 
     if (af == AF_INET6) {
 #ifdef IPV6_ECN
@@ -144,8 +145,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_1; /* Setting ECN_ECT_1 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
+            unsigned int ecn = ecn_value; /* Setting ECN=ecn_value in outgoing packets */
+            if (ecn != 0 && setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
             }
@@ -181,9 +182,9 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_1;
-            /* Request setting ECN_ECT_1 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
+            unsigned int ecn = ecn_value;
+            /* Request setting ECN=ecn_value in outgoing packets */
+            if (ecn != 0 && setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
             }
@@ -219,6 +220,11 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
 #endif
 
     return ret;
+}
+
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int* recv_set, int* send_set)
+{
+    return picoquic_socket_set_ecn_options_ex(sd, af, recv_set, send_set, PICOQUIC_ECN_ECT_1);
 }
 
 int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)

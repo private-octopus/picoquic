@@ -5400,6 +5400,10 @@ void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authen
     picoquic_tls_set_client_authentication(quic, client_authentication);
 }
 
+void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
+    picoquic_tls_set_use_exporter(quic, use_exporter);
+}
+
 void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce)
 {
     quic->enforce_client_only = (do_enforce)?1:0;

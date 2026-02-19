@@ -24,6 +24,7 @@
 #include <inttypes.h>
 #include <errno.h>
 
+#include "picoquic.h"
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "logreader.h"
@@ -295,92 +296,46 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
             else {
                 switch ((picoquic_tp_enum)extension_type) {
                 case picoquic_tp_initial_max_stream_data_bidi_local:
-                    qlog_vint_transport_extension(f, "initial_max_stream_data_bidi_local", s, extension_length);
-                    break;
                 case picoquic_tp_initial_max_stream_data_bidi_remote:
-                    qlog_vint_transport_extension(f, "initial_max_stream_data_bidi_remote", s, extension_length);
-                    break;
                 case picoquic_tp_initial_max_stream_data_uni:
-                    qlog_vint_transport_extension(f, "initial_max_stream_data_uni", s, extension_length);
-                    break;
                 case picoquic_tp_initial_max_data:
-                    qlog_vint_transport_extension(f, "initial_max_data", s, extension_length);
-                    break;
                 case picoquic_tp_initial_max_streams_bidi:
-                    qlog_vint_transport_extension(f, "initial_max_streams_bidi", s, extension_length);
-                    break;
                 case picoquic_tp_idle_timeout:
-                    qlog_vint_transport_extension(f, "idle_timeout", s, extension_length);
-                    break;
                 case picoquic_tp_max_packet_size:
-                    qlog_vint_transport_extension(f, "max_packet_size", s, extension_length);
+                case picoquic_tp_ack_delay_exponent:
+                case picoquic_tp_initial_max_streams_uni:
+                case picoquic_tp_max_ack_delay:
+                case picoquic_tp_active_connection_id_limit:
+                case picoquic_tp_max_datagram_frame_size:
+                case picoquic_tp_enable_loss_bit:
+                case picoquic_tp_min_ack_delay:
+                case picoquic_tp_enable_bdp_frame:
+                case picoquic_tp_initial_max_path_id:
+                case picoquic_tp_address_discovery:
+                case picoquic_tp_reset_stream_at:
+                    qlog_vint_transport_extension(f, picoquic_tp_name(extension_type), s, extension_length);
                     break;
+
                 case picoquic_tp_stateless_reset_token:
-                    fprintf(f, "\"stateless_reset_token\": ");
+                case picoquic_tp_original_connection_id:
+                case picoquic_tp_retry_connection_id:
+                case picoquic_tp_handshake_connection_id:
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_string(f, s, extension_length);
                     break;
-                case picoquic_tp_ack_delay_exponent:
-                    qlog_vint_transport_extension(f, "ack_delay_exponent", s, extension_length);
-                    break;
-                case picoquic_tp_initial_max_streams_uni:
-                    qlog_vint_transport_extension(f, "initial_max_streams_uni", s, extension_length);
-                    break;
                 case picoquic_tp_server_preferred_address: 
-                    fprintf(f, "\"server_preferred_address\": {"); 
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_preferred_address(f, s, extension_length);
                     fprintf(f, "}");
                     break;
                 case picoquic_tp_disable_migration:
-                    qlog_boolean_transport_extension(f, "disable_migration", s, extension_length);
-                    break;
-                case picoquic_tp_max_ack_delay:
-                    qlog_vint_transport_extension(f, "max_ack_delay", s, extension_length);
-                    break;
-                case picoquic_tp_original_connection_id:
-                    fprintf(f, "\"original_connection_id\": ");
-                    qlog_string(f, s, extension_length);
-                    break;
-                case picoquic_tp_retry_connection_id:
-                    fprintf(f, "\"retry_connection_id\": ");
-                    qlog_string(f, s, extension_length);
-                    break;
-                case picoquic_tp_handshake_connection_id:
-                    fprintf(f, "\"handshake_connection_id\": ");
-                    qlog_string(f, s, extension_length);
-                    break;
-                case picoquic_tp_active_connection_id_limit:
-                    qlog_vint_transport_extension(f, "active_connection_id_limit", s, extension_length);
-                    break;
-                case picoquic_tp_max_datagram_frame_size:
-                    qlog_vint_transport_extension(f, "max_datagram_frame_size", s, extension_length);
-                    break;
-                case picoquic_tp_enable_loss_bit:
-                    qlog_vint_transport_extension(f, "enable_loss_bit", s, extension_length);
-                    break;
-                case picoquic_tp_min_ack_delay:
-                    qlog_vint_transport_extension(f, "min_ack_delay", s, extension_length);
-                    break;
                 case picoquic_tp_enable_time_stamp:
-                    qlog_boolean_transport_extension(f, "enable_time_stamp", s, extension_length);
-                    break;
                 case picoquic_tp_grease_quic_bit:
-                    qlog_boolean_transport_extension(f, "grease_quic_bit", s, extension_length);
+                    qlog_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), s, extension_length);
                     break;
                 case picoquic_tp_version_negotiation:
-                    fprintf(f, "\"version_negotiation\": ");
+                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                     qlog_tp_version_negotiation(f, s, extension_length);
-                    break;
-                case picoquic_tp_enable_bdp_frame:
-                    qlog_vint_transport_extension(f, "enable_bdp_frame", s, extension_length);
-                    break;
-                case picoquic_tp_initial_max_path_id:
-                    qlog_vint_transport_extension(f, "initial_max_path_id", s, extension_length);
-                    break;
-                case picoquic_tp_address_discovery:
-                    qlog_vint_transport_extension(f, "address_discovery", s, extension_length);
-                    break;
-                case picoquic_tp_reset_stream_at:
-                    qlog_vint_transport_extension(f, "reset_stream_at", s, extension_length);
                     break;
                 default:
                     /* dump unknown extensions */
@@ -546,7 +501,10 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     uint64_t packet_type = 0;
     uint64_t err_code;
     uint64_t packet_size = 0;
+#if 1
+#else
     char const* str;
+#endif
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
@@ -566,6 +524,9 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
     fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
 
+#if 1
+    fprintf(f, ",\n    \"trigger\": \"%s\"", picoquic_error_name(err_code));
+#else
     switch (err_code) {
     case PICOQUIC_ERROR_DUPLICATE:
         str = "dos_prevention";
@@ -599,6 +560,7 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
         break;
     }
     fprintf(f, ",\n    \"trigger\": \"%s\"", str);
+#endif
 
     fprintf(f, "}]");
 
@@ -922,7 +884,7 @@ void qlog_closing_frame(uint64_t ftype, FILE* f, bytestream* s)
     if (ftype == picoquic_frame_type_connection_close &&
         error_code != 0) {
         byteread_vint(s, &offending_frame_type);
-        offensive_type_name = ftype2str(offending_frame_type);
+        offensive_type_name = picoquic_frame_name(offending_frame_type);
         if (strcmp(offensive_type_name, "unknown") == 0) {
             fprintf(f, ", \"trigger_frame_type\": \"%"PRIx64"\"", offending_frame_type);
         }
@@ -1262,7 +1224,7 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     size_t ptr_before_type = s->ptr;
     byteread_vint(s, &ftype);
 
-    fprintf(f, "\n    \"frame_type\": \"%s\"", ftype2str((picoquic_frame_type_enum_t)ftype));
+    fprintf(f, "\n    \"frame_type\": \"%s\"", picoquic_frame_name((picoquic_frame_type_enum_t)ftype));
 
     if (ftype >= picoquic_frame_type_stream_range_min &&
         ftype <= picoquic_frame_type_stream_range_max) {

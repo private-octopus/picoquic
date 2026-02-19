@@ -1658,7 +1658,7 @@ int picoquic_incoming_server_initial(
                     int ack_needed = 0;
                     int skip_ret = 0;
 
-                    while (skip_ret == 0 && byte_index < ph->payload_length) {
+                    while (skip_ret == 0 && byte_index < ph->offset + ph->payload_length) {
                         size_t frame_length = 0;
                         int frame_is_pure_ack = 0;
                         skip_ret = picoquic_skip_frame(&bytes[byte_index],
@@ -1893,15 +1893,15 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
     switch (received_ecn & 0x03) {
     case 0x00:
         break;
-    case 0x01: /* ECN_ECT_1 */
+    case PICOQUIC_ECN_ECT_1: /* ECN_ECT_1 */
         ack_ctx->ecn_ect1_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x02: /* ECN_ECT_0 */
+    case PICOQUIC_ECN_ECT_0: /* ECN_ECT_0 */
         ack_ctx->ecn_ect0_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x03: /* ECN_CE */
+    case PICOQUIC_ECN_CE: /* ECN_CE */
         ack_ctx->ecn_ce_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;

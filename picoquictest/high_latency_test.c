@@ -115,14 +115,12 @@ static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* cc
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         /* Set the binary log on the server side */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,

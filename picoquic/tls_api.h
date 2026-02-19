@@ -138,6 +138,8 @@ void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_au
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
 
+void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
+
 int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sockaddr* addr_peer, 
     int * is_new_token, const uint8_t* token, size_t token_length, uint8_t* text, size_t* text_length);
 

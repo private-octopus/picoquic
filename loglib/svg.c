@@ -164,7 +164,7 @@ int svg_packet_frame(bytestream * s, void * ptr)
         byteread_vint(s, &stream_id);
         fprintf(svg->f_txtlog, " stream[%"PRIu64"] ", stream_id);
     } else {
-        fprintf(svg->f_txtlog, " %s ", ftype2str((picoquic_frame_type_enum_t)ftype));
+        fprintf(svg->f_txtlog, " %s ", picoquic_frame_name((picoquic_frame_type_enum_t)ftype));
     }
     return 0;
 }

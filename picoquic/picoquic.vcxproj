@@ -155,12 +155,14 @@
     <ClCompile Include="error_names.c" />
     <ClCompile Include="fastcc.c" />
     <ClCompile Include="frames.c" />
+    <ClCompile Include="frame_names.c" />
     <ClCompile Include="intformat.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="logwriter.c" />
     <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="pacing.c" />
+    <ClCompile Include="packet_names.c" />
     <ClCompile Include="paths.c" />
     <ClCompile Include="performance_log.c" />
     <ClCompile Include="picoquic_lb.c" />
@@ -187,6 +189,7 @@
     <ClCompile Include="timing.c" />
     <ClCompile Include="tls_api.c" />
     <ClCompile Include="token_store.c" />
+    <ClCompile Include="tp_names.c" />
     <ClCompile Include="transport.c" />
     <ClCompile Include="unified_log.c">
       <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</PreprocessToFile>
