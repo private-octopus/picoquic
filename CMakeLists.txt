@@ -340,7 +340,6 @@ IF (WITH_IO_URING)
         message(FATAL_ERROR "liburing not found")
     else()
         message(STATUS "Found liburing: ${LIBURING}")
-        list(APPEND PICOQUIC_LINKER_FLAGS ${LIBURING})
         list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_IO_URING)
     endif()
 ENDIF ()
@@ -401,6 +400,7 @@ target_include_directories(picoquic-core
         picoquic_mbedtls)
 target_link_libraries(picoquic-core
     PRIVATE
+        ${LIBURING}
         ${OPENSSL_LIBRARIES}
         ${MBEDTLS_LIBRARIES}
     PUBLIC
