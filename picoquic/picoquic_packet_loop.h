@@ -71,7 +71,6 @@ typedef struct st_picoquic_socket_ctx_t {
 #elif defined(PICOQUIC_WITH_IO_URING)
     /* Declare the buffers required for io_uring */
     struct msghdr msg;
-    struct sockaddr_storage addr_from;
     uint8_t* ctrl_buffer;
     struct iovec data_iovec;
     int is_io_uring_started;
