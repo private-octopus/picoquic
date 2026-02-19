@@ -695,9 +695,9 @@ int picoquic_packet_loop_start_recvmsg(struct io_uring* ring, picoquic_socket_ct
 */
 void picoquic_packet_loop_pipe_buffer_uring_free(picoquic_network_thread_ctx_t* thread_ctx)
 {
-    if (thread_ctx->data_iovec.iov_base != NULL) {
-        free(thread_ctx->data_iovec.iov_base);
-        thread_ctx->data_iovec.iov_base = NULL;
+    if (thread_ctx->pipe_iovec.iov_base != NULL) {
+        free(thread_ctx->pipe_iovec.iov_base);
+        thread_ctx->pipe_iovec.iov_base = NULL;
     }
 }
 
@@ -756,7 +756,7 @@ int picoquic_packet_loop_uring(
     int* socket_rank)
 {
     int ret = 0;
-    int bytes_received = 0;
+    int bytes_recv = 0;
 
     /* Restart the wake pipe if needed. */
     if (thread_ctx->wake_up_defined && !thread_ctx->is_pipe_io_uring_started){
@@ -764,14 +764,14 @@ int picoquic_packet_loop_uring(
         thread_ctx->is_pipe_io_uring_started = 1;
     }
     /* Restart the socket if needed */
-    for (i = 0; ret == 0 && i < nb_sockets; i++) {
+    for (int i = 0; ret == 0 && i < nb_sockets; i++) {
         if (!s_ctx[i].is_started) {
             ret = picoquic_packet_loop_start_recvmsg(ring, & s_ctx[i], i+1);
             s_ctx[i].is_started = 1;
         }
     }
     if (ret != 0) {
-        bytes_received = -1;
+        bytes_recv = -1;
     } else {
         struct io_uring_cqe* cqe;
         struct __kernel_timespec ts;
@@ -779,8 +779,8 @@ int picoquic_packet_loop_uring(
 
         (void)io_uring_submit(ring);
         /* set the timeout value */
-        ts.tv_spec = delta_t / 1000000;
-        ts.tv_nspec = (delta_t - 1000 * ts.tv_spec) * 1000;
+        ts.tv_sec = delta_t / 1000000;
+        ts.tv_nsec = (delta_t - 1000 * ts.tv_sec) * 1000;
         /* call wait for sqe or timeout */
         io_ret = io_uring_wait_cqe_timeout(ring, &cqe, &ts);
         if (io_ret == 0) {
@@ -790,14 +790,14 @@ int picoquic_packet_loop_uring(
                 /* This is the wake up pipe. We don't care about the data. */
                 *is_wake_up_event = 1;
                 *received_buffer = NULL;
-                *bytes_recv = 0;
+                bytes_recv = 0;
                 thread_ctx->is_pipe_io_uring_started = 0;
                 if (cqe->res < 0) {
                     /* error condition */
-                    bytes_received = cqe->res;
+                    bytes_recv = cqe->res;
                 }
                 else if (cqe->res == 0) {
-                    bytes_received = -1;
+                    bytes_recv = -1;
                 }
             }
             else {
@@ -808,14 +808,14 @@ int picoquic_packet_loop_uring(
                 if (cqe->res < 0) {
                     /* error condition */
                     ret = -cqe->res;
-                    bytes_received = cqe->res;
+                    bytes_recv = cqe->res;
                     *received_buffer = NULL;
                 }
                 else {
                     /* parse the cmsg */
                     picoquic_socks_cmsg_parse(&s_ctx[i].msg, addr_dest, dest_if, received_ecn, NULL);
                     /* document bytes received */
-                    bytes_received = cqe->res;
+                    bytes_recv = cqe->res;
                     *received_buffer = s_ctx[i].data_iovec.iov_base;
                 }
             }
@@ -823,14 +823,14 @@ int picoquic_packet_loop_uring(
         else if (io_ret == -ETIME) {
             /* timeout expired: no bytes received */
             *received_buffer = NULL;
-            bytes_received = 0;
+            bytes_recv = 0;
         }
         else {
             /* error */
             ret = -1;
         }
     }
-    return bytes_received;
+    return bytes_recv;
 }
 
 void io_uring_cancel_and_free(
@@ -844,12 +844,12 @@ void io_uring_cancel_and_free(
     if (sqe != NULL) {
         io_uring_prep_cancel64(sqe, 0, IORING_ASYNC_CANCEL_ANY);
     }
-    /* Restart the wake pipe if needed. */
+    /* Free the wake pipe if needed. */
     if (thread_ctx->wake_up_defined) {
         picoquic_packet_loop_pipe_buffer_uring_free(thread_ctx);
     }
-    /* Restart the socket if needed */
-    for (i = 0; ret == 0 && i < nb_sockets; i++) {
+    /* Free the socket if needed */
+    for (int i = 0; i < nb_sockets; i++) {
         picoquic_packet_loop_recv_buf_uring_free(&s_ctx[i]);
     }
 }
@@ -1259,9 +1259,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, &is_wake_up_event, thread_ctx, &socket_rank);
 #elif defined(PICOQUIC_WITH_IO_URING)
-        bytes_received = picoquic_packet_loop_uring(
+        bytes_recv = picoquic_packet_loop_uring(
             ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
-            &addr_from, &addr_dest, &dest_if, &is_wake_up_event, &received_ecn,
+            &addr_from, &addr_to, &if_index_to, &is_wake_up_event, &received_ecn,
             &received_buffer, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
