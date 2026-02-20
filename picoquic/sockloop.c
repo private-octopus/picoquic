@@ -374,7 +374,6 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
         recv_coalesced = 0;
 #endif
     }
-    memset(s_ctx, 0, sizeof(picoquic_socket_ctx_t));
     s_ctx->overlap.hEvent = WSA_INVALID_EVENT;
     s_ctx->fd = WSASocket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
 #else
@@ -1139,7 +1138,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     packet_loop_system_call_duration_t sc_duration = { 0 };
 
     int is_wake_up_event;
-#if defined(WINDOWS)
+#if defined(_WINDOWS)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #elif defined(PICOQUIC_WITH_IO_URING)
@@ -1176,7 +1175,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             ret = loop_callback(quic, picoquic_packet_loop_alt_port, loop_callback_ctx, &alt_port);
         }
     }
-#if defined(WINDOWS)
+#if defined(_WINDOWS)
 #elif defined(PICOQUIC_WITH_IO_URING)
     if (ret == 0 &&
         (ret = picoquic_packet_loop_prep_uring(&ring)) == 0) {
@@ -1356,7 +1355,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                      */
                     nb_sockets_available = nb_sockets / 2;
 
-#if defined(WINDOWS)
+#if defined(_WINDOWS)
 #elif defined(PICOQUIC_WITH_IO_URING)
 #elif defined(PICOQUIC_WITH_POLL)
                     picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
@@ -1436,7 +1435,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                     DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
                                     nb_sockets = nb_sockets_available;
 
-#if defined(WINDOWS)
+#if defined(_WINDOWS)
 #elif defined(PICOQUIC_WITH_IO_URING)
 #elif defined(PICOQUIC_WITH_POLL)
                                     picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
