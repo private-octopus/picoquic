@@ -27,13 +27,12 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
 #include "picoquic_prague.h"
+#include "c4.h"
 
 #include "picoquictest_dualq.h"
 
@@ -79,7 +78,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
      * Initialize L4S behavior.
      * Request a packet trace */
     if (ret == 0) {
-
+        picoquic_set_default_congestion_algorithm(test_ctx->qclient, ccalgo);
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, ccalgo);
         picoquic_set_congestion_algorithm(test_ctx->cnx_client, ccalgo);
 
@@ -93,7 +92,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
         }
 
         if (ret == 0) {
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
 
             ret = tls_api_one_scenario_body_ex(test_ctx, &simulated_time,
                 test_scenario_l4s, sizeof(test_scenario_l4s), 0, 0, 0, queue_delay_max, max_completion_time, nb_link_states, link_state);
@@ -155,6 +154,16 @@ int l4s_bbr_test()
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
     int ret = l4s_congestion_test(ccalgo, 1, 3800000, 21, 3000, 0, NULL);
+
+    return ret;
+}
+
+
+int l4s_c4_test()
+{
+    picoquic_congestion_algorithm_t* ccalgo = c4_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 30, 3000, 0, NULL);
 
     return ret;
 }
