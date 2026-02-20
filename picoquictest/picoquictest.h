@@ -404,6 +404,7 @@ int bbr_asym400_test();
 int l4s_reno_test();
 int l4s_prague_test();
 int l4s_prague_updown_test();
+int l4s_c4_test();
 int l4s_bbr_test();
 int l4s_bbr_updown_test();
 int large_client_hello_test();
