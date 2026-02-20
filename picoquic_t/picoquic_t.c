@@ -368,6 +368,7 @@ static const picoquic_test_def_t test_table[] = {
     { "l4s_prague", l4s_prague_test },
     { "l4s_prague_updown", l4s_prague_updown_test },
     { "l4s_bbr", l4s_bbr_test },
+    { "l4s_c4", l4s_c4_test },
     { "l4s_bbr_updown", l4s_bbr_updown_test },
     { "long_rtt", long_rtt_test },
     { "high_latency_basic", high_latency_basic_test },
