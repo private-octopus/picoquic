@@ -110,19 +110,12 @@
 #define C4_ALPHA_PUSH_VERY_LOW_1024 1056 /* 103.125 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
-#define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
-#define C4_BETA_CREEP_1024 32 /* 3.125%, 1/32 */
-#define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
-#define C4_NB_PUSH_BEFORE_RESET 4
 #define C4_NB_CRUISE_BEFORE_PUSH 4
-#define C4_MAX_DELAY_ERA_CONGESTIONS 4
-#define C4_RTT_MARGIN_5PERCENT 51
 #define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
-#define C4_KAPPA ((double)(1.0/4.0))
 #define C4_ECN_SHIFT_G 4 /* g = 1/2^4, gain parameter for alpha EWMA */
 
 #define C4_PROBE_LEVEL_MAX 3
@@ -180,13 +173,10 @@ typedef struct st_c4_state_t {
     uint64_t ecn_ce; /* running total of ce marks */
     uint64_t ecn_threshold; /* Congestion notified if ecn_alpha > ecn_threshold */
 
-    unsigned int recovery_event_not_delay : 1;
     unsigned int congestion_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
     unsigned int initial_after_jitter : 1;
-    unsigned int do_cascade : 1;
-    unsigned int do_slow_push : 1;
     unsigned int excess_ce_after_push : 1;
     /* Handling of options. */
     char const* option_string;
@@ -521,18 +511,6 @@ static void c4_set_options(c4_state_t* c4_state)
         while ((c = *x) != 0 && !ended) {
             x++;
             switch (c) {
-            case 'K': /* allow the cascade behavior */
-                c4_state->do_cascade = 1;
-                break;
-            case 'k': /* disallow the cascade behavior */
-                c4_state->do_cascade = 0;
-                break;
-            case 'O': /* allow the slow push behavior */
-                c4_state->do_slow_push = 1;
-                break;
-            case 'o': /* disallow the slow push behavior */
-                c4_state->do_slow_push = 0;
-                break;
             default:
                 ended = 1;
                 break;
@@ -547,8 +525,6 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_state->option_string = option_string;
     c4_state->running_min_rtt = UINT64_MAX;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
-    c4_state->do_slow_push = 1;
-    c4_state->do_cascade = 1;
     c4_set_options(c4_state);
     c4_enter_initial(path_x, c4_state, current_time);
 }
@@ -684,17 +660,6 @@ static void c4_enter_recovery(
     c4_congestion_t c_mode,
     uint64_t current_time)
 {
-    if (c_mode != c4_congestion_none) {
-        if (c4_state->probe_level != 0) {
-            c4_state->probe_level = (c_mode != c4_congestion_ecn)?
-                0:C4_PROBE_LEVEL_DEFAULT;
-        }
-        c4_state->recovery_event_not_delay = 0;
-    }
-    else {
-        c4_state->recovery_event_not_delay = (c_mode != c4_congestion_delay);
-    }
-
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
     }
