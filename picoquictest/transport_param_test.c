@@ -176,14 +176,7 @@ uint8_t client_param4[] = {
     picoquic_tp_idle_timeout, 1, 0x1E,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    0xC0 | (uint8_t)((picoquic_tp_initial_max_path_id >> 56) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 48) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 40) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 32) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 24) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_initial_max_path_id&0xFF), 1, 4,
+    picoquic_tp_initial_max_path_id, 1, 4,
 };
 
 uint8_t client_param5[] = {
