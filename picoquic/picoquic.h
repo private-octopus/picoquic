@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.45.0"
+#define PICOQUIC_VERSION "1.1.46.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -137,10 +137,10 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x11)
 
-#define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x4150504C4142414E)
-#define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x5245534C494D4954)
-#define PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE (0x554e5f494e5446)
-#define PICOQUIC_TRANSPORT_NO_CID_AVAILABLE (0x4e4f5f4349445f)
+#define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x3e) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x3e75) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE (0x3e76) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_NO_CID_AVAILABLE (0x3e77) /* Per draft quic multipath 20 */
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -228,7 +228,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
+#define picoquic_tp_initial_max_path_id 0x3e /* per draft quic multipath 20 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
 

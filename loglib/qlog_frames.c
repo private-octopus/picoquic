@@ -275,6 +275,7 @@ const uint8_t* qlog_frame_connection_close(FILE* f, const uint8_t* bytes, const 
 const uint8_t* qlog_frame_max_streams(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int is_bidir, int is_blocked)
 {
     uint64_t max_streams;
+    fprintf(f, ", ");
     if (is_bidir){
         qlog_json_str(f, "stream_type", "bidirectional");
     }
@@ -375,6 +376,7 @@ const uint8_t* qlog_frame_datagram(FILE* f, const uint8_t* bytes, const uint8_t*
             bytes + length > bytes_max) {
             return NULL;
         }
+        fprintf(f, ", ");
         qlog_json_uint(f, "length", length);
         bytes += length;
     }
@@ -485,6 +487,7 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
         fprintf(f, ", ");
         fprintf(f, "\"address\": ");
         qlog_frame_ip_address(f, addr, addr_length);
+        fprintf(f, ", ");
         qlog_json_uint(f, "port", port);
     }
     return bytes;
@@ -619,6 +622,9 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int sk
                 bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "reason");
                 break;
             case picoquic_frame_type_path_backup:
+                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
+                break;
+            case picoquic_frame_type_path_available:
                 bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
                 break;
             case picoquic_frame_type_bdp:
