@@ -2865,7 +2865,6 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
     size_t* stream_length = NULL;
     char const* dir_www = "h3-m-www";
     char const* dir_download = "h3-m-download";
-    size_t nb_files = picohttp_test_multifile_number;
     size_t const name_length = 10;
     size_t const file_length = 32;
     uint64_t const random_seed = 0xab8acadab8aull;
@@ -2873,23 +2872,23 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
 
     file_param.web_folder = dir_www;
 
-    int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, nb_files, name_length, file_length, dir_www, dir_download);
+    int ret = demo_test_multi_scenario_create(&scenario, &stream_length, random_seed, picohttp_test_multifile_number, name_length, file_length, dir_www, dir_download);
 
     if (ret == 0) {
         if (stream_length == NULL) {
             ret = -1;
         }
         else {
-            ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, nb_files,
+            ret = demo_server_test(alpn, server_callback_fn, (void*)&file_param, scenario, picohttp_test_multifile_number,
                 stream_length, 0, do_loss, 5000000, 0, NULL, MULTI_FILE_CLIENT_BIN, MULTI_FILE_SERVER_BIN, do_preemptive_repeat);
         }
     }
 
     if (ret == 0) {
-        ret = demo_test_multi_scenario_check(scenario, nb_files, dir_www, dir_download);
+        ret = demo_test_multi_scenario_check(scenario, picohttp_test_multifile_number, dir_www, dir_download);
     }
 
-    demo_test_multi_scenario_free(&scenario, &stream_length, nb_files);
+    demo_test_multi_scenario_free(&scenario, &stream_length, picohttp_test_multifile_number);
 
     return ret;
 }
