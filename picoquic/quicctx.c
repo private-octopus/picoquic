@@ -5456,7 +5456,7 @@ uint64_t picoquic_uniform_random(uint64_t rnd_max)
     return picoquic_public_uniform_random(rnd_max);
 }
 
-#if defined(PICOQUIC_DEBUG_MULTITHREAD)
+#if defined(PICOQUIC_WITH_THREAD_CHECK)
 /* Thread check */
 
 uint64_t picoquic_current_thread_id(void)
