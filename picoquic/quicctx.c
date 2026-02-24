@@ -34,6 +34,13 @@
 #include <errno.h>
 #endif
 #include "picoquic_newreno.h"
+#ifdef PICOQUIC_WITH_THREAD_CHECK
+#ifdef _WINDOWS
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+#endif
 
 /*
  * Supported versions. Specific versions may mandate different processing of different
