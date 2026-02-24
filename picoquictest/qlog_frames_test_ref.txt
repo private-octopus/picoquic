@@ -14,9 +14,9 @@
 { "test": "max_stream_data", "frame": { 
     "frame_type": "max_stream_data", "stream_id": 1, "maximum": 65536}},
 { "test": "max_streams_bidir", "frame": { 
-    "frame_type": "max_streams""stream_type": "bidirectional", "maximum": 256}},
+    "frame_type": "max_streams", "stream_type": "bidirectional", "maximum": 256}},
 { "test": "max_streams_unidir", "frame": { 
-    "frame_type": "max_streams""stream_type": "unidirectional", "maximum": 263}},
+    "frame_type": "max_streams", "stream_type": "unidirectional", "maximum": 263}},
 { "test": "ping", "frame": { 
     "frame_type": "ping"}},
 { "test": "blocked", "frame": { 
@@ -24,9 +24,9 @@
 { "test": "stream_data_blocked", "frame": { 
     "frame_type": "stream_data_blocked", "stream_id": 65536, "limit": 131072}},
 { "test": "streams_blocked_bidir", "frame": { 
-    "frame_type": "streams_blocked""stream_type": "bidirectional", "limit": 256}},
+    "frame_type": "streams_blocked", "stream_type": "bidirectional", "limit": 256}},
 { "test": "streams_blocked_unidir", "frame": { 
-    "frame_type": "streams_blocked""stream_type": "unidirectional", "limit": 512}},
+    "frame_type": "streams_blocked", "stream_type": "unidirectional", "limit": 512}},
 { "test": "new_connection_id", "frame": { 
     "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0102030405060708", "reset_token": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"}},
 { "test": "stop_sending", "frame": { 
@@ -52,7 +52,7 @@
 { "test": "datagram", "frame": { 
     "frame_type": "datagram"}},
 { "test": "datagram_l", "frame": { 
-    "frame_type": "datagram""length": 16}},
+    "frame_type": "datagram", "length": 16}},
 { "test": "handshake_done", "frame": { 
     "frame_type": "handshake_done"}},
 { "test": "ack_frequency", "frame": { 
@@ -70,9 +70,7 @@
 { "test": "path_backup", "frame": { 
     "frame_type": "path_backup", "path_id": 0, "sequence": 15}},
 { "test": "path_available", "frame": { 
-    "frame_type": "path_available", "unknown_frame_type": 354585608}, { 
-    "frame_type": "padding"}, { 
-    "frame_type": "stream"}},
+    "frame_type": "path_available", "path_id": 0, "sequence": 15}},
 { "test": "max paths", "frame": { 
     "frame_type": "max_path_id", "max_path_id": 17}},
 { "test": "path_new_connection_id", "frame": { 
@@ -86,9 +84,9 @@
 { "test": "bdp", "frame": { 
     "frame_type": "bdp", "lifetime": 1, "recon_bytes_in_flight": 2, "recon_min_rtt": 3, "saved_ip": "10.0.0.1"}},
 { "test": "observed_address_v4", "frame": { 
-    "frame_type": "observed_address_v4", "sequence": 1, "address": "1.2.3.4""port": 4660}},
+    "frame_type": "observed_address_v4", "sequence": 1, "address": "1.2.3.4", "port": 4660}},
 { "test": "observed_address_v6", "frame": { 
-    "frame_type": "observed_address_v6", "sequence": 2, "address": "102:304:506:708:90a:b0c:d0e:f00""port": 17767}},
+    "frame_type": "observed_address_v6", "sequence": 2, "address": "102:304:506:708:90a:b0c:d0e:f00", "port": 17767}},
 { "test": "path_ack", "frame": { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351]]}},
 { "test": "path_ack_ecn", "frame": { 

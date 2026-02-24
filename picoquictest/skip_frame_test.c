@@ -230,29 +230,29 @@ static uint8_t test_frame_type_time_stamp[] = {
 };
 
 static uint8_t test_frame_type_path_abandon_0[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_abandon >> 8)),
+    (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01, /* Path 0 */
     0x00 /* No error */
 };
 
 static uint8_t test_frame_type_path_abandon_1[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_abandon >> 24)), (uint8_t)(picoquic_frame_type_path_abandon >> 16),
-    (uint8_t)(picoquic_frame_type_path_abandon >> 8), (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_abandon >> 8)),
+    (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01,
     0x11 /* Some new error */
 };
 
 static uint8_t test_frame_type_path_backup[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_backup >> 24)), (uint8_t)(picoquic_frame_type_path_backup >> 16),
-    (uint8_t)(picoquic_frame_type_path_backup >> 8), (uint8_t)(picoquic_frame_type_path_backup & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_backup >> 8)),
+    (uint8_t)(picoquic_frame_type_path_backup & 0xFF),
     0x00, /* Path 0 */
     0x0F, /* Sequence = 0x0F */
 };
 
 static uint8_t test_frame_type_path_available[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_available>> 24)), (uint8_t)(picoquic_frame_type_path_available >> 16),
-    (uint8_t)(picoquic_frame_type_path_available >> 8), (uint8_t)(picoquic_frame_type_path_available & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_available>> 8)),
+    (uint8_t)(picoquic_frame_type_path_available & 0xFF),
     0x00, /* Path 0 */
     0x0F, /* Sequence = 0x0F */
 };
@@ -266,10 +266,7 @@ static uint8_t test_frame_type_bdp[] = {
 };
 
 static uint8_t test_frame_type_path_ack[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_path_ack>>24)),
-    (uint8_t)(picoquic_frame_type_path_ack>>16),
-    (uint8_t)(picoquic_frame_type_path_ack>>8),
-    (uint8_t)(picoquic_frame_type_path_ack),
+    picoquic_frame_type_path_ack,
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -280,10 +277,7 @@ static uint8_t test_frame_type_path_ack[] = {
 };
 
 static uint8_t test_frame_type_path_ack_ecn[] = {
-    (uint8_t)(0x80|(picoquic_frame_type_path_ack_ecn>>24)),
-    (uint8_t)(picoquic_frame_type_path_ack_ecn>>16),
-    (uint8_t)(picoquic_frame_type_path_ack_ecn>>8),
-    (uint8_t)(picoquic_frame_type_path_ack_ecn),
+    picoquic_frame_type_path_ack_ecn,
     0,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
     0x44, 0,
@@ -295,14 +289,14 @@ static uint8_t test_frame_type_path_ack_ecn[] = {
 };
 
 static uint8_t test_frame_type_max_path_id[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_max_path_id >> 24)), (uint8_t)(picoquic_frame_type_max_path_id >> 16),
-    (uint8_t)(picoquic_frame_type_max_path_id >> 8), (uint8_t)(picoquic_frame_type_max_path_id & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_max_path_id >> 8)),
+    (uint8_t)(picoquic_frame_type_max_path_id & 0xFF),
     0x11, /* max paths = 17 */
 };
 
 static uint8_t test_frame_type_path_new_connection_id[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_new_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_new_connection_id >> 16),
-    (uint8_t)(picoquic_frame_type_path_new_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_new_connection_id & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_new_connection_id >> 8)),
+    (uint8_t)(picoquic_frame_type_path_new_connection_id & 0xFF),
     1,
     7,
     0,
@@ -313,21 +307,21 @@ static uint8_t test_frame_type_path_new_connection_id[] = {
 };
 
 static uint8_t test_frame_type_path_retire_connection_id[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_retire_connection_id >> 24)), (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 16),
-    (uint8_t)(picoquic_frame_type_path_retire_connection_id >> 8), (uint8_t)(picoquic_frame_type_path_retire_connection_id & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_retire_connection_id >> 8)),
+    (uint8_t)(picoquic_frame_type_path_retire_connection_id & 0xFF),
     0,
     2
 };
 
 static uint8_t test_frame_type_paths_blocked[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_paths_blocked >> 24)), (uint8_t)(picoquic_frame_type_paths_blocked >> 16),
-    (uint8_t)(picoquic_frame_type_paths_blocked >> 8), (uint8_t)(picoquic_frame_type_paths_blocked & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_paths_blocked >> 8)),
+    (uint8_t)(picoquic_frame_type_paths_blocked & 0xFF),
     0x11, /* max paths = 17 */
 };
 
 static uint8_t test_frame_type_path_cid_blocked[] = {
-    (uint8_t)(0x80 | (picoquic_frame_type_path_cid_blocked >> 24)), (uint8_t)(picoquic_frame_type_path_cid_blocked >> 16),
-    (uint8_t)(picoquic_frame_type_path_cid_blocked >> 8), (uint8_t)(picoquic_frame_type_path_cid_blocked & 0xFF),
+    (uint8_t)(0x40 | (picoquic_frame_type_path_cid_blocked >> 8)),
+    (uint8_t)(picoquic_frame_type_path_cid_blocked & 0xFF),
     0x07, /* path id = 7 */
     0x01 /* next sequence number = 1 */
 };
@@ -1713,7 +1707,8 @@ int picoquic_compare_text_files(char const * fname1, char const * fname2, FILE *
             ret = picoquic_compare_lines(buffer1, buffer2);
             if (ret != 0)
             {
-                DBG_PRINTF("File %s differs %s at line %d\n", fname2, fname1, nb_line);
+                DBG_PRINTF("File %s differs %s at line %d\n",
+                    fname2, fname1, nb_line);
                 DBG_PRINTF("    Got: %s", buffer1);
                 DBG_PRINTF("    Vs:  %s", buffer2);
             }
