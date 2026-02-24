@@ -1149,7 +1149,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #endif
 
 #ifdef PICOQUIC_WITH_THREAD_CHECK
-    thread_ctx->quic->thread_id = picoquic_thread_id();
+    thread_ctx->quic->thread_id = picoquic_current_thread_id();
 #endif
 
     if (thread_ctx->thread_name != NULL) {
