@@ -348,7 +348,7 @@ OPTION(WITH_THREAD_CHECK "enable thread check" OFF)
 if (WITH_THREAD_CHECK)
     message(STATUS "Enabling thread check")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_THREAD_CHECK)
-endif
+endif ()
 
 # set_picoquic_compile_settings(TARGET) makes is easy to consistently
 # assign compiler build options to each of the following targets
