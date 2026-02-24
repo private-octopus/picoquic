@@ -1127,7 +1127,6 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
 #endif
 }
 
-
 int picoquic_create_mutex(picoquic_mutex_t * mutex)
 {
 #ifdef _WINDOWS
