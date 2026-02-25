@@ -812,6 +812,7 @@ int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
 
 picoquic_tp_t const* picoquic_get_default_tp(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return &quic->default_tp;
 }
 
@@ -5348,13 +5349,13 @@ void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, ch
 
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     quic->sequence_hole_pseudo_period = sequence_hole_pseudo_period;
 }
 
 void picoquic_set_preemptive_repeat_policy(picoquic_quic_t* quic, int do_repeat)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     quic->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
 }
 
