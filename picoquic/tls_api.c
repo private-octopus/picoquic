@@ -426,7 +426,7 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 {
     ptls_context_t* ctx;
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     ctx = (ptls_context_t*)quic->tls_master_ctx;
     return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id, quic->use_low_memory));
 }
