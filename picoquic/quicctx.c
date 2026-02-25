@@ -1062,7 +1062,7 @@ void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
-        PICOQUIC_THREAD_CHECK(quic);
+        PICOQUIC_THREAD_DISABLE_CHECK(quic);
 
         /* delete all the connection contexts -- do this before any other
          * action, as deleting connections may add packets to queues or
@@ -5608,6 +5608,17 @@ uint64_t picoquic_current_thread_id(void)
 #else
     return (uint64_t)pthread_self();
 #endif
+}
+
+
+void picoquic_debug_multithread_set(picoquic_quic_t* quic)
+{
+    quic->thread_id = picoquic_current_thread_id(void);
+}
+
+void picoquic_debug_multithread_disable(picoquic_quic_t* quic)
+{
+    quic->thread_id = 0;
 }
 
 void picoquic_debug_multithread_check(picoquic_quic_t* quic)

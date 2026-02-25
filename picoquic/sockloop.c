@@ -1148,9 +1148,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     struct pollfd poll_list[PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1];
 #endif
 
-#ifdef PICOQUIC_WITH_THREAD_CHECK
-    thread_ctx->quic->thread_id = picoquic_current_thread_id();
-#endif
+    PICOQUIC_THREAD_SET_CHECK(quic);
 
     if (thread_ctx->thread_name != NULL) {
         thread_ctx->thread_setname_fn(thread_ctx->thread_name);

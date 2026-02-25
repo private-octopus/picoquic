@@ -2138,9 +2138,15 @@ typedef struct st_picomask_fns_t {
 #ifdef PICOQUIC_WITH_THREAD_CHECK
 uint64_t picoquic_current_thread_id(void);
 void picoquic_debug_multithread_check(picoquic_quic_t* quic);
+void picoquic_debug_multithread_set(picoquic_quic_t* quic);
+void picoquic_debug_multithread_disable(picoquic_quic_t* quic);
 #define PICOQUIC_THREAD_CHECK(quic) picoquic_debug_multithread_check(quic)  
-#else
-#define PICOQUIC_THREAD_CHECK(quic) do { } while(0)
+#define PICOQUIC_THREAD_SET_CHECK(quic) picoquic_debug_multithread_set(quic) 
+#define PICOQUIC_THREAD_DISABLE_CHECK(quic) picoquic_debug_multithread_disable(quic)
+#else 
+#define PICOQUIC_THREAD_CHECK(quic) do { } while(0) 
+#define PICOQUIC_THREAD_SET_CHECK(quic)
+#define PICOQUIC_THREAD_DISABLE_CHECK(quic)
 #endif
 
 #ifdef __cplusplus
