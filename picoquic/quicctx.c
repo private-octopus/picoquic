@@ -4506,7 +4506,7 @@ picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 
 picoquic_cnx_t * picoquic_get_cnx_in_progress(picoquic_quic_t* quic)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->cnx_in_progress;
 }
 
