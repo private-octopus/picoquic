@@ -2144,7 +2144,7 @@ void picoquic_debug_multithread_disable(picoquic_quic_t* quic);
 #define PICOQUIC_THREAD_SET_CHECK(quic) picoquic_debug_multithread_set(quic) 
 #define PICOQUIC_THREAD_DISABLE_CHECK(quic) picoquic_debug_multithread_disable(quic)
 #else 
-#define PICOQUIC_THREAD_CHECK(quic) do { } while(0) 
+#define PICOQUIC_THREAD_CHECK(quic)
 #define PICOQUIC_THREAD_SET_CHECK(quic)
 #define PICOQUIC_THREAD_DISABLE_CHECK(quic)
 #endif
