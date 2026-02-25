@@ -5613,7 +5613,7 @@ uint64_t picoquic_current_thread_id(void)
 
 void picoquic_debug_multithread_set(picoquic_quic_t* quic)
 {
-    quic->thread_id = picoquic_current_thread_id(void);
+    quic->thread_id = picoquic_current_thread_id();
 }
 
 void picoquic_debug_multithread_disable(picoquic_quic_t* quic)
