@@ -1174,7 +1174,7 @@ void picoquic_free(picoquic_quic_t* quic)
 
 int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     quic->use_low_memory = (low_memory_mode == 0) ? 0 : 1;
     return picoquic_set_cipher_suite(quic, 0);
 }
@@ -1423,7 +1423,7 @@ picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx)
 
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->cnx_list;
 }
 
@@ -1579,7 +1579,7 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
 static uint64_t picoquic_get_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     uint64_t wake_time = UINT64_MAX;
-    PICOQUIC_THREAD_CHECK(quic);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (cnx->quic->pending_stateless_packet != NULL) {
         wake_time = current_time;
@@ -2721,7 +2721,6 @@ void picoquic_get_default_path_quality(picoquic_cnx_t* cnx, picoquic_path_qualit
 void picoquic_subscribe_to_quality_update_per_path_context(picoquic_path_t * path_x,
     uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
     path_x->pacing_rate_update_delta = pacing_rate_delta;
     path_x->rtt_update_delta = rtt_delta;
     picoquic_refresh_path_quality_thresholds(path_x);
@@ -4673,7 +4672,7 @@ void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
 
 void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     /* TODO: consider setting high water mark for pacing. */
     /* If set, wait until pacing bucket is full enough to allow further transmissions. */
     quic->packet_train_mode = (train_mode > 0) ? 1 : 0;
@@ -4681,7 +4680,7 @@ void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
 
 void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_size, uint32_t padding_multiple)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     quic->padding_minsize_default = padding_min_size;
     quic->padding_multiple_default = padding_multiple;
 }
@@ -4751,7 +4750,7 @@ void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_
 void picoquic_set_default_callback(picoquic_quic_t* quic,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
-    PICOQUIC_THREAD_CHECK(cnx->quic);
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_callback_fn = callback_fn;
     quic->default_callback_ctx = callback_ctx;
 }
