@@ -1423,13 +1423,13 @@ picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx)
 
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
 {
-    PICOQUIC_THREAD_CHECK(quic->cnx);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return quic->cnx_list;
 }
 
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
 {
-    PICOQUIC_THREAD_CHECK(quic->cnx);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->next_in_table;
 }
 
@@ -2749,7 +2749,7 @@ int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t 
 
 void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
-    PICOQUIC_THREAD_CHECK(quic->cnx);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->pacing_rate_update_delta = pacing_rate_delta;
     cnx->rtt_update_delta = rtt_delta;
     cnx->is_path_quality_update_requested = 1;
@@ -5037,7 +5037,7 @@ void picoquic_connection_disconnect(picoquic_cnx_t* cnx)
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
     int ret = 0;
-    PICOQUIC_THREAD_CHECK(quic->cnx);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     /* Verify that a packet of the previous rotation was acked */
     if (cnx->cnx_state != picoquic_state_ready ||
