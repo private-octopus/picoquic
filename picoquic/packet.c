@@ -2402,6 +2402,7 @@ int picoquic_incoming_packet_ex(
     size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+    PICOQUIC_THREAD_CHECK(quic);
 
     while (consumed_index < packet_length) {
         size_t consumed = 0;

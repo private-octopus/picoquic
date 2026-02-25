@@ -510,16 +510,19 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket)
 
 int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_save_tickets(quic->p_first_ticket, picoquic_get_tls_time(quic), ticket_store_filename);
 }
 
 int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_load_tokens(quic, token_store_filename);
 }
 
 int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_save_tokens(quic, ticket_store_filename);
 }
 

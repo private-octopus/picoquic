@@ -348,6 +348,7 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 {
     int ret = 0;
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    PICOQUIC_THREAD_CHECK(quic);
 
     picoquic_release_quic_ech_ctx(quic);
     ctx->ech.client.ciphers = picoquic_hpke_cipher_suites;
@@ -373,6 +374,8 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    PICOQUIC_THREAD_CHECK(quic);
+
     if (ctx != NULL) {
         ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)ctx->ech.server.create_opener;
         ctx->ech.server.retry_configs.base = NULL;
@@ -393,6 +396,8 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_da
 {
     int ret = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
     tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length);
     if (tls_ctx->handshake_properties.client.ech.configs.base == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
@@ -409,6 +414,7 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_da
 int picoquic_is_ech_handshake(picoquic_cnx_t* cnx)
 {
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return ptls_is_ech_handshake(tls_ctx->tls, NULL, NULL, NULL);
 }
 
@@ -1059,6 +1065,7 @@ void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
     uint8_t** retry_config, size_t* retry_config_len)
 {
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     *retry_config = tls_ctx->retry_configs.base;
     *retry_config_len = tls_ctx->retry_configs.len;

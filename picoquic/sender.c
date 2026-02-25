@@ -81,8 +81,10 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
     uint64_t stream_id, void* app_stream_ctx)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
-
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
     if (ret == 0) {
         stream->app_stream_ctx = app_stream_ctx;
     }
@@ -92,7 +94,10 @@ int picoquic_set_app_stream_ctx(picoquic_cnx_t* cnx,
 
 void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic); 
+    
+    stream = picoquic_find_stream(cnx, stream_id);
     if (stream != NULL) {
         stream->app_stream_ctx = NULL;
     }
@@ -102,6 +107,7 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 {
     int ret = 0;
     int was_ready = cnx->is_datagram_ready;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     cnx->is_datagram_ready = is_ready;
     if (!was_ready && is_ready) {
@@ -118,8 +124,9 @@ int picoquic_mark_datagram_ready(picoquic_cnx_t* cnx, int is_ready)
 int picoquic_mark_datagram_ready_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, int is_path_ready)
 {
     int ret = 0;
-    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
-    if (path_id >= 0) {
+    int path_id;
+    PICOQUIC_THREAD_CHECK(cnx->quic); 
+    if ((path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id)) >= 0) {
         int was_ready = cnx->path[path_id]->is_datagram_ready;
         cnx->path[path_id]->is_datagram_ready = is_path_ready;
         if (!was_ready && is_path_ready) {
@@ -141,8 +148,10 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void * app_stream_ctx)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
     if (ret == 0) {
         if (is_active) {
             /* The call only fails if the stream was closed or reset */
@@ -171,8 +180,10 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
 int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx, uint64_t stream_id, int is_not_coalesced)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
     if (ret == 0) {
         stream->is_not_coalesced = is_not_coalesced;
     }
@@ -183,24 +194,29 @@ int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx, uint64_t stream_id, i
 
 void picoquic_set_default_datagram_priority(picoquic_quic_t* quic, uint8_t default_datagram_priority)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_datagram_priority = default_datagram_priority;
 }
 
 void picoquic_set_datagram_priority(picoquic_cnx_t* cnx, uint8_t datagram_priority)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->datagram_priority = datagram_priority;
 }
 
 void picoquic_set_default_priority(picoquic_quic_t* quic, uint8_t default_stream_priority)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_stream_priority = default_stream_priority;
 }
 
 int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_t stream_priority)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
     if (ret == 0) {
         stream->stream_priority = stream_priority;
         picoquic_reorder_output_stream(cnx, stream);
@@ -212,6 +228,7 @@ int picoquic_set_stream_priority(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_
 int picoquic_mark_high_priority_stream(picoquic_cnx_t * cnx, uint64_t stream_id, int is_high_priority)
 {
     int ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (is_high_priority) {
         cnx->high_priority_stream_id = stream_id;
@@ -229,8 +246,10 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
     const uint8_t* data, size_t length, int set_fin, void * app_stream_ctx)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
-
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+        
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
     if (ret == 0 && set_fin) {
         if (stream->fin_requested) {
             /* app error, notified the fin twice*/
@@ -298,9 +317,10 @@ int picoquic_add_to_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
 int picoquic_set_app_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, int use_app_flow_control)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic); 
 
-    if (stream == NULL) {
+    if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
     else {
@@ -315,13 +335,14 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
     uint8_t buffer[512];
     size_t length = 0;
     size_t consumed = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (cnx->cnx_state == picoquic_state_ready && cnx->quic->max_data_limit == 0){
         /* Only send the update in ready state, so that the misc frame is not picked by the
          * wrong transport context.
          * TODO: find way to queue the update so it is only sent as 0RTT or 1RTT packet.
          */
+        picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
         if (stream == NULL) {
             ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
         }
@@ -347,8 +368,10 @@ int picoquic_open_flow_control(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t
 
 void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-    if (stream != NULL) {
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
+    if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
         stream->app_stream_ctx = NULL;
     }
 }
@@ -358,6 +381,7 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (reliable_size > 0 && !cnx->is_reset_stream_at_enabled) {
         ret = PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION;
@@ -394,6 +418,8 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
      * but Visual Studio produces an obnoxious error message about
      * mixing bitwise or and logical or. */
     int stream_type_id = cnx->client_mode ^ 1;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
     if (is_unidir) {
         stream_type_id |= 2;
     }
@@ -406,6 +432,7 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     stream = picoquic_find_stream(cnx, stream_id);
 
@@ -434,6 +461,7 @@ int picoquic_discard_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint16_t lo
 {
     int ret = 0;
     picoquic_stream_head_t* stream = NULL;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     stream = picoquic_find_stream(cnx, stream_id);
 
@@ -1282,6 +1310,7 @@ int picoquic_is_pkt_ctx_backlog_empty(picoquic_packet_context_t* pkt_ctx)
 int picoquic_is_cnx_backlog_empty(picoquic_cnx_t* cnx)
 {
     int backlog_empty = 1;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (cnx->cnx_state < picoquic_state_ready) {
         backlog_empty = picoquic_is_pkt_ctx_backlog_empty(&cnx->pkt_ctx[picoquic_packet_context_initial]) &&
@@ -3957,7 +3986,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
     struct sockaddr_storage * p_addr_to, struct sockaddr_storage * p_addr_from, int* if_index, size_t* send_msg_size)
 {
     uint64_t next_wake_time;
-    int ret = picoquic_handle_send_timers(cnx, current_time, &next_wake_time);
+    int ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+        
+    ret = picoquic_handle_send_timers(cnx, current_time, &next_wake_time);
     *send_length = 0;
 
     if (send_buffer_max < PICOQUIC_ENFORCED_INITIAL_MTU) {
@@ -4187,6 +4219,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code)
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     if (cnx->cnx_state < picoquic_state_draining) {
         /* Behave exactly as if having received a closing message from the peer */
         uint64_t current_time = picoquic_get_quic_time(cnx->quic);
@@ -4210,8 +4243,10 @@ int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic,
     picoquic_connection_id_t * log_cid, picoquic_cnx_t** p_last_cnx, size_t * send_msg_size)
 {
     int ret = 0;
-    picoquic_stateless_packet_t* sp = picoquic_dequeue_stateless_packet(quic);
-
+    picoquic_stateless_packet_t* sp;
+    PICOQUIC_THREAD_CHECK(quic);
+    
+    sp = picoquic_dequeue_stateless_packet(quic);
     if (p_last_cnx) {
         *p_last_cnx = NULL;
     }

@@ -425,7 +425,9 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
 
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 {
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    ptls_context_t* ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    ctx = (ptls_context_t*)quic->tls_master_ctx;
     return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id, quic->use_low_memory));
 }
 
@@ -570,7 +572,9 @@ static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchang
 int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
 {
     int ret = 0;
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    ptls_context_t* ctx;
+    PICOQUIC_THREAD_CHECK(quic);
+    ctx = (ptls_context_t*)quic->tls_master_ctx;
 
     ret = picoquic_set_key_exchange_in_ctx(ctx, key_exchange_id);
     return ret;
@@ -662,6 +666,7 @@ void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier) 
 int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
 {
     int ret = -1;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (picoquic_set_tls_root_certificates_fn != NULL) {
         if ((ret = picoquic_set_tls_root_certificates_fn(quic->tls_master_ctx, certs, count)) == 0){
@@ -2016,6 +2021,7 @@ static void picoquic_free_log_event(picoquic_quic_t* quic)
  */
 void picoquic_set_key_log_file(picoquic_quic_t *quic, char const * keylog_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
     struct st_picoquic_log_event_t* log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
 
@@ -2106,23 +2112,27 @@ void picoquic_tlscontext_trim_after_handshake(picoquic_cnx_t * cnx)
 
 char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx)
 {
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    picoquic_tls_ctx_t* ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
 
     return ptls_get_negotiated_protocol(ctx->tls);
 }
 
 char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx)
 {
-    picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-
+    picoquic_tls_ctx_t* ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    
+    ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     return ptls_get_server_name(ctx->tls);
 }
 
 int picoquic_tls_is_psk_handshake(picoquic_cnx_t* cnx)
 {
     /* int ret = cnx->is_psk_handshake; */
-    int ret = ptls_is_psk_handshake(((picoquic_tls_ctx_t*)(cnx->tls_ctx))->tls);
-    return ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    return ptls_is_psk_handshake(((picoquic_tls_ctx_t*)(cnx->tls_ctx))->tls);
 }
 
 
@@ -2195,7 +2205,7 @@ int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out,
     if (cnx == NULL || label == NULL || out == NULL || outlen == 0) {
         return -1;
     }
-
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     picoquic_tls_ctx_t *tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
     if (tls_ctx == NULL || tls_ctx->tls == NULL) {
         return PTLS_ERROR_IN_PROGRESS;
@@ -2771,6 +2781,7 @@ int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connectio
 
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
 
     free_certificates_list(ctx->certificates.list, ctx->certificates.count);

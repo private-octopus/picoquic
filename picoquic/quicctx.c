@@ -611,6 +611,8 @@ void picoquic_registered_token_clear(picoquic_quic_t* quic, uint64_t expiry_time
 
 int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_connections)
 {
+    PICOQUIC_THREAD_CHECK(quic);
+
     if (max_nb_connections <= quic->max_number_connections) {
         quic->tentative_max_number_connections = max_nb_connections;
         return 0;
@@ -621,6 +623,7 @@ int picoquic_adjust_max_connections(picoquic_quic_t * quic, uint32_t max_nb_conn
 
 uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->current_number_connections;
 }
 
@@ -773,7 +776,9 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name)
 {
-    int ret = picoquic_load_tokens(quic, token_file_name);
+    int ret;
+    PICOQUIC_THREAD_CHECK(quic);
+    ret = picoquic_load_tokens(quic, token_file_name);
 
     if (ret == PICOQUIC_ERROR_NO_SUCH_FILE) {
         DBG_PRINTF("Ticket file <%s> not created yet.\n", token_file_name);
@@ -793,6 +798,7 @@ int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name
 int picoquic_set_default_tp(picoquic_quic_t* quic, picoquic_tp_t * tp)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (tp == NULL) {
         picoquic_init_transport_parameters(&quic->default_tp, 0);
@@ -885,11 +891,13 @@ static int picoquic_set_tp_value_by_type(picoquic_tp_t* tp, uint64_t tp_type, ui
 
 int picoquic_set_default_tp_value(picoquic_quic_t* quic, uint64_t tp_type, uint64_t tp_value)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_set_tp_value_by_type(&quic->default_tp, tp_type, tp_value);
 }
 
 void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multiple, uint32_t padding_minsize)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->padding_minsize_default = padding_minsize;
     quic->padding_multiple_default = padding_multiple;
 }
@@ -897,6 +905,7 @@ void picoquic_set_default_padding(picoquic_quic_t* quic, uint32_t padding_multip
 int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit_version_enum default_spinbit_policy)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (default_spinbit_policy <= picoquic_spinbit_on) {
         quic->default_spin_policy = default_spinbit_policy;
@@ -910,6 +919,7 @@ int picoquic_set_default_spinbit_policy(picoquic_quic_t * quic, picoquic_spinbit
 int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_enum spinbit_policy)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (spinbit_policy < picoquic_spinbit_on) {
         cnx->spin_policy = spinbit_policy;
@@ -923,12 +933,14 @@ int picoquic_set_spinbit_policy(picoquic_cnx_t* cnx, picoquic_spinbit_version_en
 
 void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit_version_enum default_lossbit_policy)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_lossbit_policy = default_lossbit_policy;
     quic->default_tp.enable_loss_bit = (int)default_lossbit_policy;
 }
 
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_multipath_option = multipath_option;
 
     if (multipath_option & 1) {
@@ -938,6 +950,7 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     if (mode > 0 && mode <= 3) {
         quic->default_tp.address_discovery_mode = mode;
     }
@@ -949,12 +962,15 @@ void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode
 
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->cwin_max = (cwin_max == 0) ? UINT64_MAX : cwin_max;
 }
 
 void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
 {
-    picoquic_cnx_t* cnx = quic->cnx_list;
+    picoquic_cnx_t* cnx;
+    PICOQUIC_THREAD_CHECK(quic);
+    cnx = quic->cnx_list;
     quic->max_data_limit = max_data;
 
     quic->default_tp.initial_max_data = max_data;
@@ -974,66 +990,78 @@ void picoquic_set_max_data_control(picoquic_quic_t* quic, uint64_t max_data)
 
 void picoquic_set_default_idle_timeout(picoquic_quic_t* quic, uint64_t idle_timeout_ms)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_tp.max_idle_timeout = idle_timeout_ms;
 }
 
 void picoquic_set_default_handshake_timeout(picoquic_quic_t* quic, uint64_t handshake_timeout_us)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_handshake_timeout = handshake_timeout_us;
 }
 
 void picoquic_set_default_crypto_epoch_length(picoquic_quic_t* quic, uint64_t crypto_epoch_length_max)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
         PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH : crypto_epoch_length_max;
 }
 
 uint64_t picoquic_get_default_crypto_epoch_length(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->crypto_epoch_length_max;
 }
 
 void picoquic_set_crypto_epoch_length(picoquic_cnx_t* cnx, uint64_t crypto_epoch_length_max)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->crypto_epoch_length_max = (crypto_epoch_length_max == 0) ?
         PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH : crypto_epoch_length_max;
 }
 
 uint64_t picoquic_get_crypto_epoch_length(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->crypto_epoch_length_max;
 }
 
 
 uint8_t picoquic_get_local_cid_length(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->local_cnxid_length;
 }
 
 int picoquic_is_local_cid(picoquic_quic_t* quic, picoquic_connection_id_t* cid)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return (cid->id_len == quic->local_cnxid_length &&
         picoquic_cnx_by_id(quic, *cid, NULL) != NULL);
 }
 
 void picoquic_set_max_simultaneous_logs(picoquic_quic_t* quic, uint32_t max_simultaneous_logs)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->max_simultaneous_logs = max_simultaneous_logs;
 }
 
 uint32_t picoquic_get_max_simultaneous_logs(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->max_simultaneous_logs;
 }
 
 void picoquic_set_default_bdp_frame_option(picoquic_quic_t* quic, int bdp_option)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_send_receive_bdp_frame = bdp_option;
 }
 
 void picoquic_free(picoquic_quic_t* quic)
 {
     if (quic != NULL) {
+        PICOQUIC_THREAD_CHECK(quic);
 
         /* delete all the connection contexts -- do this before any other
          * action, as deleting connections may add packets to queues or
@@ -1145,16 +1173,19 @@ void picoquic_free(picoquic_quic_t* quic)
 
 int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     quic->use_low_memory = (low_memory_mode == 0) ? 0 : 1;
     return picoquic_set_cipher_suite(quic, 0);
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
+    PICOQUIC_THREAD_CHECK(quic);
     picoquic_dispose_verify_certificate_callback(quic);
 }
 
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     if (cookie_mode&1) {
         quic->force_check_token = 1;
     } else {
@@ -1173,11 +1204,13 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 
 void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic,  uint32_t max_half_open_before_retry)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->max_half_open_before_retry = max_half_open_before_retry;
 }
 
 uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->max_half_open_before_retry;
 }
 
@@ -1222,10 +1255,8 @@ picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* 
 
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx)
 {
-    int ret =
-        (cnx->nb_packets_logged < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log);
-
-    return ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    return (cnx->nb_packets_logged < PICOQUIC_LOG_PACKET_MAX_SEQUENCE || cnx->quic->use_long_log);
 }
 
 /* Connection context creation and registration */
@@ -1391,11 +1422,13 @@ picoquic_quic_t* picoquic_get_quic_ctx(picoquic_cnx_t* cnx)
 
 picoquic_cnx_t* picoquic_get_first_cnx(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic->cnx);
     return quic->cnx_list;
 }
 
 picoquic_cnx_t* picoquic_get_next_cnx(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(quic->cnx);
     return cnx->next_in_table;
 }
 
@@ -1499,6 +1532,7 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
 uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_time)
 {
     uint64_t wake_time = UINT64_MAX;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (quic->pending_stateless_packet != NULL) {
         wake_time = current_time;
@@ -1544,6 +1578,7 @@ int64_t picoquic_get_next_wake_delay(picoquic_quic_t* quic,
 static uint64_t picoquic_get_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     uint64_t wake_time = UINT64_MAX;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (cnx->quic->pending_stateless_packet != NULL) {
         wake_time = current_time;
@@ -1739,6 +1774,7 @@ void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
 int picoquic_set_first_if_index(picoquic_cnx_t* cnx, unsigned long if_index)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (cnx->cnx_state == picoquic_state_client_init) {
         cnx->path[0]->first_tuple->if_index = if_index;
@@ -2181,6 +2217,8 @@ int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id
 void picoquic_notify_destination_unreachable(picoquic_cnx_t* cnx, uint64_t current_time,
     struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
     if (cnx != NULL && addr_peer != NULL) {
         int no_path_left = 1;
         int partial_match = 0;
@@ -2208,6 +2246,7 @@ void picoquic_notify_destination_unreachable_by_cnxid(picoquic_quic_t * quic, pi
     uint64_t current_time, struct sockaddr* addr_peer, struct sockaddr* addr_local, int if_index, int socket_err)
 {
     picoquic_cnx_t* cnx = NULL;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (quic->local_cnxid_length == 0 || cnxid->id_len == 0) {
         cnx = picoquic_cnx_by_net(quic, addr_peer);
@@ -2303,7 +2342,10 @@ int picoquic_check_new_path_allowed(picoquic_cnx_t* cnx, int to_preferred_addres
 
 int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int * is_already_allowed)
 {
-    int ret = picoquic_check_new_path_allowed(cnx, 0);
+    int ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+        
+    ret = picoquic_check_new_path_allowed(cnx, 0);
 
     *is_already_allowed = 0;
     if (ret == 0) {
@@ -2394,7 +2436,9 @@ int picoquic_verify_proposed_tuple(picoquic_cnx_t* cnx, struct sockaddr const** 
 int picoquic_probe_new_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct sockaddr const* addr_peer,
     struct sockaddr const* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
 {
-    int ret = picoquic_verify_proposed_tuple(cnx, &addr_peer, &addr_local, &if_index, current_time);
+    int ret;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    ret = picoquic_verify_proposed_tuple(cnx, &addr_peer, &addr_local, &if_index, current_time);
 
     /* TODO: check whether that tuple already exists */
 
@@ -2424,6 +2468,7 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
     const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
 {
     int path_id = -1;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (!cnx->is_multipath_enabled || to_preferred_address) {
         return picoquic_probe_new_tuple(cnx, cnx->path[0], addr_peer, addr_local, if_index, current_time, to_preferred_address);
@@ -2466,17 +2511,20 @@ int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_
 
 void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->are_path_callbacks_enabled = are_enabled;
 }
 
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->are_path_callbacks_enabled = are_enabled;
 }
 
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id)
 {
     int ret = -1;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     for (int i = 0; i < cnx->nb_paths; i++) {
         if (cnx->path[i]->unique_path_id == unique_path_id) {
@@ -2535,6 +2583,7 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint64_t reason, char const * phrase, uint64_t current_time)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (!cnx->is_multipath_enabled) {
         ret = -1;
@@ -2651,7 +2700,9 @@ static void picoquic_get_path_quality_from_context(picoquic_path_t* path_x, pico
 int picoquic_get_path_quality(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_quality_t* quality)
 {
     int ret = -1;
-    int path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
+    int path_id;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    path_id = picoquic_get_path_id_from_unique(cnx, unique_path_id);
     if (path_id >= 0) {
         picoquic_path_t* path_x = cnx->path[path_id];
         picoquic_get_path_quality_from_context(path_x, quality);
@@ -2669,6 +2720,7 @@ void picoquic_get_default_path_quality(picoquic_cnx_t* cnx, picoquic_path_qualit
 void picoquic_subscribe_to_quality_update_per_path_context(picoquic_path_t * path_x,
     uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     path_x->pacing_rate_update_delta = pacing_rate_delta;
     path_x->rtt_update_delta = rtt_delta;
     picoquic_refresh_path_quality_thresholds(path_x);
@@ -2678,6 +2730,7 @@ int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t 
     uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     cnx->is_path_quality_update_requested = 1;
 
@@ -2695,6 +2748,7 @@ int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t 
 
 void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
+    PICOQUIC_THREAD_CHECK(quic->cnx);
     cnx->pacing_rate_update_delta = pacing_rate_delta;
     cnx->rtt_update_delta = rtt_delta;
     cnx->is_path_quality_update_requested = 1;
@@ -2707,6 +2761,7 @@ void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_r
 
 void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->pacing_rate_update_delta = pacing_rate_delta;
     quic->rtt_update_delta = rtt_delta;
 }
@@ -3648,10 +3703,11 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t* stream
 int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id, picoquic_stream_direct_receive_fn direct_receive_fn, void* direct_receive_ctx)
 {
     int ret = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+    picoquic_stream_head_t* stream;
     picoquic_stream_data_node_t* data;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
-    if (stream == NULL) {
+    if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
         ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
     else if (!IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
@@ -4296,6 +4352,7 @@ picoquic_cnx_t* picoquic_create_cnx(picoquic_quic_t* quic,
     const struct sockaddr* addr_to, uint64_t start_time, uint32_t preferred_version,
     char const* sni, char const* alpn, char client_mode)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_create_cnx_internal(quic, initial_cnx_id, remote_cnx_id, addr_to, start_time, preferred_version,
         sni, alpn, client_mode, NULL, NULL);
 }
@@ -4327,6 +4384,7 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
 int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     if (cnx->cnx_state != picoquic_state_client_init ||
         cnx->tls_stream[0].sent_offset > 0 ||
@@ -4356,6 +4414,7 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
 
 void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const * tp)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->local_parameters = *tp;
 
     if (cnx->quic->mtu_max > 0 && cnx->local_parameters.max_packet_size == 0)
@@ -4375,88 +4434,105 @@ void picoquic_set_transport_parameters(picoquic_cnx_t * cnx, picoquic_tp_t const
 
 picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int get_local)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return(get_local) ? &cnx->local_parameters : &cnx->remote_parameters;
 }
 
 void picoquic_get_peer_addr(picoquic_cnx_t* cnx, struct sockaddr** addr)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     *addr = (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr;
 }
 
 void picoquic_get_local_addr(picoquic_cnx_t* cnx, struct sockaddr** addr)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     *addr = (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr;
 }
 
 unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->first_tuple->if_index;
 }
 
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->initial_cnxid;
 }
 
 picoquic_connection_id_t picoquic_get_client_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return (cnx->client_mode)?cnx->path[0]->first_tuple->p_local_cnxid->cnx_id : cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return (cnx->client_mode) ? cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id : cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->initial_cnxid;
 }
 
 uint64_t picoquic_get_cnx_start_time(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->start_time;
 }
 
 picoquic_state_enum picoquic_get_cnx_state(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->cnx_state;
 }
 
 picoquic_cnx_t * picoquic_get_cnx_in_progress(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return quic->cnx_in_progress;
 }
 
 int picoquic_is_0rtt_available(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return (cnx->crypto_context[picoquic_epoch_0rtt].aead_encrypt == NULL) ? 0 : 1;
 }
 
 void picoquic_cnx_set_padding_policy(picoquic_cnx_t * cnx, uint32_t padding_multiple, uint32_t padding_minsize)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->padding_multiple = padding_multiple;
     cnx->padding_minsize = padding_minsize;
 }
 
 void picoquic_cnx_get_padding_policy(picoquic_cnx_t * cnx, uint32_t * padding_multiple, uint32_t * padding_minsize)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     *padding_multiple = cnx->padding_multiple;
     *padding_minsize = cnx->padding_minsize;
 }
 
 void picoquic_cnx_set_spinbit_policy(picoquic_cnx_t * cnx, picoquic_spinbit_version_enum spinbit_policy)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->spin_policy = spinbit_policy;
 }
 
@@ -4474,16 +4550,19 @@ void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwi
 
 void picoquic_set_default_pmtud_policy(picoquic_quic_t* quic, picoquic_pmtud_policy_enum pmtud_policy)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_pmtud_policy = pmtud_policy;
 }
 
 void picoquic_cnx_set_pmtud_policy(picoquic_cnx_t* cnx, picoquic_pmtud_policy_enum pmtud_policy)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->pmtud_policy = pmtud_policy;
 }
 
 void picoquic_cnx_set_pmtud_required(picoquic_cnx_t* cnx, int is_pmtud_required)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->pmtud_policy = (is_pmtud_required) ? picoquic_pmtud_required : picoquic_pmtud_basic;
 }
 
@@ -4539,6 +4618,7 @@ uint64_t picoquic_current_time()
 uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
 {
     uint64_t now;
+    PICOQUIC_THREAD_CHECK(quic);
     if (quic->p_simulated_time == NULL) {
         now = picoquic_current_time();
     }
@@ -4551,41 +4631,48 @@ uint64_t picoquic_get_quic_time(picoquic_quic_t* quic)
 
 void picoquic_set_fuzz(picoquic_quic_t * quic, picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->fuzz_fn = fuzz_fn;
     quic->fuzz_ctx = fuzz_ctx;
 }
 
 void picoquic_set_log_level(picoquic_quic_t* quic, int log_level)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     /* Only two level for now: log first 100 packets, or log everything. */
     quic->use_long_log = (log_level > 0) ? 1 : 0;
 }
 
 void picoquic_use_unique_log_names(picoquic_quic_t* quic, int use_unique_log_names)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->use_unique_log_names = use_unique_log_names;
 }
 
 #ifndef PICOQUIC_WITHOUT_SSLKEYLOG
 void picoquic_enable_sslkeylog(picoquic_quic_t* quic, int enable_sslkeylog)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->enable_sslkeylog = (enable_sslkeylog != 0);
 }
 
 int picoquic_is_sslkeylog_enabled(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->enable_sslkeylog;
 }
 #endif
 
 void picoquic_set_random_initial(picoquic_quic_t* quic, int random_initial)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     /* If set, triggers randomization of initial PN numbers. */
     quic->random_initial = (random_initial > 1) ? 2 : ((random_initial > 0) ? 1 : 0);
 }
 
 void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     /* TODO: consider setting high water mark for pacing. */
     /* If set, wait until pacing bucket is full enough to allow further transmissions. */
     quic->packet_train_mode = (train_mode > 0) ? 1 : 0;
@@ -4593,6 +4680,7 @@ void picoquic_set_packet_train_mode(picoquic_quic_t* quic, int train_mode)
 
 void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_size, uint32_t padding_multiple)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     quic->padding_minsize_default = padding_min_size;
     quic->padding_multiple_default = padding_multiple;
 }
@@ -4600,6 +4688,7 @@ void picoquic_set_padding_policy(picoquic_quic_t* quic, uint32_t padding_min_siz
 int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid_length)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(quic);
 
     if (cid_length != quic->local_cnxid_length) {
         if (cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
@@ -4618,22 +4707,26 @@ int picoquic_set_default_connection_id_length(picoquic_quic_t* quic, uint8_t cid
 
 void picoquic_set_default_connection_id_ttl(picoquic_quic_t* quic, uint64_t ttl_usec)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->local_cnxid_ttl = ttl_usec;
 }
 
 uint64_t picoquic_get_default_connection_id_ttl(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->local_cnxid_ttl;
 }
 
 void picoquic_set_mtu_max(picoquic_quic_t* quic, uint32_t mtu_max)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->mtu_max = mtu_max;
     quic->default_tp.max_packet_size = mtu_max;
 }
 
 void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn alpn_select_fn)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     if (quic->default_alpn != NULL) {
         free((void *)quic->default_alpn);
         quic->default_alpn = NULL;
@@ -4643,6 +4736,7 @@ void picoquic_set_alpn_select_fn(picoquic_quic_t* quic, picoquic_alpn_select_fn 
 
 void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_fn_v2 alpn_select_fn)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     if (quic->default_alpn != NULL) {
         free((void *)quic->default_alpn);
         quic->default_alpn = NULL;
@@ -4656,12 +4750,14 @@ void picoquic_set_alpn_select_fn_v2(picoquic_quic_t* quic, picoquic_alpn_select_
 void picoquic_set_default_callback(picoquic_quic_t* quic,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     quic->default_callback_fn = callback_fn;
     quic->default_callback_ctx = callback_ctx;
 }
 
 void picoquic_set_default_stateless_reset_min_interval(picoquic_quic_t* quic, uint64_t min_interval_usec)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->stateless_reset_next_time = picoquic_get_quic_time(quic);
     quic->stateless_reset_min_interval = min_interval_usec;
 }
@@ -4669,27 +4765,32 @@ void picoquic_set_default_stateless_reset_min_interval(picoquic_quic_t* quic, ui
 void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->callback_fn = callback_fn;
     cnx->callback_ctx = callback_ctx;
 }
 
 picoquic_stream_data_cb_fn picoquic_get_default_callback_function(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->default_callback_fn;
 }
 
 void * picoquic_get_default_callback_context(picoquic_quic_t* quic)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return quic->default_callback_ctx;
 }
 
 picoquic_stream_data_cb_fn picoquic_get_callback_function(picoquic_cnx_t * cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->callback_fn;
 }
 
 void * picoquic_get_callback_context(picoquic_cnx_t * cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->callback_ctx;
 }
 
@@ -4748,7 +4849,10 @@ int picoquic_queue_misc_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t 
 
 void picoquic_purge_misc_frames_after_ready(picoquic_cnx_t* cnx)
 {
-    picoquic_misc_frame_header_t* misc_frame = cnx->first_misc_frame;
+    picoquic_misc_frame_header_t* misc_frame;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+        
+    misc_frame = cnx->first_misc_frame;
 
     while (misc_frame != NULL) {
         picoquic_misc_frame_header_t* next_frame = misc_frame->next_misc_frame;
@@ -4932,6 +5036,7 @@ void picoquic_connection_disconnect(picoquic_cnx_t* cnx)
 int picoquic_start_key_rotation(picoquic_cnx_t* cnx)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(quic->cnx);
 
     /* Verify that a packet of the previous rotation was acked */
     if (cnx->cnx_state != picoquic_state_ready ||
@@ -4967,6 +5072,7 @@ void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx)
 void picoquic_delete_cnx(picoquic_cnx_t* cnx)
 {
     if (cnx != NULL) {
+        PICOQUIC_THREAD_CHECK(cnx->quic);
         if (cnx->memlog_call_back != NULL) {
             cnx->memlog_call_back(cnx, NULL, cnx->memlog_ctx, 1, 0);
         }
@@ -5070,6 +5176,7 @@ int picoquic_is_handshake_error(uint64_t error_code)
 void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason, 
     uint64_t* remote_reason, uint64_t* local_application_reason, uint64_t* remote_application_reason)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     *local_reason = cnx->local_error;
     *remote_reason = cnx->remote_error;
     *local_application_reason = cnx->application_error;
@@ -5079,6 +5186,7 @@ void picoquic_get_close_reasons(picoquic_cnx_t* cnx, uint64_t* local_reason,
 /* set the app wake up time (or cancel it by setting it to zero) */
 void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->app_wake_time = app_wake_time;
     if (cnx->app_wake_time != 0 && cnx->app_wake_time < cnx->next_wake_time) {
         picoquic_reinsert_by_wake_time(cnx->quic, cnx, app_wake_time);
@@ -5088,12 +5196,14 @@ void picoquic_set_app_wake_time(picoquic_cnx_t* cnx, uint64_t app_wake_time)
 /* Setting up version negotiation parameters */
 void picoquic_set_desired_version(picoquic_cnx_t* cnx, uint32_t desired_version)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->desired_version = desired_version;
     cnx->do_version_negotiation = 1;
 }
 
 void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_version)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->desired_version = rejected_version;
     cnx->do_version_negotiation = 1;
 }
@@ -5217,6 +5327,7 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 
 void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const * alg_option_string)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->default_congestion_alg = alg;
     quic->default_congestion_alg_option_string = alg_option_string;
 }
@@ -5237,21 +5348,25 @@ void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, ch
 
 void picoquic_set_optimistic_ack_policy(picoquic_quic_t* quic, uint32_t sequence_hole_pseudo_period)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     quic->sequence_hole_pseudo_period = sequence_hole_pseudo_period;
 }
 
 void picoquic_set_preemptive_repeat_policy(picoquic_quic_t* quic, int do_repeat)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     quic->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
 }
 
 void picoquic_set_preemptive_repeat_per_cnx(picoquic_cnx_t* cnx, int do_repeat)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->is_preemptive_repeat_enabled = (do_repeat) ? 1 : 0;
 }
 
 void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
@@ -5279,21 +5394,25 @@ void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_
 
 void picoquic_set_priority_limit_for_bypass(picoquic_cnx_t* cnx, uint8_t priority_limit)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->priority_limit_for_bypass = priority_limit;
 }
 
 void picoquic_set_feedback_loss_notification(picoquic_cnx_t* cnx, unsigned int should_notify)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->is_lost_feedback_notification_required = should_notify;
 }
 
 void picoquic_request_forced_probe_up(picoquic_cnx_t* cnx, unsigned int request_forced_probe_up)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->is_forced_probe_up_required = request_forced_probe_up;
 }
 
 void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrease_threshold, uint64_t increase_threshold)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->pacing_decrease_threshold = decrease_threshold;
     cnx->pacing_increase_threshold = increase_threshold;
     cnx->is_pacing_update_requested = (decrease_threshold != UINT64_MAX || increase_threshold != UINT64_MAX);
@@ -5301,16 +5420,19 @@ void picoquic_subscribe_pacing_rate_updates(picoquic_cnx_t* cnx, uint64_t decrea
 
 uint64_t picoquic_get_pacing_rate(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->pacing.rate;
 }
 
 uint64_t picoquic_get_cwin(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->cwin;
 }
 
 uint64_t picoquic_get_rtt(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->path[0]->smoothed_rtt;
 }
 
@@ -5331,6 +5453,7 @@ int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr)
 
 void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     if (interval == 0) {
         /* Use the negotiated value */
         uint64_t idle_timeout = cnx->idle_timeout;
@@ -5351,11 +5474,13 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
 
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     cnx->keep_alive_interval = 0;
 }
 
 void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic, 
     ptls_verify_certificate_t * cb, picoquic_free_verify_certificate_ctx free_fn) {
+    PICOQUIC_THREAD_CHECK(quic);
     picoquic_dispose_verify_certificate_callback(quic);
 
     picoquic_tls_set_verify_certificate_callback(quic, cb, free_fn);
@@ -5363,6 +5488,7 @@ void picoquic_set_verify_certificate_callback(picoquic_quic_t* quic,
 
 int picoquic_is_client(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->client_mode;
 }
 
@@ -5370,24 +5496,28 @@ int picoquic_is_client(picoquic_cnx_t* cnx)
 
 uint64_t picoquic_get_local_error(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->local_error;
 }
 
 uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->remote_error;
 }
 
 uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->remote_application_error;
 }
 
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
     uint64_t remote_error = 0;
-    picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-    if (stream != NULL) {
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
         remote_error = stream->remote_error;
     }
     return remote_error;
@@ -5395,24 +5525,29 @@ uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_i
 
 uint64_t picoquic_get_data_sent(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->data_sent;
 }
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->data_received;
 }
 
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
+    PICOQUIC_THREAD_CHECK(quic);
     picoquic_tls_set_client_authentication(quic, client_authentication);
 }
 
 void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
+    PICOQUIC_THREAD_CHECK(quic);
     picoquic_tls_set_use_exporter(quic, use_exporter);
 }
 
 void picoquic_enforce_client_only(picoquic_quic_t* quic, int do_enforce)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->enforce_client_only = (do_enforce)?1:0;
 }
 
