@@ -5616,8 +5616,8 @@ void picoquic_debug_multithread_check(picoquic_quic_t* quic)
         if (quic->thread_id != picoquic_current_thread_id()) {
             DBG_PRINTF("Thread check failed: current thread %p, expected thread %p\n",
                 (void*)picoquic_current_thread_id(), (void*)quic->thread_id);
+            abort();
         }
-        abort();
     }
 }
 #endif
