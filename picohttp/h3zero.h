@@ -50,6 +50,9 @@ extern "C" {
 #define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
+#define H3ZERO_WT_AVAILABLE_PROTOCOLS "WT-Available-Protocols"
+#define H3ZERO_WT_PROTOCOL "WT-Protocol"
+
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
 #define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
 
@@ -129,6 +132,8 @@ typedef enum {
     http_header_user_agent,
     http_header_x_forwarded_for,
     http_header_x_frame_options,
+    http_header_wt_available_protocols,
+    http_header_wt_protocol,
 	http_header_max
 } http_header_enum_t;
 
@@ -191,6 +196,11 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
     size_t protocol_length;
+    uint8_t const* wt_available_protocols;
+    size_t wt_available_protocols_length;
+    uint8_t const* wt_protocol;
+    size_t wt_protocol_length;
+
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
@@ -253,7 +263,7 @@ uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_ma
     char const* host, char const* ua_string);
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const* origin, char const* ua_string);
+    char const* origin, char const* ua_string, char const * wt_available_protocols);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
     char const* host, h3zero_content_type_enum content_type, char const* ua_string);
@@ -261,7 +271,8 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     h3zero_content_type_enum doc_type);
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);
 uint8_t* h3zero_create_response_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    h3zero_content_type_enum doc_type, char const* server_string);
+    h3zero_content_type_enum doc_type, char const* server_string,
+    char const* wt_protocol);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t* h3zero_create_not_found_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max, char const* server_string);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);

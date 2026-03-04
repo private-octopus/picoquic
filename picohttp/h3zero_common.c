@@ -1134,6 +1134,7 @@ int h3zero_process_request_frame(
 				else {
 					/* Create a connect accept frame */
 					picoquic_log_app_message(cnx, "Connect accepted on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, app_ctx->path_table[path_item].path);
+					/* TODO: path callback, fill additional HTTP headers */
 					o_bytes = h3zero_create_response_header_frame(o_bytes, o_bytes_max, h3zero_content_type_none);
 					stream_ctx->is_upgraded = 1;
 				}

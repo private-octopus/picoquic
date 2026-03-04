@@ -492,6 +492,29 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->protocol, &parts->protocol_length);
                 }
                 break;
+
+            case http_header_wt_available_protocols:
+                if (parts->wt_available_protocols != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->wt_available_protocols, &parts->wt_available_protocols_length);
+                }
+                break;
+
+            case http_header_wt_protocol:
+                if (parts->wt_protocol != NULL) {
+                    /* Duplicate content type! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->wt_protocol, &parts->wt_available_protocols_length);
+                }
+                break;
+
             default:
                 break;
             }
@@ -508,7 +531,9 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range", NULL};
+     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range",
+     H3ZERO_WT_AVAILABLE_PROTOCOLS, H3ZERO_WT_PROTOCOL,
+     NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
         http_pseudo_header_status, http_header_content_type,
@@ -823,7 +848,7 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
 
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     char const * authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const * origin, char const* ua_string)
+    char const * origin, char const* ua_string, char const * wt_available_protocols)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -852,6 +877,12 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     /* User Agent */
     if (ua_string != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
+    /* WT Available Protocols */
+    if (wt_available_protocols != NULL) {
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, 
+            (uint8_t*)H3ZERO_WT_AVAILABLE_PROTOCOLS, strlen(H3ZERO_WT_AVAILABLE_PROTOCOLS),
+            (uint8_t*)wt_available_protocols, strlen(wt_available_protocols));
     }
     return bytes;
 }
@@ -936,7 +967,8 @@ uint8_t* h3zero_create_request_header_frame(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_content_type_enum doc_type, char const* server_string)
+    h3zero_content_type_enum doc_type, char const* server_string, 
+    char const * wt_protocol)
 {
 
     if (bytes == NULL || bytes + 2 > bytes_max) {
@@ -959,13 +991,20 @@ uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * byte
         bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
     }
 
+    if (wt_protocol != NULL) {
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max,
+            (uint8_t*)H3ZERO_WT_PROTOCOL, strlen(H3ZERO_WT_PROTOCOL),
+            (uint8_t*)wt_protocol, strlen(wt_protocol));
+    }
+
     return bytes;
 }
 
 uint8_t* h3zero_create_response_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     h3zero_content_type_enum doc_type)
 {
-    return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type, H3ZERO_USER_AGENT_STRING);
+    return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type,
+        H3ZERO_USER_AGENT_STRING, NULL);
 }
 
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string)

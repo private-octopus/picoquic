@@ -257,7 +257,7 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
 
 int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
     const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
-    uint8_t * extra, size_t extra_length)
+    char const* wt_available_protocols, uint8_t * extra, size_t extra_length)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
@@ -282,7 +282,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
         bytes += 2; /* reserve two bytes for frame length */
 
         bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
-            H3ZERO_USER_AGENT_STRING);
+            H3ZERO_USER_AGENT_STRING, wt_available_protocols);
 
         if (bytes == NULL) {
             ret = -1;
@@ -321,9 +321,9 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 }
 
 int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
-    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx, char const* wt_available_protocols)
 {
-    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, NULL, 0);
+    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, wt_available_protocols, NULL, 0);
 }
 
 /*
