@@ -2460,6 +2460,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_disabled)
+        {
+            int ret = migration_disabled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(large_client_hello) {
             int ret = large_client_hello_test();
 
@@ -3213,6 +3220,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_migration_disabled)
+        {
+            int ret = h3zero_migration_disabled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(h09_server) {
             int ret = h09_server_test();
 

@@ -410,6 +410,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bad_coalesce", bad_coalesce_test },
     { "bad_cnxid", bad_cnxid_test },
     { "document_addresses", document_addresses_test },
+    { "migration_disabled", migration_disabled_test },
     { "large_client_hello", large_client_hello_test },
     { "limited_reno", limited_reno_test },
     { "limited_cubic", limited_cubic_test },

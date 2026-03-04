@@ -10058,6 +10058,48 @@ int random_public_tester_test()
 }
 
 /*
+ * Test a simple download work if the server has set the connection
+ * diabled parameter.
+ */
+
+int migration_disabled_test()
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    /* Set the migration_disabled flag in the server parameter
+     */
+    if (ret == 0) {
+        test_ctx->qserver->default_tp.migration_disabled = 1;
+
+        /* Run a basic test scenario
+         */
+
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 250000);
+    }
+
+    /* verify that the migration was properly noticed as disabled. */
+    if (ret == 0 && test_ctx->cnx_client != NULL &&
+        !test_ctx->cnx_client->remote_parameters.migration_disabled) {
+        DBG_PRINTF("%s", "Migration not disabled on client\n");
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
  * Test whether connections can be established when the client hello is larger than a 
  * single packet. This is done by adding a "padding" transport parameter.
  */
