@@ -394,10 +394,11 @@ target_include_directories(picoquic-core
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
     PUBLIC
-        ${MBEDTLS_INCLUDE_DIRS}
-        picoquic
-        c4/src
-        picoquic_mbedtls)
+        $<BUILD_INTERFACE:${MBEDTLS_INCLUDE_DIRS}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/c4/src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic_mbedtls>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(picoquic-core
     PRIVATE
         ${LIBURING}
