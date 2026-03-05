@@ -385,6 +385,7 @@ endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
 target_sources(picoquic-core PRIVATE ${PICOQUIC_CORE_HEADERS_PRIVATE})
+add_library(picoquic::picoquic-core ALIAS picoquic-core)
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
@@ -616,6 +617,7 @@ endif()
 
 
 install(TARGETS picoquic-core
+    EXPORT picoquic-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(PICOQUIC_FETCH_PTLS)
@@ -626,10 +628,16 @@ if(PICOQUIC_FETCH_PTLS)
     set(LIB_PATH "${LIB_PATH}" CACHE PATH "Path of library files")
 
     install(TARGETS ${PTLS_LIBRARIES}
+        EXPORT picoquic-targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 else()
     set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
 endif()
+
+install(EXPORT picoquic-targets
+    FILE picoquic-targets.cmake
+    NAMESPACE picoquic::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/picoquic)
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
