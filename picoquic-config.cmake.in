@@ -1,5 +1,11 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(OpenSSL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/picoquic-targets.cmake")
+
 set(picoquic_VERSION "@PACKAGE_PROJECT_VERSION@")
 set(picoquic_LIBRARIES "@PACKAGE_LIB_PATH@")
 set(picoquic_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
