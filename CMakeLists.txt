@@ -619,10 +619,14 @@ install(TARGETS picoquic-core
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(PICOQUIC_FETCH_PTLS)
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a")
+    foreach(_ptls_lib ${PTLS_LIBRARIES})
+        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/lib${_ptls_lib}.a")
+    endforeach()
+    set(LIB_PATH "${LIB_PATH}" CACHE PATH "Path of library files")
 
     install(TARGETS ${PTLS_LIBRARIES}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 else()
     set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
 endif()
