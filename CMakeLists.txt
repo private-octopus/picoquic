@@ -12,7 +12,12 @@ project(picoquic
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
-find_package(Threads REQUIRED)
+option(WITH_THREADS "Build with Threads support" ON)
+if(WITH_THREADS)
+    find_package(Threads REQUIRED)
+else()
+    message(FATAL_ERROR "WITH_THREADS=OFF is not yet fully implemented")
+endif()
 
 option(DISABLE_DEBUG_PRINTF "Disable Picoquic debug output" OFF)
 option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
