@@ -775,7 +775,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             * Then, callback the application. That means the WT app context
             * should be obtained from the path app context, etc.
             */
-            (void)picowt_select_wt_protocol(stream_ctx, PICOWT_BATON_ALPN);
+            (void)picowt_select_wt_protocol(stream_ctx, PICOWT_BATON_ALPN_FILTER);
             ret = wt_baton_accept(cnx, bytes, length, stream_ctx, path_app_ctx);
             break;
         case picohttp_callback_connect_refused:

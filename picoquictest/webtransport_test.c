@@ -166,7 +166,7 @@ static int picowt_baton_test_one(
             else {
                 ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
                     baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN);
+                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
             }
         }
 
