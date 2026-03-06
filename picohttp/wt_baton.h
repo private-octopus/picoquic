@@ -50,6 +50,8 @@ extern "C" {
 #define WT_BATON_VERSION 0
 #define WT_BATON_MAX_COUNT 256
 #define WT_BATON_MAX_LANES 256
+    /* WT Protocol */
+#define PICOWT_BATON_ALPN "devious-baton-00"
 
     /* Wt_baton context:
      *

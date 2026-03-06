@@ -538,7 +538,7 @@ int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int i
         http_pseudo_header_method, http_pseudo_header_path,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
-        http_header_range
+        http_header_range, http_header_wt_available_protocols, http_header_wt_protocol
     };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
@@ -1117,6 +1117,16 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         *((uint8_t**)&header->protocol) = NULL;
         header->protocol_length = 0;
     }
+    if (header->wt_available_protocols != NULL) {
+        free((uint8_t*)header->wt_available_protocols);
+        *((uint8_t**)&header->wt_available_protocols) = NULL;
+        header->wt_available_protocols_length = 0;
+    }
+    if (header->wt_protocol != NULL) {
+        free((uint8_t*)header->wt_protocol);
+        *((uint8_t**)&header->wt_protocol) = NULL;
+        header->wt_protocol_length = 0;
+    }
 }
 
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
@@ -1127,6 +1137,11 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 
     if (stream_state->trailer_found){
         h3zero_release_header_parts(&stream_state->trailer);
+    }
+
+    if (stream_state->wt_protocol != NULL) {
+        free((char *)stream_state->wt_protocol);
+        stream_state->wt_protocol = NULL;;
     }
 
     if (stream_state->current_frame != NULL) {

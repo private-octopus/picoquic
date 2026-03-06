@@ -250,6 +250,84 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
     return ret;
 }
 
+/* set web transport protocol to selected value.
+*/
+int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected_protocol)
+{
+    int ret = 0;
+    if (stream_ctx->ps.stream_state.wt_protocol != NULL) {
+        ret = -1;
+    }
+    else if ((stream_ctx->ps.stream_state.wt_protocol = picoquic_string_duplicate(selected_protocol)) == NULL) {
+        ret = -1; /* memory allocation failed */
+    }
+    return ret;
+}
+
+/*
+* Set selected web transport protocol
+* - Compare the incoming 'wt_available_protocol" to the server list.
+* - If there is a match, set the selected protocol in the context, and return 0.
+* - If there is no match, return -1.
+*/
+int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported)
+{
+    char candidate[256];
+    size_t candidate_length;
+    char const* a = (char const *)stream_ctx->ps.stream_state.header.wt_available_protocols;
+    size_t s_len = strlen(supported);
+    int ret = -1;
+
+    while (a != NULL && *a != 0) {
+        /* isolate the next available */
+        candidate_length = 0;
+
+        while (*a == ' ' || *a == '\t') {
+            a++;
+        }
+        while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t' && candidate_length < 254) {
+            candidate[candidate_length] = *a;
+            a++;
+            candidate_length++;
+        }
+        while (*a == ' ' || *a == '\t') {
+            a++;
+        }
+        candidate[candidate_length] = 0;
+        if (*a == ',') {
+            a++;
+        }
+        else if (*a != 0) {
+            a = NULL;
+        }
+        if (candidate_length > 0) {
+            /* check whether there is a match*/
+            int os = 0;
+            while (os + candidate_length <= s_len) {
+                if (os == ' ' || os == '\t' || os == ',') {
+                    os++;
+                }
+                else {
+                    if ((candidate_length == s_len ||
+                        supported[os + candidate_length] == ' ' ||
+                        supported[os + candidate_length] == '\t ' ||
+                        supported[os + candidate_length] == ',') &&
+                        supported[os + candidate_length] == 0) {
+                        /* found it. set the value. */
+                        ret = picowt_set_wt_protocol(stream_ctx, candidate);
+                        a = NULL;
+                        break;
+                    }
+                    else while (os + candidate_length <= s_len &&
+                        supported[os] != ' ' && supported[os] != '\t') {
+                        os++;
+                    }
+                }
+            }
+        }
+    }
+    return ret;
+}
 
 /*
 * Connect

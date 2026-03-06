@@ -161,12 +161,12 @@ static int picowt_baton_test_one(
                 uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
                 ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
                     baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, NULL, grease_capsule, 12);
+                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
             }
             else {
                 ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
                     baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, NULL);
+                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN);
             }
         }
 

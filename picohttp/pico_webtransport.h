@@ -100,6 +100,22 @@ extern "C" {
      */
     int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, uint64_t local_stream_error);
 
+    /* Select the protocol to use for the web transport session, among the ones supported by the peer.
+     * This should be called by the server before accepting a web transport session.
+     * If the peer provided a "WT_AVAILABLE_PROTOCOLS" header, the code will parse the
+     * parameter list and select the first protocol that is also present in the
+     * "supported" list provided as argument.
+     * 
+     * The supported list is a character string with the format "protocol1, protocol2, protocol3",
+     * where the protocol names are separated by comma and optional space.
+     * 
+     * Return value is 0 if successful, -1 if no common protocol is found, including if the peer did
+     * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
+     * 
+     * The selected protocol is set in the stream_ctx of the web transport session.
+     */
+    int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
+
 #ifdef __cplusplus
 }
 #endif

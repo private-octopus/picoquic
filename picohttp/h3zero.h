@@ -290,6 +290,7 @@ typedef struct st_h3zero_data_stream_state_t {
     uint64_t control_stream_id;
     uint8_t frame_header[16];
     size_t frame_header_read;
+    char const * wt_protocol;
     unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
     unsigned int frame_prefix_parsed : 1;
