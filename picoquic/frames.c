@@ -141,8 +141,14 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
         ret = 1;
     }
     
-    /* We only delete the stream if there are no pending retransmissions */
-    if (stream->is_closed && picoquic_is_stream_acked(stream)) {
+    /* We only delete the stream if there are no pending retransmissions.
+    * For bidirectional streams, or for local unidir streams, that means
+    * waiting for acknowledgements. For remote unidir streams, we won't have any ack,
+    * so we can delete the stream immediately.
+    */
+    if (stream->is_closed && (
+        (!IS_BIDIR_STREAM_ID(stream->stream_id) && !IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode)) ||
+        picoquic_is_stream_acked(stream))) {
         picoquic_delete_stream(cnx, stream);
     }
 

@@ -3240,6 +3240,23 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
             max_completion_microsec);
     }
 
+    if (scenario[0].stream_id == 2) {
+        /* Verify that for scenario involving unidir streams, these are
+         * properly closed.
+         */
+        if (ret == 0 && test_ctx->cnx_client != NULL && test_ctx->cnx_client->stream_tree.size != 0) {
+            DBG_PRINTF("There are %d streams left open on client at the end of test.",
+                test_ctx->cnx_client->stream_tree.size);
+            ret = -1;
+        }
+
+        if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->stream_tree.size != 0) {
+            DBG_PRINTF("There are %d streams left open on client at the end of test.",
+                test_ctx->cnx_server->stream_tree.size);
+            ret = -1;
+        }
+    }
+
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
