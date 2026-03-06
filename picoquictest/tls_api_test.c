@@ -3285,7 +3285,37 @@ int tls_api_very_long_congestion_test()
 
 int unidir_test()
 {
-    return tls_api_one_scenario_test(test_scenario_unidir, sizeof(test_scenario_unidir), 0, 0, 128000, 10000, 0, 100000, NULL, NULL);
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+
+    int ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_unidir, sizeof(test_scenario_unidir), 0, 0, 128000, 10000,
+            100000);
+    }
+
+    /* Verify that the unidir streams are properly closed. */
+    if (ret == 0 && test_ctx->cnx_client != NULL && test_ctx->cnx_client->stream_tree.size != 0) {
+        DBG_PRINTF("There are %d streams left open on client at the end of test.",
+            test_ctx->cnx_client->stream_tree.size);
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server != NULL && test_ctx->cnx_server->stream_tree.size != 0) {
+        DBG_PRINTF("There are %d streams left open on client at the end of test.",
+            test_ctx->cnx_server->stream_tree.size);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 int many_short_loss_test()
