@@ -240,6 +240,11 @@ static int picowt_baton_test_one(
                 baton_ctx.lanes[0].first_baton);
             ret = -1;
         }
+        if (ret == 0 && test_id == 1 && strcmp(baton_ctx.wt_protocol, PICOWT_BATON_ALPN) != 0) {
+            DBG_PRINTF("Negotiated WT protocol was %s instead of %s",
+                baton_ctx.wt_protocol, PICOWT_BATON_ALPN);
+            ret = -1;
+        }
     }
     /* Verify that settings were correctly received */
     if (ret == 0 && !h3zero_cb->settings.settings_received) {

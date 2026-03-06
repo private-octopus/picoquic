@@ -125,6 +125,7 @@ extern "C" {
         uint8_t baton_datagram_send_next;
         uint64_t nb_baton_bytes_received;
         uint64_t nb_baton_bytes_sent;
+        char wt_protocol[256];
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {
