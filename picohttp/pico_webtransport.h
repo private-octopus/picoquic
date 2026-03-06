@@ -108,11 +108,11 @@ extern "C" {
      * 
      * The supported list is a character string with the format "protocol1, protocol2, protocol3",
      * where the protocol names are separated by comma and optional space.
+     * The code will select the first protocol in the client list that is also supported
+     * by the server, and set it in the stream_ctx of the web transport session.
      * 
      * Return value is 0 if successful, -1 if no common protocol is found, including if the peer did
      * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
-     * 
-     * The selected protocol is set in the stream_ctx of the web transport session.
      */
     int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
 

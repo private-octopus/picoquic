@@ -160,6 +160,38 @@ web transport.
 An example of callback implementation is provided in `wt_baton_callback`
 in `wt_baton.c`._
 
+### WT Protocol negotiation
+
+The web transport protocol is negotiated as part of the HTTP3 connection.
+The client proposes a list of avalaible protocols as an argument
+to "picowt_connect":
+
+```
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,
+    h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, 
+    picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
+    char const* wt_available_protocols);
+```
+
+The list of protocols is encoded as a comma separated list of protocol identifiers,
+as specified in the
+[web transport draft](https://datatracker.ietf.org/doc/draft-ietf-webtrans-http3/),
+for example: "protocol1, protocol2, protocol3".
+
+The server selects the protocol by calling the `picowt_select_wt_protocol` API:
+
+```
+int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
+```
+
+The argument `supported` is the list of protocols supported by the server, encoded
+using the same format as the list of protocols proposed by the client, for
+example: "protocol0, protocol2, protocol3".
+The code will select the first protocol in the client list that is also supported
+by the server, "protocol2" in our example. The selected value
+is copied in the stream context of the web transport session (look for
+the `ps.session_state.wt_protocol` entry in the stream context).
+
 ### Creating streams
 
 Once the session is created, client and server will be able to open "local"
