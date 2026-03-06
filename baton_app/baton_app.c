@@ -245,7 +245,7 @@ int wt_baton_client(char const* server_name, int server_port, char const* path, 
         * own callback.
          */
         ret = picowt_connect(cnx, h3_ctx, control_stream_ctx, baton_ctx.authority, baton_ctx.server_path,
-            wt_baton_callback, &baton_ctx);
+            wt_baton_callback, &baton_ctx, "spurious-baton-00");
 
         if (ret != 0) {
             fprintf(stderr, "Could not program the web transport connection\n");

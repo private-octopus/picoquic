@@ -250,6 +250,84 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
     return ret;
 }
 
+/* set web transport protocol to selected value.
+*/
+int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected_protocol)
+{
+    int ret = 0;
+    if (stream_ctx->ps.stream_state.wt_protocol != NULL) {
+        ret = -1;
+    }
+    else if ((stream_ctx->ps.stream_state.wt_protocol = picoquic_string_duplicate(selected_protocol)) == NULL) {
+        ret = -1; /* memory allocation failed */
+    }
+    return ret;
+}
+
+/*
+* Set selected web transport protocol
+* - Compare the incoming 'wt_available_protocol" to the server list.
+* - If there is a match, set the selected protocol in the context, and return 0.
+* - If there is no match, return -1.
+*/
+int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported)
+{
+    char candidate[256];
+    size_t candidate_length;
+    char const* a = (char const *)stream_ctx->ps.stream_state.header.wt_available_protocols;
+    size_t s_len = strlen(supported);
+    int ret = -1;
+
+    while (a != NULL && *a != 0) {
+        /* isolate the next available */
+        candidate_length = 0;
+
+        while (*a == ' ' || *a == '\t') {
+            a++;
+        }
+        while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t' && candidate_length < 254) {
+            candidate[candidate_length] = *a;
+            a++;
+            candidate_length++;
+        }
+        while (*a == ' ' || *a == '\t') {
+            a++;
+        }
+        candidate[candidate_length] = 0;
+        if (*a == ',') {
+            a++;
+        }
+        else if (*a != 0) {
+            a = NULL;
+        }
+        if (candidate_length > 0) {
+            /* check whether there is a match*/
+            int os = 0;
+            while (os + candidate_length <= s_len) {
+                if (supported[os] == ' ' || supported[os] == '\t' || supported[os] == ',') {
+                    os++;
+                }
+                else {
+                    if ((os + candidate_length == s_len ||
+                        supported[os + candidate_length] == ' ' ||
+                        supported[os + candidate_length] == '\t ' ||
+                        supported[os + candidate_length] == ',') &&
+                        memcmp(&supported[os], candidate, candidate_length) == 0) {
+                        /* found it. set the value. */
+                        ret = picowt_set_wt_protocol(stream_ctx, candidate);
+                        a = NULL;
+                        break;
+                    }
+                    else while (os + candidate_length <= s_len &&
+                        supported[os] != ' ' && supported[os] != '\t') {
+                        os++;
+                    }
+                }
+            }
+        }
+    }
+    return ret;
+}
 
 /*
 * Connect
@@ -257,7 +335,7 @@ int picowt_prepare_client_cnx(picoquic_quic_t* quic, struct sockaddr* server_add
 
 int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_stream_ctx_t* stream_ctx, 
     const char * authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
-    uint8_t * extra, size_t extra_length)
+    char const* wt_available_protocols, uint8_t * extra, size_t extra_length)
 {
     /* register the stream ID as session ID */
     int ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
@@ -282,7 +360,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
         bytes += 2; /* reserve two bytes for frame length */
 
         bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, (const uint8_t*)path, strlen(path), "webtransport", NULL,
-            H3ZERO_USER_AGENT_STRING);
+            H3ZERO_USER_AGENT_STRING, wt_available_protocols);
 
         if (bytes == NULL) {
             ret = -1;
@@ -321,9 +399,9 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 }
 
 int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
-    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx)
+    const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx, char const* wt_available_protocols)
 {
-    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, NULL, 0);
+    return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, wt_available_protocols, NULL, 0);
 }
 
 /*

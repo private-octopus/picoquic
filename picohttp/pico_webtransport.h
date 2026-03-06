@@ -63,7 +63,8 @@ extern "C" {
      *              this is defined in h3zero_common.h
      * wt_ctx: application level context for that connection.
      */
-    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback,
+        void* wt_ctx, char const* wt_available_protocols);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */
@@ -98,6 +99,22 @@ extern "C" {
     /* Reset local stream
      */
     int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, uint64_t local_stream_error);
+
+    /* Select the protocol to use for the web transport session, among the ones supported by the peer.
+     * This should be called by the server before accepting a web transport session.
+     * If the peer provided a "WT_AVAILABLE_PROTOCOLS" header, the code will parse the
+     * parameter list and select the first protocol that is also present in the
+     * "supported" list provided as argument.
+     * 
+     * The supported list is a character string with the format "protocol1, protocol2, protocol3",
+     * where the protocol names are separated by comma and optional space.
+     * The code will select the first protocol in the client list that is also supported
+     * by the server, and set it in the stream_ctx of the web transport session.
+     * 
+     * Return value is 0 if successful, -1 if no common protocol is found, including if the peer did
+     * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
+     */
+    int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
 
 #ifdef __cplusplus
 }

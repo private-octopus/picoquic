@@ -124,7 +124,7 @@ int h3zero_queue_connect_header_frame(
     bytes += 2; /* reserve two bytes for frame length */
 
     bytes = h3zero_create_connect_header_frame(bytes, bytes_max, authority, path, path_length, protocol, NULL,
-        ua_string);
+        ua_string, NULL);
 
     if (bytes == NULL) {
         ret = -1;
