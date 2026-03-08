@@ -40,9 +40,6 @@ void picoquic_openssl_load(int unload)
     /* Nothing to do, as the module is not loaded. */
 }
 #else
-#if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30500000L && !defined(OPENSSL_NO_ENGINE)
-#define OPENSSL_NO_ENGINE
-#endif
 #include "picotls/openssl.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>
