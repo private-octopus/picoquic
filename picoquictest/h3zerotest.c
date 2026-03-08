@@ -1775,13 +1775,28 @@ static size_t const demo_test_stream_length[] = {
     190
 };
 
-static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server_callback_fn, void * server_param,
-    const picoquic_demo_stream_desc_t * demo_scenario, size_t nb_scenario, size_t const * demo_length,
-    int do_sat, uint64_t do_losses, uint64_t completion_target, int delay_fin, const char * out_dir, const char * client_bin,
-    const char * server_bin, int do_preemptive_repeat)
+typedef struct st_demo_server_test_spec_t {
+    char const* alpn;
+    picoquic_stream_data_cb_fn server_callback_fn;
+    void* server_param;
+    const picoquic_demo_stream_desc_t* demo_scenario;
+    size_t nb_scenario;
+    size_t const* demo_length;
+    int do_sat;
+    uint64_t do_losses;
+    uint64_t completion_target;
+    int delay_fin;
+    const char* out_dir;
+    const char* client_bin;
+    const char* server_bin;
+    int do_preemptive_repeat;
+    int disable_migration;
+} demo_server_test_spec_t;
+
+static int demo_server_test_specced(demo_server_test_spec_t * spec)
 {
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = do_losses;
+    uint64_t loss_mask = spec->do_losses;
     uint64_t time_out;
     int nb_trials = 0;
     int was_active = 0;
@@ -1791,25 +1806,29 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     picoquic_tp_t client_parameters;
     picoquic_connection_id_t initial_cid = { {0xde, 0xc1, 3, 4, 5, 6, 7, 8}, 8 };
 
-    ret = picoquic_demo_client_initialize_context(&callback_ctx, demo_scenario, nb_scenario, alpn, 0, delay_fin);
-    callback_ctx.out_dir = out_dir;
+    ret = picoquic_demo_client_initialize_context(&callback_ctx, spec->demo_scenario, spec->nb_scenario, spec->alpn, 0, spec->delay_fin);
+    callback_ctx.out_dir = spec->out_dir;
     callback_ctx.no_print = 1;
 
     if (ret == 0) {
         ret = tls_api_init_ctx_ex(&test_ctx,
             PICOQUIC_INTERNAL_TEST_VERSION_1,
-            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+            PICOQUIC_TEST_SNI, spec->alpn, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
 
-        if (ret == 0 && server_bin != NULL) {
+        if (ret == 0 && spec->server_bin != NULL) {
             picoquic_set_qlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
         }
 
-        if (ret == 0 && client_bin != NULL) {
+        if (ret == 0 && spec->client_bin != NULL) {
             picoquic_set_qlog(test_ctx->qclient, ".");
         }
 
-        if (ret == 0 && do_sat) {
+        if (ret == 0 && spec->disable_migration) {
+            test_ctx->qserver->default_tp.migration_disabled = 1;
+        }
+
+        if (ret == 0 && spec->do_sat) {
             /* For the satellite test, set long delays, 10 Mbps one way, 1 Mbps the other way */
             const uint64_t satellite_latency = 300000;
             test_ctx->c_to_s_link->microsec_latency = satellite_latency;
@@ -1825,7 +1844,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         }
 
-        if (ret == 0 && do_preemptive_repeat) {
+        if (ret == 0 && spec->do_preemptive_repeat) {
             picoquic_set_preemptive_repeat_policy(test_ctx->qserver, 1);
             picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, 1);
         }
@@ -1844,7 +1863,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
 
     if (ret == 0) {
         picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-        picoquic_set_default_callback(test_ctx->qserver, NULL, server_param);
+        picoquic_set_default_callback(test_ctx->qserver, NULL, spec->server_param);
         picoquic_set_callback(test_ctx->cnx_client, picoquic_demo_client_callback, &callback_ctx);
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -1859,7 +1878,7 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
         ret = picoquic_demo_client_start_streams(test_ctx->cnx_client, &callback_ctx, PICOQUIC_DEMO_STREAM_ID_INITIAL);
     }
 
-    if (delay_fin) {
+    if (spec->delay_fin) {
         /* Trigger sending the first stream requests, then send a separate FIN on stream 0 */
         int is_sent = 0;
         time_out = simulated_time + 3000000;
@@ -1902,10 +1921,10 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     }
 
     /* Verify that the data was properly received. */
-    for (size_t i = 0; ret == 0 && i < nb_scenario; i++) {
+    for (size_t i = 0; ret == 0 && i < spec->nb_scenario; i++) {
         picoquic_demo_client_stream_ctx_t* stream = callback_ctx.first_stream;
 
-        while (stream != NULL && stream->stream_id != demo_scenario[i].stream_id) {
+        while (stream != NULL && stream->stream_id != spec->demo_scenario[i].stream_id) {
             stream = stream->next_stream;
         }
 
@@ -1917,23 +1936,28 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
             DBG_PRINTF("Scenario stream %d, file was not closed\n", (int)i);
             ret = -1;
         }
-        else if (stream->received_length < demo_length[i]) {
+        else if (stream->received_length < spec->demo_length[i]) {
             DBG_PRINTF("Scenario stream %d, only %d bytes received\n", 
                 (int)i, (int)stream->received_length);
             ret = -1;
         }
-        else if (stream->post_sent < demo_scenario[i].post_size) {
+        else if (stream->post_sent < spec->demo_scenario[i].post_size) {
             DBG_PRINTF("Scenario stream %d, only %d bytes sent\n",
                 (int)i, (int)stream->post_sent);
             ret = -1;
         }
     }
 
-    if (ret == 0 && completion_target != 0) {
-        if (simulated_time > completion_target) {
-            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
+    if (ret == 0 && spec->completion_target != 0) {
+        if (simulated_time > spec->completion_target) {
+            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, spec->completion_target);
             ret = -1;
         }
+    }
+
+    if (ret == 0 && spec->disable_migration && !test_ctx->cnx_client->remote_parameters.migration_disabled) {
+        DBG_PRINTF("%s", "Migration should be disabled, but server did not set the flag");
+        ret = -1;
     }
 
     if (ret == 0 && test_ctx->qclient->nb_data_nodes_allocated > test_ctx->qclient->nb_data_nodes_in_pool) {
@@ -1953,6 +1977,17 @@ static int demo_server_test(char const * alpn, picoquic_stream_data_cb_fn server
     return ret;
 }
 
+static int demo_server_test(char const* alpn, picoquic_stream_data_cb_fn server_callback_fn, void* server_param,
+    const picoquic_demo_stream_desc_t* demo_scenario, size_t nb_scenario, size_t const* demo_length,
+    int do_sat, uint64_t do_losses, uint64_t completion_target, int delay_fin, const char* out_dir, const char* client_bin,
+    const char* server_bin, int do_preemptive_repeat)
+{
+    demo_server_test_spec_t test_spec = { 
+        alpn, server_callback_fn, server_param, demo_scenario, nb_scenario, demo_length,
+        do_sat, do_losses, completion_target, delay_fin, out_dir, client_bin, server_bin, do_preemptive_repeat, 0 };
+    return demo_server_test_specced(&test_spec);
+}
+
 int h3zero_server_test()
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
@@ -1965,6 +2000,15 @@ int h09_server_test()
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL,
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, NULL, NULL, 0);
+}
+
+int h3zero_migration_disabled_test()
+{
+    demo_server_test_spec_t test_spec = {
+        PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
+        0, 0, 0, 0, NULL, ".", ".", 0, 1 };
+
+    return demo_server_test_specced(&test_spec);
 }
 
 /* Unit test of H09 header parsing. 
@@ -2163,7 +2207,6 @@ int h09_header_test()
 
     return ret;
 }
-
 
 int generic_server_test()
 {
