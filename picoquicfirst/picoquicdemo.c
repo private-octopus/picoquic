@@ -656,17 +656,20 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
-                if (cb_ctx->multipath_initiated == 0) {
-                    int is_already_allowed = 0;
-                    cb_ctx->multipath_initiated = 1;
-                    if (picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed) == 0) {
-                        if (is_already_allowed) {
-                            ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                if (cb_ctx->cnx_client->is_multipath_enabled || cb_ctx->force_migration ||
+                    cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined) {
+                    if (cb_ctx->multipath_initiated == 0) {
+                        int is_already_allowed = 0;
+                        cb_ctx->multipath_initiated = 1;
+                        if (picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed) == 0) {
+                            if (is_already_allowed) {
+                                ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                            }
                         }
                     }
-                }
-                if (!cb_ctx->multipath_probe_done && cb_ctx->cnx_client->is_notified_that_path_is_allowed) {
-                    ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                    if (!cb_ctx->multipath_probe_done && cb_ctx->cnx_client->is_notified_that_path_is_allowed) {
+                        ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                    }
                 }
                 /* Track the migration to server preferred address */
                 if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
