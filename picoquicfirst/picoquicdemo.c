@@ -657,7 +657,8 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
                 if (cb_ctx->cnx_client->is_multipath_enabled || cb_ctx->force_migration ||
-                    cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined) {
+                    cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined)
+                {
                     if (cb_ctx->multipath_initiated == 0) {
                         int is_already_allowed = 0;
                         cb_ctx->multipath_initiated = 1;
@@ -1111,6 +1112,10 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 
         if (loop_cb.force_migration){
+            if (cnx_client->remote_parameters.migration_disabled) {
+                fprintf(stdout, "Migration is disabled by the server.\n");
+                picoquic_log_app_message(cnx_client, "%s", "Migration is disabled by the server.");
+            }
             if (!loop_cb.migration_started) {
                 fprintf(stdout, "Could not start testing migration.\n");
                 picoquic_log_app_message(cnx_client, "%s", "Could not start testing migration.");
