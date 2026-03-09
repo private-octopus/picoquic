@@ -326,5 +326,11 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         if (cnx->qlog_ctx != NULL) {
             cnx->quic->qlog_fns->log_cc_dump(cnx, current_time);
         }
+
+        for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
+        {
+            picoquic_path_t* path = cnx->path[path_index];
+            path->is_cc_data_updated = 0;
+        }
     }
 }
