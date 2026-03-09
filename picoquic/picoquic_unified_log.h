@@ -102,7 +102,7 @@ typedef void (*picoquic_log_new_connection_fn)(picoquic_cnx_t* cnx);
 typedef void (*picoquic_log_close_connection_fn)(picoquic_cnx_t* cnx);
 
 /* log congestion control parameters */
-typedef void (*picoquic_log_cc_dump_fn)(picoquic_cnx_t* cnx, uint64_t current_time);
+typedef void (*picoquic_log_cc_dump_fn)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 
 /* close resource allocated for logging in QUIC context */
 typedef void (*picoquic_log_quic_close)(picoquic_quic_t* quic);

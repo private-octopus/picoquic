@@ -1983,10 +1983,8 @@ void picoquic_textlog_negotiated_alpn(FILE* F, picoquic_cnx_t* cnx, int received
     fprintf(F, "\n");
 }
 
-static void textlog_congestion_state(FILE* F, picoquic_cnx_t* cnx, uint64_t current_time)
+static void textlog_congestion_state(FILE* F, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    picoquic_path_t * path_x = cnx->path[0];
-
     textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
     textlog_time(F, cnx, current_time, "T= ", ", ");
     fprintf(F, "cwin: %d,", (int)path_x->cwin);
@@ -2375,11 +2373,9 @@ static void textlog_close_connection(picoquic_cnx_t* cnx)
 #endif
 }
 
-static void textlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
+static void textlog_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_congestion_state(cnx->quic->F_log, cnx, current_time);
-    }
+    textlog_congestion_state(cnx->quic->F_log, cnx, path_x, current_time);
 }
 
 
