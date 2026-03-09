@@ -316,15 +316,28 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     if (cnx->memlog_call_back != NULL) {
         cnx->memlog_call_back(cnx, cnx->path[0], cnx->memlog_ctx, 0, current_time);
     }
+
     if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_cc_dump(cnx, current_time);
-        }
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_cc_dump(cnx, current_time);
-        }
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_cc_dump(cnx, current_time);
+        picoquic_path_t* path_x;
+        for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
+        {
+            path_x = cnx->path[path_index];
+
+            if (!path_x->is_cc_data_updated) {
+                continue;
+            }
+
+            if (cnx->quic->F_log != NULL) {
+                cnx->quic->text_log_fns->log_cc_dump(cnx, path_x, current_time);
+            }
+            if (cnx->f_binlog != NULL) {
+                cnx->quic->bin_log_fns->log_cc_dump(cnx, path_x, current_time);
+            }
+            if (cnx->qlog_ctx != NULL) {
+                cnx->quic->qlog_fns->log_cc_dump(cnx, path_x, current_time);
+            }
+
+            path_x->is_cc_data_updated = 0;
         }
     }
 }

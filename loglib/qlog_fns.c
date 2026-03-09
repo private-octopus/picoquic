@@ -125,10 +125,10 @@ qlog_fns_path_context_t* qlog_fns_get_path_context(qlog_fns_context_t* ctx, pico
         if (path_ctx->unique_path_id == unique_path_id) {
             return path_ctx;
         }
+        path_ctx_prev = path_ctx;
         path_ctx = path_ctx->next;
         nb_ctx++;
     }
-    path_ctx_prev = path_ctx;
     path_ctx = (qlog_fns_path_context_t*)malloc(sizeof(qlog_fns_path_context_t));
     if (path_ctx != NULL) {
         memset(path_ctx, 0, sizeof(qlog_fns_path_context_t));
@@ -876,38 +876,17 @@ void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_
     }
 }
 
-void qlog_fns_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
+void qlog_fns_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)cnx->qlog_ctx;
 
-    for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
-    {
-        picoquic_path_t* path = cnx->path[path_index];
-        if (!path->is_cc_data_updated) {
-            continue;
-        }
-        else {
-            qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx,
-#if 1
-                /* Bug compatibility with first version */
-                cnx->path[0]->unique_path_id
-#else
-                path->unique_path_id
-#endif
-            );
-            picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-            if (cnx->is_multipath_enabled) {
-                pkt_ctx = &cnx->path[path_index]->pkt_ctx;
-            }
-            if (path_ctx != NULL) {
-                qlog_fns_cc_dump_path(cnx, path, pkt_ctx, ctx, path_ctx, current_time);
-            }
-            path->is_cc_data_updated = 0;
-#if 1
-            /* Bug compatibility with first implementation */
-            break;
-#endif
-        }
+    qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx, path_x->unique_path_id);
+    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+    if (cnx->is_multipath_enabled) {
+        pkt_ctx = &path_x->pkt_ctx;
+    }
+    if (path_ctx != NULL) {
+        qlog_fns_cc_dump_path(cnx, path_x, pkt_ctx, ctx, path_ctx, current_time);
     }
 }
 
