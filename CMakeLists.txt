@@ -12,7 +12,12 @@ project(picoquic
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
-find_package(Threads REQUIRED)
+option(WITH_THREADS "Build with Threads support" ON)
+if(WITH_THREADS)
+    find_package(Threads REQUIRED)
+else()
+    message(FATAL_ERROR "WITH_THREADS=OFF is not yet fully implemented")
+endif()
 
 option(DISABLE_DEBUG_PRINTF "Disable Picoquic debug output" OFF)
 option(ENABLE_ASAN "Enable AddressSanitizer (ASAN) for debugging" OFF)
@@ -385,6 +390,7 @@ endmacro()
 
 add_library(picoquic-core ${PICOQUIC_CORE_HEADERS} ${PICOQUIC_LIBRARY_FILES})
 target_sources(picoquic-core PRIVATE ${PICOQUIC_CORE_HEADERS_PRIVATE})
+add_library(picoquic::picoquic-core ALIAS picoquic-core)
 
 message(STATUS "Defining picoquic-core")
 message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
@@ -394,10 +400,11 @@ target_include_directories(picoquic-core
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
     PUBLIC
-        ${MBEDTLS_INCLUDE_DIRS}
-        picoquic
-        c4/src
-        picoquic_mbedtls)
+        $<BUILD_INTERFACE:${MBEDTLS_INCLUDE_DIRS}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/c4/src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic_mbedtls>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(picoquic-core
     PRIVATE
         ${LIBURING}
@@ -615,16 +622,27 @@ endif()
 
 
 install(TARGETS picoquic-core
+    EXPORT picoquic-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(PICOQUIC_FETCH_PTLS)
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-core.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-fusion.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-openssl.a;${CMAKE_INSTALL_LIBDIR}/libpicotls-minicrypto.a" CACHE PATH "Path of library files")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a")
+    foreach(_ptls_lib ${PTLS_LIBRARIES})
+        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/lib${_ptls_lib}.a")
+    endforeach()
+    set(LIB_PATH "${LIB_PATH}" CACHE PATH "Path of library files")
 
     install(TARGETS ${PTLS_LIBRARIES}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        EXPORT picoquic-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 else()
     set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
 endif()
+
+install(EXPORT picoquic-targets
+    FILE picoquic-targets.cmake
+    NAMESPACE picoquic::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/picoquic)
 
 install(FILES
         ${PICOQUIC_CORE_HEADERS}
