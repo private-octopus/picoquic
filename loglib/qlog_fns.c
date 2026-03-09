@@ -125,10 +125,10 @@ qlog_fns_path_context_t* qlog_fns_get_path_context(qlog_fns_context_t* ctx, pico
         if (path_ctx->unique_path_id == unique_path_id) {
             return path_ctx;
         }
+        path_ctx_prev = path_ctx;
         path_ctx = path_ctx->next;
         nb_ctx++;
     }
-    path_ctx_prev = path_ctx;
     path_ctx = (qlog_fns_path_context_t*)malloc(sizeof(qlog_fns_path_context_t));
     if (path_ctx != NULL) {
         memset(path_ctx, 0, sizeof(qlog_fns_path_context_t));
