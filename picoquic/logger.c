@@ -1987,6 +1987,7 @@ static void textlog_congestion_state(FILE* F, picoquic_cnx_t* cnx, picoquic_path
 {
     textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
     textlog_time(F, cnx, current_time, "T= ", ", ");
+    fprintf(F, "path_id: %" PRIu64 ",", path_x->unique_path_id);
     fprintf(F, "cwin: %d,", (int)path_x->cwin);
     fprintf(F, "flight: %d,", (int)path_x->bytes_in_transit);
     fprintf(F, "nb_ret: %d,", (int)cnx->nb_retransmission_total);
