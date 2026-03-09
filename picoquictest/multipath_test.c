@@ -1840,10 +1840,8 @@ int multipath_trace_test_one(int use_qlog_streaming)
         if (use_qlog_streaming) {
             picoquic_set_qlog(test_ctx->qserver, ".");
         }
-        else {
-            (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
-            picoquic_set_binlog(test_ctx->qserver, ".");
-        }
+        (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
+        picoquic_set_binlog(test_ctx->qserver, ".");
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
