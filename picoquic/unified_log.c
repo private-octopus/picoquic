@@ -318,31 +318,26 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     if (picoquic_cnx_is_still_logging(cnx)) {
-        picoquic_path_t* path;
+        picoquic_path_t* path_x;
         for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
         {
-            path = cnx->path[path_index];
+            path_x = cnx->path[path_index];
 
-            if (!path->is_cc_data_updated) {
+            if (!path_x->is_cc_data_updated) {
                 continue;
             }
 
             if (cnx->quic->F_log != NULL) {
-                cnx->quic->text_log_fns->log_cc_dump(cnx, path, current_time);
+                cnx->quic->text_log_fns->log_cc_dump(cnx, path_x, current_time);
             }
             if (cnx->f_binlog != NULL) {
-                cnx->quic->bin_log_fns->log_cc_dump(cnx, path, current_time);
+                cnx->quic->bin_log_fns->log_cc_dump(cnx, path_x, current_time);
             }
-#if 1
-            /* Bug compatibility with first version */
-            if (cnx->qlog_ctx != NULL && path->unique_path_id == 0) {
-#elif
             if (cnx->qlog_ctx != NULL) {
-#endif
-                cnx->quic->qlog_fns->log_cc_dump(cnx, path, current_time);
+                cnx->quic->qlog_fns->log_cc_dump(cnx, path_x, current_time);
             }
 
-            path->is_cc_data_updated = 0;
+            path_x->is_cc_data_updated = 0;
         }
     }
 }

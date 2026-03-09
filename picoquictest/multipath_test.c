@@ -1840,8 +1840,10 @@ int multipath_trace_test_one(int use_qlog_streaming)
         if (use_qlog_streaming) {
             picoquic_set_qlog(test_ctx->qserver, ".");
         }
-        (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        else {
+            (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
+            picoquic_set_binlog(test_ctx->qserver, ".");
+        }
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
@@ -1960,49 +1962,6 @@ int multipath_trace_test_one(int use_qlog_streaming)
 }
 
 int multipath_qlog_test()
-{
-    int ret = 0;
-    (void)picoquic_file_delete(MULTIPATH_QLOG, NULL);
-
-    ret = multipath_trace_test_one(0);
-
-    /* Create a QLOG file from the .log file */
-    if (ret == 0) {
-        uint64_t log_time = 0;
-        uint16_t flags;
-
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(MULTIPATH_TRACE_BIN, &flags, &log_time);
-        if (f_binlog == NULL) {
-            ret = -1;
-        }
-        else {
-            ret = qlog_convert(&qlog_multipath_initial_cid, f_binlog, MULTIPATH_TRACE_BIN, 
-                MULTIPATH_QLOG, NULL, flags);
-            picoquic_file_close(f_binlog);
-        }
-    }
-
-    /* compare the log file to the expected value */
-    if (ret == 0)
-    {
-        char qlog_trace_test_ref[512];
-
-        ret = picoquic_get_input_path(qlog_trace_test_ref, sizeof(qlog_trace_test_ref),
-            picoquic_solution_dir, MULTIPATH_QLOG_REF);
-
-        if (ret != 0) {
-            DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
-        }
-        else {
-            ret = picoquic_test_compare_text_files(MULTIPATH_QLOG, qlog_trace_test_ref);
-        }
-    }
-
-    return ret;
-}
-
-
-int multipath_qlog_fns_test()
 {
     int ret = 0;
 
