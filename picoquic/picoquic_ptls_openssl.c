@@ -34,7 +34,6 @@
 #include "picoquic_utils.h"
 
 #include "picoquic_crypto_provider_api.h"
-
 #ifdef PTLS_WITHOUT_OPENSSL
 void picoquic_openssl_load(int unload)
 {
@@ -44,7 +43,9 @@ void picoquic_openssl_load(int unload)
 #include "picotls/openssl.h"
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#if !defined(OPENSSL_NO_ENGINE)
 #include <openssl/engine.h>
+#endif
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
