@@ -886,28 +886,27 @@ void qlog_fns_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         if (!path->is_cc_data_updated) {
             continue;
         }
-        else {
-            qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx,
+
+        qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx,
 #if 1
-                /* Bug compatibility with first version */
-                cnx->path[0]->unique_path_id
+            /* Bug compatibility with first version */
+            cnx->path[0]->unique_path_id
 #else
-                path->unique_path_id
+            path->unique_path_id
 #endif
-            );
-            picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-            if (cnx->is_multipath_enabled) {
-                pkt_ctx = &cnx->path[path_index]->pkt_ctx;
-            }
-            if (path_ctx != NULL) {
-                qlog_fns_cc_dump_path(cnx, path, pkt_ctx, ctx, path_ctx, current_time);
-            }
-            path->is_cc_data_updated = 0;
-#if 1
-            /* Bug compatibility with first implementation */
-            break;
-#endif
+        );
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+        if (cnx->is_multipath_enabled) {
+            pkt_ctx = &cnx->path[path_index]->pkt_ctx;
         }
+        if (path_ctx != NULL) {
+            qlog_fns_cc_dump_path(cnx, path, pkt_ctx, ctx, path_ctx, current_time);
+        }
+        path->is_cc_data_updated = 0;
+#if 1
+        /* Bug compatibility with first implementation */
+        break;
+#endif
     }
 }
 

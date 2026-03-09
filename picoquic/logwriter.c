@@ -1169,7 +1169,10 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         if (!path->is_cc_data_updated) {
             continue;
         }
-        path->is_cc_data_updated = 0;
+        if (cnx->qlog_ctx == NULL)
+        {
+            path->is_cc_data_updated = 0;
+        }
 
         /* Common chunk header */
         /* TODO: understand how to provide per path data -- most probably do a loop on
