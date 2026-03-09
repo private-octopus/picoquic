@@ -333,7 +333,12 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             if (cnx->f_binlog != NULL) {
                 cnx->quic->bin_log_fns->log_cc_dump(cnx, path, current_time);
             }
-            if (cnx->qlog_ctx != NULL && path->unique_path_id == 0) { /* Bug compatibility with first version */
+#if 1
+            /* Bug compatibility with first version */
+            if (cnx->qlog_ctx != NULL && path->unique_path_id == 0) {
+#elif
+            if (cnx->qlog_ctx != NULL) {
+#endif
                 cnx->quic->qlog_fns->log_cc_dump(cnx, path, current_time);
             }
 
