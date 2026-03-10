@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:h";
 #endif
 int config_option_letters_test()
 {
@@ -127,7 +127,9 @@ static picoquic_quic_config_t param1 = {
     "test.example.com",
     NULL, /* ech_target */
     0, /* ech_target_len */
-    1000001 /* flow_control_max */
+    1000001, /* flow_control_max */
+    "192.0.2.1", /* Preferred Address V4 */
+    "2001:db8::1", /* Preferred Address V6 */
 };
 
 static char const* config_argv1[] = {
@@ -161,6 +163,8 @@ static char const* config_argv1[] = {
     "-E", "ech_key.pem", "ech_config.pem",
     "-y", "test.example.com",
     "-Z", "1000001",
+    "-4", "192.0.2.1",
+    "-6", "2001:db8::1",
     NULL
 };
 
@@ -224,7 +228,9 @@ static picoquic_quic_config_t param2 = {
     NULL, /* ECH public name */
     (uint8_t *)ech_test_config_bin, /* ech_target */
     sizeof(ech_test_config_bin), /* ech_target_len */
-    0 /* flow control max */
+    0, /* flow control max */
+    NULL,
+    NULL,
 };
 
 static const char* config_argv2[] = {
@@ -445,7 +451,8 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
     ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
     ret |= config_test_compare_uint64("flow_control_max", expected->flow_control_max, actual->flow_control_max);
-
+    ret |= config_test_compare_string("preferred_address_v4", expected->preferred_address_v4, actual->preferred_address_v4);
+    ret |= config_test_compare_string("preferred_address_v6", expected->preferred_address_v6, actual->preferred_address_v6);
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
             ret = -1;

@@ -48,4 +48,6 @@ Picoquic options:
   -y public_name  Create an ECH configuration before applying the `ech_s` parameter.
   -K base64       ECH configuration for the client connection, base64 encoded.
   -Z bytes        Set the flow control's initial max data.
+  -4 ip[:port]    Preferred address for v4 connections.
+  -6 ipv6[:port]  Preferred address for v6 connections.
   -h              This help message

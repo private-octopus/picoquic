@@ -106,6 +106,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
     { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded."},
     { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
+    { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
+    { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -482,6 +484,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_Preferred_V4:
+        ret = config_set_string_param(&config->preferred_address_v4, params, nb_params, 0);
+        break;
+    case picoquic_option_Preferred_V6:
+        ret = config_set_string_param(&config->preferred_address_v6, params, nb_params, 0);
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -1047,6 +1055,12 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     }
     if (config->ech_target != NULL) {
         free((void*)config->ech_target);
+    }
+    if (config->preferred_address_v4 != NULL) {
+        free((void*)config->preferred_address_v4);
+    }
+    if (config->preferred_address_v6 != NULL) {
+        free((void*)config->preferred_address_v6);
     }
     picoquic_config_init(config);
 }
