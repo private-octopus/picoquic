@@ -706,6 +706,9 @@ typedef struct st_picoquic_quic_t {
 #ifdef BBRExperiment
     bbr_exp bbr_exp_flags;
 #endif
+#ifdef PICOQUIC_WITH_THREAD_CHECK
+    uint64_t thread_id;
+#endif
 
 } picoquic_quic_t;
 
@@ -2124,6 +2127,27 @@ typedef struct st_picomask_fns_t {
         size_t* consumed);
 
 } picomask_fns_t;
+
+/*
+* Multi-threading debugging support.
+* By compiling with the macro PICOQUIC_WITH_THREAD_CHECK, the code will check that
+* the thread calling a picoquic API is the same the same as the socket loop
+* thread handling the quic context of the connection. If there is a mismatch,
+* the code will print a warning message and perform a debug break.
+*/
+#ifdef PICOQUIC_WITH_THREAD_CHECK
+uint64_t picoquic_current_thread_id(void);
+void picoquic_debug_multithread_check(picoquic_quic_t* quic);
+void picoquic_debug_multithread_set(picoquic_quic_t* quic);
+void picoquic_debug_multithread_disable(picoquic_quic_t* quic);
+#define PICOQUIC_THREAD_CHECK(quic) picoquic_debug_multithread_check(quic)  
+#define PICOQUIC_THREAD_SET_CHECK(quic) picoquic_debug_multithread_set(quic) 
+#define PICOQUIC_THREAD_DISABLE_CHECK(quic) picoquic_debug_multithread_disable(quic)
+#else 
+#define PICOQUIC_THREAD_CHECK(quic)
+#define PICOQUIC_THREAD_SET_CHECK(quic)
+#define PICOQUIC_THREAD_DISABLE_CHECK(quic)
+#endif
 
 #ifdef __cplusplus
 }

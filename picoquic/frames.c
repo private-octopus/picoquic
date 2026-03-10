@@ -5276,6 +5276,8 @@ uint8_t * picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int
 int picoquic_queue_datagram_frame(picoquic_cnx_t * cnx, size_t length, const uint8_t * src)
 {
     int ret = 0;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
     if (length > PICOQUIC_DATAGRAM_QUEUE_CAUTIOUS_LENGTH) {
         if (length > cnx->local_parameters.max_datagram_frame_size ||
             length > cnx->remote_parameters.max_datagram_frame_size ||

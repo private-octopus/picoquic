@@ -58,6 +58,7 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
 
 void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     if (cnx->quic->F_log != NULL) {
         cnx->quic->text_log_fns->log_app_message(cnx, fmt, vargs);
     }
@@ -73,6 +74,7 @@ void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list va
 
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
 {
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     if (cnx->quic->F_log != NULL) {
         va_list args;
         va_start(args, fmt);
