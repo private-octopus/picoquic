@@ -245,6 +245,7 @@ int qlog_auto_test();
 int qlog_error_test();
 int qlog_trace_test();
 int qlog_trace_ecn_test();
+int qlog_trace_parallel_test();
 int qlog_fns_test();
 int qlog_fns_ecn_test();
 int perflog_test();

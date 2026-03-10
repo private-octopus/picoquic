@@ -30,6 +30,7 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquic_binlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_logger.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
@@ -887,15 +888,17 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
          /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
-        picoquic_set_binlog(quic, config->bin_dir);
+        if (config->bin_dir != NULL) {
+            picoquic_set_binlog(quic, config->bin_dir);
+        }
 
-        /* We cannot set qlog here, because of the dependency on libraries
-         * that are not linked with picoquic by default. The application
-         * will have to call:
-         *    picoquic_set_qlog(quic, config->qlog_dir);
-         */
+        if (config->qlog_dir != NULL) {
+            picoquic_set_qlog(quic, config->qlog_dir);
+        }
 
-        picoquic_set_textlog(quic, config->log_file);
+        if (config->log_file != NULL) {
+            picoquic_set_textlog(quic, config->log_file);
+        }
 
         picoquic_set_log_level(quic, config->use_long_log);
 
