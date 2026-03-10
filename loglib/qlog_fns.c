@@ -988,6 +988,7 @@ void qlog_fns_close_connection(picoquic_cnx_t* cnx)
         path_ctx = next;
     }
     free(ctx);
+    cnx->qlog_ctx = NULL;
 }
 
 /* close resource allocated for logging in QUIC context */
