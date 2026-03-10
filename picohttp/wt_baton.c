@@ -775,6 +775,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             * Then, callback the application. That means the WT app context
             * should be obtained from the path app context, etc.
             */
+            (void)picowt_select_wt_protocol(stream_ctx, PICOWT_BATON_ALPN_FILTER);
             ret = wt_baton_accept(cnx, bytes, length, stream_ctx, path_app_ctx);
             break;
         case picohttp_callback_connect_refused:
@@ -783,11 +784,27 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             * Do we need an error code? Maybe pass as bytes + length.
             * Application should clean up the app context.
             */
+            picoquic_log_app_message(cnx, "WT Connection refused on stream %" PRIu64 ", status= %d",
+                stream_ctx->stream_id,
+                stream_ctx->ps.stream_state.header.status);
             break;
         case picohttp_callback_connect_accepted: /* Connection request was accepted by peer */
             /* The response from the server has arrived and it is positive.
              * The application can start sending data.
              */
+            picoquic_log_app_message(cnx, "WT Connection accepted on stream %" PRIu64 ", protocol= %s",
+                stream_ctx->stream_id,
+                stream_ctx->ps.stream_state.header.wt_protocol != NULL ? (char const*)stream_ctx->ps.stream_state.header.wt_protocol : "none");
+            if (stream_ctx->ps.stream_state.header.wt_protocol != NULL){
+                /* For test purpose, copy the result of the negotiation in the baton context. */
+                wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+                size_t wt_protocol_len = strlen((char const*)stream_ctx->ps.stream_state.header.wt_protocol);
+                if (wt_protocol_len > 254) {
+                    wt_protocol_len = 254;
+                }
+                memcpy(baton_ctx->wt_protocol, stream_ctx->ps.stream_state.header.wt_protocol, wt_protocol_len);
+                baton_ctx->wt_protocol[wt_protocol_len + 1] = 0;
+            }
             break;
         case picohttp_callback_post_fin:
         case picohttp_callback_post_data:

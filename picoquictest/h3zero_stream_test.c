@@ -544,7 +544,7 @@ uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
     }
     if (bytes != NULL) {
         bytes = h3zero_create_response_header_frame_ex(bytes, bytes_max,
-            h3zero_content_type_text_html, "test client data");
+            h3zero_content_type_text_html, "test client data", NULL);
     }
     if (bytes != NULL) {
         size_t sz = bytes - data_byte;

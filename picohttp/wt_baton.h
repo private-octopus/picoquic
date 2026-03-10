@@ -50,6 +50,10 @@ extern "C" {
 #define WT_BATON_VERSION 0
 #define WT_BATON_MAX_COUNT 256
 #define WT_BATON_MAX_LANES 256
+    /* WT Protocol */
+#define PICOWT_BATON_ALPN "devious-baton-00"
+#define PICOWT_BATON_ALPN_AVAILABLE "wrong-end-baton, devious-baton-00"
+#define PICOWT_BATON_ALPN_FILTER "good-end-baton, devious-baton-00"
 
     /* Wt_baton context:
      *
@@ -121,6 +125,7 @@ extern "C" {
         uint8_t baton_datagram_send_next;
         uint64_t nb_baton_bytes_received;
         uint64_t nb_baton_bytes_sent;
+        char wt_protocol[256];
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {

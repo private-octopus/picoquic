@@ -53,7 +53,7 @@
 */
 int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
-    uint8_t* extra, size_t extra_length);
+    char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
 
 wt_baton_app_ctx_t baton_test_ctx = {
     15
@@ -161,12 +161,12 @@ static int picowt_baton_test_one(
                 uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
                 ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
                     baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, grease_capsule, 12);
+                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
             }
             else {
                 ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
                     baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx);
+                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
             }
         }
 
@@ -238,6 +238,11 @@ static int picowt_baton_test_one(
         if (ret == 0 && test_id == 5 && baton_ctx.lanes[0].first_baton != 33) {
             DBG_PRINTF("On URI test, first baton was %d instead of 33",
                 baton_ctx.lanes[0].first_baton);
+            ret = -1;
+        }
+        if (ret == 0 && test_id == 1 && strcmp(baton_ctx.wt_protocol, PICOWT_BATON_ALPN) != 0) {
+            DBG_PRINTF("Negotiated WT protocol was %s instead of %s",
+                baton_ctx.wt_protocol, PICOWT_BATON_ALPN);
             ret = -1;
         }
     }
