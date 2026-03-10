@@ -4945,7 +4945,7 @@ const uint8_t* picoquic_decode_path_challenge_frame(picoquic_cnx_t* cnx, const u
                 /* We do not expect path challenges, unless they are on the default path
                 * and match the preferred address.
                  */
-                if (cnx->local_parameters.prefered_address.is_defined) {
+                if (cnx->local_parameters.preferred_address.is_defined) {
                     /* TODO: verify that this is going to the preferred address. */
                     cnx->local_parameters.migration_disabled = 0;
                     picoquic_log_app_message(cnx, "Enabling migration after preferred address validation on path %" PRIu64, path_x->unique_path_id);

@@ -657,7 +657,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
                 if (cb_ctx->cnx_client->is_multipath_enabled || cb_ctx->force_migration ||
-                    cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined)
+                    cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined)
                 {
                     if (cb_ctx->multipath_initiated == 0) {
                         int is_already_allowed = 0;
@@ -673,7 +673,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                     }
                 }
                 /* Track the migration to server preferred address */
-                if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
+                if (cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(
                         (struct sockaddr*) & cb_ctx->server_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->first_tuple->peer_addr) != 0) {
                         fprintf(stdout, "Migrated to server preferred address!\n");
@@ -701,7 +701,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 if (cb_ctx->force_migration && cb_ctx->migration_started == 0 && cb_ctx->address_updated &&
                     picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
                     (cb_ctx->cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL || cb_ctx->force_migration == 1) &&
-                    (!cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
+                    (!cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined ||
                         cb_ctx->migration_to_preferred_finished)) {
                     int mig_ret = 0;
                     cb_ctx->migration_started = 1;

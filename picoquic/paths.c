@@ -698,7 +698,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             * path-migration. This is bound to be ambiguous, but we can use a simple heuristic:
             *
             * - if multipath is enabled, the old style path migration is supported but
-            *   discouraged. It is mostly there to support "migration to a prefered
+            *   discouraged. It is mostly there to support "migration to a preferred
             *   address", and there is no much harm to always treat that as a NAT
             *   rebinding. Maybe make an exception if the destination address is
             *   one of the preferred addresses.
