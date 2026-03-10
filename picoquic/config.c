@@ -870,6 +870,9 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_cwin_max(quic, config->cwin_max);
         picoquic_set_default_address_discovery_mode(quic, config->address_discovery_mode);
 
+        picoquic_set_preferred_address(&quic->default_tp.preferred_address,
+            config->preferred_address_v4, config->preferred_address_v6, 0);
+
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
                 fprintf(stderr, "No token file present. Will create one as <%s>.\n", config->token_file_name);

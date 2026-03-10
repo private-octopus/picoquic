@@ -737,6 +737,10 @@ int config_quic_test_one(picoquic_quic_config_t* config)
         {
             ret = -1;
         }
+        if ((config->preferred_address_v4 != NULL || config->preferred_address_v6 != NULL) &&
+            !quic->default_tp.preferred_address.is_defined) {
+            ret = -1;
+        }
         picoquic_free(quic);
     }
 
