@@ -1865,6 +1865,14 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+
+        TEST_METHOD(qlog_trace_parallel)
+        {
+            int ret = qlog_trace_parallel_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_fns)
         {
             int ret = qlog_fns_test();

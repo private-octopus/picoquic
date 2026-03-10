@@ -4006,6 +4006,7 @@ int tls_api_retry_test_one(int large_client_hello)
         if (large_client_hello) {
             test_ctx->cnx_client->test_large_chello = 1;
         }
+        picoquic_set_qlog(test_ctx->qclient, ".");
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
 
@@ -8952,7 +8953,7 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
     }
 }
 
-int qlog_trace_test_one(uint8_t recv_ecn)
+int qlog_trace_test_one(uint8_t recv_ecn, int parallel)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -8975,6 +8976,9 @@ int qlog_trace_test_one(uint8_t recv_ecn)
     if (ret == 0) {
         test_ctx->recv_ecn_client = recv_ecn;
         test_ctx->recv_ecn_server = recv_ecn;
+        if (parallel) {
+            picoquic_set_binlog(test_ctx->qserver, ".");
+        }
         picoquic_set_qlog(test_ctx->qserver, ".");
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
@@ -9047,13 +9051,19 @@ int qlog_trace_test_one(uint8_t recv_ecn)
 
 int qlog_trace_test()
 {
-    return qlog_trace_test_one(0);
+    return qlog_trace_test_one(0, 0);
 }
 
 int qlog_trace_ecn_test()
 {
-    return qlog_trace_test_one(0x02);
+    return qlog_trace_test_one(0x02, 0);
 }
+
+int qlog_trace_parallel_test()
+{
+    return qlog_trace_test_one(0, 1);
+}
+
 
 #define QLOG_FNS_QLOG "0102030405060708.server.qlog"
 
