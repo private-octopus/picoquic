@@ -794,3 +794,111 @@ int config_usage_test()
 
     return ret;
 }
+
+/* Test the parsing of preferred addresses.
+ */
+
+typedef struct st_test_preferred_addr_t {
+    char const* test_name;
+    char const* v4_text;
+    char const* v6_text;
+    uint16_t port;
+    int is_valid;
+    picoquic_tp_preferred_address_t preferred_address;
+} test_preferred_addr_t;
+
+test_preferred_addr_t test_preferred_address_cases[] = {
+    {
+        "none",
+        NULL,
+        NULL,
+        0,
+        1,
+        {0}
+    },
+    {
+        "v4_only",
+        "192.0.2.1",
+        NULL,
+        4433,
+        1,
+        {
+            1,
+            { 192, 0, 2, 1 },
+            4433,
+            { 0 },
+            0
+        }
+    },
+    {
+        "v6_only",
+        NULL,
+        "2001:db8::1",
+        4433,
+        1,
+        {
+            1,
+            { 0 },
+            0,
+            { 0x20,  0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+            4433
+        }
+    },
+    {
+        "both",
+        "192.0.2.1",
+        "2001:db8::1",
+        4433,
+        1,
+        {
+            1,
+            { 192, 0, 2, 1 },
+            4433,
+            { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+            4433
+        }
+    },
+    {
+        "bad v4",
+        "192.a.b.c",
+        "2001:db8::1",
+        4433,
+        0,
+        { 0}
+    },
+    {
+        "bad v6",
+        "192.0.2.1",
+        "2001:local",
+        4433,
+        0,
+        { 0 }
+    }
+};
+
+int config_preferred_test()
+{
+    int ret = 0;
+    for (size_t i = 0; ret == 0 && i < sizeof(test_preferred_address_cases) / sizeof(test_preferred_addr_t); i++) {
+        picoquic_tp_preferred_address_t preferred_address;
+        memset(&preferred_address, 0, sizeof(preferred_address));
+        int is_valid = (picoquic_set_preferred_address(&preferred_address, test_preferred_address_cases[i].v4_text,
+            test_preferred_address_cases[i].v6_text, test_preferred_address_cases[i].port) == 0);
+        if (is_valid != test_preferred_address_cases[i].is_valid) {
+            DBG_PRINTF("Test case %s: expected validity %d, got %d", test_preferred_address_cases[i].test_name,
+                test_preferred_address_cases[i].is_valid, is_valid);
+            ret = -1;
+        }
+        else if (is_valid) {
+            if (preferred_address.is_defined != test_preferred_address_cases[i].preferred_address.is_defined ||
+                memcmp(test_preferred_address_cases[i].preferred_address.ipv4Address, preferred_address.ipv4Address, 4) != 0 ||
+                test_preferred_address_cases[i].preferred_address.ipv4Port != preferred_address.ipv4Port ||
+                memcmp(test_preferred_address_cases[i].preferred_address.ipv6Address, preferred_address.ipv6Address, 16) != 0 ||
+                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port != 0) {
+                DBG_PRINTF("Test case %s: expected and actual preferred addresses differ", test_preferred_address_cases[i].test_name);
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
