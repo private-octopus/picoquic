@@ -10,38 +10,64 @@ of "create just one"? Deployments would be easier if picoquic could manage
 all the complexity of handling load balancing between multiple threads,
 instead of leaving that to each application.
 
-The first step with any big question like that is to document the issue
-and explore possible solutions. That's what this document does. Or attempts to do.
+The initial study concluded that we need to support three scenarios for
+parallelism: multiple threads in a single process, multiple processes, and
+multiple hosts. To support these scenarios, we are developing a series of
+features:
+
+- verification that the application is properly using picoquic threads
+- management of preferred address migartion to pin a connection to a
+  thread or a process
 
 
-# Parallelism by connection
+# Supported architecture
 
-The simplest design is to handle paraellism at the "connection" level.
-The connection object (`picoquic_cnx_t`) and the related path object
-(`picoquic_path_t`) hold much of the state variables enabling the
-handling of the connection.
+Picoquic aims to support three variants of parallelism: multiple threads
+in a single process, multiple processes, and multiple hosts. Whatever
+the mechanism, external peers see a single system, a single combination
+of IP address and UDP port. They send packet to that particular IP address
+and UDP port. Mechanisms like load balancers, anycast routing and sharing
+of a port between multiple threads are used to direct the incoming packets
+to one of the threads. We support that requirement by letting
+threads open the shared UDP port using option like
+`SO_REUSE`.
 
-We briefly considered a "pipeline" option, in which CPU intensive functions
-like send and receive packets or perform crypto would be delegated to a set of
-of threads, while the "main" object would be single threaded. The pipeline option
-would have some advantages, like guaranteeing that the application level API do
-not change, or enabling high performance even if the system is only handling
-a small number of connections. One downside is that the "main" thread would
-become a bottleneck, but we could worry later about parallelizing that thread.
-However, the remaining downside is that this is effectively "packet level"
-parallelism, requiring context switching or message passing for each packet.
-These context switchings can easily negate any potential performance
-gain in the architecture.
+We want to ensure "connection parallelism", in which a given connection
+is always processed by the same thread. This implies ensuring that all
+packets sent to the external IP and port for a given connection are
+routed to the same thread -- if they were not, the connection would break.
+We support that requirement with three features:
 
-We also considered parallelism at lower levels, such as "paths" or "streams",
-but handling paths, streams or connections in different streams would create
-contentions on the connection context, and require some systems of locks
-that could also easily negate the performance gains.
+- support for structured connection IDs as defined in the
+[QUIC LB draft](https://datatracker.ietf.org/doc/draft-ietf-quic-load-balancers/).
 
-In what follows, we will consier three forms of parallelism: multiple threads
-in a single process, multiple processes, and multiple hosts.
+- on Linux systems, support for EBPF scripts to direct incoming packets to the right thread
+  based on the connection ID.
+
+- support for preferred address migration, allowing the connection to be migrated
+  to an address and port uniquely used by the thread handling the connection.
+
+Structured connection IDs and EBPF should ensure that the routing of packets to the
+desired socket will remain stable for the duration of the connection. However,
+few load balancers are known to support QUIC LB; instead, they tend to route
+packets based on hashes of the source and destination addresses and ports
+according to hash buckets. These hash buckets tend to change over time.
+Preferred address migration operates just after the handshake completes,
+thus reducing the stability requirement from "the duration of the connection"
+to "the duration of the handshake."
+
+
 
 ## One process, multiple threads
+
+Applications typically require centralized functions, such as a common cache,
+or an application data base. The individual processes and threads communicate
+with this centralized function using inter process communication such as
+pipes or local sockets. Developers may want to reduce the requirement for
+interprocess communication by running multiple threads in a single
+process. Each thread will manage a set of connections, and use
+in-process mechanisms to communicate with the application.
+
 
 ~~~
               +----------------+
@@ -59,79 +85,27 @@ in a single process, multiple processes, and multiple hosts.
                     +--------------------+
 ~~~
 
-The basic architecture would be to have multiple network threads. Each network
-threads manages a set of connections, and holds the "connection contexts" for
-these connections. All these connections access a "shared socket".
+Picoquic handles paralellism at the "connection" level. Each thread
+manages a QUIC context (`picoquic_quic_t`), a set of connection
+objects created in this context (`picoquic_cnx_t`) and the related path object
+(`picoquic_path_t`). The picoquic API as defined in `picoquic.h` is
+used to interact with these objects. The API is not thread safe:
+it assumes that all API functions originate from the same thread
+that manages the connection contexts.
+
+(say how much this is dangerous and what we can do)
+
+## Preferred address migration and firewalls
+
+Preferred address migration looks attractive, but we have to be concerned
+with firewall rules. Servers may well be located behind firewalls.
+AWS deployments, for example, require that port
+numbers be explicitly open in the firewall. We could imagine opening a
+range of port numbers, but then we would need to ensure that the
+nework threads use port numbers in that range.
 
 
-## Multiple processes
 
-This paper is focused on parallelism between threads in a single process.
-We know of existing deployments that instead use parallelism between
-multiple processes.
-
-
-~~~
-              +--------------------------------+
-              |             +-----------------+|
-              | Application | Network loop    ||
-     +------->|             | Shared UDP port +----> packets out 
-     |        |             |                 +<---- packets in
-     |        |             +-----------------+|
-     |        +--------------------------------+
-     |        ...
-     |        ...
-     |        ...
-     |        +--------------------------------+
-     |        |             +-----------------+|
-     |     +->| Application | Network loop    ||
-     |     |  |             | Shared UDP port +----> packets out
-     |     |  |             |                 +<---- packets in
-     |     |  |             +-----------------+|
-     |     |  +--------------------------------+
-     v     v
- +---------------+
- | Coordinating  |
- | process       |      
- +---------------+
-~~~
-
-Each of the processes includes a "network loop" and its own application
-code. These processes share a single port, such as all listening and sending
-on UDP port 443. If applications need to share data or otherwise
-synchronize, they will typically exchange messages with a coordinating
-process.
-
-In the most simple cases, such as a static web server, the application
-will just read and write data from and to local storage, the need for
-coordination is minimal, and the architecture works very well.
-In more complex cases, the processes will need to share much more information,
-often going through a "back end" service that manages the data base.
-
-The "multi thread" architecture allows these coordination to happen
-within a single process, allowing for example access to shared memory.
-This may be more efficient in applications like a "media over QUIC"
-relay, in which multiple threads share and dynamically update a
-"media cache".
-
-## Multiple Hosts
-
-Both the thread level and process level parallelism are single CPU
-solutions. Host CPUs are often multicore. The goal is to create as
-many threads or as many processes as available cores on the CPU,
-so as to fully use the CPU's resource. If the application demands
-more resource than what a single CPU can provide, we will need to
-consider load balancing across multiple hosts.
-
-In these solutions, a load balancer is typically used to direct
-incoming packets to the relevant server, or possibly to the
-relevant process on a server. Many load balancers operate
-at the UDP level, assigning incoming packets to a specific
-server based on a hash of the IP and UDP headers. QUIC aware
-load balancers assign packets to servers based on the Destination
-CID field of the header. An example of such specification
-can be found in the
-[QUIC LB draft](https://datatracker.ietf.org/doc/draft-ietf-quic-load-balancers/).
 
 # Sharing the UDP port
 
@@ -276,42 +250,6 @@ The first octet is defined as:
    }
 ~~~
 
-## Long term sharing and preferred address
-
-The classic load sharing relies on anycast routing or hash based load balancing.
-Both keep the routing stable enough in the short term, but are known to change
-over time. Hash based load balancing buckets get redefined to better balance the
-load, anycast routing changes as the network topology evolve. QUIC has a
-solution: the server can indicate a "preferred address" during the connection
-handshake, and the client can migrate the connection to that address once
-the handshake completes.
-
-We could certainly support the preferred address mechanism in the picoquic
-socket loop. The network thread would need to open two sockets: one
-for the shared UDP port, and one for an instance specific connection.
-This will ensure that the connection survices any change in balancing
-or routing.
-
-Preferred address migration has a downside. It introduces overhead, and
-possibly some additional delays at the beginning of the connection. This
-is mostly an issue if the traffic is made of many very short connections,
-as for example in a simple web server. It is much less of an issue
-if the connections last a long time, as for example media over QUIC.
-
-We noticed that if the QUIC instance manages both incoming "server"
-connection and outgoing "client" connection, having an instance-specific
-socket helps manage the client connections. Once we have made the design
-choice of supporting outgoing connections, it makes sense to also
-support preferred address migration for the server connections.
-
-### Preferred address migration and firewalls
-
-Preferred address migration looks attractive, but we have to be concerned
-with firewall rules. Servers may well be located behind firewalls.
-AWS deployments, for example, require that port
-numbers be explicitly open in the firewall. We could imagine opening a
-range of port numbers, but then we would need to ensure that the
-nework threads use port numbers in that range.
 
 # Managing tokens and tickets
 
