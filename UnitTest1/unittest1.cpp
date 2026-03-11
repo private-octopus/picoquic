@@ -3108,6 +3108,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(config_set_port) {
+            int ret = config_set_port_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_integer) {
             int ret = h3zero_integer_test();
 

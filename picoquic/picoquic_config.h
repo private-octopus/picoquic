@@ -94,6 +94,8 @@ typedef struct st_picoquic_quic_config_t {
     char const* qlog_dir;
     char const* performance_log;
     int server_port;
+    int local_port;
+    int is_port_shared;
     int dest_if;
     int mtu_max;
     int cnx_id_length;

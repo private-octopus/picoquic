@@ -76,6 +76,8 @@ static picoquic_quic_config_t param1 = {
     "/data/qlog/", /* char const* qlog_dir; */
     "/data/performance_log.csv", /* char const* performance_log; */
     4433, /* int server_port; */
+    12345, /* int local_port; */
+    1, /* int is_port_shared; */
     1, /* int dest_if; */
     1536, /* int mtu_max; */
     -1, /* int cnx_id_length; */
@@ -178,6 +180,8 @@ static picoquic_quic_config_t param2 = {
     NULL, /* char const* qlog_dir; */
     NULL, /* char const* performance_log; */
     0, /* int server_port; */
+    0, /* int local_port; */
+    0, /* int is_port_shared; */
     0, /* int dest_if; */
     0, /* int mtu_max; */
     5, /* int cnx_id_length; */
@@ -900,6 +904,62 @@ int config_preferred_test()
                 memcmp(test_preferred_address_cases[i].preferred_address.ipv6Address, preferred_address.ipv6Address, 16) != 0 ||
                 test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port != 0) {
                 DBG_PRINTF("Test case %s: expected and actual preferred addresses differ", test_preferred_address_cases[i].test_name);
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+/*
+* test of the port setting option.
+*/
+
+int config_set_port(picoquic_quic_config_t* config, char const* port_string);
+
+
+typedef struct st_test_set_port_t {
+    char const* port_string;
+    int is_valid;
+    uint16_t server_port;
+    uint16_t local_port;
+    int is_port_shared;
+} test_set_port_t;
+
+test_set_port_t test_set_port_cases[] = {
+    { "4433", 1, 4433, 0, 0 },
+    { "443:4434", 1, 443, 4434, 0 },
+    { "S4433", 1, 4433, 0, 1 },
+    { "S443:4434", 1, 443, 4434, 1 },
+    { "", 1, 0, 0, 0 },
+    { "0", 1, 0, 0, 0 },
+    { "65535", 1, 65535, 0, 0 },
+    { "S65535", 1, 65535, 0, 1 },
+    { "S65534:65535", 1, 65534, 65535, 1 },
+    { "65536", 0, 0, 0, 0 },
+    { "-1", 0, 0, 0, 0 },
+    { "abc", 0, 0, 0, 0 },
+    { "4433:abc", 0, 0, 0, 0 },
+    { "abc:4433", 0, 0, 0, 0 },
+    { "S4433:abc", 0, 0, 0, 0 },
+    { "Sabc:4433", 0, 0, 0, 0 },
+};
+
+int config_set_port_test()
+{
+    int ret = 0;
+    for (size_t i = 0; ret == 0 && i < sizeof(test_set_port_cases) / sizeof(test_set_port_t); i++) {
+        picoquic_quic_config_t config = { 0 };
+        int is_valid = (config_set_port(&config, test_set_port_cases[i].port_string) == 0);
+        if (is_valid != test_set_port_cases[i].is_valid) {
+            DBG_PRINTF("Test case %zu: expected validity %d, got %d", i, test_set_port_cases[i].is_valid, is_valid);
+            ret = -1;
+        }
+        else if (is_valid) {
+            if (config.server_port != test_set_port_cases[i].server_port ||
+                config.local_port != test_set_port_cases[i].local_port ||
+                config.is_port_shared != test_set_port_cases[i].is_port_shared) {
+                DBG_PRINTF("Test case %zu: expected and actual port settings differ", i);
                 ret = -1;
             }
         }

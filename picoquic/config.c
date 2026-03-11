@@ -223,6 +223,44 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
     return v;
 }
 
+int config_set_port(picoquic_quic_config_t* config, char const * port_string)
+{
+    int ret = 0;
+    char opval_buffer[256];
+    char const* p = port_string;
+    int is_port_shared = 0;
+    int p1 = 0;
+    int p2 = 0;
+
+    if (*p == 'S') {
+        is_port_shared = 1;
+        p++;
+    }
+    while (*p >= '0' && *p <= '9') {
+        p1 *= 10;
+        p1 += (*p - '0');
+        p++;
+    }
+    if (*p == ':') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            p2 *= 10;
+            p2 += (*p - '0');
+            p++;
+        }
+    }
+    if (*p != 0 || p1 < 0 || p1 > 65535 || p2 < 0 || p2 > 65535) {
+        fprintf(stderr, "Invalid port: %s\n", config_optval_string(opval_buffer, 256, port_string, strlen(port_string)));
+        ret = -1;
+    }
+    else {
+        config->server_port = (uint16_t)p1;
+        config->local_port = p2;
+        config->is_port_shared = is_port_shared;
+    }
+    return ret;
+}
+
 static int config_set_option(option_table_line_t* option_desc, option_param_t* params, int nb_params, picoquic_quic_config_t* config)
 {
     int ret = 0;
