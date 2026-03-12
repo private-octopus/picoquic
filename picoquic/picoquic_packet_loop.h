@@ -128,9 +128,7 @@ typedef struct st_picoquic_packet_loop_options_t {
     unsigned int provide_alt_port : 1; /* Used for simulating multipath or migrations. */
 } picoquic_packet_loop_options_t;
 
-/* Version 2 of packet loop, works in progress.
-* Parameters are set in a struct, for future
-* extensibility.
+/* Version 2 of packet loop, obsoleted by v3
  */
 typedef struct st_picoquic_packet_loop_param_t {
     uint16_t local_port; /* Default port for outgoing connection */
@@ -150,6 +148,23 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
+
+/* Packet loop v3, capable of managing preferred address migration.
+* The argument is passed as "void*" to match the prototype of the thread function,
+* but it is actually a pointer to a structure of type picoquic_network_thread_ctx_t.
+* When the packet loop is started in the main thread, the application code
+* should be:
+* 
+*        (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+*        ret = thread_ctx.return_code;
+* 
+*/
+
+#ifdef _WINDOWS
+DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx);
+#else
+void* picoquic_packet_loop_v3(void* v_ctx);
+#endif
 
 /* Threaded version of packet loop, when running picoquic in a background thread.
 * 

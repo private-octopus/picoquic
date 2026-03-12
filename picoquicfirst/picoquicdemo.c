@@ -351,13 +351,24 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
     if (ret == 0) {
         /* Wait for packets */
-#if _WINDOWS_BUT_WE_ARE_UNIFYING
-        ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, 
-            config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
-#else
-        ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
-            config->socket_buffer_size, config->do_not_use_gso, server_loop_cb, &loop_cb_ctx);
-#endif
+        picoquic_packet_loop_param_t param = { 0 };
+        picoquic_network_thread_ctx_t thread_ctx = { 0 };
+
+        param.local_port = config->local_port;
+        param.public_port = config->server_port;
+        param.is_port_shared = config->is_port_shared;
+        param.local_af = 0;
+        param.dest_if = config->dest_if;
+        param.socket_buffer_size = config->socket_buffer_size;
+        param.do_not_use_gso = config->do_not_use_gso;
+
+        thread_ctx.quic = qserver;
+        thread_ctx.param = &param;
+        thread_ctx.loop_callback = server_loop_cb;
+        thread_ctx.loop_callback_ctx = &loop_cb_ctx;
+
+        (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+        ret = thread_ctx.return_code;
     }
 
     /* And exit */
