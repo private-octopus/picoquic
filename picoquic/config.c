@@ -255,7 +255,7 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
     }
     else {
         config->server_port = (uint16_t)p1;
-        config->local_port = p2;
+        config->local_port = (uint16_t)p2;
         config->is_port_shared = is_port_shared;
     }
     return ret;
@@ -274,7 +274,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         ret = config_set_string_param(&config->server_key_file, params, nb_params, 0);
         break;
     case picoquic_option_SERVER_PORT:
-        config->server_port = config_atoi(params, nb_params, 0, &ret);
+        ret = config_set_port(config, params->param);
         if (ret != 0) {
             fprintf(stderr, "Invalid port: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
         }
@@ -909,7 +909,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_address_discovery_mode(quic, config->address_discovery_mode);
 
         picoquic_set_preferred_address(&quic->default_tp.preferred_address,
-            config->preferred_address_v4, config->preferred_address_v6, 0);
+            config->preferred_address_v4, config->preferred_address_v6, config->local_port);
 
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
