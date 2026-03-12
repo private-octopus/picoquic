@@ -19,24 +19,46 @@ PICOQUIC_ROOT="${1:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 shift 1 2>/dev/null || true
 
 BUILD_DIR="$(mktemp -d)"
-INSTALL_PREFIX="$(mktemp -d)"
-trap 'rm -rf "$BUILD_DIR" "$INSTALL_PREFIX"' EXIT
+FETCHCONTENT_INSTALL="$(mktemp -d)"
+STANDALONE_INSTALL="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DIR" "$FETCHCONTENT_INSTALL" "$STANDALONE_INSTALL"' EXIT
 
+# --- Standalone install test ---
+# Validates that an installed picoquic (as getdeps does it) correctly exports
+# INTERFACE_INCLUDE_DIRECTORIES so consumers can #include <picoquic.h>.
+echo "==> Building and installing picoquic standalone"
+cmake -S "$PICOQUIC_ROOT" -B "$BUILD_DIR/picoquic" \
+    -DPICOQUIC_FETCH_PTLS=ON \
+    -DCMAKE_INSTALL_PREFIX="$STANDALONE_INSTALL" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF \
+    "$@"
+cmake --build "$BUILD_DIR/picoquic"
+cmake --install "$BUILD_DIR/picoquic"
+
+echo "==> Building and running install_test against standalone install"
+cmake -S "$SCRIPT_DIR/install_test" -B "$BUILD_DIR/install_test" \
+    -DCMAKE_PREFIX_PATH="$STANDALONE_INSTALL" \
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build "$BUILD_DIR/install_test"
+"$BUILD_DIR/install_test/install_test"
+
+# --- FetchContent re-export test ---
+# Validates that a library embedding picoquic via FetchContent correctly
+# re-exports it to downstream consumers.
 echo "==> Building and installing sample_lib (picoquic root: $PICOQUIC_ROOT)"
 cmake -S "$SCRIPT_DIR/sample_lib" -B "$BUILD_DIR/sample_lib" \
     -DFETCHCONTENT_SOURCE_DIR_PICOQUIC="$PICOQUIC_ROOT" \
     -DPICOQUIC_FETCH_PTLS=ON \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+    -DCMAKE_INSTALL_PREFIX="$FETCHCONTENT_INSTALL" \
     -DCMAKE_BUILD_TYPE=Release \
     "$@"
 cmake --build "$BUILD_DIR/sample_lib"
 cmake --install "$BUILD_DIR/sample_lib"
 
-echo "==> Building sample_app"
+echo "==> Building and running sample_app"
 cmake -S "$SCRIPT_DIR/sample_app" -B "$BUILD_DIR/sample_app" \
-    -DCMAKE_PREFIX_PATH="$INSTALL_PREFIX" \
+    -DCMAKE_PREFIX_PATH="$FETCHCONTENT_INSTALL" \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build "$BUILD_DIR/sample_app"
-
-echo "==> Running sample_app"
 "$BUILD_DIR/sample_app/sample_app"
