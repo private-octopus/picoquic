@@ -934,6 +934,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  */
 int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
+int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, char const* error_reason);
+
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);

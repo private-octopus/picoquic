@@ -4393,7 +4393,7 @@ const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const
 
     if (bytes == NULL ||
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
-        (bytes = picoquic_frames_length_data_skip(bytes, bytes_max)) == NULL)
+        (bytes = picoquic_frames_charz_decode(bytes, bytes_max, &cnx->remote_error_reason)) == NULL)
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_connection_close);
@@ -4421,7 +4421,7 @@ uint8_t * picoquic_format_application_close_frame(picoquic_cnx_t* cnx,
 
     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_application_close)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx->application_error)) != NULL &&
-        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, 0)) != NULL) {
+        (bytes = picoquic_frames_charz_encode(bytes, bytes_max, cnx->local_error_reason)) != NULL) {
         *is_pure_ack = 0;
     }
     else {
@@ -4437,7 +4437,7 @@ const uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, cons
 
     if (bytes == NULL ||
         /* TODO, maybe: skip frame type for compatibility with draft-13 */
-        (bytes = picoquic_frames_length_data_skip(bytes, bytes_max)) == NULL)
+        (bytes = picoquic_frames_charz_decode(bytes, bytes_max, &cnx->remote_error_reason)) == NULL)
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_application_close);

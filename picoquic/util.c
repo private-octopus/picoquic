@@ -861,6 +861,23 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
     return bytes;
 }
 
+const uint8_t* picoquic_frames_charz_decode(const uint8_t* bytes, const uint8_t* bytes_max, char ** s)
+{
+    uint64_t length;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL && length > 0) {
+        *s = picoquic_string_create(NULL, length + 1);
+        if (s == NULL) {
+            bytes = NULL;
+        }
+        else {
+            memcpy(*s, bytes, length);
+            char *str = *s;
+            str[length] = 0;
+            bytes += length;
+        }
+    }
+    return bytes;
+}
 
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64)

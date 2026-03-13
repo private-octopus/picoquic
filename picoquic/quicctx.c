@@ -5102,6 +5102,11 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->sni = NULL;
         }
 
+        if (cnx->remote_error_reason != NULL) {
+            free((void*)cnx->remote_error_reason);
+            cnx->remote_error_reason = NULL;
+        }
+
         if (cnx->retry_token != NULL) {
             free(cnx->retry_token);
             cnx->retry_token = NULL;
