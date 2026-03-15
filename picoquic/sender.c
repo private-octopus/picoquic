@@ -4197,6 +4197,11 @@ int picoquic_prepare_packet(picoquic_cnx_t* cnx,
 
 int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code)
 {
+    return picoquic_close_ex(cnx, application_reason_code, NULL);
+}
+
+int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, char const* error_reason)
+{
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(cnx->quic);
 
@@ -4211,6 +4216,7 @@ int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code)
     } else {
         ret = -1;
     }
+    cnx->local_error_reason = error_reason;
     cnx->offending_frame_type = 0;
     picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
 

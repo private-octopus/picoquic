@@ -861,7 +861,6 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
     return bytes;
 }
 
-
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64)
 {
