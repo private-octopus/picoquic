@@ -870,7 +870,7 @@ const uint8_t* picoquic_frames_charz_decode(const uint8_t* bytes, const uint8_t*
             bytes = NULL;
         }
         else {
-            *s = picoquic_string_create(NULL, (size_t)(length + 1));
+            *s = picoquic_string_create((char const *)bytes, (size_t)length);
             if (s == NULL) {
                 bytes = NULL;
             }
