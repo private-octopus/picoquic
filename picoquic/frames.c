@@ -4389,12 +4389,20 @@ uint8_t * picoquic_format_connection_close_frame(picoquic_cnx_t* cnx,
 
 const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &cnx->remote_error);
+    uint64_t reason_length = 0;
 
-    if (bytes == NULL ||
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
-        (bytes = picoquic_frames_charz_decode(bytes, bytes_max, &cnx->remote_error_reason)) == NULL)
-    {
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &cnx->remote_error)) != NULL &&
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reason_length)) != NULL){
+        const uint8_t* first_byte = bytes;
+        if (reason_length != 0 &&
+            (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, reason_length)) != NULL &&
+            cnx->remote_error_reason == NULL) {
+            cnx->remote_error_reason = picoquic_string_create((char*)first_byte, (size_t)reason_length);
+        }
+    }
+
+    if (bytes == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_connection_close);
     }
