@@ -250,6 +250,8 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_server.c
     picohttp/h3zero_uri.c
     picohttp/h3zero_url_template.c
+    picohttp/h09_common.c
+    picohttp/h09_server.c
     picohttp/h09_server.h
     picohttp/picomask.c
     picohttp/quicperf.c
@@ -261,6 +263,7 @@ set(PICOHTTP_HEADERS
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
      picohttp/h3zero_url_template.h
+     picohhtp/h09_common.h
      picohttp/h09_server.h
      picohttp/democlient.h
      picohttp/demoserver.h
