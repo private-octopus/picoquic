@@ -67,15 +67,6 @@ static int picohttp_server_parse_commandline(uint8_t* command, size_t command_le
  * header line is fully parsed (GET).
  */
 
-int picoquic_h09_server_process_data_header(
-    const uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event,
-    h3zero_stream_ctx_t* stream_ctx,
-    size_t * r_processed)
-{
-    return h09_server_process_data_header(bytes, length, fin_or_event, &stream_ctx->ps.hq, r_processed);
-}
-
 int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, 
@@ -85,7 +76,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     int ret = 0;
     size_t processed = 0;
 
-    ret = picoquic_h09_server_process_data_header(bytes, length, fin_or_event, stream_ctx, &processed);
+    ret = h09_server_process_data_header(bytes, length, fin_or_event, &stream_ctx->ps.hq, &processed);
 
     if (ret == 0 && processed < length) {
         if (stream_ctx->ps.hq.status == picohttp_server_stream_status_receiving) {
@@ -224,9 +215,6 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
 
                 picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Partial command: %s\n",
                     stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->ps.hq.frame));
-            }
-            else {
-
             }
         }
     }

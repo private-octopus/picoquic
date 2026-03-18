@@ -252,7 +252,6 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_url_template.c
     picohttp/h09_common.c
     picohttp/h09_server.c
-    picohttp/h09_server.h
     picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/webtransport.c

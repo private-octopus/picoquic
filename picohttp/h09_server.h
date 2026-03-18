@@ -31,17 +31,6 @@ extern "C" {
 /* Defining then the Http 0.9 variant of the demo server */
 #define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
 
-/* define a neutral structure that can be used by WT or by direct calls */
-    typedef struct st_h09_ctx_t {
-        int status;
-    } h09_ctx_t;
-
-    typedef struct st_h09_stream_ctx_t {
-        uint64_t stream_id;
-
-    } h09_stream_ctx_t;
-
-int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx, size_t* r_processed);
 
 int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
