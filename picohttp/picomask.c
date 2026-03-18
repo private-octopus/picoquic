@@ -177,8 +177,8 @@ static void picomask_udp_free(picomask_udp_ctx_t* udp_ctx)
 {
 
     if (udp_ctx->h3_stream != NULL) {
-        udp_ctx->h3_stream->path_callback_ctx = NULL;
-        udp_ctx->h3_stream->path_callback = NULL;
+        udp_ctx->h3_stream->fs.path_callback_ctx = NULL;
+        udp_ctx->h3_stream->fs.path_callback = NULL;
         udp_ctx->h3_stream = NULL;
     }
     free(udp_ctx);
@@ -261,7 +261,7 @@ int picomask_udp_ctx_create(picomask_ctx_t* picomask_ctx, struct sockaddr* targe
         else {
             udp_ctx->picomask_ctx = picomask_ctx;
             udp_ctx->h3_stream = h3_stream;
-            h3_stream->path_callback_ctx = udp_ctx;
+            h3_stream->fs.path_callback_ctx = udp_ctx;
             picosplay_insert(&picomask_ctx->udp_tree, udp_ctx);
             *p_udp_ctx = udp_ctx;
         }
@@ -310,12 +310,12 @@ int picomask_udp_path_params(uint8_t* path, size_t path_length, struct sockaddr_
 /* Release data and memory associated with a stream context */
 void picomask_release_stream(h3zero_stream_ctx_t* stream_ctx)
 {
-    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t * )stream_ctx->path_callback_ctx;
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t * )stream_ctx->fs.path_callback_ctx;
     if (udp_ctx != NULL) {
         picomask_udp_ctx_delete(udp_ctx->picomask_ctx, udp_ctx);
-        stream_ctx->path_callback_ctx = NULL;
+        stream_ctx->fs.path_callback_ctx = NULL;
     }
-    stream_ctx->path_callback = NULL;
+    stream_ctx->fs.path_callback = NULL;
 }
 
 struct st_picomask_fns_t picomask_fns = {
@@ -479,7 +479,7 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
 {
     int ret = 0;
     /* Find the context from h3zero */
-    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)stream_ctx->path_callback_ctx;
+    picomask_udp_ctx_t* udp_ctx = (picomask_udp_ctx_t*)stream_ctx->fs.path_callback_ctx;
     picoquic_quic_t* quic = picoquic_get_quic_ctx(cnx);
     uint64_t current_time = picoquic_get_quic_time(quic);
     picoquic_cnx_t* first_cnx = NULL;

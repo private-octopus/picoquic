@@ -170,7 +170,7 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
     void * callback_ctx)
 {
     int ret = 0;
-    demoserver_post_test_t* ctx = (demoserver_post_test_t*)stream_ctx->path_callback_ctx;
+    demoserver_post_test_t* ctx = (demoserver_post_test_t*)stream_ctx->fs.path_callback_ctx;
 
     switch (event) {
     case picohttp_callback_get: /* Received a get command */
@@ -184,7 +184,7 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
             }
             else {
                 memset(ctx, 0, sizeof(demoserver_post_test_t));
-                stream_ctx->path_callback_ctx = (void*)ctx;
+                stream_ctx->fs.path_callback_ctx = (void*)ctx;
             }
         }
         else {
@@ -248,8 +248,8 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
         }
         break;
     case picohttp_callback_reset: /* stream is abandoned */
-        stream_ctx->path_callback = NULL;
-        stream_ctx->path_callback_ctx = NULL;
+        stream_ctx->fs.path_callback = NULL;
+        stream_ctx->fs.path_callback_ctx = NULL;
 
         if (ctx != NULL) {
             free(ctx);

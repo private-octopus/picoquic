@@ -82,6 +82,29 @@ extern "C" {
         picohttp_server_stream_status_finished
     } picohttp_server_stream_status_t;
 
+    /* We define here the h09 stream state method. Ideally, we should end up
+     * completely separating h09 and h3, but for now simply having a
+     * clean context allows for reuse of h09 code outside of the H09/H3 server */
+
+    typedef struct st_h09_data_stream_state_t {
+        picohttp_server_stream_status_t status;
+        uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        int proto;
+        uint8_t* path;
+        size_t path_length;
+        size_t command_length;
+        int method;
+    } h09_data_stream_state_t;
+
+    typedef struct st_h3zero_server_file_state_t {
+        uint64_t response_length;
+        uint64_t echo_length;
+        uint64_t echo_sent;
+        uint64_t post_received;
+        picohttp_post_data_cb_fn path_callback;
+        void* path_callback_ctx;
+    } h3zero_server_file_state_t;
+
     typedef struct st_h3zero_stream_ctx_t {
         /* TODO-POST: identification of URL to process POST or GET? */
         /* TODO-POST: provide content-type */
@@ -92,32 +115,17 @@ extern "C" {
         unsigned int is_bypass : 1;
         union {
             h3zero_data_stream_state_t stream_state; /* h3 only */
-            struct {
-                picohttp_server_stream_status_t status; 
-                int proto; 
-                uint8_t* path; 
-                size_t path_length;
-                size_t command_length;
-                int method;
-            } hq; /* h09 only */
+            h09_data_stream_state_t hq; /* h09 only */
         } ps; /* Protocol specific state */
         uint64_t stream_id;
         /* Server state file management */
-        uint64_t response_length;
-        uint64_t echo_length;
-        uint64_t echo_sent;
-        uint64_t post_received;
-        picohttp_post_data_cb_fn path_callback;
-        void* path_callback_ctx;
-        uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        h3zero_server_file_state_t fs;
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
-        //char* f_name;
-        //FILE* FC;
         /* File state variables, used by both cclient and server */
         char* file_path;
         FILE* F;

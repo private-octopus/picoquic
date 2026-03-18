@@ -57,17 +57,6 @@ int h3zero_server_parse_path(const uint8_t* path, size_t path_length, uint64_t* 
     char** file_path, char const* web_folder, int* file_error);
 int h3zero_server_prepare_to_send(void* context, size_t space, h3zero_stream_ctx_t* stream_ctx);
 
-/* Defining then the Http 0.9 variant of the server
- */
-#define picoquic_h09_server_callback_ctx_t h3zero_callback_ctx_t
-
-int picoquic_h09_server_process_data_header(const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx, size_t* r_processed);
-
-int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
-
 /* The generic server will use either http3 or http0.9,
  * according to the ALPN selected by the client
  */
