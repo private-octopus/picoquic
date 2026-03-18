@@ -151,23 +151,23 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             /* Received data for a POST command. */
             size_t available = length - processed;
 
-            if (stream_ctx->fs.post_received == 0 && available > 0) {
+            if (stream_ctx->sfs.post_received == 0 && available > 0) {
                 int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                 if (path_item >= 0) {
-                    stream_ctx->fs.path_callback = app_ctx->path_table[path_item].path_callback;
-                    stream_ctx->fs.path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx, 
+                    stream_ctx->sfs.path_callback = app_ctx->path_table[path_item].path_callback;
+                    stream_ctx->sfs.path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx, 
                         app_ctx->path_table[path_item].path_app_ctx);
                 }
-                stream_ctx->fs.post_received += available;
+                stream_ctx->sfs.post_received += available;
                 (void)picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
             }
 
-            if (stream_ctx->fs.path_callback != NULL) {
+            if (stream_ctx->sfs.path_callback != NULL) {
                 /* pass data to selected API */
-                ret = stream_ctx->fs.path_callback(cnx, bytes + processed, available, picohttp_callback_post_data, stream_ctx, stream_ctx->fs.path_callback_ctx);
+                ret = stream_ctx->sfs.path_callback(cnx, bytes + processed, available, picohttp_callback_post_data, stream_ctx, stream_ctx->sfs.path_callback_ctx);
                 /* TODO-POST: how to handle errors ?*/
             }
-            stream_ctx->fs.post_received += available;
+            stream_ctx->sfs.post_received += available;
             processed = length;
         }
         else {
@@ -193,7 +193,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
             if (stream_ctx->ps.hq.method == 0) {
                 int file_error = 0;
                 if (h3zero_server_parse_path(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length,
-                    &stream_ctx->fs.echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error)) {
+                    &stream_ctx->sfs.echo_length, &stream_ctx->file_path, app_ctx->web_folder, &file_error)) {
                     char log_text[256];
                     picoquic_log_app_message(cnx, "Cannot find file for path: <%s> in folder <%s>, error: 0x%x",
                         picoquic_uint8_to_str(log_text, 256, stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length),
@@ -202,30 +202,30 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 }
             }
             else if (stream_ctx->ps.hq.method == 1) {
-                if (stream_ctx->fs.post_received == 0) {
+                if (stream_ctx->sfs.post_received == 0) {
                     int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                     if (path_item >= 0) {
                         /* TODO-POST: move this code to post-fin callback.*/
-                        stream_ctx->fs.path_callback = app_ctx->path_table[path_item].path_callback;
-                        stream_ctx->fs.path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, 
+                        stream_ctx->sfs.path_callback = app_ctx->path_table[path_item].path_callback;
+                        stream_ctx->sfs.path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, 
                             stream_ctx, app_ctx->path_table[path_item].path_app_ctx);
                     }
                 }
 
-                if (stream_ctx->fs.path_callback != NULL) {
-                    stream_ctx->fs.response_length = stream_ctx->fs.path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx,
-                        stream_ctx->fs.path_callback_ctx);
-                    if (stream_ctx->fs.response_length == 0) {
+                if (stream_ctx->sfs.path_callback != NULL) {
+                    stream_ctx->sfs.response_length = stream_ctx->sfs.path_callback(cnx, post_response, sizeof(post_response), picohttp_callback_post_fin, stream_ctx,
+                        stream_ctx->sfs.path_callback_ctx);
+                    if (stream_ctx->sfs.response_length == 0) {
                         is_bad_request = 1;
                     }
                 }
                 else {
                     /* Prepare generic POST response */
                     size_t message_length = 0;
-                    (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, h3zero_server_post_response_page, (int)stream_ctx->fs.post_received);
-                    stream_ctx->fs.response_length = message_length;
+                    (void)picoquic_sprintf((char*)post_response, sizeof(post_response), &message_length, h3zero_server_post_response_page, (int)stream_ctx->sfs.post_received);
+                    stream_ctx->sfs.response_length = message_length;
                 }
-                stream_ctx->fs.echo_length = 0;
+                stream_ctx->sfs.echo_length = 0;
             }
             else {
                 is_bad_request = 1;
@@ -244,9 +244,9 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", Reply with bad request message after command: %s\n",
                     stream_id, strip_endofline(buf, sizeof(buf), (char*)&stream_ctx->ps.hq.frame));
 
-                stream_ctx->fs.response_length = strlen(bad_request_message);
+                stream_ctx->sfs.response_length = strlen(bad_request_message);
                 (void)picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id, (const uint8_t*)bad_request_message,
-                    (size_t)stream_ctx->fs.response_length, 1, (void*)stream_ctx);
+                    (size_t)stream_ctx->sfs.response_length, 1, (void*)stream_ctx);
             }
             else {
                 /* If this is HTTP1, send an HTTP1 OK message, with the appropriate content type */
@@ -254,29 +254,29 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     size_t header_length = 0;
 
                     picoquic_sprintf(buf, sizeof(buf), &header_length, "200 OK\r\nContent-Type:%s\r\n\r\n",
-                        (stream_ctx->fs.echo_length == 0 || stream_ctx->ps.hq.method == 1) ? "text/plain" : "test/html");
+                        (stream_ctx->sfs.echo_length == 0 || stream_ctx->ps.hq.method == 1) ? "text/plain" : "test/html");
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)buf, header_length, 0, (void*)stream_ctx);
                 }
 
-                if (stream_ctx->fs.response_length == 0 && stream_ctx->fs.echo_length == 0) {
+                if (stream_ctx->sfs.response_length == 0 && stream_ctx->sfs.echo_length == 0) {
                     /* Send the canned index.html response */
-                    stream_ctx->fs.response_length = strlen(h3zero_server_default_page);
+                    stream_ctx->sfs.response_length = strlen(h3zero_server_default_page);
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, (uint8_t*)h3zero_server_default_page,
-                        (size_t)stream_ctx->fs.response_length, 1, (void*)stream_ctx);
+                        (size_t)stream_ctx->sfs.response_length, 1, (void*)stream_ctx);
                 }
-                else if (stream_ctx->fs.echo_length == 0 && stream_ctx->fs.response_length < sizeof(post_response)) {
+                else if (stream_ctx->sfs.echo_length == 0 && stream_ctx->sfs.response_length < sizeof(post_response)) {
                     /* For short responses, post directly.
                      * TODO-POST: for long responses, we expect that the application
                      * will have set a data provision shortcut. Verify that! */
                     picoquic_add_to_stream_with_ctx(cnx, stream_id, post_response,
-                        (size_t)stream_ctx->fs.response_length, 1, (void*)stream_ctx);
+                        (size_t)stream_ctx->sfs.response_length, 1, (void*)stream_ctx);
                 }
                 else {
                     picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
                 }
             }
         }
-        else if (stream_ctx->fs.response_length == 0 && stream_ctx->fs.echo_length == 0 && stream_ctx->ps.hq.method == 0) {
+        else if (stream_ctx->sfs.response_length == 0 && stream_ctx->sfs.echo_length == 0 && stream_ctx->ps.hq.method == 0) {
             char buf[256];
             if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->ps.hq.frame)){
                 stream_ctx->ps.hq.frame[stream_ctx->ps.hq.command_length] = 0;
@@ -403,13 +403,13 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
                 return 0;
             }
             else {
-                if (stream_ctx->fs.path_callback != NULL) {
-                    return stream_ctx->fs.path_callback(cnx, bytes, length, picohttp_callback_provide_data, stream_ctx, stream_ctx->fs.path_callback_ctx);
+                if (stream_ctx->sfs.path_callback != NULL) {
+                    return stream_ctx->sfs.path_callback(cnx, bytes, length, picohttp_callback_provide_data, stream_ctx, stream_ctx->sfs.path_callback_ctx);
                 }
                 else {
                     /* TODO-POST: notify callback. */
                     int ret = h3zero_server_prepare_to_send((void*)bytes, length, stream_ctx);
-                    if (stream_ctx->fs.echo_sent >= stream_ctx->fs.echo_length) {
+                    if (stream_ctx->sfs.echo_sent >= stream_ctx->sfs.echo_length) {
                         h3zero_delete_stream(cnx, ctx, stream_ctx);
                     }
                     return ret;

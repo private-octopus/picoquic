@@ -105,6 +105,15 @@ extern "C" {
         void* path_callback_ctx;
     } h3zero_server_file_state_t;
 
+    typedef struct st_h3zero_client_file_state_t {
+        uint64_t response_length;
+        uint64_t echo_length;
+        uint64_t echo_sent;
+        uint64_t post_received;
+        picohttp_post_data_cb_fn path_callback;
+        void* path_callback_ctx;
+    } h3zero_client_file_state_t;
+
     typedef struct st_h3zero_stream_ctx_t {
         /* TODO-POST: identification of URL to process POST or GET? */
         /* TODO-POST: provide content-type */
@@ -119,7 +128,7 @@ extern "C" {
         } ps; /* Protocol specific state */
         uint64_t stream_id;
         /* Server state file management */
-        h3zero_server_file_state_t fs;
+        h3zero_server_file_state_t sfs;
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */

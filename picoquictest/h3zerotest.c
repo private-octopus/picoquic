@@ -2259,7 +2259,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
     void * callback_ctx)
 {
     int ret = 0;
-    hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->fs.path_callback_ctx;
+    hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->sfs.path_callback_ctx;
 
     switch (event) {
     case picohttp_callback_get: /* Received a get command */
@@ -2273,7 +2273,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
             }
             else {
                 memset(ctx, 0, sizeof(hzero_post_echo_ctx_t));
-                stream_ctx->fs.path_callback_ctx = (void *) ctx;
+                stream_ctx->sfs.path_callback_ctx = (void *) ctx;
             }
         }
         else {
@@ -2333,8 +2333,8 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
         }
         break;
     case picohttp_callback_free: /* stream is abandoned */
-        stream_ctx->fs.path_callback = NULL;
-        stream_ctx->fs.path_callback_ctx = NULL;
+        stream_ctx->sfs.path_callback = NULL;
+        stream_ctx->sfs.path_callback_ctx = NULL;
        
         if (ctx != NULL) {
             free(ctx);
