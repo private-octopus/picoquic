@@ -210,7 +210,6 @@ int h09_server_parse_commandline(uint8_t* command, size_t command_length, h09_da
     return ret;
 }
 
-#if 0
 /*
  * Process the incoming data. 
  * We can expect the following:
@@ -230,32 +229,10 @@ int h09_server_parse_commandline(uint8_t* command, size_t command_length, h09_da
  * header line is fully parsed (GET).
  */
 
-/* TODO: the first part of the loop deals with the parsing of the header.
-* The bytes are accumulated in stream_ctx->frame[hq->command_length++] = bytes[processed];
-* There are 'protocol neutral' elements in the stream ccontext structure:
-*       uint64_t stream_id;
-*       uint64_t response_length;
-*       uint64_t echo_length;
-*       uint64_t echo_sent;
-*       uint64_t post_received;
-*       picohttp_post_data_cb_fn path_callback;
-*       void* path_callback_ctx;
-*       uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-*       unsigned int is_open : 1;
-*       unsigned int flow_opened : 1;
-*       uint64_t received_length;
-*       uint64_t post_size;
-*       uint64_t post_sent;
-*       char* file_path;
-*       FILE* F;
-* These elements will be needed for both h3, h09, wt_h09 and eventually tcp_h09
-*/
-
 int h09_server_process_data_header(
     const uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event,
     h09_data_stream_state_t* hq,
-
     size_t * r_processed)
 {
     int ret = 0;
@@ -273,8 +250,8 @@ int h09_server_process_data_header(
                 else if (bytes[processed] == '\n') {
                     crlf_present = 1;
                 }
-                else if (hq->command_length < sizeof(stream_ctx->frame) - 1) {
-                    stream_ctx->frame[hq->command_length++] = bytes[processed];
+                else if (hq->command_length < sizeof(hq->frame) - 1) {
+                    hq->frame[hq->command_length++] = bytes[processed];
                 }
                 else {
                     /* Too much data */
@@ -291,7 +268,7 @@ int h09_server_process_data_header(
 
             if (crlf_present || fin_or_event == picoquic_callback_stream_fin) {
                 /* Parse the command */
-                ret = picohttp_server_parse_commandline(stream_ctx->frame, hq->command_length, stream_ctx);
+                ret = h09_server_parse_commandline(hq->frame, hq->command_length, hq);
             }
         }
         else if (hq->status == picohttp_server_stream_status_crlf) {
@@ -320,7 +297,7 @@ int h09_server_process_data_header(
     return ret;
 }
 
-
+#if 0
 int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, 

@@ -1261,7 +1261,7 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 			stream_ctx->F = picoquic_file_close(stream_ctx->F);
 			ctx->nb_open_files--;
 		}
-		stream_ctx->is_open = 0;
+		stream_ctx->cfs.is_open = 0;
 		ctx->nb_open_streams--; 
 		ret = 1;
 	}
@@ -1525,7 +1525,7 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 					ret = -1;
 				}
 				else if (cnx->client_mode) {
-					if (stream_ctx->is_open) {
+					if (stream_ctx->cfs.is_open) {
 						/* Process incoming H3 client data */
 						ret = h3zero_process_h3_client_data(cnx, stream_id, bytes, length, fin_or_event, ctx,
 							stream_ctx, fin_stream_id);

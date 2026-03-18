@@ -106,12 +106,11 @@ extern "C" {
     } h3zero_server_file_state_t;
 
     typedef struct st_h3zero_client_file_state_t {
-        uint64_t response_length;
-        uint64_t echo_length;
-        uint64_t echo_sent;
-        uint64_t post_received;
-        picohttp_post_data_cb_fn path_callback;
-        void* path_callback_ctx;
+        unsigned int is_open : 1; /* The client has initiated this stream */
+        unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
+        uint64_t received_length;
+        uint64_t post_size;
+        uint64_t post_sent;
     } h3zero_client_file_state_t;
 
     typedef struct st_h3zero_stream_ctx_t {
@@ -130,7 +129,8 @@ extern "C" {
         /* Server state file management */
         h3zero_server_file_state_t sfs;
         /* Client state management */
-        unsigned int is_open : 1; /* The client has initiated this stream */
+        h3zero_client_file_state_t cfs;
+        //unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
         uint64_t received_length;
         uint64_t post_size;

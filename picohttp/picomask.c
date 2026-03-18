@@ -444,7 +444,7 @@ int picomask_connect_udp(picoquic_quic_t* quic, const char* authority, struct so
             /* WT_CONNECT establishes a mapping to a specific IP+port. */
             char path[256];
             size_t path_length;
-            stream_ctx->is_open = 1;
+            stream_ctx->cfs.is_open = 1;
             /* Set target_addr from path and address  */
             ret = picomask_expand_udp_path(path, sizeof(path), &path_length, picomask_ctx->path_template, target_addr);
             /* Then, queue the UDP_CONNECT frame. */

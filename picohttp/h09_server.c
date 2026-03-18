@@ -73,66 +73,7 @@ int picoquic_h09_server_process_data_header(
     h3zero_stream_ctx_t* stream_ctx,
     size_t * r_processed)
 {
-    int ret = 0;
-    size_t processed = 0;
-
-    while (ret == 0 && processed < length) {
-        if (stream_ctx->ps.hq.status == picohttp_server_stream_status_none) {
-            /* If the command has not been received yet, try to process it */
-            int crlf_present = 0;
-
-            while (processed < length && crlf_present == 0) {
-                if (bytes[processed] == '\r') {
-                    /* Ignore \r, so end of header is either CRLF/CRLF, of just LF/LF, or maybe LF/CR/LF */
-                }
-                else if (bytes[processed] == '\n') {
-                    crlf_present = 1;
-                }
-                else if (stream_ctx->ps.hq.command_length < sizeof(stream_ctx->ps.hq.frame) - 1) {
-                    stream_ctx->ps.hq.frame[stream_ctx->ps.hq.command_length++] = bytes[processed];
-                }
-                else {
-                    /* Too much data */
-                    stream_ctx->ps.hq.method = -1;
-                    ret = -1;
-                    break;
-                }
-                processed++;
-            }
-
-            if (crlf_present) {
-                stream_ctx->ps.hq.status = picohttp_server_stream_status_crlf;
-            }
-
-            if (crlf_present || fin_or_event == picoquic_callback_stream_fin) {
-                /* Parse the command */
-                ret = picohttp_server_parse_commandline(stream_ctx->ps.hq.frame, stream_ctx->ps.hq.command_length, stream_ctx);
-            }
-        }
-        else if (stream_ctx->ps.hq.status == picohttp_server_stream_status_crlf) {
-            if (bytes[processed] == '\n') {
-                /* empty line */
-                stream_ctx->ps.hq.status = picohttp_server_stream_status_receiving;
-            }
-            else if (bytes[processed] != '\r') {
-                stream_ctx->ps.hq.status = picohttp_server_stream_status_header;
-            }
-            processed++;
-        }
-        else if (stream_ctx->ps.hq.status == picohttp_server_stream_status_header) {
-            if (bytes[processed] == '\n') {
-                stream_ctx->ps.hq.status = picohttp_server_stream_status_crlf;
-            }
-            processed++;
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    *r_processed = processed;
-    return ret;
+    return h09_server_process_data_header(bytes, length, fin_or_event, &stream_ctx->ps.hq, r_processed);
 }
 
 int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,

@@ -29,7 +29,11 @@ extern "C" {
 #endif
     char* strip_endofline(char* buf, size_t bufmax, char const* line);
     int h09_server_parse_commandline(uint8_t* command, size_t command_length, h09_data_stream_state_t* hq);
-
+    int h09_server_process_data_header(
+        const uint8_t* bytes, size_t length,
+        picoquic_call_back_event_t fin_or_event,
+        h09_data_stream_state_t* hq,
+        size_t* r_processed);
 #ifdef __cplusplus
 }
 #endif
