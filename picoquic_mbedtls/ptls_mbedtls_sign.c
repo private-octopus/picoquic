@@ -1316,7 +1316,12 @@ ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem
         int psa_ret;
         mbedtls_x509_crt_init(chain_head);
 
-        psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
+        psa_ret = 1;
+        if (pem_fname)
+        {
+            psa_ret = mbedtls_x509_crt_parse_file(chain_head, pem_fname);
+        }
+
         if (psa_ret == 0) {
             *is_cert_store_not_empty = 1;
             verifier = ptls_mbedssl_init_verify_certificate_complete(chain_head, NULL, NULL, NULL);
