@@ -264,7 +264,7 @@ set(PICOHTTP_HEADERS
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
      picohttp/h3zero_url_template.h
-     picohhtp/h09_common.h
+     picohttp/h09_common.h
      picohttp/h09_server.h
      picohttp/democlient.h
      picohttp/demoserver.h
