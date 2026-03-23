@@ -117,6 +117,8 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
+    char const* v4_text, char const* v6_text, uint16_t preferred_port);
 
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);

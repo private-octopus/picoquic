@@ -67,49 +67,49 @@
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR2 \
      0x0F, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00
 
-#define TRANSPORT_PREFERED_ADDRESS_NULL \
+#define TRANSPORT_PREFERRED_ADDRESS_NULL \
     { 0, { 0, 0, 0, 0}, 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
     { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },0 }, \
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }} 
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 2, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 2, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -122,12 +122,12 @@ static picoquic_tp_t transport_param_test9 = {
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
@@ -422,35 +422,35 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->max_idle_timeout, ref->max_idle_timeout);
         ret = -1;
     }
-    else if (param->prefered_address.is_defined != ref->prefered_address.is_defined) {
-        DBG_PRINTF("prefered_address.is_defined: got %d, expected %d\n",
-            param->prefered_address.is_defined, ref->prefered_address.is_defined);
+    else if (param->preferred_address.is_defined != ref->preferred_address.is_defined) {
+        DBG_PRINTF("preferred_address.is_defined: got %d, expected %d\n",
+            param->preferred_address.is_defined, ref->preferred_address.is_defined);
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.ipv4Address, ref->prefered_address.ipv4Address, 4) != 0) {
-        DBG_PRINTF("%s", "prefered_address.ipv4Address: values don't match\n");
+    else if (memcmp(param->preferred_address.ipv4Address, ref->preferred_address.ipv4Address, 4) != 0) {
+        DBG_PRINTF("%s", "preferred_address.ipv4Address: values don't match\n");
         ret = -1;
     }
-    else if (param->prefered_address.ipv4Port != ref->prefered_address.ipv4Port) {
-        DBG_PRINTF("prefered_address.ipv4Port: got %d, expected %d\n",
-            param->prefered_address.ipv4Port, ref->prefered_address.ipv4Port);
+    else if (param->preferred_address.ipv4Port != ref->preferred_address.ipv4Port) {
+        DBG_PRINTF("preferred_address.ipv4Port: got %d, expected %d\n",
+            param->preferred_address.ipv4Port, ref->preferred_address.ipv4Port);
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.ipv6Address, ref->prefered_address.ipv6Address, 16) != 0) {
-        DBG_PRINTF("%s", "prefered_address.ipv6Address: values don't match\n");
+    else if (memcmp(param->preferred_address.ipv6Address, ref->preferred_address.ipv6Address, 16) != 0) {
+        DBG_PRINTF("%s", "preferred_address.ipv6Address: values don't match\n");
         ret = -1;
     }
-    else if (param->prefered_address.ipv6Port != ref->prefered_address.ipv6Port) {
-        DBG_PRINTF("prefered_address.ipv6Port: got %d, expected %d\n",
-            param->prefered_address.ipv6Port, ref->prefered_address.ipv6Port);
+    else if (param->preferred_address.ipv6Port != ref->preferred_address.ipv6Port) {
+        DBG_PRINTF("preferred_address.ipv6Port: got %d, expected %d\n",
+            param->preferred_address.ipv6Port, ref->preferred_address.ipv6Port);
         ret = -1;
     }
-    else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
-        DBG_PRINTF("%s", "prefered_address.connection_id: values don't match\n");
+    else if (picoquic_compare_connection_id(&param->preferred_address.connection_id, &ref->preferred_address.connection_id) != 0) {
+        DBG_PRINTF("%s", "preferred_address.connection_id: values don't match\n");
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
-        DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
+    else if (memcmp(param->preferred_address.statelessResetToken, ref->preferred_address.statelessResetToken, 16) != 0) {
+        DBG_PRINTF("%s", "preferred_address.statelessResetToken: values don't match\n");
         ret = -1;
     }
     else if (param->max_datagram_frame_size != ref->max_datagram_frame_size) {

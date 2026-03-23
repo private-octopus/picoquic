@@ -1871,16 +1871,16 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
     int ret = 0;
     uint64_t transport_error = 0;
 
-    if (cnx->remote_parameters.prefered_address.is_defined) {
+    if (cnx->remote_parameters.preferred_address.is_defined) {
         uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
-        int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
-        int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
+        int ipv4_received = cnx->remote_parameters.preferred_address.ipv4Port != 0;
+        int ipv6_received = cnx->remote_parameters.preferred_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
         transport_error = picoquic_stash_remote_cnxid(cnx, 0, unique_path_id, 1,
-            cnx->remote_parameters.prefered_address.connection_id.id_len,
-            cnx->remote_parameters.prefered_address.connection_id.id,
-            cnx->remote_parameters.prefered_address.statelessResetToken,
+            cnx->remote_parameters.preferred_address.connection_id.id_len,
+            cnx->remote_parameters.preferred_address.connection_id.id,
+            cnx->remote_parameters.preferred_address.statelessResetToken,
             NULL);
         if (transport_error != 0) {
             ret = picoquic_connection_error(cnx, transport_error, picoquic_frame_type_new_connection_id);
@@ -1900,15 +1900,15 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 /* configure an IPv6 sockaddr */
                 struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
                 d6->sin6_family = AF_INET6;
-                d6->sin6_port = cnx->remote_parameters.prefered_address.ipv6Port;
-                memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
+                d6->sin6_port = htons(cnx->remote_parameters.preferred_address.ipv6Port);
+                memcpy(&d6->sin6_addr, cnx->remote_parameters.preferred_address.ipv6Address, 16);
             }
             else {
                 /* configure an IPv4 sockaddr */
                 struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
                 d4->sin_family = AF_INET;
-                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
-                memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
+                d4->sin_port = htons(cnx->remote_parameters.preferred_address.ipv4Port);
+                memcpy(&d4->sin_addr, cnx->remote_parameters.preferred_address.ipv4Address, 4);
             }
 
             /* Only send a probe if not already using that address

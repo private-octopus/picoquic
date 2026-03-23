@@ -4103,15 +4103,15 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     if (cnx != NULL) {
         memcpy(&cnx->local_parameters, &quic->default_tp, sizeof(picoquic_tp_t));
         /* If the default parameters include preferred address, document it */
-        if (cnx->local_parameters.prefered_address.is_defined) {
+        if (cnx->local_parameters.preferred_address.is_defined) {
             /* Create an additional CID -- always for path 0, even if multipath */
             picoquic_local_cnxid_t* cnxid1 = picoquic_create_local_cnxid(cnx, 0, NULL, start_time);
             if (cnxid1 != NULL){
                 /* copy the connection ID into the local parameter */
-                cnx->local_parameters.prefered_address.connection_id = cnxid1->cnx_id;
+                cnx->local_parameters.preferred_address.connection_id = cnxid1->cnx_id;
                 /* Create the reset secret */
                 (void)picoquic_create_cnxid_reset_secret(cnx->quic, &cnxid1->cnx_id,
-                    cnx->local_parameters.prefered_address.statelessResetToken);
+                    cnx->local_parameters.preferred_address.statelessResetToken);
             }
         }
 

@@ -79,6 +79,8 @@ typedef enum {
     picoquic_option_ECH_client,
     picoquic_option_ECH_init,
     picoquic_option_FLOW_CONTROL_MAX,
+    picoquic_option_Preferred_V4,
+    picoquic_option_Preferred_V6,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -91,7 +93,9 @@ typedef struct st_picoquic_quic_config_t {
     char const* bin_dir;
     char const* qlog_dir;
     char const* performance_log;
-    int server_port;
+    uint16_t server_port;
+    uint16_t local_port;
+    int is_port_shared;
     int dest_if;
     int mtu_max;
     int cnx_id_length;
@@ -147,6 +151,9 @@ typedef struct st_picoquic_quic_config_t {
     uint8_t * ech_target;
     size_t ech_target_len;
     uint64_t flow_control_max;
+    /* Preferred address, encoded as strings */
+    char const* preferred_address_v4;
+    char const* preferred_address_v6;
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);

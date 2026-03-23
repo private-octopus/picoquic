@@ -483,8 +483,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         double_bind[i].fd = INVALID_SOCKET;
     }
     if (ret == 0 && spec->double_bind) {
-        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
-            AF_INET6, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind, test_ctx->qserver->default_congestion_alg->ecn_mark)) <= 0) {
+        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port, AF_INET6, 0, 0,
+            PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind, test_ctx->qserver->default_congestion_alg->ecn_mark)) <= 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
     }
