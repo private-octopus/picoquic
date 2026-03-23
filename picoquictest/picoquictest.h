@@ -615,6 +615,7 @@ int picowt_baton_uri_test();
 int picowt_baton_krome_test();
 int picowt_baton_reset_test();
 int picowt_drain_test();
+int picowt_h09_basic_test();
 int picowt_tp_test();
 int quicperf_parse_test();
 int quicperf_batch_test();

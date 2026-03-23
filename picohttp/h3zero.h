@@ -20,6 +20,7 @@
 */
 #ifndef H3ZERO_H
 #define H3ZERO_H
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

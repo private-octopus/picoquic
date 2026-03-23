@@ -35,6 +35,7 @@
 #include "demoserver.h"
 #include "pico_webtransport.h"
 #include "wt_baton.h"
+#include "wt_h09.h"
 
 #ifdef _WINDOWS
 #include "wincompat.h"
@@ -91,6 +92,129 @@ static int picowt_baton_test_reset(wt_baton_ctx_t * baton_ctx, int* reset_needed
     return ret;
 }
 
+int wt_test_generic_start(
+    picoquic_test_tls_api_ctx_t** test_ctx,
+    h3zero_callback_ctx_t** h3zero_cb,
+    h3zero_stream_ctx_t** control_stream_ctx,
+    uint64_t* simulated_time,
+    picoquic_connection_id_t * initial_cid,
+    const char* client_qlog_dir,
+    const char* server_qlog_dir)
+{
+    int ret = 0;
+    char const* alpn = "h3";
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(test_ctx,
+            PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, alpn, simulated_time, NULL, NULL, 0, 1, 0, initial_cid);
+
+        if (ret == 0 && server_qlog_dir != NULL) {
+            picoquic_set_qlog((*test_ctx)->qserver, server_qlog_dir);
+            (*test_ctx)->qserver->use_long_log = 1;
+        }
+
+        if (ret == 0 && client_qlog_dir != NULL) {
+            picoquic_set_qlog((*test_ctx)->qclient, client_qlog_dir);
+        }
+
+        if (ret == 0) {
+            picowt_set_default_transport_parameters((*test_ctx)->qserver);
+            picowt_set_transport_parameters((*test_ctx)->cnx_client);
+        }
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
+    }
+    else if (*test_ctx == NULL || (*test_ctx)->cnx_client == NULL) {
+        DBG_PRINTF("%s", "Connections where not properly created!\n");
+        ret = -1;
+    }
+
+    /* The default procedure creates connections using the test callback.
+    * We want to replace that by the demo client callback */
+
+    if (ret == 0) {
+        /* Set the client callback context using as much as possible
+        * the generic picowt calls. */
+
+        ret = picowt_prepare_client_cnx((*test_ctx)->qclient, (struct sockaddr*)NULL,
+            &(*test_ctx)->cnx_client, h3zero_cb, control_stream_ctx, *simulated_time, PICOQUIC_TEST_SNI);
+    }
+
+    return ret;
+}
+
+int wt_test_generic_connection(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t * loss_mask, uint64_t * simulated_time)
+{
+    picohttp_server_parameters_t server_param = { 0 };
+    int ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+
+    if (ret == 0) {
+        /* Initialize the server -- should include the path setup for connect action */
+        memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
+        server_param.web_folder = NULL;
+        server_param.path_table = path_item_list;
+        server_param.path_table_nb = 1;
+
+        picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
+        picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
+    }
+
+    /* Establish the connection from client to server. At this stage,
+    * this is merely an H3 connection.
+    */
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, loss_mask, 0, simulated_time);
+    }
+
+    return ret;
+}
+
+int wt_test_generic_final(
+    int ret,
+    picoquic_test_tls_api_ctx_t* test_ctx,
+    h3zero_callback_ctx_t* h3zero_cb,
+    uint64_t simulated_time,
+    uint64_t completion_target)
+{
+    /* Verify that settings were correctly received */
+    if (ret == 0 && !h3zero_cb->settings.settings_received) {
+        DBG_PRINTF("Settings not received at t: %llu", simulated_time);
+        ret = -1;
+    }
+    /* verify that the execution time is as expected */
+    if (ret == 0 && completion_target != 0) {
+        if (simulated_time > completion_target) {
+            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
+            ret = -1;
+        }
+    }
+    /* verify that the connection was disconnected without error */
+    if (ret == 0 &&
+        (test_ctx->cnx_client->remote_error != 0 ||
+            test_ctx->cnx_client->local_error != 0)) {
+        DBG_PRINTF("Connection close error: remote %llu, local %llu",
+            test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
+        ret = -1;
+
+    }
+
+    if (h3zero_cb != NULL)
+    {
+        h3zero_callback_delete_context(test_ctx->cnx_client, h3zero_cb);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 static int picowt_baton_test_one(
     uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
@@ -102,96 +226,40 @@ static int picowt_baton_test_one(
     uint64_t time_out;
     int nb_trials = 0;
     int was_active = 0;
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     wt_baton_ctx_t baton_ctx = { 0 };
     int ret = 0;
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     h3zero_callback_ctx_t* h3zero_cb = NULL;
+    h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
 
     initial_cid.id[3] = test_id;
+    ret = wt_test_generic_start(&test_ctx, &h3zero_cb, &control_stream_ctx, &simulated_time, &initial_cid, client_qlog_dir, server_qlog_dir);
+
 
     if (ret == 0) {
-        ret = tls_api_init_ctx_ex(&test_ctx,
-            PICOQUIC_INTERNAL_TEST_VERSION_1,
-            PICOQUIC_TEST_SNI, alpn, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
-
-        if (ret == 0 && server_qlog_dir != NULL) {
-            picoquic_set_qlog(test_ctx->qserver, server_qlog_dir);
-            test_ctx->qserver->use_long_log = 1;
-        }
-
-        if (ret == 0 && client_qlog_dir != NULL) {
-            picoquic_set_qlog(test_ctx->qclient, client_qlog_dir);
-        }
-
-        if (ret == 0) {
-            picowt_set_default_transport_parameters(test_ctx->qserver);
-            picowt_set_transport_parameters(test_ctx->cnx_client);
-        }
+        ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
+            control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
     }
-
-    if (ret != 0) {
-        DBG_PRINTF("Could not create the QUIC test contexts for V=%x\n", PICOQUIC_INTERNAL_TEST_VERSION_1);
-    }
-    else if (test_ctx == NULL || test_ctx->cnx_client == NULL) {
-        DBG_PRINTF("%s", "Connections where not properly created!\n");
-        ret = -1;
-    }
-
-    /* The default procedure creates connections using the test callback.
-    * We want to replace that by the demo client callback */
 
     if (ret == 0) {
-        /* Set the client callback context using as much as possible
-        * the generic picowt calls. */
-        h3zero_stream_ctx_t* control_stream_ctx = NULL;
-
-        ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
-            &test_ctx->cnx_client, &h3zero_cb, &control_stream_ctx, simulated_time, PICOQUIC_TEST_SNI);
-
-        if (ret == 0) {
-            ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
-                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+        if (test_id == 8) {
+            uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
+            ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
         }
-
-        if (ret == 0) {
-            if (test_id == 8) {
-                uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
-                ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
-                    baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
-            }
-            else {
-                ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
-                    baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
-            }
-        }
-
-        if (ret == 0) {
-            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
-        }
-
-        if (ret == 0) {
-            /* Initialize the server -- should include the path setup for connect action */
-            memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
-            server_param.web_folder = NULL;
-            server_param.path_table = path_item_list;
-            server_param.path_table_nb = 1;
-
-            picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
-            picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
+        else {
+            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
         }
     }
 
-    /* Establish the connection from client to server. At this stage,
-    * this is merely an H3 connection.
-    */
-
     if (ret == 0) {
-        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        ret =  wt_test_generic_connection(test_ctx, &loss_mask, &simulated_time);
     }
 
     /* Simulate the connection from the client side. */
@@ -246,38 +314,8 @@ static int picowt_baton_test_one(
             ret = -1;
         }
     }
-    /* Verify that settings were correctly received */
-    if (ret == 0 && !h3zero_cb->settings.settings_received) {
-        DBG_PRINTF("Settings not received at t: %llu", simulated_time);
-        ret = -1;
-    }
-    /* verify that the execution time is as expected */
-    if (ret == 0 && completion_target != 0) {
-        if (simulated_time > completion_target) {
-            DBG_PRINTF("Test uses %llu microsec instead of %llu", simulated_time, completion_target);
-            ret = -1;
-        }
-    }
-    /* verify that the connection was disconnected without error */
-    if (ret == 0 &&
-        (test_ctx->cnx_client->remote_error != 0 ||
-            test_ctx->cnx_client->local_error != 0)) {
-        DBG_PRINTF("Connection close error: remote %llu, local %llu",
-            test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
-        ret = -1;
 
-    }
-
-    if (h3zero_cb != NULL)
-    {
-        h3zero_callback_delete_context(test_ctx->cnx_client, h3zero_cb);
-    }
-
-    if (test_ctx != NULL) {
-        tls_api_delete_ctx(test_ctx);
-        test_ctx = NULL;
-    }
-
+    ret = wt_test_generic_final(ret, test_ctx, h3zero_cb, simulated_time, completion_target);
     return ret;
 }
 
@@ -441,3 +479,79 @@ int picowt_drain_test()
 
     return ret;
 }
+
+/* Testing the wt_h09 implementation */
+
+static int picowt_h09_test_one(
+    uint8_t test_id, const char* h09_path,
+    uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
+    const char* server_qlog_dir)
+{
+    char const* alpn = "h3";
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = do_losses;
+    uint64_t time_out;
+    int nb_trials = 0;
+    int was_active = 0;
+    wt_h09_ctx_t h09_ctx = { 0 };
+    int ret = 0;
+    picohttp_server_parameters_t server_param = { 0 };
+    picoquic_connection_id_t initial_cid = { {0x84, 0x09, 0, 0, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    h3zero_callback_ctx_t* h3zero_cb = NULL;
+    h3zero_stream_ctx_t* control_stream_ctx = NULL;
+
+    initial_cid.id[3] = test_id;
+    ret = wt_test_generic_start(&test_ctx, &h3zero_cb, &control_stream_ctx, &simulated_time, &initial_cid, client_qlog_dir, server_qlog_dir);
+
+
+    if (ret == 0) {
+        ret = wt_h09_prepare_context(test_ctx->cnx_client, &h09_ctx, h3zero_cb, control_stream_ctx, PICOQUIC_TEST_SNI, h09_path);
+    }
+
+    if (ret == 0) {
+        ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+            h09_ctx.authority, h09_ctx.server_path,
+            wt_h09_callback, &h09_ctx, PICOWT_H09_ALPN_AVAILABLE);
+    }
+
+    if (ret == 0) {
+        ret = wt_test_generic_connection(test_ctx, &loss_mask, &simulated_time);
+    }
+
+    /* Simulate the connection from the client side. */
+    time_out = simulated_time + 30000000;
+    while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+
+        if (ret != 0) {
+            DBG_PRINTF("Simulation error detected after %d trials\n", nb_trials);
+            break;
+        }
+
+        /* logic of web transport scenarios. */
+
+        /* Safety test */
+        if (ret == 0 && ++nb_trials > 100000) {
+            DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
+            ret = -1;
+            break;
+        }
+    }
+
+    /* Verify that the web transport scenarios were properly executed  */
+    if (ret == 0) {
+        /* TODO! */
+    }
+
+    ret = wt_test_generic_final(ret, test_ctx, h3zero_cb, simulated_time, completion_target);
+    return ret;
+}
+
+int picowt_h09_basic_test()
+{
+    int ret = picowt_h09_test_one(0, "/h09", 0, 2000000, ".", ".");
+
+    return ret;
+}
+

@@ -43,6 +43,9 @@
     <ClCompile Include="h09_common.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="wt_h09.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">

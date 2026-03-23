@@ -3520,6 +3520,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_h09_basic) {
+            int ret = picowt_h09_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_tp) {
             int ret = picowt_tp_test();
 

@@ -255,7 +255,9 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/webtransport.c
-    picohttp/wt_baton.c)
+    picohttp/wt_baton.c
+    picohttp/wt_h09.c
+)
 
 set(PICOHTTP_HEADERS
      picohttp/h3zero.h
