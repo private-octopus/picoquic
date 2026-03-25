@@ -15,7 +15,7 @@ extended it with support for multithread operations:
 With these new features, developers can "scale up" deployments of services that
 use picoquic, using multiple servers, multiple processes or multiple threads.
 
-## Verifying API usage in multithread environments
+## API usage in multithread environments
 
 As noted in the introduction, the picoquic APIs are not thread safe.
 It is important that the API is only used in the same thread that
@@ -67,27 +67,58 @@ and interfaces with the application with two types of callbacks:
   as data arrival.
 
 The application should keep track of the QUIC connections. When it
-want to issue a call such as ""
+want to issue a call to a picoquic API, it can do it from within a
+callback, for example when receiving data. It can also trigger the 
+callback by waking up the stack. For example, if the application
+has a message to send on a connection identified as `cnx`, it
+should:
+
+1. In the application thread:
+    - Identify the thread associated with the connection, and find
+   the associated thread context (noted `thread_ctx` here),
+    - Wake up the thread associated with the connection, calling:
+```
+        ret = picoquic_wake_up_network_thread(thread_ctx);
+```
+2. In the wake up call back for the selected thread:
+    - Mark the connection as ready to send a message on the selected stream:
+```
+        ret - picoquic_mark_active_stream(cnx, stream_id, 1, (void*)stream_ctx);
+```
+3. In the picoquic call back `picoquic_callback_prepare_to_send`
+    - copy the parts of the message that have not yet been sent
+      in the buffer returned by the call to `picoquic_provide_stream_data_buffer`
  
+Calls to create new connection, or change the state of a connection, will
+follow a similar pattern.
 
+## Debugging the API usage
 
-But just saying that does not
-mean that developers would not keep wondering why, for example,
-they cannot have more than one network thread within a picoquic instance.
-Why could not the application just say "create 15 network threads" instead
-of "create just one"? Deployments would be easier if picoquic could manage
-all the complexity of handling load balancing between multiple threads,
-instead of leaving that to each application.
+The rule for using the picoquic API is hopefully clear, but mistakes happen.
+For example, the application might call an API like `picoquic_create_cnx`
+or `picoquic_add_to_stream` directly from the main thread, or possibly
+from a callback issued for another connection in a different thread.
+For example, we can imagine "relay" style application
+receiving data on a connection, and immediately queuing that
+data on a different connection. The first call is executed on
+the first connection's thread, but the second connection cannot
+be accessed safely in that thread. Another thread might be
+accessing the connection at the same time, risking a race
+condition. 
 
-The initial study concluded that we need to support three scenarios for
-parallelism: multiple threads in a single process, multiple processes, and
-multiple hosts. To support these scenarios, we are developing a series of
-features:
+Race conditions are a pain to debug. The developer is faced with
+random errors that are typically very hard to debug.
+It is much more reliable to prevent these errors, having the
+API fail if it is not executed within the context of the
+application thread.
 
-- verification that the application is properly using picoquic threads
-- management of preferred address migartion to pin a connection to a
-  thread or a process
-
+To debug these issues, picoquic has the compile option
+`PICOQUIC_WITH_THREAD_CHECK`, which can be instantiated with
+the `cmake` option `WITH_THREAD_CHECK=ON`. If picoquic is compiled
+with that option, all API's defined in `picoquic.h` will check that
+they are executing in the proper thread, and if not will execute
+a `debugbreak()`, allowing the developer to quickly locate
+and correct the threading issue.
 
 # Supported architecture
 
