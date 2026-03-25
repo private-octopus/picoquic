@@ -1,8 +1,77 @@
 # Running picoquic on multiple threads in parallel
 
-Picoquic was designed as a singled threaded module, with the assumption that
+Picoquic was initially designed as a singled threaded module,
+with the assumption that
 deployments requiring higher performance would simply run multiple instances
-of picoquic in multiple parallel processes. But just saying that does not
+of picoquic in multiple parallel processes. Per developper demand, we have
+extended it with support for multithread operations:
+
+- Software option to verify proper use of the picoquic API in threaded environments
+- Support for "shared" UDP ports in the socket loop
+- Support for thread specific port
+- Support for Preferred Address redirection
+- Support for multiple network threads
+
+With these new features, developers can "scale up" deployments of services that
+use picoquic, using multiple servers, multiple processes or multiple threads.
+
+## Verifying API usage in multithread environments
+
+As noted in the introduction, the picoquic APIs are not thread safe.
+It is important that the API is only used in the same thread that
+also handles the picoquic context and the attached connection.
+In many scenarios, the developers will want to have at least two threads:
+one managing the application, and another managing the picoquic
+stack. The requirement then is to perform all API calls from within
+the network thread. In more complex scenarios, the process may manage
+several application threads and several network thread. There will
+be a picoquic context and a set of connections for each thread.
+The requirement in that case is to perform all API calls from within
+the same network thread that manages the relevant connection
+or the QUIC context.
+
+~~~
+   +-----------------------------------------------------------+
+   |                   +---------------------------------+     |
+   |                   | +---------------------------------+   |
+   | +--------------+  | | +---------------------------------+ |
+   | | application  |  | | | Network thread                  | |
+   | |  thread(s)   |  | | |                                 | |
+   | |  wake-up  ?--------->       Wait loop                 | |
+   | |  function ?-------> |            |                    | |
+   | |           ?-----> | |       +----+-----+ packets,     | |
+   | |              |  | | |       |          | timers       | |
+   | |              |  | | | +-----v----+ +---v------------+ | |
+   | |  Handler <-------------> Wake up | | Picoquic stack | | |
+   | |              |  | | | | callback | |                | | |
+   | |              |  | | | |     ------->                | | |
+   | |              |  | | | +----------+ |                | | |
+   | |              |  | | | +----------+ |                | | |
+   | |              |  | | | | Callback | | Per connection | | |
+   | |              |  | | | | handler  | | callbacks      | | |
+   | |              |  | | | |          <------            | | |
+   | |  Handler <------------->         | |                | | |
+   | |              |  + | | |      ------->               | | |
+   | |              |    | | |          | |                | | |
+   | |              |    + | +----------+ +----------------+ | |
+   | +--------------+      +---------------------------------+ |
+   +-----------------------------------------------------------+
+~~~
+
+The architecture diagram above describes the a typical multithread
+scenario. Each network thread manages a separate picoquic stack,
+and interfaces with the application with two types of callbacks:
+
+- wake up callbacks, which can be triggered by the thread wake up API
+- connection callbacks, which are triggered by connection events such
+  as data arrival.
+
+The application should keep track of the QUIC connections. When it
+want to issue a call such as ""
+ 
+
+
+But just saying that does not
 mean that developers would not keep wondering why, for example,
 they cannot have more than one network thread within a picoquic instance.
 Why could not the application just say "create 15 network threads" instead
