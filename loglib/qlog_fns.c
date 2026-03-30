@@ -625,11 +625,16 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
     uint64_t cid_len;
     const uint8_t* end_bytes = bytes + len;
 
-    fprintf(f, "\"ip_v4\": \"");
-    bytes = qlog_frame_hex_string(f, bytes, end_bytes, 4);
+    fprintf(f, "{");
+    if (len < 4) {
+        bytes = NULL;
+    } else {
+        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[4]);
+        bytes += 4;
+    }
     if (bytes != NULL) {
         bytes = picoquic_frames_uint16_decode(bytes, end_bytes, &port4);
-        fprintf(f, "\", \"port_v4\":%d", port4);
+        fprintf(f, ", \"port_v4\":%d", port4);
     }
     if (bytes != NULL) {
         fprintf(f, ", \"ip_v6\": \"");
@@ -662,6 +667,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
         fprintf(f, "\", \"extra_bytes\": ");
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, end_bytes - bytes);
     }
+    fprintf(f, "}");
 }
 
 void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len)
@@ -741,7 +747,6 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_server_preferred_address:
                 fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                 qlog_fns_preferred_address(f, bytes, extension_length);
-                fprintf(f, "}");
                 break;
             case picoquic_tp_disable_migration:
             case picoquic_tp_enable_time_stamp:

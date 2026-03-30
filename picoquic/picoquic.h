@@ -346,7 +346,7 @@ typedef enum {
     picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
 } picoquic_call_back_event_t;
 
-typedef struct st_picoquic_tp_prefered_address_t {
+typedef struct st_picoquic_tp_preferred_address_t {
     int is_defined;
     uint8_t ipv4Address[4];
     uint16_t ipv4Port;
@@ -354,7 +354,7 @@ typedef struct st_picoquic_tp_prefered_address_t {
     uint16_t ipv6Port;
     picoquic_connection_id_t connection_id;
     uint8_t statelessResetToken[16];
-} picoquic_tp_prefered_address_t;
+} picoquic_tp_preferred_address_t;
 
 typedef struct st_picoquic_tp_version_negotiation_t {
     uint32_t current; /* Version found in TP, should match envelope */
@@ -378,7 +378,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t active_connection_id_limit;
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
-    picoquic_tp_prefered_address_t prefered_address;
+    picoquic_tp_preferred_address_t preferred_address;
     uint32_t max_datagram_frame_size;
     int enable_loss_bit;
     int enable_time_stamp; /* (x&1) want, (x&2) can */
@@ -933,6 +933,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  * makes it unsafe to use inside a callback.
  */
 int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
+
+int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, char const* error_reason);
 
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 

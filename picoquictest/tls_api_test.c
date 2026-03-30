@@ -3050,8 +3050,8 @@ int tls_api_one_scenario_init_ex(
 
     if (ret == 0 && server_params != NULL) {
         ret = picoquic_set_default_tp((*p_test_ctx)->qserver, server_params);
-        if (server_params->prefered_address.ipv4Port != 0 ||
-            server_params->prefered_address.ipv6Port != 0) {
+        if (server_params->preferred_address.ipv4Port != 0 ||
+            server_params->preferred_address.ipv6Port != 0) {
             /* If testing server migration, disable address check */
             (*p_test_ctx)->server_use_multiple_addresses = 1;
         }
@@ -9962,6 +9962,7 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
 #else
     server_preferred.sin_addr.s_addr = 0x0A00000B;
 #endif
+    /* The preferred port is expressed in network byte order for compatibility with simulation */
     server_preferred.sin_port = 5678;
 
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
@@ -9969,9 +9970,10 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
     picoquic_init_transport_parameters(&server_parameters, 1);
 
     /* Create an alternate IP address, and use it as preferred address */
-    server_parameters.prefered_address.is_defined = 1;
-    memcpy(server_parameters.prefered_address.ipv4Address, &server_preferred.sin_addr, 4);
-    server_parameters.prefered_address.ipv4Port = server_preferred.sin_port;
+    server_parameters.preferred_address.is_defined = 1;
+    memcpy(server_parameters.preferred_address.ipv4Address, &server_preferred.sin_addr, 4);
+    /* The preferred address TP carries the port in "host" order. */
+    server_parameters.preferred_address.ipv4Port = ntohs(server_preferred.sin_port);
     server_parameters.migration_disabled = migration_disabled;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,

@@ -279,7 +279,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             aef22626bbe696581dcd46af1d63be1c8e803751)
+        GIT_TAG             b84869f41414b6d0148db7728f1cf12f5b544874)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -629,7 +629,8 @@ endif()
 
 install(TARGETS picoquic-core
     EXPORT picoquic-targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if(PICOQUIC_FETCH_PTLS)
     set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a")
