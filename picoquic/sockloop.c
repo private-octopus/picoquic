@@ -381,6 +381,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
 
+
     if (s_ctx->fd == INVALID_SOCKET ||
 #ifndef ESP_PLATFORM
         /* TODO: set option IPv6 only */
@@ -388,6 +389,9 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
 #endif
         picoquic_socket_set_pkt_info(s_ctx->fd, s_ctx->af) != 0 ||
         (s_ctx->is_port_shared && setsockopt(s_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
+#if defined(SO_REUSEPORT)
+        (s_ctx->is_port_shared && setsockopt(s_ctx->fd, SOL_SOCKET, SO_REUSEPORT, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
+#endif
         picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
