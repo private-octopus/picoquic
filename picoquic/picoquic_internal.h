@@ -706,6 +706,7 @@ typedef struct st_picoquic_quic_t {
 #ifdef BBRExperiment
     bbr_exp bbr_exp_flags;
 #endif
+    void* v_thread_ctx;
 #ifdef PICOQUIC_WITH_THREAD_CHECK
     uint64_t thread_id;
 #endif

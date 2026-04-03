@@ -118,7 +118,12 @@
 
 #include "picosocks.h"
 #include "picoquic.h"
+#include "tls_api.h"
 #include "picoquic_internal.h"
+#include "picoquic_config.h"
+#include "picoquic_lb.h"
+#include "picoquic_qlog.h"
+#include "performance_log.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_unified_log.h"
 
@@ -1766,6 +1771,8 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_qui
     }
     else {
         memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
+        /* Set the thread context in the quic context */
+        quic->v_thread_ctx = thread_ctx;
         /* Fill the arguments in the context */
         thread_ctx->quic = quic;
         thread_ctx->param = param;
@@ -1843,10 +1850,209 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
      * notice the flag, and exit.
      */
     picoquic_close_network_wake_up(thread_ctx);
+    /* Clear the thread context in the quic context, to avoid any risk of
+     * use after free. */
+    if (thread_ctx->quic != NULL) {
+        thread_ctx->quic->v_thread_ctx = NULL;
+    }
     /* delete the thread */
     if (thread_ctx->is_threaded) {
         thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
     }
+    /* If the param component was allocated as part of frame context, free it */
+    if (thread_ctx->is_param_allocated) {
+        free(thread_ctx->param);
+    }
     /* Free the context */
     free(thread_ctx);
+}
+
+
+/* Set a server context, using more parameters than the simple
+* creation from configuration.
+*/
+
+int picoquic_server_set_context(picoquic_quic_t** qserver,
+    struct st_picoquic_quic_config_t* config,
+    uint64_t current_time,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_alpn_select_fn_v2 alpn_select_fn)
+{
+    int ret = 0;
+    /* Create QUIC context */
+
+    if (ret == 0) {
+        *qserver = picoquic_create_and_configure(config, default_callback_fn, default_callback_ctx, current_time, NULL);
+        if (*qserver == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_key_log_file_from_env(*qserver);
+
+            picoquic_set_alpn_select_fn_v2(*qserver, alpn_select_fn);
+
+            picoquic_use_unique_log_names(*qserver, 1);
+
+            if (config->qlog_dir != NULL)
+            {
+                picoquic_set_qlog(*qserver, config->qlog_dir);
+            }
+            if (config->performance_log != NULL)
+            {
+                ret = picoquic_perflog_setup(*qserver, config->performance_log);
+            }
+            if (ret == 0 && config->cnx_id_cbdata != NULL) {
+                picoquic_load_balancer_config_t lb_config;
+                ret = picoquic_lb_compat_cid_config_parse(&lb_config, config->cnx_id_cbdata, strlen(config->cnx_id_cbdata));
+                if (ret != 0) {
+                    fprintf(stdout, "Cannot parse the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
+                }
+                else {
+                    ret = picoquic_lb_compat_cid_config(*qserver, &lb_config);
+                    if (ret != 0) {
+                        fprintf(stdout, "Cannot set the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
+                    }
+                }
+            }
+            if (ret == 0) {
+                fprintf(stdout, "Accept enable multipath: %d.\n", (*qserver)->default_multipath_option);
+            }
+            (*qserver)->default_tp.is_reset_stream_at_enabled = 1;
+            (*qserver)->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+        }
+    }
+    return ret;
+}
+
+/* Return the thread context associated with a QUIC context,
+* or a NULl pointer if there is none. */
+struct st_picoquic_network_thread_ctx_t* picoquic_get_thread_ctx(picoquic_quic_t* quic)
+{
+    return (struct st_picoquic_network_thread_ctx_t*) quic->v_thread_ctx;
+}
+
+/*
+* Start a set of N threads. Each thread manages its own quic context, which is
+* created here from the config parameters. The thread interacts with the
+* application through:
+*
+* - wake up and stop/delete calls, using the standard thread API,
+* - the ALPN selection function, called when a new connection is created,
+*   which can set the callback function and the callback context for the connection.
+* - a callback function called from the packet loop, either when the
+*  thread is woken up, or when the packet loop needs to check application delays.
+* - per connection callbacks.
+*
+* The application will specialize the threads by providing the callback functions,
+* and their default context:
+* - the ALPN selection function is the same for all threads.
+* - the packet loop callback is the same for all threads, and its context.
+* - the default connection callback is the same for all threads.
+* - the default connection callback context is the same for all threads.
+*
+* The packet loop callback context is the same for all threads. The function
+* can retrieve the thread context from the "quic" context argument using
+* the function picoquic_get_thread_ctx_from_quic().
+*/
+
+int picoquic_start_server_threads(
+    struct st_picoquic_quic_config_t* config,
+    uint64_t current_time,
+    picoquic_alpn_select_fn_v2 alpn_select_fn,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_packet_loop_cb_fn loop_callback_fn,
+    void* loop_callback_ctx,
+    picoquic_custom_thread_create_fn thread_create_fn,
+    picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn,
+    picoquic_network_thread_ctx_t** thread_ctxs,
+    int nb_threads_max,
+    int* nb_threads_created)
+{
+    int ret = 0;
+    int nb_threads = 0;
+    uint8_t default_ticket_key[16] = { 0 };
+    /* Set the thread functions to default value if not set */
+    if (thread_create_fn == NULL) {
+        thread_create_fn = picoquic_internal_thread_create;
+    }
+    if (thread_delete_fn == NULL) {
+        thread_delete_fn = picoquic_internal_thread_delete;
+    }
+    if (thread_setname_fn == NULL) {
+        thread_setname_fn = picoquic_internal_thread_setname;
+    }
+    /* Check that the number of threads matches the config value
+     */
+    if (config->nb_threads > nb_threads_max) {
+        fprintf(stdout, "Cannot start %d threads, max is %d.\n", config->nb_threads, nb_threads_max);
+
+        ret = -1;
+    }
+    else if (config->nb_threads < 1) {
+        nb_threads = 1;
+    }
+    else {
+        nb_threads = (int)config->nb_threads;
+    }
+    /* set the ticket encryption key if not present in config */
+    if (ret == 0 && config->ticket_encryption_key == NULL) {
+        picoquic_quic_t* quic = picoquic_create(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, default_ticket_key, current_time, NULL,
+            NULL, NULL, 0);
+        if (quic != NULL) {
+            picoquic_crypto_random(quic, default_ticket_key, sizeof(default_ticket_key));
+            picoquic_free(quic);
+            config->ticket_encryption_key = default_ticket_key;
+            config->ticket_encryption_key_length = sizeof(default_ticket_key);
+        }
+        else {
+            fprintf(stdout, "Cannot create a temporary QUIC context to generate the default ticket encryption key.\n");
+        }
+    }
+
+    for (int i = 0; ret == 0 && i < nb_threads; i++) {
+        /* Allocate and initiate the params field. */
+        picoquic_quic_t* qserver = NULL;
+        picoquic_packet_loop_param_t* param = NULL;
+
+        ret = picoquic_server_set_context(&qserver, config, current_time, default_callback_fn, default_callback_ctx, alpn_select_fn);
+        if (ret != 0) {
+            fprintf(stdout, "Cannot create the QUIC context for thread %d.\n", i);
+            nb_threads = i;
+        }
+        else if ((param = (picoquic_packet_loop_param_t*)malloc(sizeof(picoquic_packet_loop_param_t))) == NULL) {
+            fprintf(stdout, "Cannot create the packet loop param for thread %d.\n", i);
+            nb_threads = i;
+            ret = -1;
+        }
+        else {
+            memset(param, 0, sizeof(picoquic_packet_loop_param_t));
+            if (param->local_port != 0) {
+                param->local_port = (uint16_t)(config->local_port + i);
+            }
+            param->public_port = config->server_port;
+            param->is_port_shared = config->is_port_shared;
+            param->local_af = 0;
+            param->dest_if = config->dest_if;
+            param->socket_buffer_size = config->socket_buffer_size;
+            param->do_not_use_gso = config->do_not_use_gso;
+
+            thread_ctxs[i] = picoquic_start_custom_network_thread(qserver, param,
+                thread_create_fn, thread_delete_fn, thread_setname_fn, NULL,
+                loop_callback_fn, loop_callback_ctx,
+                &ret);
+            if (thread_ctxs[i] == NULL) {
+                picoquic_free(qserver);
+                free(param);
+                nb_threads = i;
+            }
+            else {
+                thread_ctxs[i]->is_param_allocated = 1;
+            }
+        }
+    }
+    *nb_threads_created = nb_threads;
+    return ret;
 }
