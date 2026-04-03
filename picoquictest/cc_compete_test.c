@@ -222,6 +222,45 @@ int cc_ns_media_test()
     return ret;
 }
 
+/* Check that the picoquic_ns media simulations can correctly be repeated */
+int cc_ns_media_repeat_test()
+{
+    int ret = 0;
+    picoquic_ns_spec_t spec = { 0 };
+    picoquic_connection_id_t icid = { { 0xcc, 0xed, 0x1a, 0, 0, 0, 0, 0}, 8 };
+    FILE* err_fd = NULL;
+    spec.main_cc_algo = picoquic_cubic_algorithm;
+    spec.main_start_time = 0;
+    spec.main_scenario_text = cc_compete_media_scenario;
+    spec.background_cc_algo = picoquic_cubic_algorithm;
+    spec.background_start_time = 0;
+    spec.background_scenario_text = cc_compete_batch_scenario_10M;
+    spec.nb_connections = 1;
+    spec.data_rate_in_gbps = 0.1;
+    spec.data_rate_up_in_gbps = 0.1;
+    spec.latency = 15000;
+    spec.main_target_time = 40000000;
+    spec.queue_delay_max = 100000;
+    spec.icid = icid;
+    spec.qlog_dir = ".";
+    spec.qperf_log = "./ns_qperflog.csv";
+    spec.media_stats_start = 200000;
+    spec.media_latency_average = 30500;
+    spec.media_latency_max = 50000;
+    spec.media_excluded = "vhigh, vmid,  vlast";
+
+    err_fd = picoquic_file_open(MEDIA_TEST_LOG, "w");
+    if (err_fd == NULL) {
+        DBG_PRINTF("Cannot open %s\n", MEDIA_TEST_LOG);
+        ret = -1;
+    }
+    else {
+        ret = picoquic_ns_n(&spec, err_fd, 5);
+        picoquic_file_close(err_fd);
+    }
+    return ret;
+}
+
 /* Check that the picoquic_ns simulations can correctly test the black hole scenario.
  */
 int cc_ns_blackhole_test()

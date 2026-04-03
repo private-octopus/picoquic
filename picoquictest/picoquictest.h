@@ -302,6 +302,7 @@ int cc_ns_wifi_bad_bbr_test();
 int cc_ns_varylink_test();
 int cc_ns_satellite_test();
 int cc_ns_media_test();
+int cc_ns_media_repeat_test();
 int satellite_basic_test();
 int satellite_seeded_test();
 int satellite_seeded_bbr1_test();

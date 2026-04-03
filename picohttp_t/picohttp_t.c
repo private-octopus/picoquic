@@ -128,7 +128,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_wifi_bad_bbr", cc_ns_wifi_bad_bbr_test },
     { "cc_ns_varylink", cc_ns_varylink_test },
     { "cc_ns_satellite", cc_ns_satellite_test },
-    { "cc_ns_media", cc_ns_media_test }
+    { "cc_ns_media", cc_ns_media_test },
+    { "cc_ns_media_repeat", cc_ns_media_repeat_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
