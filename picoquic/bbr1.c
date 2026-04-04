@@ -471,6 +471,11 @@ static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, ch
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr1_state_t* bbr1_state = (picoquic_bbr1_state_t*)malloc(sizeof(picoquic_bbr1_state_t));
 
+    if (cnx == NULL) {
+        free(bbr1_state);
+        return;
+    }
+
     path_x->congestion_alg_state = (void*)bbr1_state;
     if (bbr1_state != NULL) {
         bbr1_state->option_string = option_string;
@@ -1161,7 +1166,6 @@ void picoquic_bbr1_notify_congestion(
 */
 void picoquic_bbr1_suspension_almost_over(
     picoquic_bbr1_state_t* bbr1_state,
-    picoquic_path_t* path_x,
     uint64_t lost_packet_number)
 {
     if (bbr1_state->is_suspended &&
@@ -1223,7 +1227,7 @@ static void picoquic_bbr1_notify(
             break;
         case picoquic_congestion_notification_spurious_repeat:
             if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_almost_over(bbr1_state, path_x, ack_state->lost_packet_number);
+                picoquic_bbr1_suspension_almost_over(bbr1_state, ack_state->lost_packet_number);
             }
             break;
         case picoquic_congestion_notification_acknowledgement:
