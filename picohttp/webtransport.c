@@ -310,7 +310,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
                 else {
                     if ((os + candidate_length == s_len ||
                         supported[os + candidate_length] == ' ' ||
-                        supported[os + candidate_length] == '\t ' ||
+                        supported[os + candidate_length] == '\t' ||
                         supported[os + candidate_length] == ',') &&
                         memcmp(&supported[os], candidate, candidate_length) == 0) {
                         /* found it. set the value. */
