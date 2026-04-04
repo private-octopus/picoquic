@@ -1026,7 +1026,7 @@ void c4_notify(
     picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_per_ack_state_t * ack_state,
-    uint64_t current_time)
+    uint64_t UNUSED(current_time))
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
