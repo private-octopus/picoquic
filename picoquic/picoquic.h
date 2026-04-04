@@ -171,7 +171,7 @@ extern "C" {
  */
 #ifndef UNUSED
 #if defined(__GNUC__) || defined(__clang__)
-#define UNUSED(x) UNUSED_ ## x __attribute__((unused))
+#define UNUSED(x) x __attribute__((unused))
 #else
 #define UNUSED(x) x
 #endif
