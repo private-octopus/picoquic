@@ -604,7 +604,11 @@ static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, cha
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
-    cnx;
+
+    if (cnx == NULL) {
+        free(bbr_state);
+        return;
+    }
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
@@ -1697,7 +1701,7 @@ static uint64_t BBRTargetInflight(picoquic_bbr_state_t* bbr_state, picoquic_path
 }
 
 #ifdef RTTJitterBufferProbe
-static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
+static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t * rs)
 {
     if (IsInAProbeBWState(bbr_state) &&
         rs->rtt_sample > 2*bbr_state->min_rtt &&
@@ -1861,7 +1865,7 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
         if (BBRCheckTimeToProbeBW(bbr_state, path_x, rs, current_time))
             return; /* already decided state transition */
 #ifdef RTTJitterBufferProbe
-        if (BBRCheckPathSaturated(bbr_state, path_x, rs, current_time)) {
+        if (BBRCheckPathSaturated(bbr_state, path_x, rs)) {
             return;
         }
 #endif
@@ -1887,7 +1891,7 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
 
     case picoquic_bbr_alg_probe_bw_cruise:
 #ifdef RTTJitterBufferProbe
-        if (BBRCheckPathSaturated(bbr_state, path_x, rs, current_time)) {
+        if (BBRCheckPathSaturated(bbr_state, path_x, rs)) {
             return;
         }
 #endif
@@ -1980,7 +1984,7 @@ static void BBREnterStartupResume(picoquic_bbr_state_t* bbr_state)
     bbr_state->cwnd_gain = BBRStartupResumeCwndGain;
 }
 
-static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
+static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
 {
     if (bbr_state->state == picoquic_bbr_alg_startup_resume) {
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
@@ -2041,7 +2045,7 @@ static void BBRCheckStartupFullBandwidth(picoquic_bbr_state_t* bbr_state,
 }
 
 static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
-    picoquic_path_t * path_x, bbr_per_ack_state_t * rs, uint64_t current_time)
+    picoquic_path_t * path_x, bbr_per_ack_state_t * rs)
 {
     if (bbr_state->state == picoquic_bbr_alg_startup) {
         BBRCheckStartupFullBandwidth(bbr_state, rs);
@@ -2314,8 +2318,8 @@ static void BBRUpdateModelAndState(picoquic_bbr_state_t* bbr_state, picoquic_pat
     BBRUpdateCongestionSignals(bbr_state, path_x, rs);
     BBRUpdateACKAggregation(bbr_state, path_x, rs, current_time);
     BBRCheckStartupLongRtt(bbr_state, path_x, rs, current_time);
-    BBRCheckStartupResume(bbr_state, path_x, rs, current_time);
-    BBRCheckStartupDone(bbr_state, path_x, rs, current_time);
+    BBRCheckStartupResume(bbr_state, path_x, rs);
+    BBRCheckStartupDone(bbr_state, path_x, rs);
     BBRCheckRecovery(bbr_state, path_x, rs, current_time);
     BBRCheckDrain(bbr_state, path_x, current_time);
     BBRUpdateProbeBWCyclePhase(bbr_state, path_x, rs, current_time);
