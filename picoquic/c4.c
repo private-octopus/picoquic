@@ -548,7 +548,7 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
 }
 
-static void c4_initial_handle_rtt_excess(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification)
+static void c4_initial_handle_rtt_excess(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
     /* HyStart. */
     /* Using RTT increases as congestion signal. This is used
@@ -573,7 +573,7 @@ static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state
     }
 }
 
-static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
+static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state)
 {
     c4_state->nb_packets_in_startup += 1;
     /* We implement Reno style slow start, doubling the CWND every RTT, by
@@ -831,7 +831,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     }
 
     if (c4_state->alg_state == c4_initial) {
-        c4_initial_handle_ack(path_x, c4_state, ack_state, current_time);
+        c4_initial_handle_ack(path_x, c4_state, ack_state);
     }
     else {
         if (c4_era_check(path_x, c4_state)) {
@@ -1084,7 +1084,7 @@ void c4_notify(
         case picoquic_congestion_notification_rtt_measurement:
             c4_update_rtt(c4_state, ack_state->rtt_measurement);
             if (c4_state->alg_state == c4_initial) {
-                c4_initial_handle_rtt_excess(path_x, c4_state, notification);
+                c4_initial_handle_rtt_excess(path_x, c4_state);
                 c4_apply_rate_and_cwin(path_x, c4_state);
             }
             else {
