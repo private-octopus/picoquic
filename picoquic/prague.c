@@ -127,7 +127,9 @@ void picoquic_prague_init(picoquic_path_t* path_x, char const* option_string, ui
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
-    UNUSED(option_string);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(option_string);
+#endif
 
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));

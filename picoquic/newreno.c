@@ -190,8 +190,10 @@ static void picoquic_newreno_init(picoquic_path_t* path_x, char const *option_st
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));
-    UNUSED(current_time);
-    UNUSED(option_string);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+    UNREFERENCED_PARAMETER(option_string);
+#endif
 
     if (nr_state != NULL) {
         picoquic_newreno_reset(nr_state, path_x);

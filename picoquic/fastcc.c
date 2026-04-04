@@ -95,7 +95,9 @@ void picoquic_fastcc_init(picoquic_path_t* path_x, char const* option_string, ui
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_fastcc_state_t* fastcc_state = path_x->congestion_alg_state;
-    UNUSED(option_string);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(option_string);
+#endif
     
     if (fastcc_state == NULL) {
         fastcc_state = (picoquic_fastcc_state_t*)malloc(sizeof(picoquic_fastcc_state_t));

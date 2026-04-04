@@ -67,12 +67,13 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* pa
     cubic_state->recovery_sequence = 0;
 }
 
-static void cubic_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+static void cubic_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
-    UNUSED(option_string);
-
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(option_string);
+#endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
         cubic_reset(cubic_state, path_x, current_time);
