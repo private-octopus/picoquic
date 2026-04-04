@@ -166,8 +166,16 @@ extern "C" {
 #define PICOQUIC_ECN_ECT_1 0x01
 #define PICOQUIC_ECN_CE 0x03
 
-
-
+/* Convenience macro for handling unused attribute in functions that
+* must be defined with a specific signature, for example as callback.
+ */
+#ifndef UNUSED
+#if defined(__GNUC__) || defined(__clang__)
+#define UNUSED(x) UNUSED_ ## x __attribute__((unused))
+#else
+#define UNUSED(x) x
+#endif
+#endif
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -1690,7 +1698,7 @@ typedef struct st_picoquic_per_ack_state_t {
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,

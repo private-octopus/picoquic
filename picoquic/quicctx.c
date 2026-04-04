@@ -4281,7 +4281,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         cnx->congestion_alg = cnx->quic->default_congestion_alg;
         cnx->congestion_alg_option_string = cnx->quic->default_congestion_alg_option_string;
         if (cnx->congestion_alg != NULL) {
-            cnx->congestion_alg->alg_init(cnx, cnx->path[0], cnx->congestion_alg_option_string, start_time);
+            cnx->congestion_alg->alg_init(cnx->path[0], cnx->congestion_alg_option_string, start_time);
         }
     }
 
@@ -5386,7 +5386,7 @@ void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congesti
     if (cnx->congestion_alg != NULL) {
         if (cnx->path != NULL) {
             for (int i = 0; i < cnx->nb_paths; i++) {
-                cnx->congestion_alg->alg_init(cnx, cnx->path[i], alg_option_string, picoquic_get_quic_time(cnx->quic));
+                cnx->congestion_alg->alg_init(cnx->path[i], alg_option_string, picoquic_get_quic_time(cnx->quic));
             }
         }
     }

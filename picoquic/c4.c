@@ -627,20 +627,17 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
     }
 }
 
-void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+void c4_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     c4_state_t* c4_state = path_x->congestion_alg_state;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
     
     if (c4_state == NULL) {
         c4_state = (c4_state_t*)malloc(sizeof(c4_state_t));
     }
     
     if (c4_state != NULL){
-        cnx->is_lost_feedback_notification_required = 1;
+        path_x->cnx->is_lost_feedback_notification_required = 1;
         
         c4_reset(c4_state, path_x, option_string, current_time);
     }

@@ -466,15 +466,10 @@ static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path
     BBR1UpdateTargetCwnd(bbr1_state);
 }
 
-static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+static void picoquic_bbr1_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr1_state_t* bbr1_state = (picoquic_bbr1_state_t*)malloc(sizeof(picoquic_bbr1_state_t));
-
-    if (cnx == NULL) {
-        free(bbr1_state);
-        return;
-    }
 
     path_x->congestion_alg_state = (void*)bbr1_state;
     if (bbr1_state != NULL) {

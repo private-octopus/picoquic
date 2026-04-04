@@ -340,7 +340,7 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
             !path_x->path_is_demoted) {
             /* Set the congestion algorithm if not already done */
             if (cnx->congestion_alg != NULL && path_x->congestion_alg_state == NULL) {
-                cnx->congestion_alg->alg_init(cnx, path_x, cnx->congestion_alg_option_string, current_time);
+                cnx->congestion_alg->alg_init(path_x, cnx->congestion_alg_option_string, current_time);
             }
             /* track the available paths */
             if (path_x->path_is_backup) {
