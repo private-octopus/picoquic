@@ -333,7 +333,7 @@ int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 /* Clear the recorded errors in the crypto stack, e.g. before
 * processing a new message.
 */
-void picoquic_openssl_clear_crypto_errors()
+void picoquic_openssl_clear_crypto_errors(void)
 {
     ERR_clear_error();
 }
