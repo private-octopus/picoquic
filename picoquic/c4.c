@@ -801,7 +801,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
 
 /* Handle data ack event.
  */
-void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
+void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state)
 {
     uint64_t previous_rate = c4_state->nominal_rate;
     uint64_t rate_measurement = 0;
@@ -1038,7 +1038,7 @@ void c4_notify(
     if (c4_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            c4_handle_ack(path_x, c4_state, ack_state, current_time);
+            c4_handle_ack(path_x, c4_state, ack_state);
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_ecn_ec:
