@@ -198,8 +198,8 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_tls_api_init();
-void picoquic_tls_api_unload();
+void picoquic_tls_api_init(void);
+void picoquic_tls_api_unload(void);
 void picoquic_tls_api_reset(uint64_t init_flags);
 
 void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);
