@@ -185,19 +185,16 @@ typedef struct st_c4_state_t {
 static void c4_enter_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    c4_congestion_t c_mode,
-    uint64_t current_time);
+    c4_congestion_t c_mode);
 
 static void c4_enter_cruise(
     picoquic_path_t* path_x,
-    c4_state_t* c4_state,
-    uint64_t current_time);
+    c4_state_t* c4_state);
 
 static void c4_notify_congestion(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    c4_congestion_t c_mode,
-    uint64_t current_time);
+    c4_congestion_t c_mode);
 
 #ifdef C4_WITH_LOGGING
 /* Collect raw measurements for analysis */
@@ -486,7 +483,7 @@ static void c4_era_reset(
     c4_update_ecn_alpha(path_x, c4_state);
 }
 
-static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time)
+static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
     c4_state->alg_state = c4_initial;
     c4_state->initial_cwnd = path_x->cwin;
@@ -524,7 +521,7 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_state->running_min_rtt = UINT64_MAX;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_set_options(c4_state);
-    c4_enter_initial(path_x, c4_state, current_time);
+    c4_enter_initial(path_x, c4_state);
 }
 
 void c4_seed_cwin(c4_state_t* c4_state, uint64_t bytes_in_flight)
@@ -547,7 +544,7 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint6
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->nb_eras_no_increase = 0;
         c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
-        c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
+        c4_enter_recovery(path_x, c4_state, c4_congestion_none);
     }
 }
 
@@ -652,8 +649,7 @@ void c4_init(picoquic_path_t* path_x, char const* option_string, uint64_t curren
 static void c4_enter_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    c4_congestion_t c_mode,
-    uint64_t current_time)
+    c4_congestion_t c_mode)
 {
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
@@ -705,10 +701,10 @@ static void c4_exit_recovery(
     c4_state->ecn_alpha = 0;
 
     if (c4_state->probe_level > C4_PROBE_LEVEL_MAX) {
-        c4_enter_initial(path_x, c4_state, current_time);
+        c4_enter_initial(path_x, c4_state);
     }
     else {
-        c4_enter_cruise(path_x, c4_state, current_time);
+        c4_enter_cruise(path_x, c4_state);
     }
 }
 
@@ -718,8 +714,7 @@ static void c4_exit_recovery(
 */
 static void c4_enter_cruise(
     picoquic_path_t* path_x,
-    c4_state_t* c4_state,
-    uint64_t current_time)
+    c4_state_t* c4_state)
 {
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
@@ -750,28 +745,9 @@ static void c4_enter_cruise(
 */
 static void c4_enter_push(
     picoquic_path_t* path_x,
-    c4_state_t* c4_state,
-    uint64_t current_time)
+    c4_state_t* c4_state)
 {
-#if 1
     c4_state->alpha_1024_current = c4_push_rate_by_probe_level[c4_state->probe_level];
-#else
-    if (c4_state->nb_push_no_congestion == 0 && c4_state->do_slow_push) {
-        /* If the previous push was not successful reduce probe level to 1 */
-        c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
-    }
-    else {
-        c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
-        if (c4_state->ecn_alpha > 0) {
-            uint64_t scale_1024;
-            uint64_t push_delta;
-            c4_state->ecn_threshold = c4_ecn_threshold(c4_state);
-            scale_1024 = (c4_state->ecn_alpha * 1024) / c4_state->ecn_threshold;
-            push_delta = MULT1024(scale_1024, C4_ALPHA_PUSH_1024 - C4_ALPHA_PUSH_LOW_1024);
-            c4_state->alpha_1024_current -= push_delta;
-        }
-    }
-#endif
     c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_era_reset(path_x, c4_state);
     c4_state->alg_state = c4_pushing;
@@ -875,7 +851,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 c4_state->nominal_rate < 1000000 &&
                 5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt) {
                 c4_state->initial_after_jitter = 1;
-                c4_enter_initial(path_x, c4_state, current_time);
+                c4_enter_initial(path_x, c4_state);
             }
             else
             {
@@ -891,11 +867,11 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                     c4_era_reset(path_x, c4_state);
                     if (c4_state->nb_cruise_left_before_push <= 0 &&
                         path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                        c4_enter_push(path_x, c4_state, current_time);
+                        c4_enter_push(path_x, c4_state);
                     }
                     break;
                 case c4_pushing:
-                    c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
+                    c4_enter_recovery(path_x, c4_state, c4_congestion_none);
                     break;
                 default:
                     c4_era_reset(path_x, c4_state);
@@ -917,8 +893,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 static void c4_notify_congestion(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    c4_congestion_t c_mode,
-    uint64_t current_time)
+    c4_congestion_t c_mode)
 {
     uint64_t beta = C4_BETA_LOSS_1024;
     c4_state->congestion_notified = 1;
@@ -984,7 +959,7 @@ static void c4_notify_congestion(
             }
             C4_LOGGER(path_x, 0, c4_state, NULL, beta, c_mode);
         }
-        c4_enter_recovery(path_x, c4_state, c_mode, current_time);
+        c4_enter_recovery(path_x, c4_state, c_mode);
     }
 
     c4_apply_rate_and_cwin(path_x, c4_state);
@@ -1038,7 +1013,7 @@ static void c4_handle_rtt_excess(
     if (c4_state->recent_delay_excess > 0 &&
         c4_state->alpha_1024_previous > 1024) {
         /* May well be congested */
-        c4_notify_congestion(path_x, c4_state, c4_congestion_delay, current_time);
+        c4_notify_congestion(path_x, c4_state, c4_congestion_delay);
     }
 }
 
@@ -1081,7 +1056,7 @@ void c4_notify(
                     }
                 }
                 else {
-                    c4_notify_congestion(path_x, c4_state, c4_congestion_ecn, current_time);
+                    c4_notify_congestion(path_x, c4_state, c4_congestion_ecn);
                 }
             }
             break;
@@ -1097,7 +1072,7 @@ void c4_notify(
                     c4_initial_handle_loss(path_x, c4_state, current_time);
                 }
                 else {
-                    c4_notify_congestion(path_x, c4_state, c4_congestion_loss, current_time);
+                    c4_notify_congestion(path_x, c4_state, c4_congestion_loss);
                 }
             }
             break;
