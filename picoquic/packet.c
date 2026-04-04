@@ -916,9 +916,9 @@ int picoquic_incoming_version_negotiation(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    struct sockaddr* UNUSED(addr_from),
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t UNUSED(current_time))
 {
     int ret = 0;
 #ifdef _WINDOWS
@@ -1706,8 +1706,8 @@ int picoquic_incoming_server_handshake(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     picoquic_stream_data_node_t* received_data,
-    struct sockaddr* addr_to,
-    unsigned long if_index_to,
+    struct sockaddr* UNUSED(addr_to),
+    unsigned long UNUSED(if_index_to),
     picoquic_packet_header* ph,
     uint64_t current_time)
 {

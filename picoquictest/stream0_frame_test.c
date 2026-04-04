@@ -652,9 +652,9 @@ int stream_splay_test()
 
 /* Test that the list of active streams is properly maintained */
 
-static int stream_output_test_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+static int stream_output_test_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t UNUSED(fin_or_event), void* UNUSED(callback_ctx), void* UNUSED(v_stream_ctx))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);

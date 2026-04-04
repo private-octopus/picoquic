@@ -130,7 +130,7 @@ void * stress_client_node_value(picosplay_node_t * node)
     return (node == NULL)?NULL:(void*)((char*)node - offsetof(struct st_picoquic_stress_client_t, client_node));
 }
 
-static void stress_client_node_delete(void * tree, picosplay_node_t * node)
+static void stress_client_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);

@@ -297,7 +297,7 @@ int cnx_stress_callback_data(cnx_stress_callback_ctx_t* cnx_ctx,
 }
 
 int cnx_stress_callback_prepare_to_send(cnx_stress_callback_ctx_t* cnx_ctx,
-    cnx_stress_stream_ctx_t* stream_ctx, uint64_t stream_id,
+    cnx_stress_stream_ctx_t* stream_ctx, uint64_t UNUSED(stream_id),
     void* context, size_t length)
 {
     int ret = 0;

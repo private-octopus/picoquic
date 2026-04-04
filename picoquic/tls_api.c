@@ -921,7 +921,7 @@ uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
  * if the stack can process the extension, false (0) otherwise.
  */
 
-int picoquic_tls_collect_extensions_cb(ptls_t* tls, struct st_ptls_handshake_properties_t* properties, uint16_t type)
+int picoquic_tls_collect_extensions_cb(ptls_t* UNUSED(tls), struct st_ptls_handshake_properties_t* UNUSED(properties), uint16_t type)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tls);
@@ -965,7 +965,7 @@ void picoquic_tls_set_extensions(picoquic_cnx_t* cnx, picoquic_tls_ctx_t* tls_ct
  * reception of a handshake message containing supported extensions.
  */
 
-int picoquic_tls_collected_extensions_cb(ptls_t* tls, ptls_handshake_properties_t* properties,
+int picoquic_tls_collected_extensions_cb(ptls_t* UNUSED(tls), ptls_handshake_properties_t* properties,
     ptls_raw_extension_t* slots)
 {
 #ifdef _WINDOWS
@@ -1082,7 +1082,7 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
  */
 
 int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_ticket_ctx,
-    ptls_t* tls, int is_encrypt, ptls_buffer_t* dst, ptls_iovec_t src)
+    ptls_t* UNUSED(tls), int is_encrypt, ptls_buffer_t* dst, ptls_iovec_t src)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tls);
@@ -1366,7 +1366,7 @@ typedef struct st_picoquic_update_traffic_key_t {
     picoquic_cnx_t *cnx;
 } picoquic_update_traffic_key_t;
 
-static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t * self, ptls_t *tls, int is_enc, size_t epoch, const void *secret)
+static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t* UNUSED(self), ptls_t* tls, int is_enc, size_t epoch, const void* secret)
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
     picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;

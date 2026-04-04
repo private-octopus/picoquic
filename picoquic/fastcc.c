@@ -91,7 +91,7 @@ void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_p
     }
 }
 
-void picoquic_fastcc_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+void picoquic_fastcc_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_fastcc_state_t* fastcc_state = path_x->congestion_alg_state;

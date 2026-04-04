@@ -1269,7 +1269,7 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 }
 
 /* Log an event that cannot be attached to a specific connection */
-void binlog_ignore_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
+void binlog_ignore_quic_app_message(picoquic_quic_t* UNUSED(quic), const picoquic_connection_id_t* UNUSED(cid), const char* UNUSED(fmt), va_list(vargs))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);
@@ -1279,11 +1279,12 @@ void binlog_ignore_quic_app_message(picoquic_quic_t* quic, const picoquic_connec
 }
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
-void binlog_ignore_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving), uint64_t UNUSED(current_time), uint64_t UNUSED(cid64),
+    const struct sockaddr* UNUSED(addr_peer), const struct sockaddr* UNUSED(addr_local), size_t UNUSED(packet_length))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);
+
     UNREFERENCED_PARAMETER(receiving);
     UNREFERENCED_PARAMETER(current_time);
     UNREFERENCED_PARAMETER(addr_peer);
@@ -1301,7 +1302,7 @@ static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list var
 }
 
 /* Return from close with nothing, as this is per connection only */
-void binlog_close(picoquic_quic_t* quic)
+void binlog_close(picoquic_quic_t* UNUSED(quic))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);

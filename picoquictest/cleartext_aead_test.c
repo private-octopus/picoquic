@@ -210,7 +210,7 @@ int cleartext_aead_test()
     return ret;
 }
 
-static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length)
+static int cleartext_iv_cmp(void* UNUSED(void_aead), uint8_t* UNUSED(ref_iv), size_t UNUSED(iv_length))
 {
 #if 0
     ptls_aead_context_t* aead = (ptls_aead_context_t*)void_aead;

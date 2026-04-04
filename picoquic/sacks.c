@@ -57,7 +57,7 @@ static picosplay_node_t* picoquic_sack_node_create(void* value)
     return &((picoquic_sack_item_t*)value)->node;
 }
 
-static void picoquic_sack_node_delete(void* tree, picosplay_node_t* node)
+static void picoquic_sack_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
@@ -155,7 +155,7 @@ picoquic_sack_list_t* picoquic_sack_list_from_cnx_context(picoquic_cnx_t* cnx,
 
 /* Find the closest range below an optional specified sack item
  */
-picoquic_sack_item_t* picoquic_sack_find_range_below_number(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* previous,
+picoquic_sack_item_t* picoquic_sack_find_range_below_number(picoquic_sack_list_t* sack_list, picoquic_sack_item_t* UNUSED(previous),
     uint64_t pn64)
 {
 #ifdef _WINDOWS

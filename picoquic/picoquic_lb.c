@@ -123,8 +123,8 @@ static void picoquic_lb_compat_cid_generate_block_cipher(picoquic_quic_t* quic,
 /* This code assumes that the cnx_id_returned value is pre-filled with
  * the expected values of nonces or local-use content.
  */
-void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
-    picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
+void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_id_t UNUSED(cnx_id_local),
+    picoquic_connection_id_t UNUSED(cnx_id_remote), void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
     picoquic_load_balancer_cid_context_t* lb_ctx = (picoquic_load_balancer_cid_context_t*)cnx_id_cb_data;
 #ifdef _WINDOWS

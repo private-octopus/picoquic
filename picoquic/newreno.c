@@ -186,7 +186,7 @@ static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_
     path_x->cwin = nr_state->nrss.cwin;
 }
 
-static void picoquic_newreno_init(picoquic_path_t* path_x, char const *option_string, uint64_t current_time)
+static void picoquic_newreno_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));

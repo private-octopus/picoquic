@@ -1209,13 +1209,13 @@ void picoquic_set_max_half_open_retry_threshold(picoquic_quic_t* quic,  uint32_t
     quic->max_half_open_before_retry = max_half_open_before_retry;
 }
 
-uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* quic)
+uint32_t picoquic_get_max_half_open_retry_threshold(picoquic_quic_t* UNUSED(quic))
 {
     PICOQUIC_THREAD_CHECK(quic);
     return quic->max_half_open_before_retry;
 }
 
-picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* quic)
+picoquic_stateless_packet_t* picoquic_create_stateless_packet(picoquic_quic_t* UNUSED(quic))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);
@@ -1488,7 +1488,7 @@ static picosplay_node_t* picoquic_wake_list_create_node(void* v_cnx)
     return &((picoquic_cnx_t*)v_cnx)->cnx_wake_node;
 }
 
-static void picoquic_wake_list_delete_node(void* tree, picosplay_node_t* node)
+static void picoquic_wake_list_delete_node(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);

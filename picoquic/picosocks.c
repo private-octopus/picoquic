@@ -90,7 +90,7 @@ int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
-int picoquic_socket_set_ecn_options_ex(SOCKET_TYPE sd, int af, int * recv_set, int * send_set, uint8_t ecn_value)
+int picoquic_socket_set_ecn_options_ex(SOCKET_TYPE sd, int af, int* recv_set, int* send_set, uint8_t UNUSED(ecn_value))
 {
     int ret = -1;
 #ifdef _WINDOWS
@@ -227,7 +227,7 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int* recv_set, int* 
     return picoquic_socket_set_ecn_options_ex(sd, af, recv_set, send_set, PICOQUIC_ECN_ECT_1);
 }
 
-int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
+int picoquic_socket_set_pmtud_options(SOCKET_TYPE UNUSED(sd), int UNUSED(af))
 {
     int ret = 0;
 #if defined __linux && defined(IP_MTU_DISCOVER) && defined(IPV6_MTU_DISCOVER) && defined(IP_PMTUDISC_PROBE)

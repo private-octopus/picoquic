@@ -7573,7 +7573,7 @@ int initial_server_close_test()
  * Test that rotated keys are computed in a compatible way on client and server.
  */
 
-static int aead_iv_check(void * aead1, void * aead2)
+static int aead_iv_check(void* UNUSED(aead1), void* UNUSED(aead2))
 {
     int ret = 0;
 #if 0
