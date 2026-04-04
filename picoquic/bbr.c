@@ -335,7 +335,7 @@ typedef struct st_bbr_per_ack_state_t {
 static int IsInAProbeBWState(picoquic_bbr_state_t* bbr_state);
 static int BBRIsProbingBW(picoquic_bbr_state_t* bbr_state);
 static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
-static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
+static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 #if 0
 static void BBRHandleRestartFromIdle(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
 #endif
@@ -344,7 +344,7 @@ static void BBRStartProbeBW_DOWN(picoquic_bbr_state_t* bbr_state, picoquic_path_
 static void BBRStartProbeBW_CRUISE(picoquic_bbr_state_t* bbr_state);
 static void BBRStartProbeBW_REFILL(picoquic_bbr_state_t* bbr_state, picoquic_path_t * path_x);
 static void BBREnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
-static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time);
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRCheckStartupHighLoss(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs);
 static void BBRUpdateRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static void BBRStartRound(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
@@ -604,6 +604,7 @@ static void picoquic_bbr_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, cha
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)malloc(sizeof(picoquic_bbr_state_t));
+    cnx;
 
     path_x->congestion_alg_state = (void*)bbr_state;
     if (bbr_state != NULL) {
@@ -822,7 +823,7 @@ static void BBROnExitRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* 
              * we should try to enter startup with a high enough BW. However, 
              * simple attempts to restore the BW parameters have proven ineffective.
              */
-            BBRReEnterStartup(bbr_state, path_x, current_time);
+            BBRReEnterStartup(bbr_state, path_x);
         }
         else if(bbr_state->state == picoquic_bbr_alg_probe_bw_up) {
             /* Perform same processing as after encountering a high loss */
@@ -1710,7 +1711,7 @@ static int BBRCheckPathSaturated(picoquic_bbr_state_t* bbr_state, picoquic_path_
         bbr_state->MaxBwFilter[1] = rs->delivery_rate;
         bbr_state->max_bw = rs->delivery_rate;
         bbr_state->full_bw = rs->delivery_rate;
-        BBREnterDrain(bbr_state, path_x, current_time);
+        BBREnterDrain(bbr_state, path_x);
         BBRStartRound(bbr_state, path_x);
         return 1;
     }
@@ -1918,7 +1919,7 @@ static void BBRUpdateProbeBWCyclePhase(picoquic_bbr_state_t* bbr_state, picoquic
     }
     /* Only in probe BW states, if BW > ceiling, enter startup */
     if (bbr_state->bw > bbr_state->bw_probe_ceiling) {
-        BBRReEnterStartup(bbr_state, path_x, current_time);
+        BBRReEnterStartup(bbr_state, path_x);
     }
 }
 
@@ -1930,7 +1931,7 @@ static void BBREnterProbeBW(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
 /* End of probe BW specific algorithms */
 
 /* Drain specific processes for BBRv3 */
-static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void BBREnterDrain(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
     path_x->is_ssthresh_initialized = 1; /* Picoquic specific: notify transport that the startup phase is complete */
     bbr_state->state = picoquic_bbr_alg_drain;
@@ -1993,7 +1994,7 @@ static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path
                     bbr_state->probe_probe_bw_quickly = 1;
                     bbr_state->full_bw_count = 0;
                 }
-                BBREnterDrain(bbr_state, path_x, current_time);
+                BBREnterDrain(bbr_state, path_x);
             }
         }
     }
@@ -2053,7 +2054,7 @@ static void BBRCheckStartupDone(picoquic_bbr_state_t* bbr_state,
         if (bbr_state->filled_pipe) {
             bbr_state->probe_probe_bw_quickly = 1;
             bbr_state->full_bw_count = 0;
-            BBREnterDrain(bbr_state, path_x, current_time);
+            BBREnterDrain(bbr_state, path_x);
         }
     }
 }
@@ -2066,7 +2067,7 @@ static void BBREnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     path_x->is_cca_probing_up = 1;
 }
 
-static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+static void BBRReEnterStartup(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
     bbr_state->full_bw = 0;
     bbr_state->filled_pipe = 0;
@@ -2120,7 +2121,7 @@ static void BBRExitStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path
     BBRResetRTTJitterBuffer(bbr_state, bbr_state->min_rtt, current_time);
 #endif
     /* Enter drain */
-    BBREnterDrain(bbr_state, path_x, current_time);
+    BBREnterDrain(bbr_state, path_x);
     /* If there were just few bytes in transit, enter probe */
     BBRCheckDrain(bbr_state, path_x, current_time);
 }
@@ -2152,7 +2153,7 @@ void BBRCheckStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* pa
     }
 }
 
-void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time)
+void BBRUpdateStartupLongRtt(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
 {
     if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
         path_x->cwin += picoquic_cc_slow_start_increase(path_x, rs->newly_acked);
@@ -2336,7 +2337,7 @@ void  BBRUpdateOnACK(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, b
 {
     BBRUpdateModelAndState(bbr_state, path_x, rs, current_time);
     if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
-        BBRUpdateStartupLongRtt(bbr_state, path_x, rs, current_time);
+        BBRUpdateStartupLongRtt(bbr_state, path_x, rs);
     }
     else {
         BBRUpdateControlParameters(bbr_state, path_x, rs);
