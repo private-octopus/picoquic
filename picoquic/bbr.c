@@ -2402,7 +2402,7 @@ static void picoquic_bbr_notify_ack(
  * signals to the corresponding BBR actions.
  */
 static void picoquic_bbr_notify(
-    picoquic_cnx_t* cnx,
+    picoquic_cnx_t* UNUSED(cnx),
     picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_per_ack_state_t * ack_state,
