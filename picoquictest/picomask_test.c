@@ -596,7 +596,7 @@ picomask_test_ctx_t* picomask_test_config()
 /* Create a client connection to a specified address */
 int picomask_test_cnx_create(picomask_test_ctx_t* pt_ctx, int create_udp_ctx)
 {
-    int ret = picomask_register_proxy_client(pt_ctx->quic[0], pt_ctx->proxy_sni, 8,
+    int ret = picomask_register_proxy_client(pt_ctx->quic[0], pt_ctx->proxy_sni,
         (struct sockaddr*)&pt_ctx->addr[1], pt_ctx->simulated_time, pt_ctx->path_template);
 
     if (ret == 0) {
