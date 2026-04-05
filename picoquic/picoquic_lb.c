@@ -147,7 +147,7 @@ void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_
     }
 }
 
-static uint64_t picoquic_lb_compat_cid_verify_clear(picoquic_quic_t* quic,
+static uint64_t picoquic_lb_compat_cid_verify_clear(
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
 {
     uint64_t s_id64 = 0;
@@ -160,7 +160,7 @@ static uint64_t picoquic_lb_compat_cid_verify_clear(picoquic_quic_t* quic,
     return s_id64;
 }
 
-static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(picoquic_quic_t* quic,
+static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
 {
     size_t id_offset = ((size_t)1) + lb_ctx->nonce_length;
@@ -185,7 +185,7 @@ static uint64_t picoquic_lb_compat_cid_verify_stream_cipher(picoquic_quic_t* qui
     return s_id64;
 }
 
-static uint64_t picoquic_lb_compat_cid_verify_block_cipher(picoquic_quic_t* quic,
+static uint64_t picoquic_lb_compat_cid_verify_block_cipher(
     picoquic_load_balancer_cid_context_t* lb_ctx, picoquic_connection_id_t const* cnx_id)
 {
     uint8_t decoded[16];
@@ -204,7 +204,7 @@ static uint64_t picoquic_lb_compat_cid_verify_block_cipher(picoquic_quic_t* quic
     return s_id64;
 }
 
-uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_data, picoquic_connection_id_t const* cnx_id)
+uint64_t picoquic_lb_compat_cid_verify(void* cnx_id_cb_data, picoquic_connection_id_t const* cnx_id)
 {
     picoquic_load_balancer_cid_context_t* lb_ctx = (picoquic_load_balancer_cid_context_t*)cnx_id_cb_data;
     uint64_t server_id64;
@@ -215,13 +215,13 @@ uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_da
     else {
         switch (lb_ctx->method) {
         case picoquic_load_balancer_cid_clear:
-            server_id64 = picoquic_lb_compat_cid_verify_clear(quic, lb_ctx, cnx_id);
+            server_id64 = picoquic_lb_compat_cid_verify_clear(lb_ctx, cnx_id);
             break;
         case picoquic_load_balancer_cid_stream_cipher:
-            server_id64 = picoquic_lb_compat_cid_verify_stream_cipher(quic, lb_ctx, cnx_id);
+            server_id64 = picoquic_lb_compat_cid_verify_stream_cipher(lb_ctx, cnx_id);
             break;
         case picoquic_load_balancer_cid_block_cipher:
-            server_id64 = picoquic_lb_compat_cid_verify_block_cipher(quic, lb_ctx, cnx_id);
+            server_id64 = picoquic_lb_compat_cid_verify_block_cipher(lb_ctx, cnx_id);
             break;
         default:
             /* Error, unknown method */

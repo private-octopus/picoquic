@@ -74,7 +74,7 @@ typedef struct st_picoquic_load_balancer_cid_context_t {
 } picoquic_load_balancer_cid_context_t;
 
 void picoquic_lb_compat_cid_generate(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned);
-uint64_t picoquic_lb_compat_cid_verify(picoquic_quic_t* quic, void* cnx_id_cb_data, picoquic_connection_id_t const* cnx_id);
+uint64_t picoquic_lb_compat_cid_verify(void* cnx_id_cb_data, picoquic_connection_id_t const* cnx_id);
 #ifdef __cplusplus
 }
 #endif

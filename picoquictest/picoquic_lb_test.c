@@ -946,7 +946,7 @@ int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balanc
             ret = -1;
         }
         else {
-            uint64_t server_id64 = picoquic_lb_compat_cid_verify(quic, quic->cnx_id_callback_ctx, &result);
+            uint64_t server_id64 = picoquic_lb_compat_cid_verify(quic->cnx_id_callback_ctx, &result);
 
             if (server_id64 != config->server_id64) {
                 DBG_PRINTF("CID test #%d fails, server id decode to %" PRIu64 " instead of %" PRIu64,
