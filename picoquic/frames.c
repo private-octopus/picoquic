@@ -3171,7 +3171,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         uint64_t lost_before_ack = path_x->total_bytes_lost;
         uint64_t nb_bytes_newly_lost = 0;
 
-        picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, path_x, epoch,
+        picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, epoch,
             packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
             packet_data->last_time_stamp_received);
 
@@ -5019,7 +5019,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
             if (found_challenge && !tuple->challenge_verified) {
                 tuple->challenge_verified = 1;
                 /* Provide a qualified time estimate from challenge time */
-                picoquic_update_path_rtt(cnx, path_x, path_x, -1, tuple->challenge_time_first, current_time, 0, 0);
+                picoquic_update_path_rtt(cnx, path_x, -1, tuple->challenge_time_first, current_time, 0, 0);
                 /* This challenge is verified. 
                 * If this is a client, the path should replace the current path.
                 * If this is a server, the replacement should happen if we have a NAT, maybe,

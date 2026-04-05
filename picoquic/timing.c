@@ -177,7 +177,7 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
 * pace computation of averages and variants, so that average delays and variations are
 * computed just a few times per round trip.
 */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x, int epoch,
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
     if (old_path != NULL && (!old_path->rtt_is_initialized || epoch >= 0)) {
