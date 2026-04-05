@@ -389,7 +389,7 @@ void picoquic_prague_notify(
             break;
         }
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
             pr_state->ssthresh == UINT64_MAX);
     }
 }

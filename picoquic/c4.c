@@ -420,7 +420,7 @@ static void c4_apply_rate_and_cwin(
     else if (quantum < 2 * path_x->send_mtu) {
         quantum = 2 * path_x->send_mtu;
     }
-    picoquic_update_pacing_rate(path_x->cnx, path_x, (double)pacing_rate, quantum);
+    picoquic_update_pacing_rate(path_x, (double)pacing_rate, quantum);
 }
 
 /* Perform evaluation. Assess whether the previous era resulted

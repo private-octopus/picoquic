@@ -290,7 +290,7 @@ static void picoquic_newreno_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
             nr_state->nrss.ssthresh == UINT64_MAX);
     }
 }

@@ -1180,7 +1180,7 @@ void picoquic_bbr1_suspension_exit(
         bbr1_state->is_suspension_nearly_over) {
         path_x->cwin = bbr1_state->cwin_before_suspension;
         /* Set the pacing rate in picoquic sender */
-        picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+        picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
     }
     bbr1_state->is_suspended = 0;
     bbr1_state->is_suspension_nearly_over = 0;
@@ -1268,7 +1268,7 @@ static void picoquic_bbr1_notify(
                     path_x->pacing.bandwidth_pause = 1;
                 }
 
-                picoquic_update_pacing_data(cnx, path_x, 1);
+                picoquic_update_pacing_data(path_x, 1);
             } else {
                 BBR1UpdateOnACK(bbr1_state, path_x,
                     ack_state->rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr1_state->bytes_delivered,
@@ -1280,7 +1280,7 @@ static void picoquic_bbr1_notify(
 
                 if (bbr1_state->pacing_rate > 0) {
                     /* Set the pacing rate in picoquic sender */
-                    picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+                    picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
                 }
             }
             break;
@@ -1292,7 +1292,7 @@ static void picoquic_bbr1_notify(
         case picoquic_congestion_notification_seed_cwin:
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
                 BBR1ExitStartupSeedBDP(bbr1_state, path_x, ack_state->nb_bytes_acknowledged, current_time);
-                picoquic_update_pacing_data(cnx, path_x, 1);
+                picoquic_update_pacing_data(path_x, 1);
             }
             else if (bbr1_state->state == picoquic_bbr1_alg_startup){
                 /* If in initial startup phase, do something */
@@ -1307,7 +1307,7 @@ static void picoquic_bbr1_notify(
                     BBR1SetPacingRate(bbr1_state);
                     if (bbr1_state->pacing_rate > 0) {
                         /* Set the pacing rate in picoquic sender */
-                        picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+                        picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
                     }
                 }
             }

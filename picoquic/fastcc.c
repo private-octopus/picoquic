@@ -154,7 +154,7 @@ static void fastcc_notify_congestion(
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
 
-    picoquic_update_pacing_data(cnx, path_x, 0);
+    picoquic_update_pacing_data(path_x, 0);
 
     path_x->is_ssthresh_initialized = 1;
 }
@@ -197,7 +197,7 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += ack_state->nb_bytes_acknowledged;
                 /* Compute pacing data. */
-                picoquic_update_pacing_data(cnx, path_x, 0);
+                picoquic_update_pacing_data(path_x, 0);
             }
             break;
 

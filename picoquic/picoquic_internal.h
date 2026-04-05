@@ -1678,11 +1678,11 @@ void picoquic_update_pacing_window(picoquic_pacing_t* pacing, int slow_start, ui
 void picoquic_update_pacing_data_after_send(picoquic_pacing_t * pacing, size_t length, size_t send_mtu, uint64_t current_time);
 
 /* Reset the pacing data after CWIN is updated */
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
+void picoquic_update_pacing_data(picoquic_path_t * path_x, int slow_start);
 void picoquic_update_pacing_after_send(picoquic_path_t* path_x, size_t length, uint64_t current_time);
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
-void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
+void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 /* Manage path quality updates */
 void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x);
 int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* path_x);

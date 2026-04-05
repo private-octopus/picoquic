@@ -81,7 +81,7 @@ int pacing_test()
 
     if (ret == 0) {
         /* Set pacing parameters to specified value */
-        picoquic_update_pacing_rate(cnx, cnx->path[0], (double)test_byte_per_sec, test_quantum);
+        picoquic_update_pacing_rate(cnx->path[0], (double)test_byte_per_sec, test_quantum);
         /* Run a loop of N tests based on next wake time. */
         while (ret == 0 && nb_sent < nb_target) {
             nb_round++;

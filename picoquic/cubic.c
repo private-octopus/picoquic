@@ -417,7 +417,7 @@ static void cubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
             cubic_state->ssthresh == UINT64_MAX);
     }
 }
@@ -542,7 +542,7 @@ static void dcubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, 
+        picoquic_update_pacing_data(path_x, 
             cubic_state->alg_state == picoquic_cubic_alg_slow_start && cubic_state->ssthresh == UINT64_MAX);
     }
 }

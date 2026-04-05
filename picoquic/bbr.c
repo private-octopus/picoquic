@@ -2441,11 +2441,11 @@ static void picoquic_bbr_notify(
             BBRExitLostFeedback(bbr_state, path_x);
             picoquic_bbr_notify_ack(bbr_state, path_x, ack_state, current_time);
             if (bbr_state->state == picoquic_bbr_alg_startup_long_rtt) {
-                picoquic_update_pacing_data(cnx, path_x, 1);
+                picoquic_update_pacing_data(path_x, 1);
             }
             else if (bbr_state->pacing_rate > 0) {
                 /* Set the pacing rate in picoquic sender */
-                picoquic_update_pacing_rate(cnx, path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+                picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
             }
             break;
         case picoquic_congestion_notification_cwin_blocked:
