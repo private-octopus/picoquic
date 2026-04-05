@@ -5771,7 +5771,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
             if (!cnx->path[path_index]->path_is_demoted) {
                 /* The peer is asking to abandon an existing path */
                 cnx->path[path_index]->path_abandon_received = 1;
-                picoquic_demote_path(cnx, path_index, current_time, 0, NULL);
+                picoquic_demote_path(cnx, path_index, current_time, 0);
             }
             else if (!cnx->path[path_index]->path_abandon_received) {
                 cnx->path[path_index]->path_abandon_received = 1;
@@ -5796,8 +5796,7 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
             else {
                 if (!local_cnxid_list->is_demoted) {
                     /* Do the demotion work of a local cnxid. */
-                    if (picoquic_demote_local_cnxid_list(cnx, unique_path_id,
-                        0, current_time) != 0) {
+                    if (picoquic_demote_local_cnxid_list(cnx, unique_path_id, 0) != 0) {
                         /* Sorry, this is a local error */
                         bytes = NULL;
                     }

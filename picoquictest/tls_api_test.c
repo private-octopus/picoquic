@@ -5505,7 +5505,7 @@ int tls_different_params_test()
 
     memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(&test_parameters, 1);
+    picoquic_init_transport_parameters(&test_parameters);
 
     test_parameters.initial_max_stream_id_bidir = 0;
 
@@ -5518,7 +5518,7 @@ int tls_quant_params_test()
 
     memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(&test_parameters, 1);
+    picoquic_init_transport_parameters(&test_parameters);
 
     test_parameters.initial_max_data = 0x4000;
     test_parameters.initial_max_stream_id_bidir = 0;
@@ -6202,8 +6202,8 @@ int loss_bit_test()
     for (int i = 0; ret == 0 && i <= 3; i++) {
         memset(&client_parameters, 0, sizeof(picoquic_tp_t));
         memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-        picoquic_init_transport_parameters(&client_parameters, 1);
-        picoquic_init_transport_parameters(&server_parameters, 0);
+        picoquic_init_transport_parameters(&client_parameters);
+        picoquic_init_transport_parameters(&server_parameters);
 
         client_parameters.enable_loss_bit = (i & 1);
         server_parameters.enable_loss_bit = ((i > 1) & 1);
@@ -6473,7 +6473,7 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
     if (ret == 0 && disable_migration) {
         memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
-        picoquic_init_transport_parameters(&test_parameters, 0);
+        picoquic_init_transport_parameters(&test_parameters);
         test_parameters.migration_disabled = 1;
         picoquic_set_default_tp(test_ctx->qserver, &test_parameters);
     }
@@ -8514,7 +8514,7 @@ int stream_id_max_test()
 
     memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(&test_parameters, 0);
+    picoquic_init_transport_parameters(&test_parameters);
     test_parameters.initial_max_stream_id_bidir = 4;
 
     return tls_api_one_scenario_test(test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 0, 250000, NULL, &test_parameters);
@@ -9967,7 +9967,7 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
 
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(&server_parameters, 1);
+    picoquic_init_transport_parameters(&server_parameters);
 
     /* Create an alternate IP address, and use it as preferred address */
     server_parameters.preferred_address.is_defined = 1;
@@ -10403,8 +10403,8 @@ int no_ack_frequency_test()
     for (int i = 1; ret == 0 && i <= 3; i++) {
         memset(&client_parameters, 0, sizeof(picoquic_tp_t));
         memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-        picoquic_init_transport_parameters(&client_parameters, 1);
-        picoquic_init_transport_parameters(&server_parameters, 0);
+        picoquic_init_transport_parameters(&client_parameters);
+        picoquic_init_transport_parameters(&server_parameters);
 
         client_parameters.min_ack_delay = (i & 1) ? 0 : 1000;
         server_parameters.enable_loss_bit = (1 - ((i > 1) & 1));
@@ -10943,7 +10943,7 @@ int grease_quic_bit_test_one(unsigned int one_way_grease_quic_bit)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
 
     client_parameters.do_grease_quic_bit = 1;
 

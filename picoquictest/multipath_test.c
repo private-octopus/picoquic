@@ -384,7 +384,7 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 {
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(test_parameters, 1);
+    picoquic_init_transport_parameters(test_parameters);
     test_parameters->initial_max_path_id = 2;
     test_parameters->enable_time_stamp = 3;
 }
@@ -560,8 +560,7 @@ static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, u
         ret = -1;
     }
     else {
-        ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0,
-            "cycle of delete", *simulated_time);
+        ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0, *simulated_time);
         if (ret != 0) {
             DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", deleted_id, ret);
         }
@@ -1013,7 +1012,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
             else if (test_id == multipath_test_abandon) {
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
-                picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test",
+                picoquic_abandon_path(test_ctx->cnx_client, 0, 0,
                     simulated_time);
             }
             else if (test_id == multipath_test_break2) {

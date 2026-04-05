@@ -81,7 +81,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     initial_cid.id[2] = test_id;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.enable_time_stamp = 3;
     client_parameters.max_idle_timeout = (uint32_t)((spec->latency * 5)/1000);
     if (spec->initial_flow_control_credit > client_parameters.initial_max_data) {
@@ -94,7 +94,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
         client_parameters.initial_max_stream_data_bidi_remote = spec->initial_flow_control_credit;
     }
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 0);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.enable_time_stamp = 3;
     server_parameters.max_idle_timeout = client_parameters.max_idle_timeout;
 

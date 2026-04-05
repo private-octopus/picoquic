@@ -1220,7 +1220,7 @@ int picoquic_queue_retry_packet(
     size_t token_size;
     picoquic_connection_id_t s_cid = { 0 };
 
-    picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+    picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
     if (picoquic_prepare_retry_token(quic, addr_from,
@@ -1260,7 +1260,7 @@ int picoquic_queue_busy_packet(
         uint8_t payload[4] = { picoquic_frame_type_connection_close, PICOQUIC_TRANSPORT_SERVER_BUSY, 0, 0 };
         size_t payload_length = 0;
 
-        picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+        picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
         /* Prepare long header:  Initial */

@@ -1839,7 +1839,7 @@ static int demo_server_test_specced(demo_server_test_spec_t * spec)
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
 
             memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-            picoquic_init_transport_parameters(&client_parameters, 1);
+            picoquic_init_transport_parameters(&client_parameters);
             client_parameters.enable_time_stamp = 1;
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         }

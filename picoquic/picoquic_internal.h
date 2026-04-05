@@ -1561,7 +1561,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
 
 /* Init of transport parameters */
-void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+void picoquic_init_transport_parameters(picoquic_tp_t* tp);
 
 /* Registration of per path connection ID in server context */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
@@ -1572,7 +1572,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 /* Registration of initial connection ID and peer IP */
 int picoquic_register_net_icid(picoquic_cnx_t* cnx);
 
-void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
+void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, picoquic_connection_id_t cnx_id_remote);
 
 /* Management of address tuples */
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
@@ -1599,7 +1599,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
-void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason, char const * phrase);
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
@@ -2012,8 +2012,7 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * strea
 picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
-int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id,
-    uint64_t reason, uint64_t current_time);
+int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);

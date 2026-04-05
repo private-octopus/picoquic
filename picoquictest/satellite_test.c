@@ -91,10 +91,10 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.enable_time_stamp = 3;
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 0);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.enable_time_stamp = 3;
     if (low_flow || flow_control) {
         /* For the flow control parameters to a small value */

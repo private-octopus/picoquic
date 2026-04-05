@@ -72,10 +72,10 @@ static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* cc
     }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.enable_time_stamp = 3;
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 0);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.enable_time_stamp = 3;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);

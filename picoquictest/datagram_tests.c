@@ -360,7 +360,7 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             test_ctx->s_to_c_link->picosec_per_byte = dg_ctx->picosec_per_byte;
         }
         /* Set parameters */
-        picoquic_init_transport_parameters(&client_parameters, 1);
+        picoquic_init_transport_parameters(&client_parameters);
         client_parameters.max_datagram_frame_size = dg_ctx->dg_max_size;
         picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);

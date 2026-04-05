@@ -1075,7 +1075,7 @@ void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
-    uint64_t reason, char const* phrase, uint64_t current_time);
+    uint64_t reason, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);

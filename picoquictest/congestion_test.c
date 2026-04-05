@@ -419,7 +419,7 @@ int bbr_asym100_nodelay_test()
     picoquic_tp_t server_parameters;
 
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 1);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.min_ack_delay = 0;
 
     int ret = performance_test_one(max_completion_time, mbps, kbps, latency, jitter, buffer,
@@ -569,8 +569,8 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             test_ctx->qserver->use_long_log = 1;
             picoquic_set_qlog(test_ctx->qserver, ".");
             /* Set parameters */
-            picoquic_init_transport_parameters(&server_parameters, 0);
-            picoquic_init_transport_parameters(&client_parameters, 1);
+            picoquic_init_transport_parameters(&server_parameters);
+            picoquic_init_transport_parameters(&client_parameters);
             server_parameters.enable_bdp_frame = 1;
             client_parameters.enable_bdp_frame = 1;
             client_parameters.initial_max_stream_data_bidi_remote = 1000000;
@@ -813,7 +813,7 @@ int app_limit_cc_test_one(
     (void)picoquic_file_delete(APP_LIMIT_TRACE_QLOG, NULL);
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.initial_max_data = 40000;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
@@ -962,7 +962,7 @@ int cwin_max_test_one(
     (void)picoquic_file_delete(CWIN_MAX_TRACE_QLOG, NULL);
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
         NULL, &initial_cid, 0);
