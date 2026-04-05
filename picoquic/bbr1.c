@@ -1173,7 +1173,6 @@ void picoquic_bbr1_suspension_almost_over(
 
 void picoquic_bbr1_suspension_exit(
     picoquic_bbr1_state_t* bbr1_state,
-    picoquic_cnx_t * cnx,
     picoquic_path_t* path_x)
 {
     if (bbr1_state->is_suspended &&
@@ -1228,7 +1227,7 @@ static void picoquic_bbr1_notify(
         case picoquic_congestion_notification_acknowledgement:
             /* sum the amount of data acked per packet */
             if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_exit(bbr1_state, cnx, path_x);
+                picoquic_bbr1_suspension_exit(bbr1_state, path_x);
             }
             bbr1_state->bytes_delivered += ack_state->nb_bytes_acknowledged;
 
