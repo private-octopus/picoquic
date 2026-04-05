@@ -2294,7 +2294,7 @@ static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED
     }
 }
 
-static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t UNUSED(current_time))
 {
@@ -2314,7 +2314,7 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 
         textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
-        fprintf(F, "Lost packet type %d, path %" PRIu64 ", number % " PRIu64 ", size % zu", ptype,
+        fprintf(F, "Lost packet type %d, path %" PRIu64 ", number %" PRIu64 ", size %zu", ptype,
             path_x->unique_path_id, sequence_number, packet_size);
         if (dcid != NULL) {
             fprintf(F, ", DCID ");
