@@ -1584,15 +1584,15 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
-int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_stream_data_node_t* decrypted_data, picoquic_packet_header* ph,
+int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,
-    uint64_t current_time, int* p_path_id, int* path_is_not_allocated);
+    uint64_t current_time, int* p_path_id);
 /* Prepare packet containing only path control frames. */
 int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple,
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time);
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_packet_context_enum pc, int is_nominal_ack_path,
+    int is_nominal_ack_path,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time); 

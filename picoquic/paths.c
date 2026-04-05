@@ -31,7 +31,7 @@
 uint64_t  picoquic_tuple_challenge_time(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 
 uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_tuple_t* tuple, picoquic_packet_context_enum pc,
+    picoquic_tuple_t* tuple,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time)
@@ -138,12 +138,12 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
 }
 
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_packet_context_enum pc, int is_nominal_ack_path,
+    int is_nominal_ack_path,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time)
 {
-    return picoquic_prepare_tuple_challenge_frames(cnx, path_x, path_x->first_tuple, pc,
+    return picoquic_prepare_tuple_challenge_frames(cnx, path_x, path_x->first_tuple,
         bytes_next, bytes_max, more_data, is_pure_ack, is_challenge_padding_needed,
         current_time, next_wake_time);
 }
@@ -156,7 +156,6 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
 {
     int ret = 0;
     picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
-    picoquic_packet_context_enum pc = picoquic_packet_context_application;
     int is_pure_ack = 1;
     size_t header_length = 0;
     size_t length = 0;
@@ -189,7 +188,7 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     /* If required, prepare challenge and response frames.
      * These frames will be sent immediately, regardless of pacing or flow control.
      */
-    bytes_next = picoquic_prepare_tuple_challenge_frames(cnx, path_x, tuple, pc,
+    bytes_next = picoquic_prepare_tuple_challenge_frames(cnx, path_x, tuple,
         bytes_next, bytes_max, &more_data, &is_pure_ack, &is_challenge_padding_needed,
         current_time, next_wake_time);
 
@@ -614,13 +613,12 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
  */
 
 int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
-    picoquic_stream_data_node_t* decrypted_data, picoquic_packet_header* ph,
+    picoquic_packet_header* ph,
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
     uint64_t current_time,
-    int* p_path_id,
-    int* path_is_not_allocated)
+    int* p_path_id)
 {
     int ret = 0;
     picoquic_path_t* path_x = NULL;
