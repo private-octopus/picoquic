@@ -1967,7 +1967,7 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
  * Record stream data as acknowledged, signal datagram frames as acknowledged.
  */
 void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
-    int is_spurious, uint64_t current_time);
+    int is_spurious);
 
 /* Coding and decoding of frames */
 typedef struct st_picoquic_stream_data_buffer_argument_t {
@@ -2078,7 +2078,7 @@ int picoquic_queue_path_available_or_backup_frame(
 /* Internal only API, notify that next path is now allowed. */
 void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);
 
-int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
+int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received);
 
 void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);

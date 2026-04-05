@@ -1459,7 +1459,7 @@ int frame_ackack_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
         p->length = p->offset + len;
 
         previous_state = cnx->cnx_state;
-        picoquic_process_ack_of_frames(cnx, p, is_spurious, simulated_time);
+        picoquic_process_ack_of_frames(cnx, p, is_spurious);
         *disconnected = (cnx->cnx_state != previous_state);
 
         picoquic_delete_cnx(cnx);
