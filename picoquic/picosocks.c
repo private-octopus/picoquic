@@ -334,6 +334,7 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
     }
 }
 
+#if _WINDOWS
 void picoquic_socks_cmsg_parse(
     void* vmsg,
     struct sockaddr_storage* addr_dest,
@@ -342,7 +343,6 @@ void picoquic_socks_cmsg_parse(
     size_t * udp_coalesced_size)
 {
     /* Assume that msg has been filled by a call to recvmsg */
-#if _WINDOWS
     struct cmsghdr* cmsg;
     WSAMSG* msg = (WSAMSG*)vmsg;
 
@@ -420,6 +420,14 @@ void picoquic_socks_cmsg_parse(
         }
     }
 #else
+void picoquic_socks_cmsg_parse(
+    void* vmsg,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    size_t* UNUSED(udp_coalesced_size))
+{
+    /* Assume that msg has been filled by a call to recvmsg */
     /* Get the control information */
     struct msghdr* msg = (struct msghdr*)vmsg;
     struct cmsghdr* cmsg;
@@ -535,6 +543,7 @@ static void* cmsg_format_header_return_data_ptr(struct msghdr* msg, struct cmsgh
 }
 #endif
 
+#ifdef _WINDOWS
 void picoquic_socks_cmsg_format(
     void* vmsg,
     size_t message_length,
@@ -542,7 +551,6 @@ void picoquic_socks_cmsg_format(
     struct sockaddr* addr_from,
     int dest_if)
 {
-#ifdef _WINDOWS
     WSAMSG* msg = (WSAMSG*)vmsg;
     int control_length = 0;
     struct cmsghdr* last_cmsg = NULL;
@@ -630,8 +638,24 @@ void picoquic_socks_cmsg_format(
     if (control_length == 0) {
         msg->Control.buf = NULL;
     }
-
+}
 #else
+#if defined(UDP_SEGMENT)
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t message_length,
+    size_t send_msg_size,
+    struct sockaddr* addr_from,
+    int dest_if)
+#else
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t UNUSED(message_length),
+    size_t UNUSED(send_msg_size),
+    struct sockaddr* addr_from,
+    int dest_if)
+#endif
+{
     struct msghdr* msg = (struct msghdr*)vmsg;
     int control_length = 0;
     struct cmsghdr* last_cmsg = NULL;
@@ -666,20 +690,6 @@ void picoquic_socks_cmsg_format(
             else {
                 is_null = 1;
             }
-#endif
-#if 0
-#ifdef IP_DONTFRAG
-            if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
-                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-                    &control_length, IPPROTO_IP, IP_DONTFRAG, sizeof(int));
-                if (pval != NULL) {
-                    *pval = 1;
-                }
-                else {
-                    is_null = 1;
-                }
-            }
-#endif
 #endif
         }
         else {
@@ -723,8 +733,8 @@ void picoquic_socks_cmsg_format(
     if (control_length == 0) {
         msg->msg_control = NULL;
     }
-#endif
 }
+#endif
 
 
 #ifdef _WINDOWS
