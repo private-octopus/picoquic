@@ -175,7 +175,7 @@ static int ackfrq_test_one(ackfrq_test_spec_t * spec)
     return ret;
 }
 
-int ackfrq_basic_test()
+int ackfrq_basic_test(void)
 {
     ackfrq_test_spec_t spec = { 0 };
     spec.test_id = ackfrq_test_basic;
@@ -191,7 +191,7 @@ int ackfrq_basic_test()
     return ackfrq_test_one(&spec);
 }
 
-int ackfrq_short_test()
+int ackfrq_short_test(void)
 {
     ackfrq_test_spec_t spec = { 0 };
     spec.test_id = ackfrq_test_basic;
