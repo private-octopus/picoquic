@@ -4286,7 +4286,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     }
 
     /* Only initialize TLS after all parameters have been set */
-    if (cnx != NULL && picoquic_tlscontext_create(quic, cnx, start_time) != 0) {
+    if (cnx != NULL && picoquic_tlscontext_create(quic, cnx) != 0) {
         /* Cannot just do partial creation! */
         picoquic_delete_cnx(cnx);
         cnx = NULL;
@@ -4979,7 +4979,7 @@ int picoquic_reset_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     picoquic_log_new_connection(cnx);
 
     if (ret == 0) {
-        ret = picoquic_tlscontext_create(cnx->quic, cnx, current_time);
+        ret = picoquic_tlscontext_create(cnx->quic, cnx);
     }
     if (ret == 0) {
         ret = picoquic_initialize_tls_stream(cnx, current_time);

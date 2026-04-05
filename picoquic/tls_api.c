@@ -179,7 +179,7 @@ void picoquic_tls_api_init_providers(int unload)
 #endif
 }
 
-static void picoquic_tls_api_zero()
+static void picoquic_tls_api_zero(void)
 {
     memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
     memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
@@ -225,7 +225,7 @@ void picoquic_tls_api_log_versions(picoquic_cnx_t * cnx)
 #endif
 }
 
-void picoquic_tls_api_init()
+void picoquic_tls_api_init(void)
 {
     if (!tls_api_is_init) {
         picoquic_tls_api_zero();
@@ -234,7 +234,7 @@ void picoquic_tls_api_init()
     }
 }
 
-void picoquic_tls_api_unload()
+void picoquic_tls_api_unload(void)
 {
     if (tls_api_is_init) {
         picoquic_tls_api_init_providers(1);
@@ -508,7 +508,7 @@ ptls_hash_algorithm_t* picoquic_get_hash_algorithm_by_name(const char* hash_algo
 
 /* Obtain the SHA256 hash, used to derive some secrets
 */
-ptls_hash_algorithm_t* picoquic_get_sha256()
+ptls_hash_algorithm_t* picoquic_get_sha256(void)
 {
     return picoquic_get_hash_algorithm_by_name("sha256");
 }
@@ -690,7 +690,7 @@ int picoquic_explain_crypto_error(char const** err_file, int* err_line)
 /* Clear the recorded errors in the crypto stack, e.g. before
  * processing a new message.
  */
-void picoquic_clear_crypto_errors()
+void picoquic_clear_crypto_errors(void)
 {
     if (picoquic_clear_crypto_errors_fn != NULL) {
         picoquic_clear_crypto_errors_fn();
@@ -895,20 +895,20 @@ uint64_t picoquic_public_uniform_random(uint64_t rnd_max)
  * predict the extension ID from the QUIc version */
 uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
 {
-    int v = picoquic_supported_versions[cnx->version_index].version;
+    uint32_t v = picoquic_supported_versions[cnx->version_index].version;
     uint16_t quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_V1;
 
     /* Manage exception for old versions, that were using the
      * provisional code for the transport parameters */
     
-    if (v == PICOQUIC_SEVENTEENTH_INTEROP_VERSION ||
-        v == PICOQUIC_EIGHTEENTH_INTEROP_VERSION ||
-        v == PICOQUIC_NINETEENTH_INTEROP_VERSION ||
-        v == PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION ||
-        v == PICOQUIC_TWENTIETH_PRE_INTEROP_VERSION ||
-        v == PICOQUIC_TWENTIETH_INTEROP_VERSION ||
-        v == PICOQUIC_INTERNAL_TEST_VERSION_1 ||
-        v == PICOQUIC_INTERNAL_TEST_VERSION_2) {
+    if (v == (uint32_t)PICOQUIC_SEVENTEENTH_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_EIGHTEENTH_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_NINETEENTH_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_NINETEENTH_BIS_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_TWENTIETH_PRE_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_TWENTIETH_INTEROP_VERSION ||
+        v == (uint32_t)PICOQUIC_INTERNAL_TEST_VERSION_1 ||
+        v == (uint32_t)PICOQUIC_INTERNAL_TEST_VERSION_2) {
         quic_ext_id = PICOQUIC_TRANSPORT_PARAMETERS_TLS_EXTENSION_DRAFT;
     }
 
@@ -921,7 +921,7 @@ uint16_t picoquic_tls_get_quic_extension_id(picoquic_cnx_t* cnx)
  * if the stack can process the extension, false (0) otherwise.
  */
 
-int picoquic_tls_collect_extensions_cb(ptls_t* UNUSED(tls), struct st_ptls_handshake_properties_t* UNUSED(properties), uint16_t type)
+int picoquic_tls_collect_extensions_cb(ptls_t* UNUSED(tls), struct st_ptls_handshake_properties_t* UNUSED(properties), uint16_t UNUSED(type))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tls);
@@ -1397,7 +1397,8 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t* UNUSE
     return ret;
 }
 
-ptls_update_traffic_key_t * picoquic_set_update_traffic_key_callback() {
+ptls_update_traffic_key_t * picoquic_set_update_traffic_key_callback(void)
+{
     ptls_update_traffic_key_t * cb_st = (ptls_update_traffic_key_t *)malloc(sizeof(ptls_update_traffic_key_t));
 
     if (cb_st != NULL) {
@@ -1904,7 +1905,7 @@ uint64_t picoquic_get_tls_time(picoquic_quic_t* quic)
  * This includes setting the handshake properties that will later be
  * used during the TLS handshake.
  */
-int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time)
+int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
     int ret = 0;
     /* allocate a context structure, but only if checks are correct */
@@ -2521,7 +2522,7 @@ static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_
 /* Input stream zero data to TLS context.
  *
  * Processing  depends on the "epoch" in which packets have been received. That
- * epoch is be passed through the ptls_handle_message() API.
+ * epoch is be passed through the ptls_handle_message(void) API.
  * The API has an "epoch offset" parameter that documents how many bytes of the
  * should be sent at each epoch.
  */

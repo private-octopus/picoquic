@@ -50,7 +50,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
-int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx);
 
 void picoquic_tlscontext_free(void* ctx, unsigned int client_mode);
 
