@@ -1551,7 +1551,7 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
         if (cnx->remote_parameters.max_packet_size > 0) {
             probe_length = cnx->remote_parameters.max_packet_size;
 
-            if (cnx->quic->mtu_max > 0 && (int)probe_length >
+            if (cnx->quic->mtu_max > 0 && probe_length >
                 cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr)) {
                 probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr);
             }
@@ -2846,7 +2846,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
 */
 
 static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    int is_first_in_packet, uint64_t max_priority_allowed, uint64_t current_time,
+    int is_first_in_packet, uint64_t max_priority_allowed, 
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
 {
     int datagram_sent = 0;
@@ -3164,7 +3164,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
                             if (ret == 0) {
                                 bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                    (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time,
+                                    (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX,
                                     &more_data, &is_pure_ack, &no_data_to_send, &ret);
                             }
                             /* TODO: replace this by posting of frame when CWIN estimated */
@@ -3459,7 +3459,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     int no_data_to_send = 0;
                     if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
                         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
+                            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
                             &more_data, &is_pure_ack, &no_data_to_send, &ret);
                     }
                     if (bytes_next != bytes_next_before_bypass) {
@@ -3514,7 +3514,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
                         if (ret == 0) {
                             bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time, &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
@@ -3603,7 +3603,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 int no_data_to_send = 0;
 
                 if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
+                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
                     &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
                     length = bytes_next - bytes;
                 }
