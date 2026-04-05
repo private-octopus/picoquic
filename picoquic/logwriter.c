@@ -1277,7 +1277,7 @@ void binlog_ignore_quic_app_message(picoquic_quic_t* UNUSED(quic), const picoqui
     UNREFERENCED_PARAMETER(fmt);
 #endif
 }
-
+#if 0
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving), uint64_t UNUSED(current_time), uint64_t UNUSED(cid64),
     const struct sockaddr* UNUSED(addr_peer), const struct sockaddr* UNUSED(addr_local), size_t UNUSED(packet_length))
@@ -1292,7 +1292,7 @@ void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving)
     UNREFERENCED_PARAMETER(packet_length);
 #endif
 }
-
+#endif
 /* Log an event relating to a specific connection */
 static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
@@ -1312,7 +1312,7 @@ void binlog_close(picoquic_quic_t* UNUSED(quic))
 struct st_picoquic_unified_logging_t binlog_functions = {
     /* Per context log function */
     binlog_ignore_quic_app_message,
-    binlog_ignore_quic_pdu,
+    NULL, /*binlog_ignore_quic_pdu*/
     binlog_close,
     /* Per connection functions */
     binlog_app_message,
