@@ -355,8 +355,13 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #endif
 }
 
+#ifdef _WINDOWS
 int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+#else
+int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_use_gso),
+    picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+#endif
 {
     int ret = 0;
     struct sockaddr_storage local_address;
