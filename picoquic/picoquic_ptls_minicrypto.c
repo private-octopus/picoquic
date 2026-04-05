@@ -39,12 +39,12 @@ static int set_minicrypto_private_key_from_key_file(char const* keypem, ptls_con
 picoquic_set_private_key_from_file_t picoquic_minicrypto_set_key_fn =
                                          set_minicrypto_private_key_from_key_file;
 
-void picoquic_clear_minicrypto()
+void picoquic_clear_minicrypto(void)
 {
     /* Nothing for now */
 }
 
-void picoquic_init_minicrypto()
+void picoquic_init_minicrypto(void)
 {
     /* Nothing for now */
 }
