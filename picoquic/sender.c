@@ -3063,7 +3063,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         bytes_next = bytes + length;
 
         bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
-            1 /* is_nominal_ack_path */,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
@@ -3384,7 +3383,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
          * These frames will be sent immediately, regardless of pacing or flow control.
          */
         bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
-            is_nominal_ack_path,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
