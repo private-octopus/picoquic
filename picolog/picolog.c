@@ -55,8 +55,8 @@ int convert_svg(const picoquic_connection_id_t * cid, void * ptr);
 int convert_qlog(const picoquic_connection_id_t * cid, void * ptr);
 int filedump_binlog(FILE* bin_log, FILE* bin_dump);
 
-int usage();
-void usage_formats();
+int usage(void);
+void usage_formats(void);
 
 /* - Open binary log file and find all connection ids it contains by:
  *   - read each event
