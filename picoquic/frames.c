@@ -476,7 +476,7 @@ static const uint8_t* picoquic_skip_reset_stream_at_frame(const uint8_t* bytes, 
 * that will likely result in a protocol error.
  */
 
-uint8_t* picoquic_format_reset_stream_at_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+uint8_t* picoquic_format_reset_stream_at_frame(picoquic_stream_head_t* stream,
     uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack)
 {
     uint8_t* bytes0 = bytes;
@@ -1895,7 +1895,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
     else if (stream->reset_requested) {
         if (stream->reliable_size > 0) {
             if (picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size)) {
-                return picoquic_format_reset_stream_at_frame(cnx, stream, bytes, bytes_max, more_data, is_pure_ack);
+                return picoquic_format_reset_stream_at_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
             }
         }
         else {
