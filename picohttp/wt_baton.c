@@ -584,7 +584,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         void* path_app_ctx)
     {
         int ret = 0;
-        wt_baton_app_ctx_t* app_ctx = (wt_baton_app_ctx_t*)path_app_ctx;
         h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
         wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
         if (baton_ctx == NULL) {
@@ -592,7 +591,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         }
         else {
             /* register the incoming stream ID */
-            ret = wt_baton_ctx_init(baton_ctx, h3_ctx, app_ctx, stream_ctx);
+            ret = wt_baton_ctx_init(baton_ctx, h3_ctx, stream_ctx);
 
             /* init the global parameters */
             if (path != NULL && path_length > 0) {
@@ -862,7 +861,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     /* Initialize the content of a wt_baton context.
     * TODO: replace internal pointers by pointer to h3zero context
     */
-    int wt_baton_ctx_init(wt_baton_ctx_t * baton_ctx, h3zero_callback_ctx_t * h3_ctx, wt_baton_app_ctx_t * app_ctx, h3zero_stream_ctx_t * stream_ctx)
+    int wt_baton_ctx_init(wt_baton_ctx_t * baton_ctx, h3zero_callback_ctx_t * h3_ctx, h3zero_stream_ctx_t * stream_ctx)
     {
         int ret = 0;
 
@@ -942,7 +941,7 @@ int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
 {
     int ret = 0;
 
-    wt_baton_ctx_init(baton_ctx, h3_ctx, NULL, NULL);
+    wt_baton_ctx_init(baton_ctx, h3_ctx, NULL);
     baton_ctx->cnx = cnx;
     baton_ctx->is_client = 1;
     baton_ctx->authority = server_name;
