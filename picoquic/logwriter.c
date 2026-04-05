@@ -1248,7 +1248,7 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 #ifdef _WINDOWS
     written = vsnprintf_s(message_text,
         ps_msg->size - ps_msg->ptr, _TRUNCATE, fmt, vargs);
-    message_len = (written < 0) ? ps_msg->size - ps_msg->ptr - 1 : written;
+    message_len = (written < 0) ? ps_msg->size - ps_msg->ptr - 1 : (size_t)written;
 #else
     written = vsnprintf(message_text, ps_msg->size - ps_msg->ptr, fmt, vargs);
     if (written < 0 || written >= ps_msg->size - ps_msg->ptr){
@@ -1268,6 +1268,7 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
     (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
 }
 
+#if 0
 /* Log an event that cannot be attached to a specific connection */
 void binlog_ignore_quic_app_message(picoquic_quic_t* UNUSED(quic), const picoquic_connection_id_t* UNUSED(cid), const char* UNUSED(fmt), va_list(vargs))
 {
@@ -1277,6 +1278,7 @@ void binlog_ignore_quic_app_message(picoquic_quic_t* UNUSED(quic), const picoqui
     UNREFERENCED_PARAMETER(fmt);
 #endif
 }
+#endif
 #if 0
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving), uint64_t UNUSED(current_time), uint64_t UNUSED(cid64),
@@ -1311,8 +1313,8 @@ void binlog_close(picoquic_quic_t* UNUSED(quic))
 
 struct st_picoquic_unified_logging_t binlog_functions = {
     /* Per context log function */
-    binlog_ignore_quic_app_message,
-    NULL, /*binlog_ignore_quic_pdu*/
+    NULL, /* binlog_ignore_quic_app_message, */
+    NULL, /* binlog_ignore_quic_pdu*/
     binlog_close,
     /* Per connection functions */
     binlog_app_message,
