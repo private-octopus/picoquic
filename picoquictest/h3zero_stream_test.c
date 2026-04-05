@@ -912,7 +912,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
             const uint8_t* next_bytes;
             memset(buffer, 0xff, sizeof(buffer));
             memcpy(buffer, capsule_bytes + bytes_received, this_chunk);
-            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule, stream_ctx)) == NULL) {
+            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule)) == NULL) {
                 ret = -1;
             }
             else {

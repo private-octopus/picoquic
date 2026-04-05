@@ -343,7 +343,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      * processed directly at the web transport layer.
      */
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
-            ret = picowt_receive_capsule(cnx, stream_ctx, bytes, bytes + length, &baton_ctx->capsule);
+            ret = picowt_receive_capsule(cnx, bytes, bytes + length, &baton_ctx->capsule);
             if (ret == 0 && is_fin) {
                 stream_ctx->ps.stream_state.is_fin_received = 1;
                 baton_ctx->baton_state = wt_baton_state_closed;
