@@ -140,8 +140,7 @@ extern "C" {
 
     int wt_baton_accept(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
-        struct st_h3zero_stream_ctx_t* stream_ctx,
-        void* path_app_ctx);
+        struct st_h3zero_stream_ctx_t* stream_ctx);
 
     h3zero_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
     h3zero_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
