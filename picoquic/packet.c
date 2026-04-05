@@ -1242,8 +1242,7 @@ int picoquic_queue_busy_packet(
     const struct sockaddr* addr_from,
     const struct sockaddr* addr_to,
     int if_index_to,
-    picoquic_packet_header* ph,
-    uint64_t current_time)
+    picoquic_packet_header* ph)
 {
     int ret = 0;
     picoquic_connection_id_t s_cid = { 0 };
@@ -1920,7 +1919,6 @@ int picoquic_incoming_1rtt(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
-    unsigned char received_ecn,
     int path_is_not_allocated,
     uint64_t current_time)
 {
@@ -2197,7 +2195,7 @@ int picoquic_incoming_segment(
         /* Incoming packet could not be processed, need to send a Retry. */
         if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU){
             if (quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) {
-                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph, current_time);
+                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph);
             }
         }
     } else if (ret == 0) {
@@ -2296,7 +2294,7 @@ int picoquic_incoming_segment(
                 break;
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_1rtt(cnx, path_id, bytes, decrypted_data,
-                    &ph, addr_from, addr_to, if_index_to, received_ecn,
+                    &ph, addr_from, addr_to, if_index_to,
                     path_is_not_allocated, current_time);
                 break;
             default:
