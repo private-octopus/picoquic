@@ -2248,7 +2248,7 @@ static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_
     }
 }
 
-static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
+static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), int receiving, uint64_t UNUSED(current_time),
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2257,8 +2257,8 @@ static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int rec
     }
 }
 
-static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph,
-    size_t packet_size, int ret, uint64_t current_time)
+static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), picoquic_packet_header* ph,
+    size_t packet_size, int ret, uint64_t UNUSED(current_time))
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = cnx->quic->F_log;
@@ -2282,7 +2282,7 @@ static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     }
 }
 
-static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2296,7 +2296,7 @@ static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x
 
 static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
-    uint8_t* send_buffer, size_t send_length, uint64_t current_time)
+    uint8_t* send_buffer, size_t send_length, uint64_t UNUSED(current_time))
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_outgoing_segment(cnx->quic->F_log, 1,
@@ -2314,7 +2314,8 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 
         textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
-        fprintf(F, "Lost packet type %d, number %" PRIu64 ", size %zu", ptype, sequence_number, packet_size);
+        fprintf(F, "Lost packet type %d, path %" PRIu64 ", number % " PRIu64 ", size % zu", ptype,
+            path_x->unique_path_id, sequence_number, packet_size);
         if (dcid != NULL) {
             fprintf(F, ", DCID ");
             textlog_connection_id(F, dcid);
