@@ -1251,10 +1251,10 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
     message_len = (written < 0) ? ps_msg->size - ps_msg->ptr - 1 : (size_t)written;
 #else
     written = vsnprintf(message_text, ps_msg->size - ps_msg->ptr, fmt, vargs);
-    if (written < 0 || written >= ps_msg->size - ps_msg->ptr){
+    if (written < 0 || (size_t)written >= ps_msg->size - ps_msg->ptr){
         message_len = ps_msg->size - ps_msg->ptr - 1;
     } else {
-        message_len = written;
+        message_len = (size_t)written;
     }
 #endif
     ps_msg->ptr += message_len;
