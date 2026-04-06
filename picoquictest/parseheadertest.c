@@ -85,7 +85,11 @@ static picoquic_packet_header hinitial10 = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t pinitial10_l[] = {
@@ -121,7 +125,11 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t pvnego10[] = {
@@ -202,7 +210,11 @@ static picoquic_packet_header hhandshake = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi0_c_32[] = {
@@ -232,7 +244,11 @@ static picoquic_packet_header hphi0_c_32 = {
     1,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
@@ -262,7 +278,11 @@ static picoquic_packet_header hphi0_c_32_spin = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi1_noc_32[] = {
@@ -291,7 +311,11 @@ static picoquic_packet_header hphi1_noc_32 = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_intel_bug[] = {
@@ -396,7 +420,11 @@ static picoquic_packet_header h_intel_bug = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 struct _test_entry {
