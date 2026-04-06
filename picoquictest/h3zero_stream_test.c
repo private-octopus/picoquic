@@ -187,11 +187,11 @@ int h3zero_varint_stream_test(void)
  * h3zero_stream_ctx_t: incoming stream context.
  */
 
-int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
-    void* path_app_ctx)
+int incoming_unidir_test_fn(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picohttp_call_back_event_t UNUSED(fin_or_event),
+    struct st_h3zero_stream_ctx_t* UNUSED(stream_ctx),
+    void* UNUSED(path_app_ctx))
 {
     return 0;
 }
@@ -697,7 +697,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
                     fseek(Fbis, 0, SEEK_END);
                     sz = ftell(Fbis);
                     (void)picoquic_file_close(Fbis);
-                    if (sz != data_length) {
+                    if ((size_t)sz != data_length) {
                         ret = -1;
                     }
                 }
@@ -826,10 +826,10 @@ typedef struct st_test_datagram_ctx_t {
 } test_datagram_ctx_t;
 
 
-int h3zero_test_datagram_cb(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
+int h3zero_test_datagram_cb(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
     picohttp_call_back_event_t wt_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* UNUSED(stream_ctx),
     void* path_app_ctx)
 {
     int ret = 0;
@@ -886,7 +886,6 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    h3zero_stream_ctx_t* stream_ctx = NULL;
     uint64_t simulated_time = 0;
     h3zero_capsule_t capsule = { 0 };
     test_datagram_ctx_t dg_ctx = { 0 };
