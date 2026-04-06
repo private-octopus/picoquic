@@ -301,7 +301,7 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
                 ret = -1;
             }
 
-            for (int i = 0; ret == 0 && i < num_block; i++) {
+            for (uint64_t i = 0; ret == 0 && i < num_block; i++) {
                 size_t l_gap = 0;
                 size_t l_range = 0;
                 uint64_t gap = 0;
