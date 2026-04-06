@@ -35,7 +35,7 @@ struct hashtestkey {
     picohash_item item;
 };
 
-static uint64_t hashtest_hash(const void* v, const uint8_t* hash_seed)
+static uint64_t hashtest_hash(const void* v, const uint8_t* UNUSED(hash_seed))
 {
     const struct hashtestkey* k = (const struct hashtestkey*)v;
     uint64_t hash = (k->x + 0xDEADBEEFull);
