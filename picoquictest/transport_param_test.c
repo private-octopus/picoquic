@@ -649,7 +649,8 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     uint64_t simulated_time = 0;
     size_t decoded = 0;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, proposed_version, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, version, &simulated_time, mode);
+    test_cnx->proposed_version = proposed_version;
 
     if (ret == 0) {
         ret = picoquic_receive_transport_extensions(test_cnx, mode,
@@ -951,7 +952,7 @@ static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes
     fprintf(F, "\n");
 }
 
-static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_t target_length)
+static int transport_param_log_fuzz_test(uint8_t* target, size_t target_length)
 {
     int ret = 0;
     uint8_t buffer[256];
@@ -1037,10 +1038,10 @@ int transport_param_log_test(void)
     {
         DBG_PRINTF("Doing fuzz test of transport parameter logging into %s\n", log_tp_fuzz_file);
 
-        ret = transport_param_log_fuzz_test(0, client_param2, sizeof(client_param2));
+        ret = transport_param_log_fuzz_test(client_param2, sizeof(client_param2));
 
         if (ret == 0) {
-            ret = transport_param_log_fuzz_test(1, server_param2, sizeof(server_param2));
+            ret = transport_param_log_fuzz_test(server_param2, sizeof(server_param2));
         }
 
         DBG_PRINTF("Fuzz test of transport parameter was successful.\n", log_tp_fuzz_file);
