@@ -638,7 +638,7 @@ int warptest_check_stats(warptest_ctx_t* mt_ctx, warptest_type_enum media_type)
         uint64_t period = (media_type == warptest_audio) ? WARPTEST_AUDIO_PERIOD : WARPTEST_VIDEO_PERIOD;
         uint64_t expected = WARPTEST_DURATION / period;
 
-        if (stats->nb_frames != expected) {
+        if (stats->nb_frames != (int)expected) {
             ret = -1;
         }
         else if (stats->nb_frames != 0) {
@@ -808,7 +808,7 @@ int warptest_prepare_new_frame(warptest_ctx_t* mt_ctx, uint64_t current_time)
  * 
  * When polled, just send the missing bytes.
  */
-int warptest_prepare_to_send_on_uni_stream(warptest_uni_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
+int warptest_prepare_to_send_on_uni_stream(warptest_uni_stream_ctx_t* stream_ctx, void* context, size_t space)
 {
     int ret = 0;
 
@@ -989,7 +989,7 @@ int warptest_callback(picoquic_cnx_t* cnx,
                     ret = -1;
             } else if (!PICOQUIC_IS_BIDIR_STREAM_ID(stream_id)) {
                 uni_stream_ctx = (warptest_uni_stream_ctx_t*)v_stream_ctx;
-                ret = warptest_prepare_to_send_on_uni_stream(uni_stream_ctx, bytes, length, cnx_ctx->mt_ctx->simulated_time);
+                ret = warptest_prepare_to_send_on_uni_stream(uni_stream_ctx, bytes, length);
             }
             else {
                 stream_ctx = (warptest_stream_ctx_t*)v_stream_ctx;
@@ -1235,7 +1235,7 @@ int warptest_is_finished(warptest_ctx_t* mt_ctx)
         }
         else {
             is_finished &= (mt_ctx->frames_sent[i] == mt_ctx->frames_to_send[i]) &&
-                (mt_ctx->frames_sent[i] == mt_ctx->media_stats[i].nb_frames);
+                (mt_ctx->frames_sent[i] == (uint64_t)mt_ctx->media_stats[i].nb_frames);
         }
     }
     if (is_finished) {
@@ -1248,7 +1248,7 @@ int warptest_is_finished(warptest_ctx_t* mt_ctx)
 /* max_data_uni and max_stream_id_unidir will be set according
  * to test scenario
  */
-void warptest_init_transport_parameters(picoquic_tp_t* tp, int client_mode, warptest_spec_t* spec)
+void warptest_init_transport_parameters(picoquic_tp_t* tp, warptest_spec_t* spec)
 {
     memset(tp, 0, sizeof(picoquic_tp_t));
     tp->initial_max_stream_data_bidi_local = 0x200000;
@@ -1348,7 +1348,7 @@ warptest_ctx_t * warptest_configure(int warptest_id,  warptest_spec_t * spec)
                 picoquic_set_default_congestion_algorithm(mt_ctx->quic[i], spec->ccalgo);
                 ret = picoquic_set_qlog(mt_ctx->quic[i], ".");
                 /* Init of transport parameters per quic context */
-                warptest_init_transport_parameters(&server_parameters, 0, spec);
+                warptest_init_transport_parameters(&server_parameters, spec);
                 ret = picoquic_set_default_tp(mt_ctx->quic[i], &server_parameters);
             }
         }
@@ -1385,7 +1385,7 @@ warptest_ctx_t * warptest_configure(int warptest_id,  warptest_spec_t * spec)
             }
             if (cnx != NULL) {
                 picoquic_tp_t client_parameters;
-                warptest_init_transport_parameters(&client_parameters, 1, spec);
+                warptest_init_transport_parameters(&client_parameters, spec);
                 picoquic_set_transport_parameters(cnx, &client_parameters);
                 mt_ctx->client_cnx = warptest_create_cnx_context(mt_ctx, cnx);
                 if (mt_ctx->client_cnx == NULL) {
