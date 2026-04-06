@@ -422,7 +422,7 @@ int eca1_amplification_loss_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b0111111110100;
+    uint64_t initial_losses = 0x0FF4;
     uint8_t test_case_id = 0xa1;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 16);
 
@@ -497,7 +497,7 @@ int ec5c_silly_cid_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b0000011110000010000100;
+    uint64_t initial_losses = 0x01e084;
     uint8_t test_case_id = 0x5c;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 48);
 
@@ -535,7 +535,7 @@ int ec9a_preemptive_amok_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b100000000000;
+    uint64_t initial_losses = 0x800;
     uint8_t test_case_id = 0x9a;
     uint64_t cnx_server_idle_timeout = 0;
     uint64_t cnx_server_nb_preemptive_repeat = 0;
@@ -928,8 +928,7 @@ int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uin
     return ret;
 }
 
-int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size,
-    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size)
 {
     int no_need_to_repeat = 0;
     int do_not_detect_spurious = 0;
@@ -1168,16 +1167,13 @@ int reset_repeat_test_one(uint8_t test_id)
         * there any more, this means the original reset was
         * successful, there is no need to resend it.
         */
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame));
         break;
     case reset_need_reset:
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame));
         break;
     case reset_need_stop_sending:
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame));
         break;
     default:
         DBG_PRINTF("What test is that: %d?", test_id);
@@ -1686,7 +1682,7 @@ int reset_loop_prepare_to_send(reset_loop_callback_t * cb, int stream_rank, void
 
 int reset_loop_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
 
     int ret = 0;
