@@ -295,6 +295,7 @@ static int test_api_stream0_prepare(picoquic_test_tls_api_ctx_t* ctx, uint8_t * 
         if (ctx->stream0_test_option == 4 && ctx->stream0_sent > 5000) {
             available = 0;
             ctx->stream0_test_option = 1;
+            is_fin = 0;
         } else if (available > space) {
             available = space;
             
@@ -8771,7 +8772,7 @@ typedef struct st_header_fuzzer_ctx_t {
 } header_fuzzer_ctx_t;
 
 static uint32_t header_fuzzer(void* fuzz_ctx, picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t bytes_max, size_t length, size_t header_length)
+    uint8_t* bytes, size_t bytes_max, size_t length, size_t UNUSED(header_length))
 {
     header_fuzzer_ctx_t* ctx = (header_fuzzer_ctx_t*)fuzz_ctx;
 
@@ -8781,7 +8782,7 @@ static uint32_t header_fuzzer(void* fuzz_ctx, picoquic_cnx_t* cnx,
         cnx->pkt_ctx[picoquic_packet_context_application].send_sequence > 2) {
         uint64_t fuzz_pilot = picoquic_test_random(&ctx->random_context);
         
-        for (size_t i =1; i <= 8 && i < length ; i++) {
+        for (size_t i =1; i <= 8 && i < length && i < bytes_max ; i++) {
             bytes[i] ^= (uint8_t)fuzz_pilot;
             fuzz_pilot >>= 8;
         }
@@ -8950,7 +8951,7 @@ int packet_trace_test(void)
 #define QLOG_TRACE_ECN_QLOG "qlog_trace_ecn.qlog"
 #define QLOG_TRACE_AUTO_QLOG "0102030405060708.server.qlog"
 
-void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_local,
+void qlog_trace_cid_fn(picoquic_quic_t* UNUSED(quic), picoquic_connection_id_t cnx_id_local,
     picoquic_connection_id_t cnx_id_remote, void* cnx_id_cb_data, picoquic_connection_id_t* cnx_id_returned)
 {
     picoquic_connection_id_t* cnxfn_data = (picoquic_connection_id_t*)cnx_id_cb_data;
@@ -9399,29 +9400,26 @@ int perflog_test(void)
 int ready_to_send_test_one(int test_option)
 {
     int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
 
-    for (int i = 0; ret == 0 && i < 3; i++) {
-        uint64_t simulated_time = 0;
-        picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
+        0, NULL, NULL);
 
-        ret = tls_api_one_scenario_init(&test_ctx, &simulated_time,
-            0, NULL, NULL);
+    if (ret == 0) {
+        test_ctx->stream0_test_option = test_option;
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000,
+            1200000);
+    }
 
-        if (ret == 0) {
-            test_ctx->stream0_test_option = i;
-            ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-                test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 1000000, 0, 0, 20000,
-                1200000);
-        }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
 
-        if (test_ctx != NULL) {
-            tls_api_delete_ctx(test_ctx);
-            test_ctx = NULL;
-        }
-
-        if (ret != 0) {
-            DBG_PRINTF("Ready to send variant %d fails\n", i);
-        }
+    if (ret != 0) {
+        DBG_PRINTF("Ready to send variant %d fails\n", test_option);
     }
 
     return ret;
@@ -9776,7 +9774,7 @@ typedef struct st_tls_api_address_are_documented_t {
 
 static int test_local_address_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     int ret = 0;
     struct sockaddr * local_addr;
