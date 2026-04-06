@@ -994,8 +994,8 @@ int cnx_limit_test(void)
         /* loop until time exhausted or all created */
         while (ret == 0 && stress_ctx->simulated_time < duration && !is_done) {
             ret = cnx_stress_loop_step(stress_ctx);
-            if (stress_ctx->nb_clients == (uint32_t)nb_clients &&
-                stress_ctx->nb_servers == (uint32_t)nb_clients) {
+            if (stress_ctx->nb_clients == nb_clients &&
+                stress_ctx->nb_servers == nb_clients) {
                 is_done = 1;
                 for (int c = 0; c < nb_clients; c++) {
                     if (stress_ctx->c_ctx[c] == NULL ||
