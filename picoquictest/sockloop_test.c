@@ -125,7 +125,7 @@ int sockloop_test_verify_extra_socket(picoquic_cnx_t* cnx_client, struct sockadd
     return ret;
 }
 
-int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+int sockloop_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
