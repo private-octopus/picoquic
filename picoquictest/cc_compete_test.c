@@ -397,9 +397,9 @@ int cc_ns_wifi_bad_bbr_test(void)
 * being that the "varylink" structure is user specified.
 */
 picoquic_ns_link_spec_t cc_varylink_test_spec[] = {
-    { 1000000,  0.01,  0.01, 5000, 0, 15000, 0 },
-    { 2000000,  0.001,  0.001, 5000, 0, 15000, 0, 2, 8 },
-    { UINT64_MAX,  0.01,  0.01, 5000, 0, 15000, 0 }
+    { 1000000,  0.01,  0.01, 5000, 0, 15000, 0, 0, 0, 0 },
+    { 2000000,  0.001,  0.001, 5000, 0, 15000, 0, 2, 8, 0 },
+    { UINT64_MAX,  0.01,  0.01, 5000, 0, 15000, 0, 0, 0, 0 }
 };
 
 int cc_ns_varylink_test(void)
