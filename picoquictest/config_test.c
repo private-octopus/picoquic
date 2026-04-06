@@ -835,7 +835,9 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             { 192, 0, 2, 1 },
             4433,
             { 0 },
-            0
+            0,
+            { 0 },
+            { 0 }
         }
     },
     {
@@ -849,7 +851,11 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             { 0 },
             0,
             { 0x20,  0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-            4433
+            4433,
+            { 0 },
+            0,
+            { 0 },
+            { 0 }
         }
     },
     {
@@ -863,7 +869,11 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             { 192, 0, 2, 1 },
             4433,
             { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-            4433
+            4433,
+            { 0 },
+            0,
+            { 0 },
+            { 0 }
         }
     },
     {
