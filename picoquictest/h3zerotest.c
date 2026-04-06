@@ -842,7 +842,7 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
         DBG_PRINTF("Qpack case %d cannot be parsed", i);
         ret = -1;
     }
-    else if ((bytes - data) != data_length) {
+    else if ((size_t)(bytes - data) != data_length) {
         DBG_PRINTF("Qpack case %d parse wrong length", i);
         ret = -1;
     }
@@ -1283,18 +1283,26 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
         uint8_t* p_max;
         size_t p_len = bmax[i] - bytes;
         memset(p, 0, sizeof(packet_buffer));
-        memcpy(p, bytes, p_len);
-        p_max = packet_buffer + p_len;
-        while (p != NULL && p < p_max) {
+        if (p_len <= nb_bytes) {
+            memcpy(p, bytes, p_len);
+            p_max = packet_buffer + p_len;
+        }
+        else {
+            ret = -1;
+        }
+        while (p != NULL && p < p_max && ret == 0) {
             p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
             if (p != NULL && available_data > 0) {
                 if (nb_data + available_data > 64) {
                     ret = -1;
                 }
-                else {
+                else if (nb_data + available_data <= nb_bytes) {
                     memcpy(&data[nb_data], p, available_data);
                     p += available_data;
                     nb_data += available_data;
+                }
+                else {
+                    ret = -1;
                 }
             }
         }
@@ -1566,8 +1574,8 @@ int h3zero_stream_fuzz_test(void)
     int ret = 0;
     size_t buffer_size = 0x10000;
     uint8_t* packet_buffer = malloc(buffer_size);
-    int nb_good = 0;
-    int nb_bad = 0;
+    size_t nb_good = 0;
+    size_t nb_bad = 0;
     size_t nb_trials = 2048;
     int errors_found[6] = { 0, 0, 0, 0, 0, 0 };
     char const * errors_names[6] = {
@@ -1784,9 +1792,9 @@ int parse_demo_scenario_test(void)
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
-    { 0, 4, 0, "12345", "doc-12345.txt", 0 },
-    { 0, 8, 4, "post-test", "post-test.html", 12345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0, 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0, 0 },
+    { 0, 8, 4, "post-test", "post-test.html", 12345, 0 }
 };
 
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -2274,10 +2282,10 @@ typedef struct st_hzero_post_echo_ctx_t {
     uint8_t buf[PICOQUIC_ECHO_SIZE_MAX];
 } hzero_post_echo_ctx_t;
 
-int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
+int h3zero_test_ping_callback(picoquic_cnx_t* UNUSED(cnx),
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
-    void * callback_ctx)
+    void* UNUSED(callback_ctx))
 {
     int ret = 0;
     hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
@@ -2370,7 +2378,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
 }
 
 static const picoquic_demo_stream_desc_t post_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 2345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 2345, 0 }
 };
 
 picohttp_server_path_item_t ping_test_item = {
