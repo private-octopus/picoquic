@@ -357,7 +357,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, medi
             ((media_type == media_test_video2) ? MEDIATEST_VIDEO2_PERIOD : MEDIATEST_VIDEO_PERIOD);
         uint64_t expected = MEDIATEST_DURATION / period;
 
-        if (stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
+        if ((uint64_t)stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
             ret = -1;
         }
         else if (stats->nb_frames != 0) {
@@ -1024,7 +1024,7 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
     return ret;
 }
 
-void mediatest_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
+void mediatest_init_transport_parameters(picoquic_tp_t* tp)
 {
     memset(tp, 0, sizeof(picoquic_tp_t));
     tp->initial_max_stream_data_bidi_local = 0x200000;
@@ -1145,7 +1145,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         /* Start the connection and create the context */
         if (cnx != NULL) {
             picoquic_tp_t client_parameters;
-            mediatest_init_transport_parameters(&client_parameters, 1);
+            mediatest_init_transport_parameters(&client_parameters);
             picoquic_set_transport_parameters(cnx, &client_parameters);
             picoquic_set_feedback_loss_notification(cnx, 1);
 
