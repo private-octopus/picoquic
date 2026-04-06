@@ -98,7 +98,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     server_parameters.enable_time_stamp = 3;
     server_parameters.max_idle_timeout = client_parameters.max_idle_timeout;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

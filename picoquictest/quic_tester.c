@@ -243,7 +243,7 @@ int initial_ping_test(void)
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {
@@ -333,7 +333,7 @@ int initial_ping_ack_test(void)
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {

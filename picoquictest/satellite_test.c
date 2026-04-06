@@ -113,7 +113,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         server_parameters.initial_max_data = bdp_s;
         client_parameters.initial_max_data = bdp_c;
     }
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

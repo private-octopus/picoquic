@@ -279,7 +279,7 @@ static void test_api_receive_stream_data(
     }
 }
 
-static int test_api_stream0_prepare(picoquic_cnx_t* cnx, picoquic_test_tls_api_ctx_t* ctx, uint8_t * context, size_t space)
+static int test_api_stream0_prepare(picoquic_test_tls_api_ctx_t* ctx, uint8_t * context, size_t space)
 {
     int ret = -1;
 
@@ -449,7 +449,7 @@ int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64
     return ret;
 }
 
-static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
+static int test_api_direct_receive_callback(picoquic_cnx_t* UNUSED(cnx),
     uint64_t stream_id, int fin, const uint8_t* bytes, uint64_t offset, size_t length, void* direct_receive_ctx)
 {
     int ret = 0;
@@ -615,7 +615,7 @@ static int test_api_direct_receive_callback(picoquic_cnx_t* cnx,
 
 int test_api_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     /* Need to implement the server sending strategy */
     test_api_callback_t* cb_ctx = (test_api_callback_t*)callback_ctx;
@@ -654,7 +654,7 @@ int test_api_callback(picoquic_cnx_t* cnx,
 
     if (fin_or_event == picoquic_callback_prepare_to_send) {
         if (cb_ctx->client_mode && stream_id == 0) {
-            return test_api_stream0_prepare(cnx, ctx, bytes, length);
+            return test_api_stream0_prepare(ctx, bytes, length);
         } else {
             /* unexpected call */
             return -1;
@@ -1447,7 +1447,7 @@ static void tls_api_static_departure(picoquic_test_tls_api_ctx_t* test_ctx,
 
 static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage * addr_from, struct sockaddr_storage * addr_to,
-    int * was_active, size_t * send_length, size_t * p_segment_size,
+    size_t * send_length, size_t * p_segment_size,
     picoquictest_sim_link_t** target_link, uint64_t simulated_time)
 {
     int ret = 0;
@@ -1467,7 +1467,7 @@ static int tls_api_server_departure(picoquic_test_tls_api_ctx_t* test_ctx,
         /* useless test, but makes it easier to add a breakpoint under debugger */
         ret = -1;
     }
-    else if (send_length > 0) {
+    else if (*send_length > 0) {
         /* copy and queue in s to c */
         if (addr_from->ss_family == 0) {
             picoquic_store_addr(addr_from, (struct sockaddr*)&test_ctx->server_addr);
@@ -1502,7 +1502,7 @@ static void tls_api_prepare_coalesce_test(picoquic_test_tls_api_ctx_t* test_ctx,
 
 static int tls_api_client_departure(picoquic_test_tls_api_ctx_t* test_ctx,
     struct sockaddr_storage * addr_from, struct sockaddr_storage * addr_to,
-    int * was_active, size_t * send_length, size_t * p_segment_size,
+    size_t * send_length, size_t * p_segment_size,
     picoquictest_sim_link_t** p_target_link, uint64_t simulated_time)
 {
     int ret = 0;
@@ -1697,12 +1697,12 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
             else if (next_action == sim_action_client_departure) {
                 /* check whether the client has something to send */
                 ret = tls_api_client_departure(test_ctx, &addr_from, &addr_to,
-                    was_active, &send_length, p_segment_size, &target_link,
+                    &send_length, p_segment_size, &target_link,
                     *simulated_time);
             }
             else if (next_action == sim_action_server_departure) {
                 ret = tls_api_server_departure(test_ctx, &addr_from, &addr_to,
-                    was_active, &send_length, p_segment_size,
+                    &send_length, p_segment_size,
                     &target_link, *simulated_time);
             }
 
@@ -2131,7 +2131,7 @@ static int tls_api_attempt_to_close(
     return tls_api_close_with_losses(test_ctx, simulated_time, 0);
 }
 
-int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx,
     char const* sni, char const* alpn, uint64_t * simulated_time)
 {
     int ret = 0;
@@ -2268,7 +2268,7 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, proposed_version, sni, alpn, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, sni, alpn, &simulated_time);
     }
 
     if (test_ctx != NULL) {
@@ -2336,7 +2336,7 @@ int tls_api_inject_hs_ack_test(void)
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {
@@ -2590,15 +2590,30 @@ static int check_vn_invariant(uint8_t* packet, size_t packet_length, uint8_t* re
     size_t scid_len;
     uint8_t* scid;
     size_t response_index = 5; /* Points to byte after VN */
-    /* Invariant parsing -- compute minimum length */
-    icid_len = packet[5];
-    icid = &packet[6];
-    scid_len = packet[5 + 1 + icid_len];
-    scid = &packet[5 + 1 + icid_len + 1];
-    /* Check that the response is long enough */
-    if (response_length < 1 + 4 + 1 + icid_len + 1 + scid_len + 4) {
-        DBG_PRINTF("Response too short, length = %zu", response_length);
+
+    if (packet_length < 6) {
         ret = -1;
+    }
+    else {
+        /* Invariant parsing -- compute minimum length */
+        icid_len = packet[5];
+        icid = &packet[6];
+        if (packet_length < 5 + 1 + icid_len + 1) {
+            ret = -1;
+        }
+        else {
+            scid_len = packet[5 + 1 + icid_len];
+            scid = &packet[5 + 1 + icid_len + 1];
+            /* Check that the response is long enough */
+
+            if (packet_length < 1 + 4 + 1 + icid_len + 1 + scid_len + 4) {
+                ret = -1;
+            }
+            else if (response_length < 1 + 4 + 1 + icid_len + 1 + scid_len + 4) {
+                DBG_PRINTF("Response too short, length = %zu", response_length);
+                ret = -1;
+            }
+        }
     }
     /* Check that response is long header */
     if (ret == 0 && (response[0] & 0x80) != 0x80) {
@@ -2776,7 +2791,7 @@ size_t test_version_negotiation_get_spoofed(picoquic_cnx_t* cnx, int spoof_mode,
             }
             else if (spoof_mode != 6 && picoquic_nb_supported_versions > 1) {
                 size_t plausible_index = picoquic_nb_supported_versions - 1;
-                if (cnx->version_index == plausible_index) {
+                if ((size_t)cnx->version_index == plausible_index) {
                     plausible_index = 0;
                 }
                 plausible_vn = picoquic_supported_versions[plausible_index].version;
@@ -3030,7 +3045,7 @@ int tls_api_one_scenario_init_ex(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t * simulated_time,
     uint32_t proposed_version,
     picoquic_tp_t * client_params, picoquic_tp_t * server_params,
-    picoquic_connection_id_t * icid, int cid_zero)
+    picoquic_connection_id_t * icid)
 {
     int ret = tls_api_init_ctx_ex(p_test_ctx,
         (proposed_version == 0) ? PICOQUIC_INTERNAL_TEST_VERSION_1 : proposed_version,
@@ -3065,7 +3080,7 @@ int tls_api_one_scenario_init(
     uint32_t proposed_version,
     picoquic_tp_t* client_params, picoquic_tp_t* server_params)
 {
-    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL, 0);
+    return tls_api_one_scenario_init_ex(p_test_ctx, simulated_time, proposed_version, client_params, server_params, NULL);
 }
 
 int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx)
@@ -3112,7 +3127,7 @@ int tls_api_one_scenario_verify(picoquic_test_tls_api_ctx_t* test_ctx)
 }
 
 int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t * simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max)
+    uint64_t * simulated_time, uint64_t max_data, uint64_t queue_delay_max)
 {
     int ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     test_ctx->loss_mask_default = 0;
@@ -3177,8 +3192,7 @@ int tls_api_one_scenario_body_ex(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t init_loss_mask, uint64_t max_data, uint64_t queue_delay_max,
     uint64_t max_completion_microsec, size_t nb_link_states, test_vary_link_spec_t* link_state)
 {
-    int ret = tls_api_one_scenario_body_connect(test_ctx, simulated_time, stream0_target,
-        max_data, queue_delay_max);
+    int ret = tls_api_one_scenario_body_connect(test_ctx, simulated_time, max_data, queue_delay_max);
 
     /* Prepare to send data */
     if (ret == 0) {
@@ -5269,7 +5283,7 @@ typedef struct st_verify_certificate_test_cb_t {
     int callcount;
 } verify_certificate_test_cb_t;
 
-static int verify_sign_test(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign)
+static int verify_sign_test(void* verify_ctx, uint16_t UNUSED(algo), ptls_iovec_t UNUSED(data), ptls_iovec_t UNUSED(sign))
 {
     int* ptr = (int*)verify_ctx;
     *ptr += 1;
@@ -5281,9 +5295,9 @@ static int verify_sign_test(void* verify_ctx, uint16_t algo, ptls_iovec_t data, 
               int (**verify_sign)(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign), void **verify_data,
               ptls_iovec_t *certs, size_t num_certs);
 */
-static int verify_certificate_test_cb(struct st_ptls_verify_certificate_t* self, ptls_t* tls, const char* server_name,
+static int verify_certificate_test_cb(struct st_ptls_verify_certificate_t* self, ptls_t* UNUSED(tls), const char* UNUSED(server_name),
     int (**verify_sign)(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign), void** verify_data,
-    ptls_iovec_t* certs, size_t num_certs)
+    ptls_iovec_t* UNUSED(certs), size_t UNUSED(num_certs))
 {
 
     int ret = 0;
@@ -8160,7 +8174,7 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
     return ret;
 }
 
-int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, uint64_t loss_target, int target_client, picoquic_packet_context_enum false_pc, uint64_t false_rank)
+int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_scenario, int target_client, picoquic_packet_context_enum false_pc, uint64_t false_rank)
 {
     uint64_t simulated_time = 0;
     int nb_injected = 0;
@@ -8295,14 +8309,14 @@ int false_migration_test(void)
     int target_client;
 
     for (target_client = 1; ret == 0 && target_client >= 0; target_client--) {
-        ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_initial, 0);
+        ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), target_client, picoquic_packet_context_initial, 0);
         
         if (ret == 0) {
-            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_handshake, 0);
+            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), target_client, picoquic_packet_context_handshake, 0);
         }
 
         for (uint64_t seq = 0; ret == 0 && seq < 4; seq++) {
-            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, target_client, picoquic_packet_context_application, seq);
+            ret = false_migration_test_scenario(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), target_client, picoquic_packet_context_application, seq);
         }
     }
 
@@ -8795,7 +8809,7 @@ int bad_cnxid_test(void)
 
     if (ret == 0) {
         /* establish the connection */
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
     }
 
     /* Set fuzzer, then perform a data sending loop */
@@ -9531,7 +9545,7 @@ int long_rtt_test(void)
     picoquic_connection_id_t initial_cid = { {0x10, 0x10, 30, 0, 0, 0, 0, 0}, 8 };
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
-        0, NULL, NULL, &initial_cid, 0);
+        0, NULL, NULL, &initial_cid);
 
     if (ret == 0) {
         /* set the delay estimate, then launch the test */
@@ -9580,7 +9594,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
     }
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time,
-        0, NULL, NULL, &initial_cid, 0);
+        0, NULL, NULL, &initial_cid);
 
     if (ret == 0) {
         /* set the optimistic ack policy to the default value */
@@ -9591,8 +9605,7 @@ int optimistic_ack_test_one(int shall_spoof_ack)
         /* Reset the uniform random test */
         picoquic_public_random_seed_64(RANDOM_PUBLIC_TEST_SEED, 1);
 
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0,
-            0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
 
         if (ret != 0)
         {
@@ -9977,7 +9990,7 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
     server_parameters.migration_disabled = migration_disabled;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        NULL, &server_parameters, NULL, cid_zero);
+        NULL, &server_parameters, NULL);
 
 
     if (ret == 0) {
@@ -10687,7 +10700,7 @@ int direct_receive_test(void)
         0, NULL, NULL);
 
     if (ret == 0) {
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
 
         /* Prepare to send data */
         if (ret == 0) {

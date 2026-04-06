@@ -143,7 +143,7 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
         }
         else {
             uint32_t ticket_version = 0;
-            int ret = tls_api_one_scenario_body_connect(*p_test_ctx, simulated_time, 0, 0, 0);
+            int ret = tls_api_one_scenario_body_connect(*p_test_ctx, simulated_time, 0, 0);
 
             /* Finish sending data */
             if (ret == 0) {

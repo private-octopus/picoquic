@@ -1575,7 +1575,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
     multipath_init_params(&client_parameters, 0);
     multipath_init_params(&server_parameters, 0);
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -1606,7 +1606,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
         }
 
         if (ret == 0) {
-            ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+            ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
             if (ret != 0)
             {
                 DBG_PRINTF("Connect loop returns %d\n", ret);

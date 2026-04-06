@@ -105,7 +105,7 @@ static int wifi_test_one(wifi_test_enum test_id, wifi_test_spec_t * spec)
     
     initial_cid.id[2] = test_id;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

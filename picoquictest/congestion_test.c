@@ -175,7 +175,7 @@ static int congestion_long_test(picoquic_congestion_algorithm_t* ccalgo)
         picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
         if (ret != 0)
         {
             DBG_PRINTF("Connection loop returns %d\n", ret);
@@ -276,7 +276,7 @@ int performance_test_one(uint64_t max_completion_time, uint64_t mbps, uint64_t r
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
     initial_cid.id[7] = (buffer_id > 255) ? 0xff : (uint8_t)buffer_id;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -817,7 +817,7 @@ int app_limit_cc_test_one(
     client_parameters.initial_max_data = 40000;
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
-        NULL, &initial_cid, 0);
+        NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -965,7 +965,7 @@ int cwin_max_test_one(
     picoquic_init_transport_parameters(&client_parameters);
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters,
-        NULL, &initial_cid, 0);
+        NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

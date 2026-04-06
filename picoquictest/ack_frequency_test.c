@@ -69,7 +69,7 @@ static int ackfrq_test_one(ackfrq_test_spec_t * spec)
 
     initial_cid.id[2] = spec->test_id;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
