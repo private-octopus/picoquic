@@ -84,6 +84,7 @@ static picoquic_packet_header hinitial10 = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -113,6 +114,7 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     picoquic_packet_context_initial,
+    0,
     0,
     0,
     0,
@@ -164,6 +166,7 @@ static picoquic_packet_header hvnego10 = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -192,6 +195,7 @@ static picoquic_packet_header hhandshake = {
     0,
     2,
     picoquic_packet_context_handshake,
+    0,
     0,
     0,
     0,
@@ -227,6 +231,7 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     1,
     0,
+    0,
     0
 };
 
@@ -256,6 +261,7 @@ static picoquic_packet_header hphi0_c_32_spin = {
     1,
     0,
     0,
+    0,
     0
 };
 
@@ -279,6 +285,7 @@ static picoquic_packet_header hphi1_noc_32 = {
     3,
     picoquic_packet_context_application,
     1,
+    0,
     0,
     0,
     0,
@@ -388,6 +395,7 @@ static picoquic_packet_header h_intel_bug = {
     0,
     0,
     0,
+    0,
     0
 };
 
@@ -413,7 +421,7 @@ static struct _test_entry test_entries[] = {
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);
 
-int parseheadertest()
+int parseheadertest(void)
 {
     int ret = 0;
     picoquic_packet_header ph;
@@ -735,7 +743,7 @@ static const uint8_t test_1rtt_secret[] = {
 
 static uint8_t const addr1[4] = { 10, 0, 0, 1 };
 
-int packet_enc_dec_test()
+int packet_enc_dec_test(void)
 {
     int ret = 0;
     struct sockaddr_in test_addr_c;
@@ -933,7 +941,7 @@ int packet_initial_dec_one(
     return ret;
 }
 
-int incoming_initial_test()
+int incoming_initial_test(void)
 {
     int ret = packet_initial_dec_one(packet_intel_bug, sizeof(packet_intel_bug), "h3");
 
@@ -1163,7 +1171,7 @@ static int header_length_test_one(header_length_case_t * hlc)
     return ret;
 }
 
-int header_length_test()
+int header_length_test(void)
 {
     int ret = 0;
     for (size_t i = 0; i < nb_header_length_cases; i++) {
