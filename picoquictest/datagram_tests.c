@@ -205,7 +205,7 @@ int test_datagram_recv(picoquic_cnx_t* cnx, uint64_t unique_path_id,
 }
 
 int test_datagram_ack(picoquic_cnx_t* cnx,
-    picoquic_call_back_event_t d_event, uint8_t* bytes, size_t length, uint64_t sent_time, void* datagram_ctx)
+    picoquic_call_back_event_t d_event, uint8_t* UNUSED(bytes), size_t UNUSED(length), uint64_t UNUSED(sent_time), void* datagram_ctx)
 {
     int ret = 0;
     test_datagram_send_recv_ctx_t* dg_ctx = datagram_ctx;
@@ -505,9 +505,9 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             }
             /* Verify that the number of packets is as expected */
             if (ret == 0 && dg_ctx->max_packets_received > 0) {
-                if (test_ctx->cnx_client->nb_packets_received > dg_ctx->max_packets_received) {
+                if (test_ctx->cnx_client->nb_packets_received > (uint64_t)dg_ctx->max_packets_received) {
                     DBG_PRINTF("Expected at most %d packets for %d datagrams, batch by %d, got %d",
-                        dg_ctx->max_packets_received, dg_ctx->dg_recv[1], dg_ctx->batch_size[0], test_ctx->cnx_client->nb_packets_received);
+                        dg_ctx->max_packets_received, dg_ctx->dg_recv[1], dg_ctx->batch_size[0], (int)test_ctx->cnx_client->nb_packets_received);
                     ret = -1;
                 }
             }
