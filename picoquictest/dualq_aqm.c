@@ -111,7 +111,7 @@ void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, du
     xq->queue_bytes += packet->length;
 }
 
-picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, dualq_queue_t* xq)
+picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, dualq_queue_t* xq)
 {
     picoquictest_sim_packet_t* packet = xq->queue_first;
 
@@ -196,10 +196,10 @@ picoquictest_sim_packet_t* dualq_scheduler(dualq_state_t* dualq, picoquictest_si
     picoquictest_sim_packet_t* packet = NULL;
     *is_lq = ((dualq->schedule_tick & 0x0f) == 0) ? 0 : 1;
 
-    packet = dualq_dequeue_queue(dualq, link, (*is_lq == 0)? &dualq->cq : &dualq->lq);
+    packet = dualq_dequeue_queue(dualq, (*is_lq == 0)? &dualq->cq : &dualq->lq);
     if (packet == NULL) {
         *is_lq ^= 1;
-        packet = dualq_dequeue_queue(dualq, link, (*is_lq == 0) ? &dualq->cq : &dualq->lq);
+        packet = dualq_dequeue_queue(dualq, (*is_lq == 0) ? &dualq->cq : &dualq->lq);
     }
     
     dualq->schedule_tick += 1;
@@ -376,10 +376,10 @@ void dualq_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     dualq_state_t* dualq = (dualq_state_t*)self;
     picoquictest_sim_packet_t* packet;
 
-    while ((packet = dualq_dequeue_queue(dualq, link, &dualq->lq)) != NULL){
+    while ((packet = dualq_dequeue_queue(dualq, &dualq->lq)) != NULL){
         picoquictest_sim_link_enqueue(link, packet, 0, 1);
     }
-    while ((packet = dualq_dequeue_queue(dualq, link, &dualq->cq)) != NULL) {
+    while ((packet = dualq_dequeue_queue(dualq, &dualq->cq)) != NULL) {
         picoquictest_sim_link_enqueue(link, packet, 0, 1);
     }
 
