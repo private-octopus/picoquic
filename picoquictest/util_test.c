@@ -227,7 +227,7 @@ int util_memcmp_test(void)
 
                 carry = 1;
                 time_start = picoquic_current_time();
-                for (int j = 0; j < nb_round; j++) {
+                for (uint64_t j = 0; j < nb_round; j++) {
                     x[j] ^= 1;
                     y[j] ^= 1;
                     carry &= (picoquic_constant_time_memcmp(x, y, l_total) != 0);
