@@ -386,7 +386,7 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 
     picoquic_init_transport_parameters(test_parameters);
     test_parameters->initial_max_path_id = 2;
-    test_parameters->enable_time_stamp = 3;
+    test_parameters->enable_time_stamp = 3* enable_time_stamp;
 }
 
 /* wait until the migration completes */
