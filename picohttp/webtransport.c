@@ -286,9 +286,12 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
             a++;
         }
         while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t' && candidate_length < 254) {
-            candidate[candidate_length] = *a;
+            /* Skip quotes - HTTP structured fields use quoted strings */
+            if (*a != '"') {
+                candidate[candidate_length] = *a;
+                candidate_length++;
+            }
             a++;
-            candidate_length++;
         }
         while (*a == ' ' || *a == '\t') {
             a++;

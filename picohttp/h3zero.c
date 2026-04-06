@@ -34,6 +34,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#ifdef _WINDOWS
+#define picoquic_strncasecmp _strnicmp
+#else
+#include <strings.h>
+#define picoquic_strncasecmp strncasecmp
+#endif
 #include "h3zero.h"
 
 /*
@@ -553,7 +559,7 @@ int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int i
 
     for (int i = 0; interesting_header_name[i] != NULL; i++) {
         if (strlen(interesting_header_name[i]) == name_length &&
-            memcmp(interesting_header_name[i], name, name_length) == 0) {
+            picoquic_strncasecmp(interesting_header_name[i], (const char*)name, name_length) == 0) {
             val = interesting_header[i];
             break;
         }
