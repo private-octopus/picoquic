@@ -137,7 +137,7 @@ int fctest_receive_data(fctest_ctx_t* fctest_ctx, picoquic_cnx_t* cnx, uint64_t 
 	return ret;
 }
 
-static int fctest_prepare_to_send(fctest_ctx_t* fctest_ctx, picoquic_cnx_t* cnx, uint8_t* context, size_t space)
+static int fctest_prepare_to_send(fctest_ctx_t* fctest_ctx, uint8_t* context, size_t space)
 {
 	int ret = 0;
 	uint8_t* buffer;
@@ -219,7 +219,7 @@ int fctest_callback(picoquic_cnx_t* cnx,
 			/* On the client, prepare the expected amount of data. Mark
 			* active until the expected amount is received. */
 			if (!cnx->client_mode) {
-				ret = fctest_prepare_to_send(fctest_ctx, cnx, bytes, length);
+				ret = fctest_prepare_to_send(fctest_ctx, bytes, length);
 			}
 			break;
 		case picoquic_callback_datagram: /* Datagram frame has been received */
