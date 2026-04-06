@@ -35,7 +35,11 @@ static picoquic_tp_t test_tp = {
     123, 456, 78, 91011, 1234, 567, 0, 0, 0, 0, 0, 0,
     { 0, {0,0,0,0}, 0, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0,
         {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}, 0
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}, 0,
+        0 /* enable_loss_bit */, 0 /* enable_time_stamp */, 0 /* min_ack_delay */,
+        0 /* do_grease_quic_bit */, { 0 } /* version_negotiation */,
+        0 /* enable_bdp_frame */, 0 /* initial_max_path_id */,
+        0 /* address_discovery_mode */, 0 /* is_reset_stream_at_enabled */
 };
 
 static int create_test_ticket(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
