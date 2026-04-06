@@ -335,7 +335,7 @@ int ec2f_second_flight_nack_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b111000001;
+    uint64_t initial_losses = 0x1c1;
     uint8_t test_case_id = 0x2f;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 1, &simulated_time, initial_losses, 9);
 
