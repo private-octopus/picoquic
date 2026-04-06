@@ -261,7 +261,7 @@ int netperf_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 int netperf_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t* simulated_time, uint64_t max_data, uint64_t queue_delay_max,
     uint8_t* send_buffer, size_t send_buffer_size)
 {
     uint64_t loss_mask = 0;
@@ -397,7 +397,7 @@ int netperf_one_scenario(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0) {
-        ret = netperf_scenario_body_connect(test_ctx, &simulated_time, stream0_target,
+        ret = netperf_scenario_body_connect(test_ctx, &simulated_time,
             max_data, queue_delay_max, send_buffer, send_buffer_size);
 
         /* Prepare to send data */
