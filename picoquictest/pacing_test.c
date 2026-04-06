@@ -316,7 +316,7 @@ int pacing_repeat_test(void)
             }
             /* Check that the value are as expected */
             if (pacing.rate != pacing_events[i].rate ||
-                pacing.packet_time_nanosec != pacing_events[i].expected_packet_nanosec ||
+                (uint64_t)pacing.packet_time_nanosec != pacing_events[i].expected_packet_nanosec ||
                 pacing.bucket_max != pacing_events[i].expected_bucket_nanosec) {
                 DBG_PRINTF("Event %d, expected rate: " PRIu64 ", Packet_n: " PRIu64 ", Bucket: " PRIu64,
                     i, pacing.rate, pacing.packet_time_nanosec, pacing.bucket_max);
