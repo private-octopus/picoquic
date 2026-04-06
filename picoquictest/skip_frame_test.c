@@ -1332,7 +1332,6 @@ int frames_repeat_test(void)
     }
     else {
         for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
-            uint64_t err = 0;
             size_t len = test_skip_list[i].len;
             uint64_t frame_type = 0;
             const uint8_t* type_byte = NULL;
