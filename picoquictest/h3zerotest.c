@@ -2629,7 +2629,7 @@ int demo_server_file_test(void)
 }
 
 static const picoquic_demo_stream_desc_t satellite_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0, 0 }
 };
 
 static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -3035,7 +3035,7 @@ static const picoquic_demo_stream_desc_t http_stress_scenario_3[] = {
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_4[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000, 0 },
     { 0, 4, 0, "/", "_", 0, 0 }
 };
 
