@@ -175,7 +175,11 @@ static picoquic_packet_header hvnego10 = {
     0,
     0,
     0,
-    0
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t phandshake[] = {
@@ -911,8 +915,7 @@ int packet_enc_dec_test(void)
 
 int packet_initial_dec_one(
     uint8_t* bytes,
-    size_t packet_length,
-    char const * alpn)
+    size_t packet_length)
 {
     int ret = 0;
     struct sockaddr_in test_addr_c;
@@ -971,7 +974,7 @@ int packet_initial_dec_one(
 
 int incoming_initial_test(void)
 {
-    int ret = packet_initial_dec_one(packet_intel_bug, sizeof(packet_intel_bug), "h3");
+    int ret = packet_initial_dec_one(packet_intel_bug, sizeof(packet_intel_bug));
 
     return ret;
 }
