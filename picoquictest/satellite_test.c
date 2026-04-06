@@ -188,7 +188,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
             uint64_t bdp_p = bdp/ (8 * test_ctx->cnx_client->path[0]->send_mtu);
             uint64_t nb_max = 3 * bdp_p;
 
-            if (test_ctx->qserver->nb_data_nodes_allocated_max > nb_max){
+            if ((uint64_t)test_ctx->qserver->nb_data_nodes_allocated_max > nb_max){
                 DBG_PRINTF("Allocated nodes: %" PRIu64 " > 3*%" PRIu64, 
                     test_ctx->qserver->nb_data_nodes_allocated_max, bdp_p);
                 ret = -1;
