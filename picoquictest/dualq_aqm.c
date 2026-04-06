@@ -226,7 +226,7 @@ double dualq_laqm(dualq_state_t* dualq, uint64_t current_time)
     return pprime;
 }
 
-picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64_t current_time, int* should_drop)
+picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, uint64_t current_time, int* should_drop)
 {
     picoquictest_sim_packet_t* packet = NULL;
     int is_lq = 0;
@@ -330,7 +330,7 @@ void dualq_update_it(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64
     int should_drop;
     
     while (link->queue_time <= current_time) {
-        if ((packet = dualq_dequeue_one(dualq, link, current_time, &should_drop)) != NULL) {
+        if ((packet = dualq_dequeue_one(dualq, current_time, &should_drop)) != NULL) {
             picoquictest_sim_link_enqueue(link, packet, current_time, should_drop);
         }
         else {

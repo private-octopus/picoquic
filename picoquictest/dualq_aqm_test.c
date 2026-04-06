@@ -163,7 +163,7 @@ int dualq_dequeue_test(void)
         }
         else {
             int shoulddrop = 0;
-            picoquictest_sim_packet_t* packet = dualq_dequeue_one(dqt_ctx.dqs, dqt_ctx.link, dqt_ctx.simulated_time, &shoulddrop);
+            picoquictest_sim_packet_t* packet = dualq_dequeue_one(dqt_ctx.dqs, dqt_ctx.simulated_time, &shoulddrop);
 
             if (packet == NULL) {
                 dqt_ctx.simulated_time += 1000;
