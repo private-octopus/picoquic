@@ -1733,7 +1733,7 @@ void picoquic_internal_thread_setname(char const * thread_name)
         }
     }
 #else
-#ifdef __APPLE__
+#if defined(__APPLE__)
     pthread_setname_np(thread_name);
 #elif defined(__FreeBSD__)
     pthread_setname_np(pthread_self(), thread_name);
