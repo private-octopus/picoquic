@@ -183,7 +183,7 @@ static void stress_context_reorder(picoquic_stress_ctx_t* stress_ctx, picoquic_s
 
 static int stress_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     int ret = 0;
     picoquic_stress_server_callback_ctx_t* stress_ctx = (picoquic_stress_server_callback_ctx_t*)callback_ctx;
@@ -370,8 +370,8 @@ static int stress_client_start_streams(picoquic_cnx_t* cnx,
 }
 
 static int stress_client_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    uint64_t stream_id, uint8_t* UNUSED(bytes), size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     int ret = 0;
     picoquic_stress_client_callback_ctx_t* cb_ctx = (picoquic_stress_client_callback_ctx_t*)callback_ctx;
