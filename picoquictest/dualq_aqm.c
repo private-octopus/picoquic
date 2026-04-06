@@ -96,7 +96,7 @@ typedef struct st_dualq_state_t {
 /* Add a packet to a queue. Maintain counters, etc. 
  */
 
-void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, dualq_queue_t* xq, picoquictest_sim_packet_t* packet)
+void dualq_enqueue_queue(dualq_queue_t* xq, picoquictest_sim_packet_t* packet)
 {
     if (xq->queue_first == NULL) {
         xq->queue_first = packet;
@@ -111,7 +111,7 @@ void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, du
     xq->queue_bytes += packet->length;
 }
 
-picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_state_t* dualq, dualq_queue_t* xq)
+picoquictest_sim_packet_t* dualq_dequeue_queue(dualq_queue_t* xq)
 {
     picoquictest_sim_packet_t* packet = xq->queue_first;
 
@@ -156,12 +156,12 @@ void dualq_enqueue(dualq_state_t* dualq, picoquictest_sim_link_t* link, picoquic
         if (packet->ecn_mark == PICOQUIC_ECN_ECT_1 ||
             packet->ecn_mark == PICOQUIC_ECN_CE) {
             /* Add to L4S queue */
-            dualq_enqueue_queue(dualq, link, &dualq->lq, packet);
+            dualq_enqueue_queue(&dualq->lq, packet);
         }
         else
         {
             /* add to classic queue */
-            dualq_enqueue_queue(dualq, link, &dualq->cq, packet);
+            dualq_enqueue_queue(&dualq->cq, packet);
         }
     }
 }
@@ -192,14 +192,14 @@ int dualq_recur(dualq_queue_t* xq, double likelihood) {
 
 /* dualq_scheduler selects between the head packets of the two
 * queues.The choice of scheduler technology is discussed later. */
-picoquictest_sim_packet_t* dualq_scheduler(dualq_state_t* dualq, picoquictest_sim_link_t* link, int* is_lq) {
+picoquictest_sim_packet_t* dualq_scheduler(dualq_state_t* dualq, int* is_lq) {
     picoquictest_sim_packet_t* packet = NULL;
     *is_lq = ((dualq->schedule_tick & 0x0f) == 0) ? 0 : 1;
 
-    packet = dualq_dequeue_queue(dualq, (*is_lq == 0)? &dualq->cq : &dualq->lq);
+    packet = dualq_dequeue_queue((*is_lq == 0)? &dualq->cq : &dualq->lq);
     if (packet == NULL) {
         *is_lq ^= 1;
-        packet = dualq_dequeue_queue(dualq, (*is_lq == 0) ? &dualq->cq : &dualq->lq);
+        packet = dualq_dequeue_queue((*is_lq == 0) ? &dualq->cq : &dualq->lq);
     }
     
     dualq->schedule_tick += 1;
@@ -233,7 +233,7 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_
     /* Couples L4S& Classic queues */
     *should_drop = 0;
 
-    if ((packet = dualq_scheduler(dualq, link, &is_lq)) != NULL) {
+    if ((packet = dualq_scheduler(dualq, &is_lq)) != NULL) {
         if (is_lq) {
             /* scheduler chose lq */
             /* Check for overload saturation */
@@ -376,10 +376,10 @@ void dualq_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     dualq_state_t* dualq = (dualq_state_t*)self;
     picoquictest_sim_packet_t* packet;
 
-    while ((packet = dualq_dequeue_queue(dualq, &dualq->lq)) != NULL){
+    while ((packet = dualq_dequeue_queue(&dualq->lq)) != NULL){
         picoquictest_sim_link_enqueue(link, packet, 0, 1);
     }
-    while ((packet = dualq_dequeue_queue(dualq, &dualq->cq)) != NULL) {
+    while ((packet = dualq_dequeue_queue(&dualq->cq)) != NULL) {
         picoquictest_sim_link_enqueue(link, packet, 0, 1);
     }
 

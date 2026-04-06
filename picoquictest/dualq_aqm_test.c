@@ -109,7 +109,7 @@ int dualq_enqueue_test(void)
         picoquictest_sim_packet_t* old_first = xq->queue_first;
         picoquictest_sim_packet_t* last_in_link = dqt_ctx.link->last_packet;
 
-        dualq_enqueue_queue(dqt_ctx.dqs, dqt_ctx.link, xq, packet);
+        dualq_enqueue_queue(xq, packet);
 
         if (xq->queue_last != packet ||
             xq->queue_bytes != old_bytes + packet->length ||
@@ -150,7 +150,7 @@ int dualq_dequeue_test(void)
     for (size_t i = 0; ret == 0 && i < sizeof(ecn_sequence) / sizeof(uint8_t); i++) {
         picoquictest_sim_packet_t* packet = dualq_test_get_packet(ecn_sequence[i], 1000);
         dualq_queue_t* xq = (queue_id[i] == 0) ? &dqt_ctx.dqs->cq : &dqt_ctx.dqs->lq;
-        dualq_enqueue_queue(dqt_ctx.dqs, dqt_ctx.link, xq, packet);
+        dualq_enqueue_queue(xq, packet);
     }
     /* Perform link departure until all packets sent */
 

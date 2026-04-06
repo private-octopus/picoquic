@@ -75,7 +75,7 @@ extern "C" {
         uint64_t last_input_time;
     } dualq_state_t;
 
-    void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, dualq_queue_t* xq, picoquictest_sim_packet_t* packet);
+    void dualq_enqueue_queue(dualq_queue_t* xq, picoquictest_sim_packet_t* packet);
     picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64_t current_time, int* should_drop);
 #ifdef __cplusplus
 }
