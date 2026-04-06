@@ -187,27 +187,27 @@ int spinbit_test_one(picoquic_spinbit_version_enum spin_policy, picoquic_spinbit
     return ret;
 }
 
-int spinbit_test()
+int spinbit_test(void)
 {
     return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_on);
 }
 
-int spinbit_random_test()
+int spinbit_random_test(void)
 {
     return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_random);
 }
 
-int spinbit_randclient_test()
+int spinbit_randclient_test(void)
 {
     return spinbit_test_one(picoquic_spinbit_random, picoquic_spinbit_basic);
 }
 
-int spinbit_null_test()
+int spinbit_null_test(void)
 {
     return spinbit_test_one(picoquic_spinbit_basic, picoquic_spinbit_null);
 }
 
-int spinbit_bad_test()
+int spinbit_bad_test(void)
 {
     int ret = 0;
     if (spinbit_test_one(picoquic_spinbit_on, 123456) == 0 ||

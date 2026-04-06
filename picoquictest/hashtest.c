@@ -84,7 +84,7 @@ int picohash_test_one(int embedded_item)
     }
 
     if (t == NULL) {
-        DBG_PRINTF("%s", "picohash_create() failed\n");
+        DBG_PRINTF("%s", "picohash_create(void) failed\n");
         ret = -1;
     } else {
         struct hashtestkey hk;
@@ -194,12 +194,12 @@ int picohash_test_one(int embedded_item)
     return ret;
 }
 
-int picohash_test()
+int picohash_test(void)
 {
     return(picohash_test_one(0));
 }
 
-int picohash_embedded_test()
+int picohash_embedded_test(void)
 {
     return(picohash_test_one(1));
 }
@@ -219,7 +219,7 @@ void hash_test_init(uint8_t* test, size_t length, uint8_t * k, size_t k_length)
     }
 }
 
-int picohash_bytes_test()
+int picohash_bytes_test(void)
 {
     uint8_t test[1024];
     uint8_t k[16];
@@ -261,7 +261,7 @@ int picohash_bytes_test()
 /* Test of the siphash function
  */
 
-int siphash_test()
+int siphash_test(void)
 {
     uint8_t test[1024];
     uint8_t k[16];

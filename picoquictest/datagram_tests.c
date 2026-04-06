@@ -570,7 +570,7 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
     return ret;
 }
 
-int datagram_test()
+int datagram_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -580,7 +580,7 @@ int datagram_test()
     return datagram_test_one(1, &dg_ctx, 0);
 }
 
-int datagram_rt_test()
+int datagram_rt_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -595,7 +595,7 @@ int datagram_rt_test()
     return datagram_test_one(2, &dg_ctx, 0);
 }
 
-int datagram_rt_skip_test()
+int datagram_rt_skip_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -612,7 +612,7 @@ int datagram_rt_skip_test()
     return datagram_test_one(3, &dg_ctx, 0);
 }
 
-int datagram_rtnew_skip_test()
+int datagram_rtnew_skip_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -631,7 +631,7 @@ int datagram_rtnew_skip_test()
 }
 
 
-int datagram_loss_test()
+int datagram_loss_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -644,7 +644,7 @@ int datagram_loss_test()
     return datagram_test_one(4, &dg_ctx, 0x040080100200400ull);
 }
 
-int datagram_size_test()
+int datagram_size_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = 512;
@@ -655,7 +655,7 @@ int datagram_size_test()
     return datagram_test_one(5, &dg_ctx, 0);
 }
 
-int datagram_small_test()
+int datagram_small_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = 512;
@@ -672,7 +672,7 @@ int datagram_small_test()
     return datagram_test_one(6, &dg_ctx, 0);
 }
 
-int datagram_small_new_test()
+int datagram_small_new_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = 512;
@@ -690,7 +690,7 @@ int datagram_small_new_test()
     return datagram_test_one(7, &dg_ctx, 0);
 }
 
-int datagram_wifi_test()
+int datagram_wifi_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
@@ -708,7 +708,7 @@ int datagram_wifi_test()
     return datagram_test_one(8, &dg_ctx, 0);
 }
 
-int datagram_small_packet_test()
+int datagram_small_packet_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = 512;
@@ -730,7 +730,7 @@ int datagram_small_packet_test()
     return datagram_test_one(9, &dg_ctx, 0);
 }
 
-int datagram_too_long_test()
+int datagram_too_long_test(void)
 {
     test_datagram_send_recv_ctx_t dg_ctx = { 0 };
     dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;

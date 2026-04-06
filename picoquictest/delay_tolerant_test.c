@@ -178,7 +178,7 @@ void dtn_set_basic_test_spec(dtn_test_spec_t* spec)
     spec->has_loss = 0;
 }
 
-int dtn_basic_test()
+int dtn_basic_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -193,7 +193,7 @@ static test_api_stream_desc_t dtn_scenario_data[] = {
 };
 
 
-int dtn_data_test()
+int dtn_data_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -212,7 +212,7 @@ static test_api_stream_desc_t dtn_scenario_silence[] = {
     { 12, 8, 257, 257 }
 };
 
-int dtn_silence_test()
+int dtn_silence_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -224,7 +224,7 @@ int dtn_silence_test()
     return dtn_test_one(0x51, &spec);
 }
 
-int dtn_twenty_test()
+int dtn_twenty_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;

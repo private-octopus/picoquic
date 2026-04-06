@@ -40,7 +40,7 @@
 #include "tls_api.h"
 
 extern "C" {
-    int cplusplustest() {
+    int cplusplustest(void) {
         return 0;
     }
 }

@@ -144,7 +144,7 @@ int h3zero_uri_test_one(h3zero_uri_path_test_case_t* test_case)
     return ret;
 }
 
-int h3zero_uri_test()
+int h3zero_uri_test(void)
 {
     int ret = 0;
     for (size_t i = 0; i < nb_test_cases; i++) {
@@ -327,7 +327,7 @@ static int template_test_error_length(const template_test_case_t* test_cases, si
     return ret;
 }
 
-int h3zero_url_template_test()
+int h3zero_url_template_test(void)
 {
     int ret = 0;
     /* First, build a list of parameters */

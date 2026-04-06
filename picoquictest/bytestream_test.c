@@ -260,7 +260,7 @@ int verify_bytestream_read(bytestream * s)
     return ret;
 }
 
-int verify_bytestream_on_stack()
+int verify_bytestream_on_stack(void)
 {
     int ret = 0;
 
@@ -284,7 +284,7 @@ int verify_bytestream_on_stack()
     return ret;
 }
 
-int verify_bytestream_on_heap()
+int verify_bytestream_on_heap(void)
 {
     int ret = 0;
 
@@ -307,7 +307,7 @@ int verify_bytestream_on_heap()
 /*
  * This tests bytestream write functionality when close to or over the allocated limits.
  */
-int bytestream_test_write_limits()
+int bytestream_test_write_limits(void)
 {
     int ret = 0;
     const static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
@@ -404,7 +404,7 @@ int bytestream_test_write_limits()
 /*
  * This tests bytestream read functionality when close to or over the allocated limits.
  */
-int bytestream_test_read_limits()
+int bytestream_test_read_limits(void)
 {
     int ret = 0;
     
@@ -617,7 +617,7 @@ typedef struct st_picoquic_val_len {
     size_t len;
 } picoquic_val_len;
 
-int bytestream_test_vint()
+int bytestream_test_vint(void)
 {
     int ret = 0;
 
@@ -681,7 +681,7 @@ int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_sto
     return ret;
 }
 
-int bytestream_test_addr()
+int bytestream_test_addr(void)
 {
     int ret = 0;
 
@@ -711,7 +711,7 @@ int bytestream_test_addr()
     return ret;
 }
 
-int bytestream_test_utils()
+int bytestream_test_utils(void)
 {
     int ret = 0;
     size_t size = 0;
@@ -778,7 +778,7 @@ int bytestream_test_utils()
     return ret;
 }
 
-int bytestream_test()
+int bytestream_test(void)
 {
     int ret = 0;
 

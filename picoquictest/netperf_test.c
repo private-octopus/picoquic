@@ -481,7 +481,7 @@ static test_api_stream_desc_t netperf_scenario_basic[] = {
     { 4, 0, 257, 1000000 }
 };
 
-int netperf_basic_test()
+int netperf_basic_test(void)
 {
     int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
         NULL,
@@ -490,7 +490,7 @@ int netperf_basic_test()
     return ret;
 }
 
-int netperf_bbr_test()
+int netperf_bbr_test(void)
 {
     int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
         picoquic_bbr_algorithm,
@@ -649,7 +649,7 @@ static test_api_stream_desc_t nat_attack_scenario[] = {
     { 32, 0, 256000, 1000000 }
 };
 
-int nat_attack_test()
+int nat_attack_test(void)
 {
     /* Create a connection context */
     uint64_t simulated_time = 0;

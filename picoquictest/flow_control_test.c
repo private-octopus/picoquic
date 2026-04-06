@@ -358,7 +358,7 @@ int fctest_one(fctest_spec_t* spec)
 	return ret;
 }
 
-int flow_control_test()
+int flow_control_test(void)
 {
 	fctest_spec_t spec = { 0 };
 	spec.test_id = 1;

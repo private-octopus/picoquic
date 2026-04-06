@@ -203,7 +203,7 @@ client hello. The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_test()
+int initial_ping_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -264,7 +264,7 @@ The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_ack_test()
+int initial_ping_ack_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;

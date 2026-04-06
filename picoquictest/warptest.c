@@ -1496,7 +1496,7 @@ int warptest_one(int warptest_id, warptest_spec_t * spec)
 }
 
 /* Test cases */
-int warptest_video_test()
+int warptest_video_test(void)
 {
     int ret;
     warptest_spec_t spec = { 0 };
@@ -1508,7 +1508,7 @@ int warptest_video_test()
     return ret;
 }
 
-int warptest_video_audio_test()
+int warptest_video_audio_test(void)
 {
     int ret;
     warptest_spec_t spec = { 0 };
@@ -1521,7 +1521,7 @@ int warptest_video_audio_test()
     return ret;
 }
 
-int warptest_video_data_audio_test()
+int warptest_video_data_audio_test(void)
 {
     int ret;
     warptest_spec_t spec = { 0 };
@@ -1535,7 +1535,7 @@ int warptest_video_data_audio_test()
     return ret;
 }
 
-int warptest_worst_test()
+int warptest_worst_test(void)
 {
     int ret;
     warptest_spec_t spec = { 0 };
@@ -1549,7 +1549,7 @@ int warptest_worst_test()
     return ret;
 }
 
-int warptest_param_test()
+int warptest_param_test(void)
 {
     int ret;
     warptest_spec_t spec = { 0 };

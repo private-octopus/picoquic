@@ -154,7 +154,7 @@ static test_api_stream_desc_t hilat_scenario_basic[] = {
     { 4, 0, 257, 2000 }
 };
 
-int high_latency_basic_test()
+int high_latency_basic_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;
@@ -293,7 +293,7 @@ static test_api_stream_desc_t hilat_scenario_100mb[] = {
  * that then have to be corrected.
  */
 
-int high_latency_bbr_test()
+int high_latency_bbr_test(void)
 {
     uint64_t latency = 5000000;
     uint64_t expected_completion = 145000000;
@@ -304,13 +304,13 @@ int high_latency_bbr_test()
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int high_latency_cubic_test()
+int high_latency_cubic_test(void)
 {
     /* we do not run this test on Win32 builds */
     return 0;
 }
 #else
-int high_latency_cubic_test()
+int high_latency_cubic_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;
@@ -327,7 +327,7 @@ int high_latency_cubic_test()
  * detected, but still some code verifications to do.
  */
 
-int high_latency_probeRTT_test()
+int high_latency_probeRTT_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;

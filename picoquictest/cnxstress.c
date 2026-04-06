@@ -966,7 +966,7 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
 /* The unit test entry point executes the cnx stress test with a 
  * small duration and a small number of clients, the goal being to check that
  * the cnx stress code actually works. */
-int cnx_stress_unit_test()
+int cnx_stress_unit_test(void)
 {
     return cnx_stress_do_test(120000000, 100, 0);
 }
@@ -977,7 +977,7 @@ int cnx_stress_unit_test()
  * test, which verifies that if one creates exactly the "limit" number of connections, 
  * they all succeed.
  */
-int cnx_limit_test()
+int cnx_limit_test(void)
 {
     int ret = 0;
     int nb_clients = 4;

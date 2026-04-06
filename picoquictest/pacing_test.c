@@ -42,7 +42,7 @@
 /* Test of the pacing functions.
 */
 
-int pacing_test()
+int pacing_test(void)
 {
     /* Create a connection so as to instantiate the pacing context */
     int ret = 0;
@@ -211,7 +211,7 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
     return ret;
 }
 
-int pacing_bbr_test()
+int pacing_bbr_test(void)
 {
     /* BBRv3 includes a short term loop that detects losses and tune the
     * sending rate accordingly. The packet losses cause startup to 
@@ -223,25 +223,25 @@ int pacing_bbr_test()
     return ret;
 }
 
-int pacing_cubic_test()
+int pacing_cubic_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_cubic_algorithm, 900000, 210);
     return ret;
 }
 
-int pacing_dcubic_test()
+int pacing_dcubic_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_dcubic_algorithm, 900000, 240);
     return ret;
 }
 
-int pacing_fast_test()
+int pacing_fast_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 1000000, 180);
     return ret;
 }
 
-int pacing_newreno_test()
+int pacing_newreno_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
     return ret;
@@ -294,7 +294,7 @@ pacing_test_t pacing_events[] = {
 
 size_t nb_pacing_events = sizeof(pacing_events) / sizeof(pacing_test_t);
 
-int pacing_repeat_test()
+int pacing_repeat_test(void)
 {
     int ret = 0;
     picoquic_pacing_t pacing = { 0 };

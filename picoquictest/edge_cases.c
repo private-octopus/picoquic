@@ -295,7 +295,7 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
 /* Edge case zero: verify that the common code
  * works.
  */
-int ec00_zero_test()
+int ec00_zero_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -331,7 +331,7 @@ int ec00_zero_test()
  * state. 
  */
 
-int ec2f_second_flight_nack_test()
+int ec2f_second_flight_nack_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -400,7 +400,7 @@ void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* F)
     }
 }
 
-int eccf_corrupted_file_fuzz_test()
+int eccf_corrupted_file_fuzz_test(void)
 {
     int ret = 0;
     FILE* F = picoquic_file_open("ECCF_Fuzz_report.csv", "w");
@@ -418,7 +418,7 @@ int eccf_corrupted_file_fuzz_test()
 /* Amplification test using large 
  * server hello with losses.
  */
-int eca1_amplification_loss_test()
+int eca1_amplification_loss_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -442,7 +442,7 @@ int eca1_amplification_loss_test()
  * is acceptable.
  */
 
-int ecf1_final_loss_test()
+int ecf1_final_loss_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -493,7 +493,7 @@ int ecf1_final_loss_test()
  * of the clien't ack, and the server then sending a bogus repeat.
  */
 
-int ec5c_silly_cid_test()
+int ec5c_silly_cid_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -531,7 +531,7 @@ int ec5c_silly_cid_test()
  * preemptive repeats before giving up. Repro, then verify.
  */
 
-int ec9a_preemptive_amok_test()
+int ec9a_preemptive_amok_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -720,7 +720,7 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
     return ret;
 }
 
-int idle_timeout_test()
+int idle_timeout_test(void)
 {
     int ret = 0;
 
@@ -843,7 +843,7 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
     return ret;
 }
 
-int idle_server_test()
+int idle_server_test(void)
 {
     int ret = 0;
 
@@ -1194,42 +1194,42 @@ int reset_repeat_test_one(uint8_t test_id)
     return ret;
 }
 
-int reset_ack_max_test()
+int reset_ack_max_test(void)
 {
     return reset_repeat_test_one(reset_ack_max_stream);
 }
 
-int reset_ack_reset_test()
+int reset_ack_reset_test(void)
 {
     return reset_repeat_test_one(reset_ack_reset);
 }
 
-int reset_extra_max_test()
+int reset_extra_max_test(void)
 {
     return reset_repeat_test_one(reset_extra_max_stream);
 }
 
-int reset_extra_reset_test()
+int reset_extra_reset_test(void)
 {
     return reset_repeat_test_one(reset_extra_reset);
 }
 
-int reset_extra_stop_test()
+int reset_extra_stop_test(void)
 {
     return reset_repeat_test_one(reset_extra_stop_sending);
 }
 
-int reset_need_max_test()
+int reset_need_max_test(void)
 {
     return reset_repeat_test_one(reset_need_max_stream);
 }
 
-int reset_need_reset_test()
+int reset_need_reset_test(void)
 {
     return reset_repeat_test_one(reset_need_reset);
 }
 
-int reset_need_stop_test()
+int reset_need_stop_test(void)
 {
     return reset_repeat_test_one(reset_need_stop_sending);
 }
@@ -1342,7 +1342,7 @@ int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated
     return ret;
 }
 
-int initial_pto_test()
+int initial_pto_test(void)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t *test_ctx = NULL;
@@ -1494,7 +1494,7 @@ int pto_server_prepare(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t simulated
     return ret;
 }
 
-int initial_pto_srv_test()
+int initial_pto_srv_test(void)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1633,7 +1633,7 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
     return ret;
 }
 
-int crypto_hs_offset_test()
+int crypto_hs_offset_test(void)
 {
     picoquic_packet_context_enum pc[] = { picoquic_packet_context_initial,
         picoquic_packet_context_handshake, picoquic_packet_context_application };
@@ -1758,7 +1758,7 @@ int reset_loop_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int reset_loop_test()
+int reset_loop_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2014,17 +2014,17 @@ int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
     return ret;
 }
 
-int reset_stream_at_basic_test()
+int reset_stream_at_basic_test(void)
 {
     return reset_stream_at_test_one(rsat_basic);
 }
 
-int reset_stream_at_limit_test()
+int reset_stream_at_limit_test(void)
 {
     return reset_stream_at_test_one(rsat_limit);
 }
 
-int reset_stream_at_loss_test()
+int reset_stream_at_loss_test(void)
 {
     return reset_stream_at_test_one(rsat_loss);
 }
@@ -2036,7 +2036,7 @@ typedef struct {
     const char* expected;
 } error_name_case_t;
 
-int error_name_test()
+int error_name_test(void)
 {
     int ret = 0;
     int failures = 0;

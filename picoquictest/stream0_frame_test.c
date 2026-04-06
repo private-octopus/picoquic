@@ -217,7 +217,7 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
     return ret;
 }
 
-int StreamZeroFrameTest()
+int StreamZeroFrameTest(void)
 {
     int ret = 0;
 
@@ -408,7 +408,7 @@ static int TlsStreamFrameOneTest(struct test_case_st* test)
     return ret;
 }
 
-int TlsStreamFrameTest()
+int TlsStreamFrameTest(void)
 {
     int ret = 0;
 
@@ -422,7 +422,7 @@ int TlsStreamFrameTest()
 /*
  * Regression: spurious STREAM_STATE_ERROR when reusing a closed local stream id
  */
-int stream_state_local_reuse_test()
+int stream_state_local_reuse_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -512,7 +512,7 @@ int check_stream_splay_node_sanity(picosplay_node_t *x, void *floor, void *ceil,
     return count;
 }
 
-int stream_splay_test()
+int stream_splay_test(void)
 {
     int ret = 0;
     int count = 0;
@@ -797,7 +797,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
     return ret;
 }
 
-int stream_output_test()
+int stream_output_test(void)
 {
     int ret = 0;
     picoquic_quic_t *quic = NULL;
@@ -934,7 +934,7 @@ int stream_rank_test_one(size_t n, uint64_t *rank, uint64_t *stream_id,
     return ret;
 }
 
-int stream_rank_test()
+int stream_rank_test(void)
 {
     uint64_t stream_rank[] = { 1, 2, 3, 1000, 10000 };
     uint64_t stream_client_bidir[] = { 0, 4, 8, 3996, 39996 };
@@ -1081,7 +1081,7 @@ int provide_stream_buffer_test_one(uint64_t stream_id, uint64_t stream_offset, s
     return ret;
 }
 
-int provide_stream_buffer_test()
+int provide_stream_buffer_test(void)
 {
     uint64_t stream_ids[4] = { 0, 7, 127, 0x10000 };
     uint64_t offsets[4] = { 0, 1, 65, 0x10000 };

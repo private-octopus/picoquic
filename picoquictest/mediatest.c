@@ -1340,7 +1340,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
 }
 
 /* Test cases */
-int mediatest_video_test()
+int mediatest_video_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1352,7 +1352,7 @@ int mediatest_video_test()
     return ret;
 }
 
-int mediatest_video_audio_test()
+int mediatest_video_audio_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1365,7 +1365,7 @@ int mediatest_video_audio_test()
     return ret;
 }
 
-int mediatest_video_data_audio_test()
+int mediatest_video_data_audio_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1379,7 +1379,7 @@ int mediatest_video_data_audio_test()
     return ret;
 }
 
-int mediatest_video2_down_test()
+int mediatest_video2_down_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1397,7 +1397,7 @@ int mediatest_video2_down_test()
     return ret;
 }
 
-int mediatest_video2_back_test()
+int mediatest_video2_back_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1415,7 +1415,7 @@ int mediatest_video2_back_test()
     return ret;
 }
 
-int mediatest_video2_probe_test()
+int mediatest_video2_probe_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1433,7 +1433,7 @@ int mediatest_video2_probe_test()
     return ret;
 }
 
-int mediatest_worst_test()
+int mediatest_worst_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1447,7 +1447,7 @@ int mediatest_worst_test()
     return ret;
 }
 
-int mediatest_no_coal_test()
+int mediatest_no_coal_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1462,7 +1462,7 @@ int mediatest_no_coal_test()
     return ret;
 }
 
-int mediatest_wifi_test()
+int mediatest_wifi_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1487,7 +1487,7 @@ int mediatest_wifi_test()
     return ret;
 }
 
-int mediatest_suspension_test()
+int mediatest_suspension_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1509,7 +1509,7 @@ int mediatest_suspension_test()
     return ret;
 }
 
-int mediatest_suspension2_test()
+int mediatest_suspension2_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };

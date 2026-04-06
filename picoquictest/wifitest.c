@@ -214,7 +214,7 @@ void wifi_test_set_default_spec(wifi_test_spec_t* spec, picoquic_congestion_algo
     spec->queue_max_delay = 260000;
 }
 
-int wifi_bbr_test()
+int wifi_bbr_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2800000);
@@ -223,7 +223,7 @@ int wifi_bbr_test()
     return ret;
 }
 
-int wifi_bbr1_test()
+int wifi_bbr1_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_bbr1_algorithm, 2800000);
@@ -232,7 +232,7 @@ int wifi_bbr1_test()
     return ret;
 }
 
-int wifi_cubic_test()
+int wifi_cubic_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 2870000);
@@ -242,7 +242,7 @@ int wifi_cubic_test()
     return ret;
 }
 
-int wifi_reno_test()
+int wifi_reno_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 2800000);
@@ -262,7 +262,7 @@ static wifi_test_suspension_t suspension_hard[] = {
 
 static size_t nb_suspension_hard = sizeof(suspension_hard) / sizeof(wifi_test_suspension_t);
 
-int wifi_bbr_hard_test()
+int wifi_bbr_hard_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_hard,
@@ -277,7 +277,7 @@ int wifi_bbr_hard_test()
     return ret;
 }
 
-int wifi_bbr1_hard_test()
+int wifi_bbr1_hard_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_hard,
@@ -292,7 +292,7 @@ int wifi_bbr1_hard_test()
     return ret;
 }
 
-int wifi_cubic_hard_test()
+int wifi_cubic_hard_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_hard,
@@ -307,7 +307,7 @@ int wifi_cubic_hard_test()
     return ret;
 }
 
-int wifi_reno_hard_test()
+int wifi_reno_hard_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_hard,
@@ -322,7 +322,7 @@ int wifi_reno_hard_test()
     return ret;
 }
 
-int wifi_bbr_long_test()
+int wifi_bbr_long_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_basic,
@@ -337,7 +337,7 @@ int wifi_bbr_long_test()
     return ret;
 }
 
-int wifi_bbr1_long_test()
+int wifi_bbr1_long_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_basic,
@@ -352,7 +352,7 @@ int wifi_bbr1_long_test()
     return ret;
 }
 
-int wifi_cubic_long_test()
+int wifi_cubic_long_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_cubic_algorithm, 3100000);
@@ -363,7 +363,7 @@ int wifi_cubic_long_test()
     return ret;
 }
 
-int wifi_reno_long_test()
+int wifi_reno_long_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_newreno_algorithm, 3000000);
@@ -375,7 +375,7 @@ int wifi_reno_long_test()
     return ret;
 }
 
-int wifi_bbr_shadow_test()
+int wifi_bbr_shadow_test(void)
 {
     wifi_test_spec_t spec;
     wifi_test_set_default_spec(&spec, picoquic_bbr_algorithm, 2750000);
@@ -399,7 +399,7 @@ static wifi_test_suspension_t suspension_many[] = {
 
 static size_t nb_suspension_many = sizeof(suspension_many) / sizeof(wifi_test_suspension_t);
 
-int wifi_bbr_many_test()
+int wifi_bbr_many_test(void)
 {
     wifi_test_spec_t spec = {
         nb_suspension_many,

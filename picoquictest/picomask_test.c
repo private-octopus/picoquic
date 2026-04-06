@@ -493,7 +493,7 @@ int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
     return ret;
 }
 
-picomask_test_ctx_t* picomask_test_config()
+picomask_test_ctx_t* picomask_test_config(void)
 {
     int ret = 0;
     char test_server_cert_file[512];
@@ -669,7 +669,7 @@ udp_path_test_t path_tests[] = {
     "/masque?target_host=2001%3Adb8%3A%3A42&target_port=443" }
 };
 
-int picomask_udp_path_test()
+int picomask_udp_path_test(void)
 {
     int ret = 0;
     char text[256];
@@ -696,7 +696,7 @@ int picomask_udp_path_test()
 * 
 * TODO: remove the UDP context when the connection disappears.
 */
-int picomask_udp_test()
+int picomask_udp_test(void)
 {
     int ret = 0;
     picomask_test_ctx_t* pt_ctx = picomask_test_config();

@@ -152,7 +152,7 @@ int h3zero_varint_stream_chunk_test(uint64_t * targets, size_t nb_targets, size_
     return ret;
 }
 
-int h3zero_varint_stream_test()
+int h3zero_varint_stream_test(void)
 {
     int ret = 0;
     uint64_t targets[4] = { 132, 4, 0x10001, 0x10000001 };
@@ -213,7 +213,7 @@ int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero
     return ret;
 }
 
-int h3zero_incoming_unidir_test()
+int h3zero_incoming_unidir_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -352,7 +352,7 @@ uint8_t* h3zero_test_submit_frame(uint8_t* bytes, uint8_t* bytes_max, h3zero_str
     return bytes;
 }
 
-int h3zero_unidir_error_test()
+int h3zero_unidir_error_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -455,7 +455,7 @@ int h3zero_setting_submit(int is_after_settings, uint64_t frame_type, int expect
 }
 
 
-int h3zero_setting_error_test()
+int h3zero_setting_error_test(void)
 {
     uint64_t unexpected_frames[4] = { h3zero_frame_settings, h3zero_frame_data,
         h3zero_frame_header, h3zero_frame_push_promise };
@@ -716,7 +716,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 
 int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
 
-int h3zero_error_client_stream_test()
+int h3zero_error_client_stream_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -751,7 +751,7 @@ int h3zero_error_client_stream_test()
 }
 
 
-int h3zero_client_data_test()
+int h3zero_client_data_test(void)
 {
     client_data_test_spec_t spec = { 0 };
     int ret = h3zero_client_data_test_one(&spec);
@@ -942,7 +942,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
     return ret;
 }
 
-int h3zero_capsule_test()
+int h3zero_capsule_test(void)
 {
     int ret = 0;
     size_t test_chunk[3] = { sizeof(capsule_datagram), sizeof(capsule_datagram) - 1, 1 };

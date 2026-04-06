@@ -72,7 +72,7 @@ int dualq_test_get_ctx(dualq_test_ctx* dqt_ctx)
     return ret;
 }
 
-int dualq_test_ctx_test()
+int dualq_test_ctx_test(void)
 {
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
@@ -94,7 +94,7 @@ picoquictest_sim_packet_t* dualq_test_get_packet(uint8_t ecn_mark, size_t length
 }
 
 /* Enqueue test: check the low level queue API */
-int dualq_enqueue_test()
+int dualq_enqueue_test(void)
 {
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
@@ -136,7 +136,7 @@ int dualq_enqueue_test()
 }
 
 /* Dequeue test: basic check of the dequeue API */
-int dualq_dequeue_test()
+int dualq_dequeue_test(void)
 {
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
@@ -222,7 +222,7 @@ int dualq_test_check_queue(picoquictest_sim_link_t* link)
 }
 
 
-int dualq_submit_test()
+int dualq_submit_test(void)
 {
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
@@ -332,7 +332,7 @@ typedef enum {
     st_submit
 } dualq_sustain_test_enum;
 
-int dualq_sustain_test()
+int dualq_sustain_test(void)
 {
     dualq_test_ctx dqt_ctx;
     int ret = dualq_test_get_ctx(&dqt_ctx);
@@ -412,7 +412,7 @@ int dualq_sustain_test()
 
 /* Series of unit tests of the dualq aqm function */
 
-int dualq_aqm_test()
+int dualq_aqm_test(void)
 {
     int ret = dualq_test_ctx_test();
 

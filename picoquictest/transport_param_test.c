@@ -798,7 +798,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     return ret;
 }
 
-int transport_param_test()
+int transport_param_test(void)
 {
     int ret = 0;
     uint64_t proof = 0;
@@ -999,7 +999,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
     return ret;
 }
 
-int transport_param_log_test()
+int transport_param_log_test(void)
 {
     FILE* F = NULL;
     int ret = 0;
@@ -1201,7 +1201,7 @@ vn_tp_test_t vn_tp_test_case[] = {
 
 size_t nb_vn_tp_test_case = sizeof(vn_tp_test_case) / sizeof(vn_tp_test_t);
 
-int vn_tp_test()
+int vn_tp_test(void)
 {
     int ret = 0;
 
@@ -1378,7 +1378,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
     return ret;
 }
 
-int transport_param_default_test()
+int transport_param_default_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < nb_default_test_case; i++) {

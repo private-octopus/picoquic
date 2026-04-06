@@ -43,7 +43,7 @@
 #include "picoquic_crypto_provider_api.h"
 
 #ifdef PTLS_WITHOUT_OPENSSL
-int openssl_cert_test()
+int openssl_cert_test(void)
 {
     /* Nothing to do, as the module is not loaded. */
     return 0;
@@ -96,7 +96,7 @@ static int openssl_cert_test_one(char const * cert_file_name, int expected_count
 }
 
 
-int openssl_cert_test()
+int openssl_cert_test(void)
 {
     /* Nothing to do, as the module is not loaded. */
     int ret = 0;

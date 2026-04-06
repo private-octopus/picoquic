@@ -131,7 +131,7 @@ static int l4s_congestion_test(picoquic_congestion_algorithm_t* ccalgo, int do_l
 /* This test is used for reference. Perf is bad, because each CE mark is
  * a congestion mark.
  */
-int l4s_reno_test()
+int l4s_reno_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_newreno_algorithm;
 
@@ -140,7 +140,7 @@ int l4s_reno_test()
     return ret;
 }
 
-int l4s_prague_test()
+int l4s_prague_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
@@ -149,7 +149,7 @@ int l4s_prague_test()
     return ret;
 }
 
-int l4s_bbr_test()
+int l4s_bbr_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr_algorithm;
 
@@ -159,7 +159,7 @@ int l4s_bbr_test()
 }
 
 
-int l4s_c4_test()
+int l4s_c4_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = c4_algorithm;
 
@@ -176,7 +176,7 @@ test_vary_link_spec_t l4s_link_updown[] = {
 
 size_t nb_l4s_link_updown = sizeof(l4s_link_updown) / sizeof(test_vary_link_spec_t);
 
-int l4s_prague_updown_test()
+int l4s_prague_updown_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
@@ -185,7 +185,7 @@ int l4s_prague_updown_test()
     return ret;
 }
 
-int l4s_bbr_updown_test()
+int l4s_bbr_updown_test(void)
 {
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
     return 0;

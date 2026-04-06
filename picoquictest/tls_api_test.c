@@ -2183,7 +2183,7 @@ int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t
     return ret;
 }
 
-int tls_api_connect_test()
+int tls_api_connect_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2279,12 +2279,12 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
     return ret;
 }
 
-int tls_api_test()
+int tls_api_test(void)
 {
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
 
-int tls_api_inject_hs_ack_test()
+int tls_api_inject_hs_ack_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2347,7 +2347,7 @@ int tls_api_inject_hs_ack_test()
     return ret;
 }
 
-int tls_exporter_test()
+int tls_exporter_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2437,7 +2437,7 @@ int tls_exporter_test()
     return ret;
 }
 
-int tls_api_silence_test()
+int tls_api_silence_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -2486,7 +2486,7 @@ int tls_api_loss_test(uint64_t mask)
 }
 
 /* Test that connection establishment succeeds in presence of many losses */
-int tls_api_many_losses()
+int tls_api_many_losses(void)
 {
     uint64_t loss_mask = 0;
     int ret = 0;
@@ -2537,7 +2537,7 @@ int tls_api_many_losses()
  * Verifies that client properly handles a version negotiation packet.
  */
 
-int tls_api_version_negotiation_test()
+int tls_api_version_negotiation_test(void)
 {
     const uint32_t version_grease = 0x0aca4a0a;
     uint64_t simulated_time = 0;
@@ -2647,7 +2647,7 @@ static int check_vn_invariant(uint8_t* packet, size_t packet_length, uint8_t* re
     return ret;
 }
 
-int tls_api_version_invariant_test()
+int tls_api_version_invariant_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -2860,7 +2860,7 @@ int test_version_negotiation_spoof_one(int spoof_mode)
     return ret;
 }
 
-int test_version_negotiation_spoof()
+int test_version_negotiation_spoof(void)
 {
     int ret = 0;
 
@@ -2929,7 +2929,7 @@ int vn_compat_test_one(uint32_t current, uint32_t target)
     return ret;
 }
 
-int vn_compat_test()
+int vn_compat_test(void)
 {
     int ret = 0;
 
@@ -2949,7 +2949,7 @@ int vn_compat_test()
 /* Test setting the SNI
  */
 
-int tls_api_sni_test()
+int tls_api_sni_test(void)
 {
     return tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
@@ -2957,7 +2957,7 @@ int tls_api_sni_test()
 /* The ALPN test checks that the connection fails if no ALPN is specified.
  */
 
-int tls_api_alpn_test()
+int tls_api_alpn_test(void)
 {
     int ret = tls_api_test_with_loss(NULL, 0, PICOQUIC_TEST_SNI, NULL);
 
@@ -2974,7 +2974,7 @@ int tls_api_alpn_test()
     return ret;
 }
 
-int tls_api_wrong_alpn_test()
+int tls_api_wrong_alpn_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -3248,42 +3248,42 @@ int tls_api_one_scenario_test(test_api_stream_desc_t* scenario,
     return ret;
 }
 
-int tls_api_oneway_stream_test()
+int tls_api_oneway_stream_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_oneway, sizeof(test_scenario_oneway), 0, 0, 0, 0, 0, 75000, NULL, NULL);
 }
 
-int tls_api_q_and_r_stream_test()
+int tls_api_q_and_r_stream_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0, 0, 0, 0, 75000, NULL, NULL);
 }
 
-int tls_api_q2_and_r2_stream_test()
+int tls_api_q2_and_r2_stream_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0, 0, 0, 0, 86000, NULL, NULL);
 }
 
-int tls_api_very_long_stream_test()
+int tls_api_very_long_stream_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0, 1000000, NULL, NULL);
 }
 
-int tls_api_very_long_max_test()
+int tls_api_very_long_max_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 128000, 0, 0, 1000000, NULL, NULL);
 }
 
-int tls_api_very_long_with_err_test()
+int tls_api_very_long_with_err_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0x30000, 128000, 0, 0, 2210000, NULL, NULL);
 }
 
-int tls_api_very_long_congestion_test()
+int tls_api_very_long_congestion_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 128000, 20000, 0, 1000000, NULL, NULL);
 }
 
-int unidir_test()
+int unidir_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -3318,7 +3318,7 @@ int unidir_test()
     return ret;
 }
 
-int many_short_loss_test()
+int many_short_loss_test(void)
 {
     return tls_api_one_scenario_test(test_scenario_more_streams, sizeof(test_scenario_more_streams), 0, 0x882818A881288848ull, 16000, 2000, 0, 0, NULL, NULL);
 }
@@ -3327,7 +3327,7 @@ int many_short_loss_test()
  * handshake packets are empty after reaching the ready state
  */
 
-int implicit_ack_test()
+int implicit_ack_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3379,7 +3379,7 @@ int implicit_ack_test()
  * with a stateless reset, the client closes its own connection.
  */
 
-int stateless_reset_test()
+int stateless_reset_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3448,7 +3448,7 @@ int stateless_reset_test()
 * send it to the client.
 * Expected result: the client ignores the bogus reset.
 */
-int stateless_reset_bad_test()
+int stateless_reset_bad_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3495,7 +3495,7 @@ int stateless_reset_bad_test()
 * send it from the client to the server.
 * Expected result: the server connection ignores the bogus reset.
 */
-int stateless_reset_client_test()
+int stateless_reset_client_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3549,7 +3549,7 @@ int stateless_reset_client_test()
 * Verify that the server does not send a reset in response to
 * a bogus long header packet
 */
-int stateless_reset_handshake_test()
+int stateless_reset_handshake_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3609,7 +3609,7 @@ int stateless_reset_handshake_test()
  * and that the client eventually closes the connection. 
  */
 
-int immediate_close_test()
+int immediate_close_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -3823,7 +3823,7 @@ int tls_retry_token_test_one(int token_mode, int dup_token)
     return ret;
 }
 
-int tls_retry_token_test()
+int tls_retry_token_test(void)
 {
     int ret = tls_retry_token_test_one(1,0);
 
@@ -3848,7 +3848,7 @@ int tls_retry_token_test()
 }
 
 /* Unit test of token validation */
-int tls_retry_token_valid_test()
+int tls_retry_token_valid_test(void)
 {
     int ret = 0;
     int is_new_token = 0;
@@ -4035,12 +4035,12 @@ int tls_api_retry_test_one(int large_client_hello)
     return ret;
 }
 
-int tls_api_retry_test()
+int tls_api_retry_test(void)
 {
     return tls_api_retry_test_one(0);
 }
 
-int tls_api_retry_large_test()
+int tls_api_retry_large_test(void)
 {
     return tls_api_retry_test_one(1);
 }
@@ -4049,7 +4049,7 @@ int tls_api_retry_large_test()
 * if the client does not initially provide a key share
 */
 
-int tls_zero_share_test()
+int tls_zero_share_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -4077,7 +4077,7 @@ int tls_zero_share_test()
  * Test two successive connections from the same client.
  */
 
-int tls_api_two_connections_test()
+int tls_api_two_connections_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -4137,27 +4137,27 @@ int tls_api_two_connections_test()
     return ret;
 }
 
-int tls_api_client_first_loss_test()
+int tls_api_client_first_loss_test(void)
 {
     return tls_api_loss_test(1ull);
 }
 
-int tls_api_client_second_loss_test()
+int tls_api_client_second_loss_test(void)
 {
     return tls_api_loss_test(2ull);
 }
 
-int tls_api_server_first_loss_test()
+int tls_api_server_first_loss_test(void)
 {
     return tls_api_loss_test(14ull);
 }
 
-int tls_api_client_losses_test()
+int tls_api_client_losses_test(void)
 {
     return tls_api_loss_test(3ull);
 }
 
-int tls_api_server_losses_test()
+int tls_api_server_losses_test(void)
 {
     return tls_api_loss_test(6ull);
 }
@@ -4165,7 +4165,7 @@ int tls_api_server_losses_test()
 /*
  * Do a simple test for all supported versions
  */
-int tls_api_multiple_versions_test()
+int tls_api_multiple_versions_test(void)
 {
     int ret = 0;
 
@@ -4251,7 +4251,7 @@ int keep_alive_test_impl(int keep_alive)
     return ret;
 }
 
-int keep_alive_test()
+int keep_alive_test(void)
 {
     int ret = keep_alive_test_impl(1);
 
@@ -4298,7 +4298,7 @@ int session_resume_wait_for_ticket(picoquic_test_tls_api_ctx_t* test_ctx,
     return ret;
 }
 
-int session_resume_test()
+int session_resume_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -4591,7 +4591,7 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
 * Basic 0-RTT test. Verify that things work in the absence of loss 
 */
 
-int zero_rtt_test()
+int zero_rtt_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     return zero_rtt_test_one(&zrt);
@@ -4607,7 +4607,7 @@ int zero_rtt_test()
 * between 1 and 16.
 */
 
-int zero_rtt_loss_test()
+int zero_rtt_loss_test(void)
 {
     int ret = 0;
 
@@ -4631,7 +4631,7 @@ int zero_rtt_loss_test()
 * ticket key for the second server instance.
 */
 
-int zero_rtt_spurious_test()
+int zero_rtt_spurious_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.use_badcrypt = 1;
@@ -4645,7 +4645,7 @@ int zero_rtt_spurious_test()
 * mode on the server between the 2 client connections.
 */
 
-int zero_rtt_retry_test()
+int zero_rtt_retry_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.hardreset = 1;
@@ -4659,7 +4659,7 @@ int zero_rtt_retry_test()
 * zero RTT is enabled to add a padded 0-RTT packet
 */
 
-int zero_rtt_no_coal_test()
+int zero_rtt_no_coal_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.no_coal = 1;
@@ -4671,7 +4671,7 @@ int zero_rtt_no_coal_test()
  * We test that 50 connections succeed in presence of 30% packet drops.
  */
 
-int zero_rtt_many_losses_test()
+int zero_rtt_many_losses_test(void)
 {
     int ret = 0;
     uint64_t random_context = 0x1055ca45c001babaull;
@@ -4702,7 +4702,7 @@ int zero_rtt_many_losses_test()
 * 0-RTT long test. Verify that the client can send several 0-RTT packets
 */
 
-int zero_rtt_long_test()
+int zero_rtt_long_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.long_data = 1;
@@ -4713,7 +4713,7 @@ int zero_rtt_long_test()
 * 0-RTT delay test. Verify that the tickets as old as the specified delay are still accepted.
 */
 
-int zero_rtt_delay_test()
+int zero_rtt_delay_test(void)
 {
     int ret = 0;
     int bad_ret;
@@ -4743,7 +4743,7 @@ int zero_rtt_delay_test()
 * 0-RTT ech. Verify that the 0 RTT works even greasing ech
 */
 
-int zero_rtt_ech_test()
+int zero_rtt_ech_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.propose_ech = 1;
@@ -4863,19 +4863,19 @@ int stop_sending_test_one(int discard, int reset_loss)
     return ret;
 }
 
-int stop_sending_test()
+int stop_sending_test(void)
 {
     int ret = stop_sending_test_one(0, 0);
     return ret;
 }
 
-int stop_sending_loss_test()
+int stop_sending_loss_test(void)
 {
     int ret = stop_sending_test_one(0, 1);
     return ret;
 }
 
-int discard_stream_test()
+int discard_stream_test(void)
 {
     int ret = stop_sending_test_one(1, 0);
     return ret;
@@ -4936,35 +4936,35 @@ int mtu_discovery_test_one(picoquic_pmtud_policy_enum pmtud_policy,
     return ret;
 }
 
-int mtu_discovery_test()
+int mtu_discovery_test(void)
 {
     int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1440, 1440, 
         test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 0);
     return ret;
 }
 
-int mtu_blocked_test()
+int mtu_blocked_test(void)
 {
     int ret = mtu_discovery_test_one(picoquic_pmtud_blocked, 1252, 1252, 
         test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 0);
     return ret;
 }
 
-int mtu_delayed_test()
+int mtu_delayed_test(void)
 {
     int ret = mtu_discovery_test_one(picoquic_pmtud_delayed, 1252, 1440, 
         test_scenario_very_long, sizeof(test_scenario_very_long), 0);
     return ret;
 }
 
-int mtu_required_test()
+int mtu_required_test(void)
 {
     int ret = mtu_discovery_test_one(picoquic_pmtud_required, 1440, 1440, 
         test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0);
     return ret;
 }
 
-int mtu_max_test()
+int mtu_max_test(void)
 {
     int ret = mtu_discovery_test_one(picoquic_pmtud_basic, 1420, 1392,
         test_scenario_mtu_discovery, sizeof(test_scenario_mtu_discovery), 1420);
@@ -5052,7 +5052,7 @@ static int mtu_drop_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64
     return ret;
 }
 
-int mtu_drop_bbr_test()
+int mtu_drop_bbr_test(void)
 {
     /* TODO: the time with BBR v1 was 10300000. The current value is
      * a slight regression. Investigate whether some performance
@@ -5061,25 +5061,25 @@ int mtu_drop_bbr_test()
     return ret;
 }
 
-int mtu_drop_cubic_test()
+int mtu_drop_cubic_test(void)
 {
     int ret = mtu_drop_cc_algotest(picoquic_cubic_algorithm, 10000000);
     return ret;
 }
 
-int mtu_drop_dcubic_test()
+int mtu_drop_dcubic_test(void)
 {
     int ret = mtu_drop_cc_algotest(picoquic_dcubic_algorithm, 9200000);
     return ret;
 }
 
-int mtu_drop_fast_test()
+int mtu_drop_fast_test(void)
 {
     int ret = mtu_drop_cc_algotest(picoquic_fastcc_algorithm, 11500000);
     return ret;
 }
 
-int mtu_drop_newreno_test()
+int mtu_drop_newreno_test(void)
 {
     int ret = mtu_drop_cc_algotest(picoquic_newreno_algorithm, 11600000);
     return ret;
@@ -5090,7 +5090,7 @@ int mtu_drop_newreno_test()
  * spurious retransmissions,and checking that it is fixed.
  */
 
-int spurious_retransmit_test()
+int spurious_retransmit_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -5140,7 +5140,7 @@ int spurious_retransmit_test()
 * client and server produce the correct results.
 */
 
-int pn_enc_1rtt_test()
+int pn_enc_1rtt_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -5186,7 +5186,7 @@ int pn_enc_1rtt_test()
     return ret;
 }
 
-int bad_certificate_test()
+int bad_certificate_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -5296,7 +5296,7 @@ static int verify_certificate_test_cb(struct st_ptls_verify_certificate_t* self,
     return ret;
 }
 
-int set_verify_certificate_callback_test()
+int set_verify_certificate_callback_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -5393,7 +5393,7 @@ int set_verify_certificate_callback_test()
  * Verify that the simulated time works as expected
  */
 
-int virtual_time_test()
+int virtual_time_test(void)
 {
     int ret = 0;
     uint64_t test_time = 0;
@@ -5499,7 +5499,7 @@ int virtual_time_test()
  * Testing with different initial connection parameters
  */
 
-int tls_different_params_test()
+int tls_different_params_test(void)
 {
     picoquic_tp_t test_parameters;
 
@@ -5512,7 +5512,7 @@ int tls_different_params_test()
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0, 3510000, &test_parameters, NULL);
 }
 
-int tls_quant_params_test()
+int tls_quant_params_test(void)
 {
     picoquic_tp_t test_parameters;
 
@@ -5530,7 +5530,7 @@ int tls_quant_params_test()
     return tls_api_one_scenario_test(test_scenario_quant, sizeof(test_scenario_quant), 0, 0, 0, 0, 0, 3510000, &test_parameters, NULL);
 }
 
-int set_certificate_and_key_test()
+int set_certificate_and_key_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -5712,7 +5712,7 @@ int request_client_authentication_test_one(const char *test_client_cert_file,
     return ret;
 }
 
-int request_client_authentication_test()
+int request_client_authentication_test(void)
 {
     char test_client_cert_file[512];
     char test_client_key_file[512];
@@ -5757,7 +5757,7 @@ int request_client_authentication_test()
     return ret;
 }
 
-int request_client_authentication_25519_test()
+int request_client_authentication_25519_test(void)
 {
     char test_client_cert_file[512];
     char test_client_key_file[512];
@@ -5803,7 +5803,7 @@ int request_client_authentication_25519_test()
     return ret;
 }
 
-int bad_client_certificate_test()
+int bad_client_certificate_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6034,21 +6034,21 @@ int nat_rebinding_test_one(uint64_t loss_mask_data, int zero_cid, uint64_t laten
     return ret;
 }
 
-int nat_rebinding_test()
+int nat_rebinding_test(void)
 {
     uint64_t loss_mask = 0;
 
     return nat_rebinding_test_one(loss_mask, 0, 0);
 }
 
-int nat_rebinding_loss_test()
+int nat_rebinding_loss_test(void)
 {
     uint64_t loss_mask = 0x2012;
 
     return nat_rebinding_test_one(loss_mask, 0, 0);
 }
 
-int nat_rebinding_zero_test()
+int nat_rebinding_zero_test(void)
 {
     /* Test of NAT rebinding with zero-length client CID */
     uint64_t loss_mask = 0;
@@ -6056,7 +6056,7 @@ int nat_rebinding_zero_test()
     return nat_rebinding_test_one(loss_mask, 1, 0);
 }
 
-int nat_rebinding_latency_test()
+int nat_rebinding_latency_test(void)
 {
     /* Test of NAT rebinding with zero-length client CID */
     uint64_t loss_mask = 0;
@@ -6072,7 +6072,7 @@ int nat_rebinding_latency_test()
 * the connection survives 6 NAT transitions at short intervals.
 */
 
-int fast_nat_rebinding_test()
+int fast_nat_rebinding_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6193,7 +6193,7 @@ int fast_nat_rebinding_test()
  * Test whether the loss bit reporting can be enabled without breaking the connection
  */
 
-int loss_bit_test()
+int loss_bit_test(void)
 {
     int ret = 0;
     picoquic_tp_t client_parameters;
@@ -6345,7 +6345,7 @@ int client_error_test_modal(int mode)
     return ret;
 }
 
-int client_error_test()
+int client_error_test(void)
 {
     int ret = 0;
     char const* mode_name[] = { "stream", "new_connection_id", "stop_sending" };
@@ -6366,7 +6366,7 @@ int client_error_test()
 * then connections are refused.
 */
 
-int client_only_test()
+int client_only_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6573,27 +6573,27 @@ int transmit_cnxid_test_one(int retire_before, int disable_migration, int retire
     return ret;
 }
 
-int transmit_cnxid_test()
+int transmit_cnxid_test(void)
 {
     return transmit_cnxid_test_one(0, 0, 0);
 }
 
-int transmit_cnxid_disable_test()
+int transmit_cnxid_disable_test(void)
 {
     return transmit_cnxid_test_one(0, 1, 0);
 }
 
-int transmit_cnxid_retire_before_test()
+int transmit_cnxid_retire_before_test(void)
 {
     return transmit_cnxid_test_one(1, 0, 0);
 }
 
-int transmit_cnxid_retire_disable_test()
+int transmit_cnxid_retire_disable_test(void)
 {
     return transmit_cnxid_test_one(1, 1, 0);
 }
 
-int transmit_cnxid_retire_early_test()
+int transmit_cnxid_retire_early_test(void)
 {
     return transmit_cnxid_test_one(0, 0, 1);
 }
@@ -6605,7 +6605,7 @@ int transmit_cnxid_retire_early_test()
  * When the number exceeds the number of connections, the probing should fail.
  */
 
-int probe_api_test()
+int probe_api_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6811,24 +6811,24 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     return ret;
 }
 
-int migration_test()
+int migration_test(void)
 {
     return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);
 }
 
-int migration_test_long()
+int migration_test_long(void)
 {
     return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0);
 }
 
-int migration_test_loss()
+int migration_test_loss(void)
 {
     uint64_t loss_mask = 0x09;
 
     return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), loss_mask, 0);
 }
 
-int migration_zero_test()
+int migration_zero_test(void)
 {
     return migration_test_scenario(test_scenario_very_long, sizeof(test_scenario_q_and_r), 0, 1);
 }
@@ -6837,7 +6837,7 @@ int migration_zero_test()
  * Start a transfer, start a migration to a non existant address,
  * verify that the transfer completes */
 
-int migration_fail_test()
+int migration_fail_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -6908,7 +6908,7 @@ int migration_fail_test()
  * The goal of the attack is to verify that the connection resists.
  */
 
-int rebinding_stress_test()
+int rebinding_stress_test(void)
 {
     int nb_trials = 0;
     const int max_trials = 10000;
@@ -7082,7 +7082,7 @@ int rebinding_stress_test()
  * We expect the server to switch to using a new client CID
  */
 
-int cnxid_renewal_test()
+int cnxid_renewal_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t next_time = 0;
@@ -7175,7 +7175,7 @@ int cnxid_renewal_test()
  * and verify that the server will refill the stash of 
  * connection ID.
  */
-int retire_cnxid_test()
+int retire_cnxid_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -7278,7 +7278,7 @@ int retire_cnxid_test()
  * parameter in a new connection ID test, to check that the
  * old connection ID are removed and successfully replaced.
  */
-int not_before_cnxid_test()
+int not_before_cnxid_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -7370,7 +7370,7 @@ int not_before_cnxid_test()
  * Server busy. Verify that the connection fails with the proper error code, and then that once the server is not busy the next connection succeeds.
  */
 
-int server_busy_test()
+int server_busy_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -7442,7 +7442,7 @@ int server_busy_test()
  * Initial close test. Check what happens when the client closes a connection without waiting for the full establishment
  */
 
-int initial_close_test()
+int initial_close_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -7506,7 +7506,7 @@ int initial_close_test()
  * message. Verify that the client receives the error code.
  */
 
-int initial_server_close_test()
+int initial_server_close_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -7612,7 +7612,7 @@ static int pn_enc_check(void * pn1, void * pn2)
 }
 #endif
 
-int new_rotated_key_test()
+int new_rotated_key_test(void)
 {
     uint64_t loss_mask = 0;
     uint64_t simulated_time = 0;
@@ -7861,7 +7861,7 @@ static int key_rotation_test_one(int inject_bad_packet)
     return ret;
 }
 
-int key_rotation_test()
+int key_rotation_test(void)
 {
     int ret = key_rotation_test_one(0);
 
@@ -7938,12 +7938,12 @@ static int key_rotation_auto_one(uint64_t epoch_length, int client_test)
     return ret;
 }
 
-int key_rotation_auto_server()
+int key_rotation_auto_server(void)
 {
     return key_rotation_auto_one(300, 0);
 }
 
-int key_rotation_auto_client()
+int key_rotation_auto_client(void)
 {
     return key_rotation_auto_one(400, 1);
 }
@@ -8061,7 +8061,7 @@ static int key_rotation_stress_test_one(int nb_packets)
     return ret;
 }
 
-int key_rotation_stress_test()
+int key_rotation_stress_test(void)
 {
     return key_rotation_stress_test_one(10);
 }
@@ -8289,7 +8289,7 @@ int false_migration_test_scenario(test_api_stream_desc_t * scenario, size_t size
     return ret;
 }
 
-int false_migration_test()
+int false_migration_test(void)
 {
     int ret = 0;
     int target_client;
@@ -8409,7 +8409,7 @@ int nat_handshake_test_one(int test_rank)
     return ret;
 }
 
-int nat_handshake_test()
+int nat_handshake_test(void)
 {
     int ret = 0;
 
@@ -8494,7 +8494,7 @@ static int short_initial_cid_test_one(uint8_t cid_length)
     return ret;
 }
 
-int short_initial_cid_test()
+int short_initial_cid_test(void)
 {
     int ret = 0;
     for (uint8_t i = 4; ret == 0 && i < 18; i++) {
@@ -8508,7 +8508,7 @@ int short_initial_cid_test()
  * Test whether the number of open streams is properly enforced
  */
 
-int stream_id_max_test()
+int stream_id_max_test(void)
 {
     picoquic_tp_t test_parameters;
 
@@ -8693,17 +8693,17 @@ int padding_test_one(uint32_t padding_multiple, uint32_t padding_min_size)
     return ret;
 }
 
-int padding_test()
+int padding_test(void)
 {
     return padding_test_one(128, 64);
 }
 
-int padding_null_test()
+int padding_null_test(void)
 {
     return padding_test_one(0, 0);
 }
 
-int padding_zero_min_test()
+int padding_zero_min_test(void)
 {
     return padding_test_one(128, 0);
 }
@@ -8713,7 +8713,7 @@ int padding_zero_min_test()
  * Test whether the server correctly processes coalesced packets when one of the segments does not decrypt correctly 
  */
 
-int bad_coalesce_test()
+int bad_coalesce_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -8778,7 +8778,7 @@ static uint32_t header_fuzzer(void* fuzz_ctx, picoquic_cnx_t* cnx,
     return (uint32_t)length;
 }
 
-int bad_cnxid_test()
+int bad_cnxid_test(void)
 {
     uint64_t simulated_time = 0;
     header_fuzzer_ctx_t fuzz_ctx;
@@ -8866,7 +8866,7 @@ int bad_cnxid_test()
 #define PACKET_TRACE_CSV "packet_trace.csv"
 #define PACKET_TRACE_BIN "ace1020304050607.server.log"
 
-int packet_trace_test()
+int packet_trace_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -9049,17 +9049,17 @@ int qlog_trace_test_one(uint8_t recv_ecn, int parallel)
     return ret;
 }
 
-int qlog_trace_test()
+int qlog_trace_test(void)
 {
     return qlog_trace_test_one(0, 0);
 }
 
-int qlog_trace_ecn_test()
+int qlog_trace_ecn_test(void)
 {
     return qlog_trace_test_one(0x02, 0);
 }
 
-int qlog_trace_parallel_test()
+int qlog_trace_parallel_test(void)
 {
     return qlog_trace_test_one(0, 1);
 }
@@ -9162,12 +9162,12 @@ int qlog_fns_test_one(uint8_t recv_ecn)
     return ret;
 }
 
-int qlog_fns_test()
+int qlog_fns_test(void)
 {
     return qlog_fns_test_one(0);
 }
 
-int qlog_fns_ecn_test()
+int qlog_fns_ecn_test(void)
 {
     return qlog_fns_test_one(0x02);
 }
@@ -9287,13 +9287,13 @@ static int perflog_compare(const char* fname1, const char* fname2)
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int perflog_test()
+int perflog_test(void)
 {
     /* we do not run this test on Win32 builds */
     return 0;
 }
 #else
-int perflog_test()
+int perflog_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -9413,25 +9413,25 @@ int ready_to_send_test_one(int test_option)
     return ret;
 }
 
-int ready_to_send_test()
+int ready_to_send_test(void)
 {
     int ret = ready_to_send_test_one(1);
     return ret;
 }
 
-int ready_to_skip_test()
+int ready_to_skip_test(void)
 {
     int ret = ready_to_send_test_one(3);
     return ret;
 }
 
-int ready_to_zero_test()
+int ready_to_zero_test(void)
 {
     int ret = ready_to_send_test_one(4);
     return ret;
 }
 
-int ready_to_zfin_test()
+int ready_to_zfin_test(void)
 {
     int ret = ready_to_send_test_one(2);
     return ret;
@@ -9503,7 +9503,7 @@ int cid_length_test_one(uint8_t length)
     return ret;
 }
 
-int cid_length_test()
+int cid_length_test(void)
 {
     int ret = 0;
     const uint8_t tested_length[] = { 0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
@@ -9522,7 +9522,7 @@ int cid_length_test()
 /* Testing transmission behavior over large RTT links
  */
 
-int long_rtt_test()
+int long_rtt_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
@@ -9728,14 +9728,14 @@ int optimistic_ack_test_one(int shall_spoof_ack)
     return ret;
 }
 
-int optimistic_ack_test()
+int optimistic_ack_test(void)
 {
     int ret = optimistic_ack_test_one(1);
 
     return ret;
 }
 
-int optimistic_hole_test()
+int optimistic_hole_test(void)
 {
     int ret = optimistic_ack_test_one(0);
 
@@ -9880,7 +9880,7 @@ int document_addresses_check(tls_api_address_are_documented_t * test_cb_ctx,
     return ret;
 }
 
-int document_addresses_test()
+int document_addresses_test(void)
 {
     uint64_t simulated_time = 0; 
     tls_api_address_are_documented_t client_address_callback_ctx, server_address_callback_ctx;
@@ -9938,7 +9938,7 @@ int document_addresses_test()
  * Test whether a connection succeed when SNI is not specified.
  */
 
-int null_sni_test()
+int null_sni_test(void)
 {
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, PICOQUIC_TEST_ALPN);
 }
@@ -10038,24 +10038,24 @@ int preferred_address_test_one(int migration_disabled, int cid_zero)
     return ret;
 }
 
-int preferred_address_test()
+int preferred_address_test(void)
 {
     return preferred_address_test_one(0, 0);
 }
 
-int preferred_address_dis_mig_test()
+int preferred_address_dis_mig_test(void)
 {
     return preferred_address_test_one(1, 0);
 }
 
-int preferred_address_zero_test()
+int preferred_address_zero_test(void)
 {
     /* test with zero length client cid */
     return preferred_address_test_one(0, 1);
 }
 
 /* Test that the random public generation behaves in expected ways */
-int random_public_tester_test()
+int random_public_tester_test(void)
 {
 #define RANDOM_PUBLIC_TEST_CONST 11
 #define RANDOM_PUBLIC_TEST_ROUNDS 100
@@ -10104,7 +10104,7 @@ int random_public_tester_test()
  * diabled parameter.
  */
 
-int migration_disabled_test()
+int migration_disabled_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -10146,7 +10146,7 @@ int migration_disabled_test()
  * single packet. This is done by adding a "padding" transport parameter.
  */
 
-int large_client_hello_test()
+int large_client_hello_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -10376,17 +10376,17 @@ int ddos_amplification_test_one(int use_0rtt, int do_8k)
     return ret;
 }
 
-int ddos_amplification_test()
+int ddos_amplification_test(void)
 {
     return ddos_amplification_test_one(0, 0);
 }
 
-int ddos_amplification_0rtt_test()
+int ddos_amplification_0rtt_test(void)
 {
     return ddos_amplification_test_one(1, 0);
 }
 
-int ddos_amplification_8k_test()
+int ddos_amplification_8k_test(void)
 {
     return ddos_amplification_test_one(0, 1);
 }
@@ -10394,7 +10394,7 @@ int ddos_amplification_8k_test()
 /* Verify that the code operates correctly when the ack frequency extension is not used
  */
 
-int no_ack_frequency_test()
+int no_ack_frequency_test(void)
 {
     int ret = 0;
     picoquic_tp_t client_parameters;
@@ -10514,7 +10514,7 @@ static int connection_drop_test_one(picoquic_state_enum target_client_state, pic
     return ret;
 }
 
-int connection_drop_test()
+int connection_drop_test(void)
 {
     int ret = 0;
     picoquic_state_enum target_state[9] = {
@@ -10556,7 +10556,7 @@ int connection_drop_test()
 #define PACING_RATE_CSV "pacing_rate.csv"
 
 
-int pacing_update_test()
+int pacing_update_test(void)
 {
     uint64_t simulated_time = 0;
 
@@ -10619,7 +10619,7 @@ int pacing_update_test()
 #endif
 #define QUALITY_UPDATE_CSV "quality_update.csv"
 
-int quality_update_test()
+int quality_update_test(void)
 {
     uint64_t simulated_time = 0;
 
@@ -10675,7 +10675,7 @@ int quality_update_test()
 /* Test the direct receive API
  */
 
-int direct_receive_test()
+int direct_receive_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
@@ -10738,7 +10738,7 @@ int direct_receive_test()
 * What happens if the client immediately repeats the Initial packet?
 */
 
-int initial_race_test()
+int initial_race_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -10834,7 +10834,7 @@ int initial_race_test()
  * Test connection establishment with ChaCha20
  */
 
-int chacha20_test()
+int chacha20_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -10875,7 +10875,7 @@ int chacha20_test()
 /*
  * Test CID renewal on quiescence larger than PICOQUIC_CID_REFRESH_DELAY
  */
-int cid_quiescence_test()
+int cid_quiescence_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -10993,12 +10993,12 @@ int grease_quic_bit_test_one(unsigned int one_way_grease_quic_bit)
     return ret;
 }
 
-int grease_quic_bit_test()
+int grease_quic_bit_test(void)
 {
     return  grease_quic_bit_test_one(0);
 }
 
-int grease_quic_bit_one_way_test()
+int grease_quic_bit_one_way_test(void)
 {
     return  grease_quic_bit_test_one(1);
 }
@@ -11080,31 +11080,31 @@ static int red_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t ta
     return ret;
 }
 
-int red_newreno_test()
+int red_newreno_test(void)
 {
     int ret = red_cc_algotest(picoquic_newreno_algorithm, 500000, 150);
     return ret;
 }
 
-int red_cubic_test()
+int red_cubic_test(void)
 {
     int ret = red_cc_algotest(picoquic_cubic_algorithm, 510000, 225);
     return ret;
 }
 
-int red_dcubic_test()
+int red_dcubic_test(void)
 {
     int ret = red_cc_algotest(picoquic_dcubic_algorithm, 500000, 275);
     return ret;
 }
 
-int red_fast_test()
+int red_fast_test(void)
 {
     int ret = red_cc_algotest(picoquic_fastcc_algorithm, 500000, 250);
     return ret;
 }
 
-int red_bbr_test()
+int red_bbr_test(void)
 {
     int ret = red_cc_algotest(picoquic_bbr_algorithm, 500000, 170);
     return ret;
@@ -11171,7 +11171,7 @@ static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint
     return ret;
 }
 
-int multi_segment_test()
+int multi_segment_test(void)
 {
     picoquic_congestion_algorithm_t* algo_list[5] = {
         picoquic_newreno_algorithm,
@@ -11325,24 +11325,24 @@ int heavy_loss_test_one(int scenario_id, uint64_t completion_target)
     return ret;
 }
 
-int heavy_loss_test()
+int heavy_loss_test(void)
 {
     return heavy_loss_test_one(0, 23500000);
 }
 
-int heavy_loss_inter_test()
+int heavy_loss_inter_test(void)
 {
     return heavy_loss_test_one(1, 22000000);
 }
 
-int heavy_loss_total_test()
+int heavy_loss_total_test(void)
 {
     return heavy_loss_test_one(2, 25000000);
 }
 
 
 
-int integrity_limit_test()
+int integrity_limit_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -11559,7 +11559,7 @@ int excess_repeat_test_one(picoquic_congestion_algorithm_t* cc_algo, int repeat_
     return ret;
 }
 
-int excess_repeat_test()
+int excess_repeat_test(void)
 {
     const int nb_repeat_max = 128;
 
@@ -11772,7 +11772,7 @@ int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* q
     return ret;
 }
 
-int cnx_ddos_unit_test()
+int cnx_ddos_unit_test(void)
 {
     return cnx_ddos_test_loop(1000, 1000, NULL);
 }
@@ -11939,7 +11939,7 @@ int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buff
     return ret;
 }
 
-int bad_chello_test()
+int bad_chello_test(void)
 {
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     uint64_t simulated_time = 0;
@@ -12085,7 +12085,7 @@ int pn_random_test_one(int randomize_all)
     return ret;
 }
 
-int pn_random_test()
+int pn_random_test(void)
 {
 
     int ret = pn_random_test_one(0);
@@ -12102,7 +12102,7 @@ int pn_random_test()
     return ret;
 }
 
-int pn_random_init_test()
+int pn_random_init_test(void)
 {
     int ret = pn_random_test_one(0);
 
@@ -12148,7 +12148,7 @@ int test_stateless_blowback_one(picoquic_quic_t* quic, uint64_t * simulated_time
     return ret;
 }
 
-int test_stateless_blowback()
+int test_stateless_blowback(void)
 {
     int was_sent = 0;
     uint64_t new_interval = 2 * PICOQUIC_MICROSEC_STATELESS_RESET_INTERVAL_DEFAULT;
@@ -12356,7 +12356,7 @@ int random_padding_test_one(size_t pad_length, uint64_t* random_context, uint8_t
     return ret;
 }
 
-int random_padding_test()
+int random_padding_test(void)
 {
     uint64_t random_context = 0x1234567890abcdef;
 
@@ -12374,7 +12374,7 @@ int random_padding_test()
 
 char const* error_reason_text_log = "error_reason_log.txt";
 
-int error_reason_test()
+int error_reason_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -12636,7 +12636,7 @@ int port_blocked_test_port(uint16_t port, int expect_blocked)
     return ret;
 }
 
-int port_blocked_test()
+int port_blocked_test(void)
 {
     int ret = 0;
     const uint16_t blocked_port_to_test[] = { 0, 53, 138, 1900, 5353, 11211 };
@@ -12657,7 +12657,7 @@ int port_blocked_test()
 
 /* Test the immediate ACK function.
  */
-int immediate_ack_test()
+int immediate_ack_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -12784,7 +12784,7 @@ static size_t keylog_file_size(char const* file_name)
     return(sz);
 }
 
-int keylog_test()
+int keylog_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -12871,7 +12871,7 @@ int get_hash_algo_test(char const* alg_name)
     return ret;
 }
 
-int get_hash_test()
+int get_hash_test(void)
 {
     int ret = 0;
     char const* valid_hash = "sha256";
@@ -12893,7 +12893,7 @@ int get_hash_test()
     return (ret);
 }
 
-int get_tls_errors_test()
+int get_tls_errors_test(void)
 {
     int ret = 0;
     uint8_t data[128];
@@ -12978,7 +12978,7 @@ int get_tls_errors_test()
 * in the incoming packets and leaves it undef.
 */
 
-int af_undef_test()
+int af_undef_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;

@@ -207,7 +207,7 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
     return ret;
 }
 
-int satellite_basic_test()
+int satellite_basic_test(void)
 {
     /* Should be less than 7 sec per draft etosat. */
     /* TODO test changed, app limited, verify. */
@@ -215,13 +215,13 @@ int satellite_basic_test()
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 5500000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
-int satellite_seeded_test()
+int satellite_seeded_test(void)
 {
     /* Simulate remembering RTT and BW from previous connection */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 4900000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
-int satellite_seeded_bbr1_test()
+int satellite_seeded_bbr1_test(void)
 {
     /* Simulate remembering RTT and BW from previous connection */
     /* TODO test changed, app limited, verify. */
@@ -229,13 +229,13 @@ int satellite_seeded_bbr1_test()
     return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 5500000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
-int satellite_loss_test()
+int satellite_loss_test(void)
 {
     /* Should be less than 10 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 8000000, 250, 3, 0, 1, 0, 0, 0, 0);
 }
 
-int satellite_loss_fc_test()
+int satellite_loss_fc_test(void)
 {
     /* Should be less than 10 sec per draft etosat.
      * The flow control option sets the "max data" to 2 BDP, with the effect
@@ -243,68 +243,68 @@ int satellite_loss_fc_test()
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 12500000, 250, 3, 0, 1, 0, 0, 0, 1);
 }
 
-int satellite_preemptive_test()
+int satellite_preemptive_test(void)
 {
     /* Variation of the loss test, using preemptive repeat*/
     /* Should be less than 10 sec per draft etosat.  */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 7100000, 250, 3, 0, 1, 1, 0, 0, 0);
 }
 
-int satellite_jitter_test()
+int satellite_jitter_test(void)
 {
     /* Should be less than 7 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 6700000, 250, 3, 3000, 0, 0, 0, 0, 0);
 }
 
-int satellite_medium_test()
+int satellite_medium_test(void)
 {
     /* Should be less than 20 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 18200000, 50, 10, 0, 0, 0, 0, 0, 0);
 }
 
-int satellite_small_test()
+int satellite_small_test(void)
 {
     /* Should be less than 85 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 81500000, 10, 2, 0, 0, 0, 0, 0, 0);
 }
 
-int satellite_small_up_test()
+int satellite_small_up_test(void)
 {
     /* Should be less than 420 sec per draft etosat. */
     return satellite_test_one(picoquic_bbr_algorithm, 100000000, 400000000, 2, 10, 0, 0, 0, 0, 0, 0);
 }
 
 
-int satellite_bbr1_test()
+int satellite_bbr1_test(void)
 {
     /* Should be less than 7 sec per draft etosat */
     return satellite_test_one(picoquic_bbr1_algorithm, 100000000, 7000000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
-int satellite_cubic_test()
+int satellite_cubic_test(void)
 {
     /* Should be less than 7 sec per draft etosat */
     return satellite_test_one(picoquic_cubic_algorithm, 100000000, 6500000, 250, 3, 0, 0, 0, 0, 0, 0);
 }
 
-int satellite_cubic_seeded_test()
+int satellite_cubic_seeded_test(void)
 {
     return satellite_test_one(picoquic_cubic_algorithm, 100000000, 5000000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
-int satellite_cubic_loss_test()
+int satellite_cubic_loss_test(void)
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
     return satellite_test_one(picoquic_cubic_algorithm, 100000000, 7500000, 250, 3, 0, 1, 0, 0, 0, 0);
 }
 
-int satellite_dcubic_seeded_test()
+int satellite_dcubic_seeded_test(void)
 {
     /* TODO check max_completion_time */
     return satellite_test_one(picoquic_dcubic_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 1, 0, 0);
 }
 
-int satellite_prague_seeded_test()
+int satellite_prague_seeded_test(void)
 {
     /* TODO check max_completion_time */
     return satellite_test_one(picoquic_prague_algorithm, 100000000, 5300000, 250, 3, 0, 0, 0, 1, 0, 0);
@@ -329,7 +329,7 @@ int satellite_prague_seeded_test()
  * and the test code to measure the transmission overhead.
  */
 
-int satellite_preemptive_fc_test()
+int satellite_preemptive_fc_test(void)
 {
     /* Should be less than 10 sec per draft etosat, but cubic is a bit slower */
     return satellite_test_one(picoquic_bbr_algorithm, 10000000, 20000000, 20, 2, 0, 1, 1, 0, 1, 0);

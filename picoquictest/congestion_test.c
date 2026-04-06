@@ -107,42 +107,42 @@ static int congestion_control_test(picoquic_congestion_algorithm_t* ccalgo, uint
     return ret;
 }
 
-int cubic_test()
+int cubic_test(void)
 {
     return congestion_control_test(picoquic_cubic_algorithm, 3500000, 0, 0);
 }
 
-int cubic_jitter_test()
+int cubic_jitter_test(void)
 {
     return congestion_control_test(picoquic_cubic_algorithm, 3550000, 5000, 5);
 }
 
-int c4_test()
+int c4_test(void)
 {
     return congestion_control_test(c4_algorithm, 3600000, 0, 0);
 }
 
-int c4_jitter_test()
+int c4_jitter_test(void)
 {
     return congestion_control_test(c4_algorithm, 3650000, 5000, 5);
 }
 
-int fastcc_test()
+int fastcc_test(void)
 {
     return congestion_control_test(picoquic_fastcc_algorithm, 3700000, 0, 0);
 }
 
-int fastcc_jitter_test()
+int fastcc_jitter_test(void)
 {
     return congestion_control_test(picoquic_fastcc_algorithm, 4050000, 5000, 5);
 }
 
-int bbr_test()
+int bbr_test(void)
 {
     return congestion_control_test(picoquic_bbr_algorithm, 3500000, 0, 0);
 }
 
-int bbr_jitter_test()
+int bbr_jitter_test(void)
 {
     return congestion_control_test(picoquic_bbr_algorithm, 3600000, 5000, 5);
 }
@@ -233,22 +233,22 @@ static int congestion_long_test(picoquic_congestion_algorithm_t* ccalgo)
     return ret;
 }
 
-int bbr_long_test()
+int bbr_long_test(void)
 {
     return congestion_long_test(picoquic_bbr_algorithm);
 }
 
-int c4_long_test()
+int c4_long_test(void)
 {
     return congestion_long_test(c4_algorithm);
 }
 
-int bbr1_test()
+int bbr1_test(void)
 {
     return congestion_control_test(picoquic_bbr1_algorithm, 3600000, 0, 0);
 }
 
-int bbr1_long_test()
+int bbr1_long_test(void)
 {
     return congestion_long_test(picoquic_bbr1_algorithm);
 }
@@ -322,7 +322,7 @@ int performance_test(uint64_t max_completion_time, uint64_t mbps, uint64_t laten
  * Verify that 10 MB can be downloaded in less than 1 second on a 100 mbps link.
  */
 
-int bbr_performance_test()
+int bbr_performance_test(void)
 {
     uint64_t max_completion_time = 1050000;
     uint64_t latency = 10000;
@@ -339,7 +339,7 @@ int bbr_performance_test()
  * Verify that 10 MB can be downloaded in less than 100 seconds on a 1 mbps link.
  */
 
-int bbr_slow_long_test()
+int bbr_slow_long_test(void)
 {
     uint64_t max_completion_time = 81000000;
     uint64_t latency = 300000;
@@ -356,7 +356,7 @@ int bbr_slow_long_test()
  * Verify that 10 MB can be downloaded in less than 128 seconds on a 1 mbps link.
  */
 
-int bbr_one_second_test()
+int bbr_one_second_test(void)
 {
     uint64_t max_completion_time = 90000000;
     uint64_t latency = 1000000;
@@ -372,7 +372,7 @@ int bbr_one_second_test()
 
 /* AWS like performance test
  * Verify that 10MB can be downloaded very fast on a low latency Gbps link. */
-int gbps_performance_test()
+int gbps_performance_test(void)
 {
     uint64_t max_completion_time = 250000;
     uint64_t latency = 4000;
@@ -391,7 +391,7 @@ int gbps_performance_test()
  * The buffer size is set to a high value, which allows queues to grow and delays to build up. In theory,
  * BBR should minimize these queues, but the test verifies that it actually does.
  */
-int bbr_asym100_test()
+int bbr_asym100_test(void)
 {
     uint64_t max_completion_time = 8500000;
     uint64_t latency = 1000;
@@ -408,7 +408,7 @@ int bbr_asym100_test()
 /* Asymmetric test, no delay.
  * Variant in which the negotiation of delayed ACK is disabled.
  */
-int bbr_asym100_nodelay_test()
+int bbr_asym100_nodelay_test(void)
 {
     uint64_t max_completion_time = 8500000;
     uint64_t latency = 1000;
@@ -431,7 +431,7 @@ int bbr_asym100_nodelay_test()
 /* Asymmetric test.
  * Variant using 400 kbps return path and a 40 Mbps link
  */
-int bbr_asym400_test()
+int bbr_asym400_test(void)
 {
     uint64_t max_completion_time = 2350000;
     uint64_t latency = 1000;
@@ -666,12 +666,12 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     return ret;
 }
 
-int bdp_basic_test()
+int bdp_basic_test(void)
 {
     return bdp_option_test_one(bdp_test_option_basic);
 }
 
-int bdp_rtt_test()
+int bdp_rtt_test(void)
 {
     /* TODO: this test succeeds for the wrong reason.
     * The goal of the test is to verify that the BDP is NOT set
@@ -684,50 +684,50 @@ int bdp_rtt_test()
     return bdp_option_test_one(bdp_test_option_rtt);
 }
 
-int bdp_ip_test()
+int bdp_ip_test(void)
 {
     return bdp_option_test_one(bdp_test_option_ip);
 }
 
-int bdp_delay_test()
+int bdp_delay_test(void)
 {
     return bdp_option_test_one(bdp_test_option_delay);
 }
 
-int bdp_reno_test()
+int bdp_reno_test(void)
 {
     return bdp_option_test_one(bdp_test_option_reno);
 }
 
-int bdp_short_test()
+int bdp_short_test(void)
 {
     return bdp_option_test_one(bdp_test_option_short);
 }
 
-int bdp_short_hi_test()
+int bdp_short_hi_test(void)
 {
     return bdp_option_test_one(bdp_test_option_short_hi);
 }
 
-int bdp_short_lo_test()
+int bdp_short_lo_test(void)
 {
     return bdp_option_test_one(bdp_test_option_short_lo);
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int bdp_cubic_test()
+int bdp_cubic_test(void)
 {
     /* We do not run this test in Win32 builds. */
     return 0;
 }
 #else
-int bdp_cubic_test()
+int bdp_cubic_test(void)
 {
     return bdp_option_test_one(bdp_test_option_cubic);
 }
 #endif
 
-int bdp_bbr1_test()
+int bdp_bbr1_test(void)
 {
     return bdp_option_test_one(bdp_test_option_bbr1);
 }
@@ -784,7 +784,7 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
     return ret;
 }
 
-int blackhole_test()
+int blackhole_test(void)
 {
     int ret = blackhole_test_one(picoquic_bbr_algorithm, 15000000, 0);
 
@@ -866,7 +866,7 @@ int app_limit_cc_test_one(
     return ret;
 }
 
-int app_limit_cc_test()
+int app_limit_cc_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgos[] = {
         picoquic_newreno_algorithm,
@@ -1013,7 +1013,7 @@ int cwin_max_test_one(
     return ret;
 }
 
-int cwin_max_test()
+int cwin_max_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgos[] = {
         picoquic_newreno_algorithm,
