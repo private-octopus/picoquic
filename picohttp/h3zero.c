@@ -31,6 +31,7 @@
  * The server will start the connection by sending a setting frame, which will
  * specify a zero-length dynamic dictionary for QPACK.
  */
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -517,7 +518,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 }
                 else {
                     bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->wt_protocol, &parts->wt_available_protocols_length);
+                        decoded_length, &parts->wt_protocol, &parts->wt_protocol_length);
+                    /* WT-Protocol is a Structured Header String — strip surrounding quotes */
+                    if (parts->wt_protocol != NULL && parts->wt_protocol_length >= 2 &&
+                        parts->wt_protocol[0] == '"' &&
+                        parts->wt_protocol[parts->wt_protocol_length - 1] == '"') {
+                        uint8_t* p = (uint8_t*)parts->wt_protocol;
+                        parts->wt_protocol_length -= 2;
+                        memmove(p, p + 1, parts->wt_protocol_length);
+                        p[parts->wt_protocol_length] = 0;
+                    }
                 }
                 break;
 
@@ -998,9 +1008,12 @@ uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * byte
     }
 
     if (wt_protocol != NULL) {
+        /* WT-Protocol is a Structured Header String and must be quoted per spec */
+        char quoted[258];
+        int quoted_len = snprintf(quoted, sizeof(quoted), "\"%s\"", wt_protocol);
         bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max,
             (uint8_t*)H3ZERO_WT_PROTOCOL, strlen(H3ZERO_WT_PROTOCOL),
-            (uint8_t*)wt_protocol, strlen(wt_protocol));
+            (uint8_t*)quoted, (size_t)quoted_len);
     }
 
     return bytes;
