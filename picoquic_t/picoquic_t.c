@@ -28,11 +28,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_tls_api_unload();
+void picoquic_tls_api_unload(void);
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {
