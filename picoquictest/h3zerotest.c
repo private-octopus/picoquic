@@ -2552,7 +2552,7 @@ int demo_file_access_test(void)
 #define PICOQUIC_TEST_FILE_DEMO_FOLDER "picoquictest"
 
 static const picoquic_demo_stream_desc_t file_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0, 0 }
 };
 
 static size_t const demo_file_test_stream_length[] = {
@@ -2672,7 +2672,7 @@ const char doc_name_long[] = { '/', FILE_NAME_LONG, 0};
 const char file_name_long[] = { '.', '/', FILE_NAME_LONG, 0 };
 
 static const picoquic_demo_stream_desc_t long_file_name_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, doc_name_long, file_name_long, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, doc_name_long, file_name_long, 0, 0 }
 };
 
 static const size_t nb_long_file_name_scenario = sizeof(long_file_name_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -3018,25 +3018,25 @@ int h09_multi_file_preemptive_test(void)
 
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0},
-    { 0, 4, 0, "test.html", "test.html", 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
+    { 0, 4, 0, "test.html", "test.html", 0 , 0},
+    { 0, 8, 0, "main.jpg", "main.jpg", 0, 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 0, 0 },
+    { 0, 8, 4, "test.html", "test.html", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_4[] = {
     { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
-    { 0, 4, 0, "/", "_", 0 }
+    { 0, 4, 0, "/", "_", 0, 0 }
 };
 
 typedef struct st_http_stress_scenario_list_t {
