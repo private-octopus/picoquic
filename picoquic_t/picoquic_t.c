@@ -28,11 +28,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_tls_api_unload();
+void picoquic_tls_api_unload(void);
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {
@@ -551,7 +551,9 @@ static const picoquic_test_def_t test_table[] = {
     { "config_option", config_option_test },
     { "config_option_letters", config_option_letters_test },
     { "config_quic", config_quic_test },
-    { "config_usage", config_usage_test }
+    { "config_usage", config_usage_test },
+    { "config_preferred", config_preferred_test },
+    { "config_set_port", config_set_port_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

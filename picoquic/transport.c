@@ -95,11 +95,11 @@ int picoquic_transport_param_cid_decode(picoquic_cnx_t * cnx, uint8_t* bytes, ui
     return ret;
 }
 
-uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint8_t * bytes_max,
-    picoquic_tp_prefered_address_t * prefered_address)
+uint8_t * picoquic_encode_transport_preferred_address_address(uint8_t * bytes, uint8_t * bytes_max,
+    picoquic_tp_preferred_address_t * preferred_address)
 {
     /* first compute the length */
-    uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + prefered_address->connection_id.id_len + ((uint64_t)16);
+    uint64_t coded_length = ((uint64_t)(4 + 2 + 16 + 2 + 1)) + preferred_address->connection_id.id_len + ((uint64_t)16);
 
     if (bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_server_preferred_address)) != NULL &&
@@ -108,18 +108,18 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
             bytes = NULL;
         }
         else {
-            memcpy(bytes, prefered_address->ipv4Address, 4);
+            memcpy(bytes, preferred_address->ipv4Address, 4);
             bytes += 4;
-            picoformat_16(bytes, prefered_address->ipv4Port);
+            picoformat_16(bytes, preferred_address->ipv4Port);
             bytes += 2;
-            memcpy(bytes, prefered_address->ipv6Address, 16);
+            memcpy(bytes, preferred_address->ipv6Address, 16);
             bytes += 16;
-            picoformat_16(bytes, prefered_address->ipv4Port);
+            picoformat_16(bytes, preferred_address->ipv4Port);
             bytes += 2;
-            *bytes++ = prefered_address->connection_id.id_len;
+            *bytes++ = preferred_address->connection_id.id_len;
             bytes += picoquic_format_connection_id(bytes, bytes_max - bytes,
-                prefered_address->connection_id);
-            memcpy(bytes, prefered_address->statelessResetToken, 16);
+                preferred_address->connection_id);
+            memcpy(bytes, preferred_address->statelessResetToken, 16);
             bytes += 16;
         }
     }
@@ -127,34 +127,34 @@ uint8_t * picoquic_encode_transport_param_prefered_address(uint8_t * bytes, uint
     return bytes;
 }
 
-size_t picoquic_decode_transport_param_prefered_address(uint8_t * bytes, size_t bytes_max,
-    picoquic_tp_prefered_address_t * prefered_address)
+size_t picoquic_decode_transport_preferred_address_address(uint8_t * bytes, size_t bytes_max,
+    picoquic_tp_preferred_address_t * preferred_address)
 {
     /* first compute the minimal length */
     size_t byte_index = 0;
     uint8_t cnx_id_length = 0;
-    size_t minimal_length = 4u + 2u + 16u + 2u + 1u /* + prefered_address->connection_id.id_len */ + 16u;
+    size_t minimal_length = 4u + 2u + 16u + 2u + 1u /* + preferred_address->connection_id.id_len */ + 16u;
     size_t ret = 0;
 
     if (bytes_max >= minimal_length) {
-        memcpy(prefered_address->ipv4Address, bytes + byte_index, 4);
+        memcpy(preferred_address->ipv4Address, bytes + byte_index, 4);
         byte_index += 4;
-        prefered_address->ipv4Port = PICOPARSE_16(bytes + byte_index);
+        preferred_address->ipv4Port = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
-        memcpy(prefered_address->ipv6Address, bytes + byte_index, 16);
+        memcpy(preferred_address->ipv6Address, bytes + byte_index, 16);
         byte_index += 16;
-        prefered_address->ipv6Port = PICOPARSE_16(bytes + byte_index);
+        preferred_address->ipv6Port = PICOPARSE_16(bytes + byte_index);
         byte_index += 2;
         cnx_id_length = bytes[byte_index++];
         if (cnx_id_length > 0 && cnx_id_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE &&
             byte_index + (size_t)cnx_id_length + 16u <= bytes_max &&
             cnx_id_length == picoquic_parse_connection_id(bytes + byte_index, cnx_id_length,
-                &prefered_address->connection_id)){
+                &preferred_address->connection_id)){
             byte_index += cnx_id_length;
-            memcpy(prefered_address->statelessResetToken, bytes + byte_index, 16);
+            memcpy(preferred_address->statelessResetToken, bytes + byte_index, 16);
             byte_index += 16;
             ret = byte_index;
-            prefered_address->is_defined = 1;
+            preferred_address->is_defined = 1;
         }
     }
 
@@ -339,9 +339,9 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.initial_max_stream_id_unidir);
     }
 
-    if (cnx->local_parameters.prefered_address.is_defined) {
-        bytes = picoquic_encode_transport_param_prefered_address(
-            bytes, bytes_max, &cnx->local_parameters.prefered_address);
+    if (cnx->local_parameters.preferred_address.is_defined) {
+        bytes = picoquic_encode_transport_preferred_address_address(
+            bytes, bytes_max, &cnx->local_parameters.preferred_address);
     }
 
     if (cnx->local_parameters.migration_disabled != 0 && bytes != NULL) {
@@ -667,8 +667,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 }
                 case picoquic_tp_server_preferred_address:
                 {
-                    uint64_t coded_length = picoquic_decode_transport_param_prefered_address(
-                        bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.prefered_address);
+                    uint64_t coded_length = picoquic_decode_transport_preferred_address_address(
+                        bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.preferred_address);
 
                     if (coded_length != extension_length) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Preferred address TP");

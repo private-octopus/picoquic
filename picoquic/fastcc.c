@@ -91,12 +91,11 @@ void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_p
     }
 }
 
-void picoquic_fastcc_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+void picoquic_fastcc_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_fastcc_state_t* fastcc_state = path_x->congestion_alg_state;
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(option_string);
 #endif
     
@@ -155,7 +154,7 @@ static void fastcc_notify_congestion(
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
 
-    picoquic_update_pacing_data(cnx, path_x, 0);
+    picoquic_update_pacing_data(path_x, 0);
 
     path_x->is_ssthresh_initialized = 1;
 }
@@ -198,7 +197,7 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += ack_state->nb_bytes_acknowledged;
                 /* Compute pacing data. */
-                picoquic_update_pacing_data(cnx, path_x, 0);
+                picoquic_update_pacing_data(path_x, 0);
             }
             break;
 

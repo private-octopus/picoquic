@@ -207,7 +207,7 @@ static void limited_config_set_default( limited_test_config_t* config, uint8_t t
     config->picosec_per_byte = 80000; /* corresponds to 100 Mbps */
 }
 
-int limited_reno_test()
+int limited_reno_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 1);
@@ -217,7 +217,7 @@ int limited_reno_test()
     return limited_client_test_one(&config);
 }
 
-int limited_cubic_test()
+int limited_cubic_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 2);
@@ -227,7 +227,7 @@ int limited_cubic_test()
     return limited_client_test_one(&config);
 }
 
-int limited_bbr_test()
+int limited_bbr_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 3);
@@ -237,7 +237,7 @@ int limited_bbr_test()
     return limited_client_test_one(&config);
 }
 
-int limited_batch_test()
+int limited_batch_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 4);
@@ -248,7 +248,7 @@ int limited_batch_test()
     return limited_client_test_one(&config);
 }
 
-int limited_safe_test()
+int limited_safe_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 5);

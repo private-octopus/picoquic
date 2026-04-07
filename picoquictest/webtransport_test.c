@@ -319,70 +319,70 @@ static int picowt_baton_test_one(
     return ret;
 }
 
-int picowt_baton_basic_test()
+int picowt_baton_basic_test(void)
 {
     int ret = picowt_baton_test_one(1, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_error_test()
+int picowt_baton_error_test(void)
 {
     int ret = picowt_baton_test_one(4, "/baton?inject=1", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_long_test()
+int picowt_baton_long_test(void)
 {
     int ret = picowt_baton_test_one(2, "/baton", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_wrong_test()
+int picowt_baton_wrong_test(void)
 {
     int ret = picowt_baton_test_one(3, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_uri_test()
+int picowt_baton_uri_test(void)
 {
     int ret = picowt_baton_test_one(5, "/baton?baton=33", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_multi_test()
+int picowt_baton_multi_test(void)
 {
     int ret = picowt_baton_test_one(6, "/baton?baton=240&count=4", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_random_test()
+int picowt_baton_random_test(void)
 {
     int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_krome_test()
+int picowt_baton_krome_test(void)
 {
     int ret = picowt_baton_test_one(8, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_reset_test()
+int picowt_baton_reset_test(void)
 {
     int ret = picowt_baton_test_one(9, "/baton?count=8", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_tp_test()
+int picowt_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -469,7 +469,7 @@ int picowt_drain_test_one(int expect_error)
     return ret;
 }
 
-int picowt_drain_test()
+int picowt_drain_test(void)
 {
     int ret = picowt_drain_test_one(0);
 

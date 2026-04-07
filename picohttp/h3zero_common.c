@@ -86,7 +86,7 @@ static void picohttp_clear_stream_ctx(h3zero_stream_ctx_t* stream_ctx)
 	}
 }
 
-static void picohttp_stream_node_delete(void * tree, picosplay_node_t * node)
+static void picohttp_stream_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
 	h3zero_stream_ctx_t * stream_ctx = picohttp_stream_node_value(node);
 	picohttp_clear_stream_ctx(stream_ctx);
@@ -357,7 +357,7 @@ uint8_t* h3zero_load_frame_content(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t* h3zero_skip_frame_content(uint8_t* bytes, uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
+	h3zero_data_stream_state_t* stream_state)
 {
 	size_t available = bytes_max - bytes;
 
@@ -448,7 +448,7 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			if (stream_state->current_frame_read < stream_state->current_frame_length) {
 				/* Process or skip the frame */
 				if (stream_state->is_current_frame_ignored) {
-					bytes = h3zero_skip_frame_content(bytes, bytes_max, stream_state, error_found);
+					bytes = h3zero_skip_frame_content(bytes, bytes_max, stream_state);
 				}
 				else {
 					bytes = h3zero_load_frame_content(bytes, bytes_max, stream_state, error_found);
@@ -523,8 +523,7 @@ uint8_t* h3zero_wt_parse_control_stream_id(
 uint8_t* h3zero_parse_remote_bidir_stream(
 	uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
-	h3zero_callback_ctx_t* ctx,
-	uint64_t * error_found)
+	h3zero_callback_ctx_t* ctx)
 {
 	h3zero_data_stream_state_t* stream_state = &stream_ctx->ps.stream_state;
 
@@ -600,7 +599,7 @@ uint8_t* h3zero_parse_incoming_remote_stream(
 	uint64_t error_found = 0;
 
 	if (IS_BIDIR_STREAM_ID(stream_ctx->stream_id)) {
-		bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+		bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx);
 	}
 	else {
 		bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, opt_cnx);
@@ -739,7 +738,7 @@ static uint8_t* h3zero_parse_frame_prefix(uint8_t* bytes, uint8_t* bytes_max,
 	return bytes;
 }
 
-uint8_t* h3zero_parse_header_frame(uint8_t* bytes, uint8_t* bytes_max, size_t available,
+uint8_t* h3zero_parse_header_frame(uint8_t* bytes, size_t available,
 	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
 {
 	if (stream_state->current_frame == NULL) {
@@ -838,7 +837,7 @@ uint8_t* h3zero_parse_data_stream(uint8_t* bytes, uint8_t* bytes_max,
 				}
 				else if (stream_state->current_frame_type == h3zero_frame_header) {
 					/* Process the header frame */
-					bytes = h3zero_parse_header_frame(bytes, bytes_max, available, stream_state, error_found);
+					bytes = h3zero_parse_header_frame(bytes, available, stream_state, error_found);
 				}
 				else {
 					/* Unknown frame type, should just be ignored */
@@ -929,7 +928,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 		uint8_t* bytes_max = bytes + length;
 
 		if (IS_BIDIR_STREAM_ID(stream_id)) {
-			bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found);
+			bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx);
 		}
 		else {
 			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, cnx);
@@ -1271,7 +1270,7 @@ int h3zero_client_close_stream(picoquic_cnx_t * cnx,
 int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 	uint64_t stream_id, uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event, h3zero_callback_ctx_t* ctx,
-	h3zero_stream_ctx_t* stream_ctx, uint64_t* fin_stream_id)
+	h3zero_stream_ctx_t* stream_ctx)
 {
 	int ret = 0;
 	int process_complete = 0;
@@ -1538,7 +1537,7 @@ int h3zero_callback_data(picoquic_cnx_t* cnx,
 				else {
 					/* Process incoming H3 server data */
 					ret = h3zero_process_h3_server_data(cnx, stream_id, bytes, length, fin_or_event, ctx,
-						stream_ctx, fin_stream_id);
+						stream_ctx);
 				}
 			}
 			else {
@@ -2104,7 +2103,7 @@ void h3zero_release_capsule(h3zero_capsule_t* capsule)
 	memset(capsule, 0, sizeof(h3zero_capsule_t));
 }
 
-const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule, h3zero_stream_ctx_t * stream_ctx)
+const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule)
 {
 	if (capsule->is_stored) {
 		/* reset the fields to expected value */

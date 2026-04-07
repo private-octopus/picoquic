@@ -152,7 +152,7 @@ int h3zero_varint_stream_chunk_test(uint64_t * targets, size_t nb_targets, size_
     return ret;
 }
 
-int h3zero_varint_stream_test()
+int h3zero_varint_stream_test(void)
 {
     int ret = 0;
     uint64_t targets[4] = { 132, 4, 0x10001, 0x10000001 };
@@ -187,11 +187,11 @@ int h3zero_varint_stream_test()
  * h3zero_stream_ctx_t: incoming stream context.
  */
 
-int incoming_unidir_test_fn(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
-    picohttp_call_back_event_t fin_or_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
-    void* path_app_ctx)
+int incoming_unidir_test_fn(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picohttp_call_back_event_t UNUSED(fin_or_event),
+    struct st_h3zero_stream_ctx_t* UNUSED(stream_ctx),
+    void* UNUSED(path_app_ctx))
 {
     return 0;
 }
@@ -213,7 +213,7 @@ int h3zero_set_test_context(picoquic_quic_t** quic, picoquic_cnx_t** cnx, h3zero
     return ret;
 }
 
-int h3zero_incoming_unidir_test()
+int h3zero_incoming_unidir_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -352,7 +352,7 @@ uint8_t* h3zero_test_submit_frame(uint8_t* bytes, uint8_t* bytes_max, h3zero_str
     return bytes;
 }
 
-int h3zero_unidir_error_test()
+int h3zero_unidir_error_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -455,7 +455,7 @@ int h3zero_setting_submit(int is_after_settings, uint64_t frame_type, int expect
 }
 
 
-int h3zero_setting_error_test()
+int h3zero_setting_error_test(void)
 {
     uint64_t unexpected_frames[4] = { h3zero_frame_settings, h3zero_frame_data,
         h3zero_frame_header, h3zero_frame_push_promise };
@@ -697,7 +697,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
                     fseek(Fbis, 0, SEEK_END);
                     sz = ftell(Fbis);
                     (void)picoquic_file_close(Fbis);
-                    if (sz != data_length) {
+                    if ((size_t)sz != data_length) {
                         ret = -1;
                     }
                 }
@@ -716,7 +716,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 
 int h3zero_client_open_stream_file(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
 
-int h3zero_error_client_stream_test()
+int h3zero_error_client_stream_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -751,7 +751,7 @@ int h3zero_error_client_stream_test()
 }
 
 
-int h3zero_client_data_test()
+int h3zero_client_data_test(void)
 {
     client_data_test_spec_t spec = { 0 };
     int ret = h3zero_client_data_test_one(&spec);
@@ -826,10 +826,10 @@ typedef struct st_test_datagram_ctx_t {
 } test_datagram_ctx_t;
 
 
-int h3zero_test_datagram_cb(picoquic_cnx_t* cnx,
-    uint8_t* bytes, size_t length,
+int h3zero_test_datagram_cb(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
     picohttp_call_back_event_t wt_event,
-    struct st_h3zero_stream_ctx_t* stream_ctx,
+    struct st_h3zero_stream_ctx_t* UNUSED(stream_ctx),
     void* path_app_ctx)
 {
     int ret = 0;
@@ -886,7 +886,6 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     h3zero_callback_ctx_t* h3_ctx = NULL;
-    h3zero_stream_ctx_t* stream_ctx = NULL;
     uint64_t simulated_time = 0;
     h3zero_capsule_t capsule = { 0 };
     test_datagram_ctx_t dg_ctx = { 0 };
@@ -912,7 +911,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
             const uint8_t* next_bytes;
             memset(buffer, 0xff, sizeof(buffer));
             memcpy(buffer, capsule_bytes + bytes_received, this_chunk);
-            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule, stream_ctx)) == NULL) {
+            if ((next_bytes = h3zero_accumulate_capsule(buffer, buffer + chunk_size, &capsule)) == NULL) {
                 ret = -1;
             }
             else {
@@ -942,7 +941,7 @@ int h3zero_capsule_receive_chunks(const uint8_t * capsule_bytes, size_t capsule_
     return ret;
 }
 
-int h3zero_capsule_test()
+int h3zero_capsule_test(void)
 {
     int ret = 0;
     size_t test_chunk[3] = { sizeof(capsule_datagram), sizeof(capsule_datagram) - 1, 1 };

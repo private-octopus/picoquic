@@ -125,7 +125,7 @@ int sockloop_test_verify_extra_socket(picoquic_cnx_t* cnx_client, struct sockadd
     return ret;
 }
 
-int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+int sockloop_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
@@ -483,8 +483,8 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         double_bind[i].fd = INVALID_SOCKET;
     }
     if (ret == 0 && spec->double_bind) {
-        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
-            AF_INET6, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind, test_ctx->qserver->default_congestion_alg->ecn_mark)) <= 0) {
+        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port, AF_INET6, 0, 0,
+            PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind, test_ctx->qserver->default_congestion_alg->ecn_mark)) <= 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
     }
@@ -630,7 +630,7 @@ void sockloop_test_set_spec(sockloop_test_spec_t* spec, uint8_t test_id)
     spec->socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
 }
 
-int sockloop_basic_test()
+int sockloop_basic_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 1);
@@ -645,7 +645,7 @@ static test_api_stream_desc_t sockloop_test_scenario_1M[] = {
     { 8, 4, 257, 1000000 }
 };
 
-int sockloop_eio_test()
+int sockloop_eio_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 2);
@@ -657,7 +657,7 @@ int sockloop_eio_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_errsock_test()
+int sockloop_errsock_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 3);
@@ -666,7 +666,7 @@ int sockloop_errsock_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_ipv4_test()
+int sockloop_ipv4_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 4);
@@ -678,7 +678,7 @@ int sockloop_ipv4_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_migration_test()
+int sockloop_migration_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 5);
@@ -692,7 +692,7 @@ int sockloop_migration_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_nat_test()
+int sockloop_nat_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 6);
@@ -707,7 +707,7 @@ int sockloop_nat_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_thread_test()
+int sockloop_thread_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 7);
@@ -719,7 +719,7 @@ int sockloop_thread_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_thread_name_test()
+int sockloop_thread_name_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 8);

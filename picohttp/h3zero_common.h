@@ -180,7 +180,7 @@ extern "C" {
 
     void h3zero_release_capsule(h3zero_capsule_t* capsule);
 
-    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule, h3zero_stream_ctx_t * stream_ctx);
+    const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_capsule_t* capsule);
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);

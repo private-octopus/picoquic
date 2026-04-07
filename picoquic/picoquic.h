@@ -166,8 +166,16 @@ extern "C" {
 #define PICOQUIC_ECN_ECT_1 0x01
 #define PICOQUIC_ECN_CE 0x03
 
-
-
+/* Convenience macro for handling unused attribute in functions that
+* must be defined with a specific signature, for example as callback.
+ */
+#ifndef UNUSED
+#if defined(__GNUC__) || defined(__clang__)
+#define UNUSED(x) x __attribute__((unused))
+#else
+#define UNUSED(x) x
+#endif
+#endif
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -346,7 +354,7 @@ typedef enum {
     picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
 } picoquic_call_back_event_t;
 
-typedef struct st_picoquic_tp_prefered_address_t {
+typedef struct st_picoquic_tp_preferred_address_t {
     int is_defined;
     uint8_t ipv4Address[4];
     uint16_t ipv4Port;
@@ -354,7 +362,7 @@ typedef struct st_picoquic_tp_prefered_address_t {
     uint16_t ipv6Port;
     picoquic_connection_id_t connection_id;
     uint8_t statelessResetToken[16];
-} picoquic_tp_prefered_address_t;
+} picoquic_tp_preferred_address_t;
 
 typedef struct st_picoquic_tp_version_negotiation_t {
     uint32_t current; /* Version found in TP, should match envelope */
@@ -378,7 +386,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t active_connection_id_limit;
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
-    picoquic_tp_prefered_address_t prefered_address;
+    picoquic_tp_preferred_address_t preferred_address;
     uint32_t max_datagram_frame_size;
     int enable_loss_bit;
     int enable_time_stamp; /* (x&1) want, (x&2) can */
@@ -1067,7 +1075,7 @@ void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
-    uint64_t reason, char const* phrase, uint64_t current_time);
+    uint64_t reason, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
@@ -1690,7 +1698,7 @@ typedef struct st_picoquic_per_ack_state_t {
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,

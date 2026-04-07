@@ -63,7 +63,7 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000ull /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000ull /* 1 ms */
 #define PICOQUIC_ACK_DELAY_MIN_MAX_VALUE 0xFFFFFFull /* max value that can be negotiated by peers */
-#define PICOQUIC_RACK_DELAY 10000ull /* 10 ms */
+#define PICOQUIC_RACK_DELAY 10000 /* 10 ms */
 #define PICOQUIC_MAX_ACK_DELAY_MAX_MS 0x4000ull /* 2<14 ms */
 #define PICOQUIC_TOKEN_DELAY_LONG (24*60*60*1000000ull) /* 24 hours */
 #define PICOQUIC_TOKEN_DELAY_SHORT (2*60*1000000ull) /* 2 minutes */
@@ -1561,7 +1561,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
 int picoquic_load_token_file(picoquic_quic_t* quic, char const * token_file_name);
 
 /* Init of transport parameters */
-void picoquic_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+void picoquic_init_transport_parameters(picoquic_tp_t* tp);
 
 /* Registration of per path connection ID in server context */
 int picoquic_register_cnx_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
@@ -1572,7 +1572,7 @@ int picoquic_register_net_secret(picoquic_cnx_t* cnx);
 /* Registration of initial connection ID and peer IP */
 int picoquic_register_net_icid(picoquic_cnx_t* cnx);
 
-void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, uint8_t id_length, picoquic_connection_id_t cnx_id_remote);
+void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_t* cnx_id, picoquic_connection_id_t cnx_id_remote);
 
 /* Management of address tuples */
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
@@ -1584,15 +1584,14 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index,
     uint64_t unique_path_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
-int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_stream_data_node_t* decrypted_data, picoquic_packet_header* ph,
+int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,
-    uint64_t current_time, int* p_path_id, int* path_is_not_allocated);
+    uint64_t current_time, int* p_path_id);
 /* Prepare packet containing only path control frames. */
 int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple,
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time);
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_packet_context_enum pc, int is_nominal_ack_path,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time); 
@@ -1600,7 +1599,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
-void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason, char const * phrase);
+void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
@@ -1678,11 +1677,11 @@ void picoquic_update_pacing_window(picoquic_pacing_t* pacing, int slow_start, ui
 void picoquic_update_pacing_data_after_send(picoquic_pacing_t * pacing, size_t length, size_t send_mtu, uint64_t current_time);
 
 /* Reset the pacing data after CWIN is updated */
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int slow_start);
+void picoquic_update_pacing_data(picoquic_path_t * path_x, int slow_start);
 void picoquic_update_pacing_after_send(picoquic_path_t* path_x, size_t length, uint64_t current_time);
 int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_time);
 /* Reset pacing data if congestion algorithm computes it directly */
-void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
+void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum);
 /* Manage path quality updates */
 void picoquic_refresh_path_quality_thresholds(picoquic_path_t* path_x);
 int picoquic_issue_path_quality_update(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
@@ -1884,7 +1883,7 @@ void picoquic_seed_bandwidth(picoquic_cnx_t* cnx, uint64_t rtt_min, uint64_t cwi
 uint64_t picoquic_current_retransmit_timer(picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Update the path RTT upon receiving an explict or implicit acknowledgement */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, picoquic_path_t* path_x, int epoch,
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp);
 
 /* stream management */
@@ -1967,7 +1966,7 @@ void picoquic_set_ack_needed(picoquic_cnx_t* cnx, uint64_t current_time, picoqui
  * Record stream data as acknowledged, signal datagram frames as acknowledged.
  */
 void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
-    int is_spurious, uint64_t current_time);
+    int is_spurious);
 
 /* Coding and decoding of frames */
 typedef struct st_picoquic_stream_data_buffer_argument_t {
@@ -2013,8 +2012,7 @@ void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * strea
 picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
 picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, picoquic_connection_id_t* suggested_value, uint64_t current_time);
-int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id,
-    uint64_t reason, uint64_t current_time);
+int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t reason);
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
@@ -2078,7 +2076,7 @@ int picoquic_queue_path_available_or_backup_frame(
 /* Internal only API, notify that next path is now allowed. */
 void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);
 
-int picoquic_decode_closing_frames(picoquic_cnx_t* cnx, uint8_t* bytes, size_t bytes_max, int* closing_received);
+int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received);
 
 void picoquic_process_sooner_packets(picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_delete_sooner_packets(picoquic_cnx_t* cnx);

@@ -106,6 +106,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
     { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded."},
     { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
+    { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
+    { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -221,6 +223,44 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
     return v;
 }
 
+int config_set_port(picoquic_quic_config_t* config, char const * port_string)
+{
+    int ret = 0;
+    char opval_buffer[256];
+    char const* p = port_string;
+    int is_port_shared = 0;
+    int p1 = 0;
+    int p2 = 0;
+
+    if (*p == 'S') {
+        is_port_shared = 1;
+        p++;
+    }
+    while (*p >= '0' && *p <= '9') {
+        p1 *= 10;
+        p1 += (*p - '0');
+        p++;
+    }
+    if (*p == ':') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            p2 *= 10;
+            p2 += (*p - '0');
+            p++;
+        }
+    }
+    if (*p != 0 || p1 < 0 || p1 > 65535 || p2 < 0 || p2 > 65535) {
+        fprintf(stderr, "Invalid port: %s\n", config_optval_string(opval_buffer, 256, port_string, strlen(port_string)));
+        ret = -1;
+    }
+    else {
+        config->server_port = (uint16_t)p1;
+        config->local_port = (uint16_t)p2;
+        config->is_port_shared = is_port_shared;
+    }
+    return ret;
+}
+
 static int config_set_option(option_table_line_t* option_desc, option_param_t* params, int nb_params, picoquic_quic_config_t* config)
 {
     int ret = 0;
@@ -234,7 +274,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         ret = config_set_string_param(&config->server_key_file, params, nb_params, 0);
         break;
     case picoquic_option_SERVER_PORT:
-        config->server_port = config_atoi(params, nb_params, 0, &ret);
+        ret = config_set_port(config, params->param);
         if (ret != 0) {
             fprintf(stderr, "Invalid port: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
         }
@@ -482,6 +522,12 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
+    case picoquic_option_Preferred_V4:
+        ret = config_set_string_param(&config->preferred_address_v4, params, nb_params, 0);
+        break;
+    case picoquic_option_Preferred_V6:
+        ret = config_set_string_param(&config->preferred_address_v6, params, nb_params, 0);
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -546,7 +592,7 @@ void picoquic_config_usage_file(FILE* F)
     }
 }
 
-void picoquic_config_usage()
+void picoquic_config_usage(void)
 {
     picoquic_config_usage_file(stderr);
 }
@@ -862,6 +908,9 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_cwin_max(quic, config->cwin_max);
         picoquic_set_default_address_discovery_mode(quic, config->address_discovery_mode);
 
+        picoquic_set_preferred_address(&quic->default_tp.preferred_address,
+            config->preferred_address_v4, config->preferred_address_v6, config->local_port);
+
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
                 fprintf(stderr, "No token file present. Will create one as <%s>.\n", config->token_file_name);
@@ -1047,6 +1096,12 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     }
     if (config->ech_target != NULL) {
         free((void*)config->ech_target);
+    }
+    if (config->preferred_address_v4 != NULL) {
+        free((void*)config->preferred_address_v4);
+    }
+    if (config->preferred_address_v6 != NULL) {
+        free((void*)config->preferred_address_v6);
     }
     picoquic_config_init(config);
 }

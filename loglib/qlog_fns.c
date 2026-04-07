@@ -235,32 +235,6 @@ void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint
     ctx->event_count++;
 }
 
-
-/* Log an event that cannot be attached to a specific connection */
-void qlog_fns_quic_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(quic);
-    UNREFERENCED_PARAMETER(cid);
-    UNREFERENCED_PARAMETER(fmt);
-    UNREFERENCED_PARAMETER(vargs);
-#endif
-}
-
-/* Log arrival or departure of an UDP datagram for an unknown connection */
-void qlog_fns_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(quic);
-    UNREFERENCED_PARAMETER(receiving);
-    UNREFERENCED_PARAMETER(current_time);
-    UNREFERENCED_PARAMETER(addr_peer);
-    UNREFERENCED_PARAMETER(addr_local);
-    UNREFERENCED_PARAMETER(packet_length);
-#endif
-}
-
 /* Log an event relating to a specific connection */
 void qlog_fns_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
@@ -625,11 +599,16 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
     uint64_t cid_len;
     const uint8_t* end_bytes = bytes + len;
 
-    fprintf(f, "\"ip_v4\": \"");
-    bytes = qlog_frame_hex_string(f, bytes, end_bytes, 4);
+    fprintf(f, "{");
+    if (len < 4) {
+        bytes = NULL;
+    } else {
+        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[4]);
+        bytes += 4;
+    }
     if (bytes != NULL) {
         bytes = picoquic_frames_uint16_decode(bytes, end_bytes, &port4);
-        fprintf(f, "\", \"port_v4\":%d", port4);
+        fprintf(f, ", \"port_v4\":%d", port4);
     }
     if (bytes != NULL) {
         fprintf(f, ", \"ip_v6\": \"");
@@ -662,6 +641,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
         fprintf(f, "\", \"extra_bytes\": ");
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, end_bytes - bytes);
     }
+    fprintf(f, "}");
 }
 
 void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len)
@@ -741,7 +721,6 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_server_preferred_address:
                 fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
                 qlog_fns_preferred_address(f, bytes, extension_length);
-                fprintf(f, "}");
                 break;
             case picoquic_tp_disable_migration:
             case picoquic_tp_enable_time_stamp:
@@ -780,8 +759,8 @@ void qlog_fns_transport_extension(picoquic_cnx_t* cnx, int is_local,
 }
 
 /* log TLS ticket */
-void qlog_fns_tls_ticket(picoquic_cnx_t* cnx,
-    uint8_t* ticket, uint16_t ticket_length)
+void qlog_fns_tls_ticket(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(ticket), uint16_t UNUSED(ticket_length))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);
@@ -794,7 +773,7 @@ void qlog_fns_tls_ticket(picoquic_cnx_t* cnx,
 * The congestion control is per path. 
 * We get an event per path id. If multipath is not enabled, only path[0] is logged.
 */
-void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_packet_context_t* pkt_ctx, 
+void qlog_fns_cc_dump_path(picoquic_path_t* path, 
     qlog_fns_context_t * ctx, qlog_fns_path_context_t * path_ctx,  uint64_t current_time)
 {
     FILE* f = ctx->f_txtlog;
@@ -876,17 +855,13 @@ void qlog_fns_cc_dump_path(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_
     }
 }
 
-void qlog_fns_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+void qlog_fns_cc_dump(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)cnx->qlog_ctx;
 
     qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx, path_x->unique_path_id);
-    picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
-    if (cnx->is_multipath_enabled) {
-        pkt_ctx = &path_x->pkt_ctx;
-    }
     if (path_ctx != NULL) {
-        qlog_fns_cc_dump_path(cnx, path_x, pkt_ctx, ctx, path_ctx, current_time);
+        qlog_fns_cc_dump_path(path_x, ctx, path_ctx, current_time);
     }
 }
 
@@ -1000,8 +975,8 @@ void qlog_fns_quic_close(picoquic_quic_t* quic)
 
 picoquic_unified_logging_t qlog_fns = {
     /* Per context log function */
-    qlog_fns_quic_app_message,
-    qlog_fns_quic_pdu,
+    NULL,
+    NULL,
     qlog_fns_quic_close,
     /* Per connection functions */
     qlog_fns_app_message,

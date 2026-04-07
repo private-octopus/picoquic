@@ -27,7 +27,7 @@
 /* first 2 bytes of MD5("PICOQUIC QPERF BENCH SERVER PORT") = 0x2214, 8724 */
 #define PQBENCH_DEFAULT_SERVER_PORT 8724 
 
-void usage()
+void usage(void)
 {
     fprintf(stderr, "Usage: pqbench [arguments] [ server nb_clients qperf_scenario ]\n");
     fprintf(stderr, "   nb_clients: number of parallel connections\n");
@@ -39,7 +39,7 @@ void usage()
 }
 
 int pqb_server(picoquic_quic_config_t* config, int do_memory_log);
-int pqb_client(picoquic_quic_config_t* config, char const* server_name, int server_port,
+int pqb_client(picoquic_quic_config_t* config, char const* server_name,
     int nb_clients, char const* scenario);
 int pqb_locate_default_file(char const** param, char const* default_file_name);
 
@@ -49,7 +49,6 @@ int main(int argc, char ** argv)
     char option_string[512];
     int opt;
     const char* server_name = NULL;
-    int server_port = 0;
     char* qperf_scenario = NULL;
     int do_memory_log = 0;
     int nb_clients = 0;
@@ -99,7 +98,7 @@ int main(int argc, char ** argv)
         server_name = argv[optind];
         nb_clients = atoi(argv[optind+1]);
         qperf_scenario = argv[optind+2];
-        ret = pqb_client(&config, server_name, server_port, nb_clients, qperf_scenario);
+        ret = pqb_client(&config, server_name, nb_clients, qperf_scenario);
     }
     else {
         usage();
@@ -151,7 +150,7 @@ typedef struct st_pqb_callback_t {
 } pqb_callback_t;
 
 static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
-    void* callback_ctx, void* callback_arg)
+    void* callback_ctx, void* UNUSED(callback_arg))
 {
     int ret = 0;
     pqb_callback_t* pqb_ctx = (pqb_callback_t*)callback_ctx;
@@ -367,7 +366,7 @@ int pqb_server_address(
     return ret;
 }
 
-int pqb_client(picoquic_quic_config_t* config, char const* server_name, int server_port,
+int pqb_client(picoquic_quic_config_t* config, char const* server_name,
     int nb_clients, char const* scenario)
 {
     int ret = 0;

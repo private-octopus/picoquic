@@ -67,12 +67,11 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* pa
     cubic_state->recovery_sequence = 0;
 }
 
-static void cubic_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+static void cubic_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(option_string);
 #endif
     path_x->congestion_alg_state = (void*)cubic_state;
@@ -418,7 +417,7 @@ static void cubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, cubic_state->alg_state == picoquic_cubic_alg_slow_start &&
             cubic_state->ssthresh == UINT64_MAX);
     }
 }
@@ -543,7 +542,7 @@ static void dcubic_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, 
+        picoquic_update_pacing_data(path_x, 
             cubic_state->alg_state == picoquic_cubic_alg_slow_start && cubic_state->ssthresh == UINT64_MAX);
     }
 }

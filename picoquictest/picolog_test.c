@@ -78,7 +78,7 @@ int test_convert_svg(const picoquic_connection_id_t* cid, void* ptr)
     return svg_convert(cid, appctx->f_binlog, appctx->f_template, appctx->binlog_name, appctx->out_dir);
 }
 
-int picolog_basic_test()
+int picolog_basic_test(void)
 {
     int ret = 0;
     /* find the test input file */

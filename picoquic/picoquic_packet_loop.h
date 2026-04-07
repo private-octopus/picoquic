@@ -40,7 +40,8 @@ typedef struct st_picoquic_socket_ctx_t {
     int af;
     uint16_t port; /* Port number to which the socket is bound */
     uint16_t n_port; /* value of the port number in network order htons(port) */
-
+    uint16_t private_port; /* Port number to which the socket is bound, if not shared */
+    int is_port_shared : 1; /* Whether the socket is shared with other threads, e.g., port 443 between several H3 threads */
     /* Flags */
     unsigned int is_started : 1;
     unsigned int supports_udp_send_coalesced : 1;
@@ -127,14 +128,14 @@ typedef struct st_picoquic_packet_loop_options_t {
     unsigned int provide_alt_port : 1; /* Used for simulating multipath or migrations. */
 } picoquic_packet_loop_options_t;
 
-/* Version 2 of packet loop, works in progress.
-* Parameters are set in a struct, for future
-* extensibility.
+/* Version 2 of packet loop, obsoleted by v3
  */
 typedef struct st_picoquic_packet_loop_param_t {
-    uint16_t local_port;
+    uint16_t local_port; /* Default port for outgoing connection */
     int local_af;
     int dest_if;
+    uint16_t public_port;
+    int is_port_shared; /* public port is shared with other threads, e.g., port 443 between several H3 threads */
     int socket_buffer_size;
     int do_not_use_gso;
     int extra_socket_required;
@@ -147,6 +148,23 @@ int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
     picoquic_packet_loop_cb_fn loop_callback,
     void * loop_callback_ctx);
+
+/* Packet loop v3, capable of managing preferred address migration.
+* The argument is passed as "void*" to match the prototype of the thread function,
+* but it is actually a pointer to a structure of type picoquic_network_thread_ctx_t.
+* When the packet loop is started in the main thread, the application code
+* should be:
+* 
+*        (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+*        ret = thread_ctx.return_code;
+* 
+*/
+
+#ifdef _WINDOWS
+DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx);
+#else
+void* picoquic_packet_loop_v3(void* v_ctx);
+#endif
 
 /* Threaded version of packet loop, when running picoquic in a background thread.
 * 
@@ -317,8 +335,8 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
 
 /* Following declarations are used for unit tests. */
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
-int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, int socket_buffer_size, int extra_socket_required,
-    int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
+int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
+    int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
 
 #ifdef __cplusplus
 }

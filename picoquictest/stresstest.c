@@ -130,7 +130,7 @@ void * stress_client_node_value(picosplay_node_t * node)
     return (node == NULL)?NULL:(void*)((char*)node - offsetof(struct st_picoquic_stress_client_t, client_node));
 }
 
-static void stress_client_node_delete(void * tree, picosplay_node_t * node)
+static void stress_client_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
@@ -183,7 +183,7 @@ static void stress_context_reorder(picoquic_stress_ctx_t* stress_ctx, picoquic_s
 
 static int stress_server_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     int ret = 0;
     picoquic_stress_server_callback_ctx_t* stress_ctx = (picoquic_stress_server_callback_ctx_t*)callback_ctx;
@@ -370,8 +370,8 @@ static int stress_client_start_streams(picoquic_cnx_t* cnx,
 }
 
 static int stress_client_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    uint64_t stream_id, uint8_t* UNUSED(bytes), size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
     int ret = 0;
     picoquic_stress_client_callback_ctx_t* cb_ctx = (picoquic_stress_client_callback_ctx_t*)callback_ctx;
@@ -1153,7 +1153,7 @@ static int stress_or_fuzz_test(picoquic_fuzz_fn fuzz_fn, void * fuzz_ctx, uint64
     return ret;
 }
 
-int stress_test()
+int stress_test(void)
 {
     return stress_or_fuzz_test(NULL, NULL, picoquic_stress_test_duration, 10*picoquic_stress_test_duration);
 }
@@ -1227,7 +1227,7 @@ static uint32_t basic_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
     return (uint32_t)length;
 }
 
-int fuzz_test()
+int fuzz_test(void)
 {
     basic_fuzzer_ctx_t fuzz_ctx;
     int ret = 0;
@@ -1308,7 +1308,7 @@ static test_random_tester_t random_cases[] = {
 
 static size_t nb_random_cases = sizeof(random_cases) / sizeof(test_random_tester_t);
 
-int random_tester_test()
+int random_tester_test(void)
 {
     /* This is the initial run, so we merely write the expected value */
     uint64_t t_seed = 0xDEADBEEFBABAC001ull;
@@ -1361,7 +1361,7 @@ int random_tester_test()
 }
 
 #define RANDOM_GAUSS_NB_TESTS 255
-int random_gauss_test()
+int random_gauss_test(void)
 {
     uint64_t t_seed = 0xDEADBEEFBABAC001ull;
     int ret = 0;
@@ -1485,7 +1485,7 @@ static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
     return (uint32_t)length;
 }
 
-int fuzz_initial_test()
+int fuzz_initial_test(void)
 {
     initial_fuzzer_ctx_t fuzz_ctx;
     int ret = 0;

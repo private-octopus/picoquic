@@ -280,6 +280,8 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
 
+OPTION(WITH_OPENSSL "build with OpenSSL" ON)
+
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
@@ -301,8 +303,6 @@ else()
     message(STATUS "PTLS compiled without support for Fusion")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
-
-OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
 if(WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)

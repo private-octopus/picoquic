@@ -85,7 +85,7 @@ int ech_test_check_buf(uint8_t* config, size_t config_len, char const* ref_file_
     return ret;
 }
 
-int ech_config_test()
+int ech_config_test(void)
 {
     int ret = 0;
     char test_server_pub_key_file[512];
@@ -120,7 +120,7 @@ int ech_config_test()
     return ret;
 }
 
-int ech_config_p_test()
+int ech_config_p_test(void)
 {
     int ret = 0;
     char test_server_key_file[512];
@@ -158,7 +158,7 @@ int ech_config_p_test()
 
 #if 0
 /* ECH test of config from CERT */
-int ech_cert_test()
+int ech_cert_test(void)
 {
     int ret = 0;
     char test_server_cert_file[512];
@@ -431,14 +431,14 @@ int ech_e2e_test_one(ech_e2e_spec_t* spec)
     return ret;
 }
 
-int ech_e2e_test()
+int ech_e2e_test(void)
 {
     ech_e2e_spec_t spec = { 0 };
     spec.expect_success = 1;
     return ech_e2e_test_one(&spec);
 }
 
-int ech_e2e_0rtt_test()
+int ech_e2e_0rtt_test(void)
 {
     ech_e2e_spec_t spec = { 0 };
     spec.expect_grease = 1;
@@ -447,14 +447,14 @@ int ech_e2e_0rtt_test()
     return ech_e2e_test_one(&spec);
 }
 
-int ech_grease_test()
+int ech_grease_test(void)
 {
     ech_e2e_spec_t spec = { 0 };
     spec.expect_grease = 1;
     return ech_e2e_test_one(&spec);
 }
 
-int ech_no_ech_test()
+int ech_no_ech_test(void)
 {
     ech_e2e_spec_t spec = { 0 };
     spec.expect_grease = 0;

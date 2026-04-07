@@ -542,8 +542,8 @@ static int sample_background_wakeup(sample_background_ctx_t* client_ctx)
     return ret;
 }
 
-static int sample_background_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
-    void* callback_ctx, void * callback_arg)
+static int sample_background_loop_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* UNUSED(callback_arg))
 {
     int ret = 0;
     sample_background_ctx_t* client_ctx = (sample_background_ctx_t*)callback_ctx;

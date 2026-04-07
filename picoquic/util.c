@@ -108,12 +108,12 @@ void debug_set_stream(FILE *F)
 #endif
 }
 
-FILE* get_debug_out()
+FILE* get_debug_out(void)
 {
     return debug_out;
 }
 
-int get_debug_suspended()
+int get_debug_suspended(void)
 {
     return debug_suspended;
 }
@@ -365,7 +365,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 }
 
 /* Hash connection ids for picohash_table's */
-uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed)
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * UNUSED(hash_seed))
 {
     uint64_t val64 = 0;
     size_t i = 0;
@@ -646,6 +646,53 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
     }
     else if (addr_family == AF_INET6) {
         ret = picoquic_store_text_addr(stored_addr, "::1", port);
+    }
+    return ret;
+}
+
+/* fill the preferred address data based on v4 and v6 text addresses */
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t * preferred,
+    char const * v4_text, char const * v6_text, uint16_t preferred_port)
+{
+    int ret = 0;
+    struct sockaddr_storage v4_addr = { 0 };
+    struct sockaddr_storage v6_addr = { 0 };
+
+    memset(preferred, 0, sizeof(picoquic_tp_preferred_address_t));
+
+    if (v4_text != NULL) {
+        ret = picoquic_store_text_addr(&v4_addr, v4_text, preferred_port);
+    }
+    if (ret == 0 && v6_text != NULL) {
+        ret = picoquic_store_text_addr(&v6_addr, v6_text, preferred_port);
+    }
+    if (ret == 0) {
+        if (v4_text != NULL) {
+            if (v4_addr.ss_family != AF_INET) {
+                ret = -1;
+            }
+            else {
+                memcpy(preferred->ipv4Address, &((struct sockaddr_in*)&v4_addr)->sin_addr, 4);
+                preferred->ipv4Port = ((struct sockaddr_in*)&v4_addr)->sin_port;
+                if (preferred->ipv4Port == 0) {
+                    preferred->ipv4Port = preferred_port;
+                }
+                preferred->is_defined |= 1;
+            }
+        }
+        if (v6_text != NULL) {
+            if (v6_addr.ss_family != AF_INET6) {
+                ret = -1;
+            }
+            else {
+                memcpy(preferred->ipv6Address, &((struct sockaddr_in6*)&v6_addr)->sin6_addr, 16);
+                preferred->ipv6Port = ((struct sockaddr_in6*)&v6_addr)->sin6_port;
+                if (preferred->ipv6Port == 0) {
+                    preferred->ipv6Port = preferred_port;
+                }
+                preferred->is_defined |= 1;
+            }
+        }
     }
     return ret;
 }

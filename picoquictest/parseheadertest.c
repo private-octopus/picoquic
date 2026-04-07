@@ -84,7 +84,12 @@ static picoquic_packet_header hinitial10 = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t pinitial10_l[] = {
@@ -119,7 +124,12 @@ static picoquic_packet_header hinitial10_l = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t pvnego10[] = {
@@ -164,7 +174,12 @@ static picoquic_packet_header hvnego10 = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t phandshake[] = {
@@ -198,7 +213,12 @@ static picoquic_packet_header hhandshake = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi0_c_32[] = {
@@ -227,7 +247,12 @@ static picoquic_packet_header hphi0_c_32 = {
     0,
     1,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi0_c_32_spin[] = {
@@ -256,7 +281,12 @@ static picoquic_packet_header hphi0_c_32_spin = {
     1,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_short_phi1_noc_32[] = {
@@ -284,7 +314,12 @@ static picoquic_packet_header hphi1_noc_32 = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 static uint8_t packet_intel_bug[] = {
@@ -388,7 +423,12 @@ static picoquic_packet_header h_intel_bug = {
     0,
     0,
     0,
-    0
+    0,
+    0,
+    0, /* size_t token_length; */
+    NULL, /* const uint8_t* token_bytes; */
+    0, /* size_t pl_val; */
+    NULL /* struct st_picoquic_local_cnxid_t* l_cid; */
 };
 
 struct _test_entry {
@@ -413,7 +453,7 @@ static struct _test_entry test_entries[] = {
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _test_entry);
 
-int parseheadertest()
+int parseheadertest(void)
 {
     int ret = 0;
     picoquic_packet_header ph;
@@ -735,7 +775,7 @@ static const uint8_t test_1rtt_secret[] = {
 
 static uint8_t const addr1[4] = { 10, 0, 0, 1 };
 
-int packet_enc_dec_test()
+int packet_enc_dec_test(void)
 {
     int ret = 0;
     struct sockaddr_in test_addr_c;
@@ -875,8 +915,7 @@ int packet_enc_dec_test()
 
 int packet_initial_dec_one(
     uint8_t* bytes,
-    size_t packet_length,
-    char const * alpn)
+    size_t packet_length)
 {
     int ret = 0;
     struct sockaddr_in test_addr_c;
@@ -933,9 +972,9 @@ int packet_initial_dec_one(
     return ret;
 }
 
-int incoming_initial_test()
+int incoming_initial_test(void)
 {
-    int ret = packet_initial_dec_one(packet_intel_bug, sizeof(packet_intel_bug), "h3");
+    int ret = packet_initial_dec_one(packet_intel_bug, sizeof(packet_intel_bug));
 
     return ret;
 }
@@ -1163,7 +1202,7 @@ static int header_length_test_one(header_length_case_t * hlc)
     return ret;
 }
 
-int header_length_test()
+int header_length_test(void)
 {
     int ret = 0;
     for (size_t i = 0; i < nb_header_length_cases; i++) {

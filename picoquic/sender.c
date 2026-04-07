@@ -1551,7 +1551,7 @@ static size_t picoquic_next_mtu_probe_length(picoquic_cnx_t* cnx, picoquic_path_
         if (cnx->remote_parameters.max_packet_size > 0) {
             probe_length = cnx->remote_parameters.max_packet_size;
 
-            if (cnx->quic->mtu_max > 0 && (int)probe_length >
+            if (cnx->quic->mtu_max > 0 && probe_length >
                 cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr)) {
                 probe_length = cnx->quic->mtu_max - PICOQUIC_MTU_OVERHEAD((struct sockaddr*)&path_x->first_tuple->peer_addr);
             }
@@ -1871,16 +1871,16 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
     int ret = 0;
     uint64_t transport_error = 0;
 
-    if (cnx->remote_parameters.prefered_address.is_defined) {
+    if (cnx->remote_parameters.preferred_address.is_defined) {
         uint64_t unique_path_id = (cnx->is_multipath_enabled) ? 1 : 0;
-        int ipv4_received = cnx->remote_parameters.prefered_address.ipv4Port != 0;
-        int ipv6_received = cnx->remote_parameters.prefered_address.ipv6Port != 0;
+        int ipv4_received = cnx->remote_parameters.preferred_address.ipv4Port != 0;
+        int ipv6_received = cnx->remote_parameters.preferred_address.ipv6Port != 0;
 
         /* Add the connection ID to the local stash */
         transport_error = picoquic_stash_remote_cnxid(cnx, 0, unique_path_id, 1,
-            cnx->remote_parameters.prefered_address.connection_id.id_len,
-            cnx->remote_parameters.prefered_address.connection_id.id,
-            cnx->remote_parameters.prefered_address.statelessResetToken,
+            cnx->remote_parameters.preferred_address.connection_id.id_len,
+            cnx->remote_parameters.preferred_address.connection_id.id,
+            cnx->remote_parameters.preferred_address.statelessResetToken,
             NULL);
         if (transport_error != 0) {
             ret = picoquic_connection_error(cnx, transport_error, picoquic_frame_type_new_connection_id);
@@ -1900,15 +1900,15 @@ int picoquic_prepare_server_address_migration(picoquic_cnx_t* cnx)
                 /* configure an IPv6 sockaddr */
                 struct sockaddr_in6 * d6 = (struct sockaddr_in6 *)&dest_addr;
                 d6->sin6_family = AF_INET6;
-                d6->sin6_port = cnx->remote_parameters.prefered_address.ipv6Port;
-                memcpy(&d6->sin6_addr, cnx->remote_parameters.prefered_address.ipv6Address, 16);
+                d6->sin6_port = htons(cnx->remote_parameters.preferred_address.ipv6Port);
+                memcpy(&d6->sin6_addr, cnx->remote_parameters.preferred_address.ipv6Address, 16);
             }
             else {
                 /* configure an IPv4 sockaddr */
                 struct sockaddr_in * d4 = (struct sockaddr_in *)&dest_addr;
                 d4->sin_family = AF_INET;
-                d4->sin_port = cnx->remote_parameters.prefered_address.ipv4Port;
-                memcpy(&d4->sin_addr, cnx->remote_parameters.prefered_address.ipv4Address, 4);
+                d4->sin_port = htons(cnx->remote_parameters.preferred_address.ipv4Port);
+                memcpy(&d4->sin_addr, cnx->remote_parameters.preferred_address.ipv4Address, 4);
             }
 
             /* Only send a probe if not already using that address
@@ -2846,7 +2846,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
 */
 
 static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    int is_first_in_packet, uint64_t max_priority_allowed, uint64_t current_time,
+    int is_first_in_packet, uint64_t max_priority_allowed, 
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
 {
     int datagram_sent = 0;
@@ -3063,7 +3063,6 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
         bytes_next = bytes + length;
 
         bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
-            pc, 1 /* is_nominal_ack_path */,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
@@ -3165,7 +3164,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             }
                             if (ret == 0) {
                                 bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                    (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time,
+                                    (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX,
                                     &more_data, &is_pure_ack, &no_data_to_send, &ret);
                             }
                             /* TODO: replace this by posting of frame when CWIN estimated */
@@ -3384,7 +3383,6 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
          * These frames will be sent immediately, regardless of pacing or flow control.
          */
         bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
-            pc, is_nominal_ack_path,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
@@ -3461,7 +3459,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     int no_data_to_send = 0;
                     if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
                         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
+                            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
                             &more_data, &is_pure_ack, &no_data_to_send, &ret);
                     }
                     if (bytes_next != bytes_next_before_bypass) {
@@ -3516,7 +3514,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                         }
                         if (ret == 0) {
                             bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, current_time, &more_data, &is_pure_ack, &no_data_to_send, &ret);
+                                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
                         }
 
                         /* TODO: replace this by scheduling of BDP frame when window has been estimated */
@@ -3605,7 +3603,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                 int no_data_to_send = 0;
 
                 if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass, current_time,
+                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
                     &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
                     length = bytes_next - bytes;
                 }
