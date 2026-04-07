@@ -815,6 +815,8 @@ typedef struct st_test_preferred_addr_t {
     picoquic_tp_preferred_address_t preferred_address;
 } test_preferred_addr_t;
 
+#define NULLCID { { 0 }, 0 }
+
 test_preferred_addr_t test_preferred_address_cases[] = {
     {
         "none",
@@ -836,7 +838,7 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             4433,
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
             0,
-            { 0 },
+            NULLCID,
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
@@ -852,7 +854,7 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             0,
             { 0x20,  0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
             4433,
-            { 0 },
+            NULLCID,
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
@@ -868,7 +870,7 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             4433,
             { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
             4433,
-            { 0 },
+            NULLCID,
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
@@ -908,7 +910,7 @@ int config_preferred_test(void)
                 memcmp(test_preferred_address_cases[i].preferred_address.ipv4Address, preferred_address.ipv4Address, 4) != 0 ||
                 test_preferred_address_cases[i].preferred_address.ipv4Port != preferred_address.ipv4Port ||
                 memcmp(test_preferred_address_cases[i].preferred_address.ipv6Address, preferred_address.ipv6Address, 16) != 0 ||
-                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port != 0) {
+                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port) {
                 DBG_PRINTF("Test case %s: expected and actual preferred addresses differ", test_preferred_address_cases[i].test_name);
                 ret = -1;
             }

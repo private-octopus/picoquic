@@ -1280,7 +1280,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
 
     for (int i = 0; ret == 0 && i < nb_splits && bytes != NULL; i++) {
         uint8_t* p = packet_buffer;
-        uint8_t* p_max;
+        uint8_t* p_max = NULL;
         size_t p_len = bmax[i] - bytes;
         memset(p, 0, sizeof(packet_buffer));
         if (p_len <= nb_bytes) {
@@ -1290,7 +1290,7 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
         else {
             ret = -1;
         }
-        while (p != NULL && p < p_max && ret == 0) {
+        while (ret == 0 && p != NULL && p < p_max) {
             p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
             if (p != NULL && available_data > 0) {
                 if (nb_data + available_data > 64) {
