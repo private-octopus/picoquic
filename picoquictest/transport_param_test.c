@@ -502,7 +502,8 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
     return ret;
 }
 
-int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, uint64_t * p_simulated_time, int mode)
+int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, 
+    uint32_t proposed_version, uint64_t * p_simulated_time, int mode)
 {
     int ret = 0;
     picoquic_connection_id_t initial_cnx_id = { { INITIAL_CONNECTION_ID, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
@@ -541,7 +542,7 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
 
         if (*quic_ctx != NULL) {
             *test_cnx = picoquic_create_cnx(*quic_ctx, initial_cnx_id, remote_cnx_id,
-                (struct sockaddr*) &addr, 0, 0, "sni", "alpn", (mode == 0) ? 1 : 0);
+                (struct sockaddr*) &addr, 0, proposed_version, "sni", "alpn", (mode == 0) ? 1 : 0);
         }
 
         if (*quic_ctx == NULL || *test_cnx == NULL) {
@@ -566,7 +567,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
     size_t encoded = 0, decoded = 0; 
     uint64_t simulated_time = 0;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, proposed_version, &simulated_time, mode);
 
     if (ret == 0) {
         /* initialize the connection object to the test parameters */
@@ -648,7 +649,8 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     uint64_t simulated_time = 0;
     size_t decoded = 0;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, version, &simulated_time, mode);
+    test_cnx->proposed_version = proposed_version;
 
     if (ret == 0) {
         ret = picoquic_receive_transport_extensions(test_cnx, mode,
@@ -688,7 +690,7 @@ int transport_param_error_test(int mode, uint8_t* target, size_t target_length, 
     uint64_t simulated_time = 0;
     size_t decoded;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, 0, &simulated_time, mode);
 
     if (ret == 0) {
         int err_ret = picoquic_receive_transport_extensions(test_cnx, mode,
@@ -738,7 +740,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     }
 
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, 0, &simulated_time, mode);
 
     if (ret == 0) {
         /* initialize the connection object to the test parameters */
@@ -798,7 +800,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     return ret;
 }
 
-int transport_param_test()
+int transport_param_test(void)
 {
     int ret = 0;
     uint64_t proof = 0;
@@ -944,13 +946,13 @@ static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
 void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
     uint8_t * bytes, size_t bytes_max);
 
-static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max, int client_mode)
+static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
     picoquic_textlog_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max);
     fprintf(F, "\n");
 }
 
-static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_t target_length)
+static int transport_param_log_fuzz_test(uint8_t* target, size_t target_length)
 {
     int ret = 0;
     uint8_t buffer[256];
@@ -987,7 +989,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
                 for (size_t dl = 0; dl < target_length; dl += l + 6)
                 {
                     /* log */
-                    transport_param_log_test_one(F, buffer, target_length - dl, client_mode);
+                    transport_param_log_test_one(F, buffer, target_length - dl);
                 }
                 fclose(F);
             }
@@ -999,7 +1001,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
     return ret;
 }
 
-int transport_param_log_test()
+int transport_param_log_test(void)
 {
     FILE* F = NULL;
     int ret = 0;
@@ -1012,14 +1014,14 @@ int transport_param_log_test()
     if (F != NULL) {
         char log_tp_test_ref[512];
 
-        transport_param_log_test_one(F, client_param1, sizeof(client_param1), 0);
-        transport_param_log_test_one(F, client_param2, sizeof(client_param2), 0);
-        transport_param_log_test_one(F, client_param3, sizeof(client_param3), 0);
-        transport_param_log_test_one(F, server_param1, sizeof(server_param1), 1);
-        transport_param_log_test_one(F, server_param2, sizeof(server_param2), 1);
-        transport_param_log_test_one(F, client_param4, sizeof(client_param4), 0);
-        transport_param_log_test_one(F, client_param5, sizeof(client_param5), 0);
-        transport_param_log_test_one(F, server_param3, sizeof(server_param3), 1);
+        transport_param_log_test_one(F, client_param1, sizeof(client_param1));
+        transport_param_log_test_one(F, client_param2, sizeof(client_param2));
+        transport_param_log_test_one(F, client_param3, sizeof(client_param3));
+        transport_param_log_test_one(F, server_param1, sizeof(server_param1));
+        transport_param_log_test_one(F, server_param2, sizeof(server_param2));
+        transport_param_log_test_one(F, client_param4, sizeof(client_param4));
+        transport_param_log_test_one(F, client_param5, sizeof(client_param5));
+        transport_param_log_test_one(F, server_param3, sizeof(server_param3));
 
         fclose(F);
 
@@ -1036,10 +1038,10 @@ int transport_param_log_test()
     {
         DBG_PRINTF("Doing fuzz test of transport parameter logging into %s\n", log_tp_fuzz_file);
 
-        ret = transport_param_log_fuzz_test(0, client_param2, sizeof(client_param2));
+        ret = transport_param_log_fuzz_test(client_param2, sizeof(client_param2));
 
         if (ret == 0) {
-            ret = transport_param_log_fuzz_test(1, server_param2, sizeof(server_param2));
+            ret = transport_param_log_fuzz_test(server_param2, sizeof(server_param2));
         }
 
         DBG_PRINTF("Fuzz test of transport parameter was successful.\n", log_tp_fuzz_file);
@@ -1201,7 +1203,7 @@ vn_tp_test_t vn_tp_test_case[] = {
 
 size_t nb_vn_tp_test_case = sizeof(vn_tp_test_case) / sizeof(vn_tp_test_t);
 
-int vn_tp_test()
+int vn_tp_test(void)
 {
     int ret = 0;
 
@@ -1332,7 +1334,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_loss_bit:
-        if (quic->default_tp.enable_loss_bit != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_loss_bit != tp_value) {
             ret = -1;
         }
         break;
@@ -1342,7 +1344,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_time_stamp:
-        if (quic->default_tp.enable_time_stamp != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_time_stamp != tp_value) {
             ret = -1;
         }
         break;
@@ -1352,7 +1354,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_bdp_frame:
-        if (quic->default_tp.enable_bdp_frame != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_bdp_frame != tp_value) {
             ret = -1;
         }
         break;
@@ -1367,7 +1369,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_reset_stream_at:
-        if (quic->default_tp.is_reset_stream_at_enabled != tp_value) {
+        if ((uint64_t)quic->default_tp.is_reset_stream_at_enabled != tp_value) {
             ret = -1;
         }
         break;
@@ -1378,7 +1380,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
     return ret;
 }
 
-int transport_param_default_test()
+int transport_param_default_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < nb_default_test_case; i++) {

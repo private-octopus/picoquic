@@ -486,15 +486,14 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 * - Close session.
 * 
 */
-int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
-    const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
+int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {
     int ret = 0; 
     
     while (ret == 0 && bytes < bytes_max) {
         const uint8_t* bytes_first = bytes;
 
-        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule, stream_ctx);
+        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
 
         if (bytes == NULL) {
             picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes_first);

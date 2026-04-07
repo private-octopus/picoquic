@@ -42,7 +42,7 @@
 */
 #define AUTOQLOG_BAD_QLOG "no_such_folder/bad\\folder"
 
-int autoqlog_bad_file()
+int autoqlog_bad_file(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -61,7 +61,7 @@ int autoqlog_bad_file()
 	return ret;
 }
 
-int autoqlog_no_binlog()
+int autoqlog_no_binlog(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -83,7 +83,7 @@ int autoqlog_no_binlog()
 	return ret;
 }
 
-int autoqlog_longdir()
+int autoqlog_longdir(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -106,7 +106,7 @@ int autoqlog_longdir()
 	return ret;
 }
 
-int autoqlog_unique()
+int autoqlog_unique(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -131,7 +131,7 @@ int autoqlog_unique()
 	return ret;
 }
 
-int qlog_auto_test()
+int qlog_auto_test(void)
 {
 	int ret = autoqlog_bad_file();
 
@@ -330,7 +330,7 @@ int qlog_tp_extension_test(FILE* F)
 	return ret;
 }
 
-int qlog_error_test()
+int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
 	int ret = (F == NULL) ? -1 : 0;

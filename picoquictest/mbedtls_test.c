@@ -70,7 +70,7 @@ static test_api_stream_desc_t test_scenario_mbedtls[] = {
     { 4, 0, 2000, 2000 }
 };
 
-int mbedtls_test()
+int mbedtls_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -147,17 +147,17 @@ extern ptls_cipher_suite_t ptls_mbedtls_chacha20poly1305sha256;
 extern ptls_key_exchange_algorithm_t ptls_mbedtls_secp256r1;
 extern ptls_key_exchange_algorithm_t ptls_mbedtls_x25519;
 
-int ptls_mbedtls_init();
-void ptls_mbedtls_free();
+int ptls_mbedtls_init(void);
+void ptls_mbedtls_free(void);
 void ptls_mbedtls_random_bytes(void* buf, size_t len);
-static int test_random();
+static int test_random(void);
 static int test_hash(ptls_hash_algorithm_t* algo, ptls_hash_algorithm_t* ref);
 static int test_label(ptls_hash_algorithm_t* hash, ptls_hash_algorithm_t* ref);
 static int test_cipher(ptls_cipher_algorithm_t* cipher, ptls_cipher_algorithm_t* cipher_ref);
 static int test_aead(ptls_aead_algorithm_t* algo, ptls_hash_algorithm_t* hash, ptls_aead_algorithm_t* ref, ptls_hash_algorithm_t* hash_ref);
 static int test_key_exchange(ptls_key_exchange_algorithm_t* client, ptls_key_exchange_algorithm_t* server);
 
-int mbedtls_crypto_test()
+int mbedtls_crypto_test(void)
 {
     ptls_cipher_algorithm_t* cipher_test[5] = {
         &ptls_mbedtls_aes128ecb,
@@ -240,7 +240,7 @@ int mbedtls_crypto_test()
 
 #define PTLS_MBEDTLS_RANDOM_TEST_LENGTH 1021
 
-static int test_random()
+static int test_random(void)
 {
     /* The random test is just trying to check that we call the API properly. 
     * This is done by getting a vector of 1021 bytes, computing the sum of
@@ -688,7 +688,7 @@ static int mbedtls_test_load_one_der_key(char const* path_ref)
     return ret;
 }
 
-int mbedtls_load_key_test()
+int mbedtls_load_key_test(void)
 {
     int ret = 0;
 
@@ -743,7 +743,7 @@ int mbedtls_load_key_test()
 * - key file does not contain a key (we use a cert file for that)
 * - key file is for ED25559, which is not supported
 */
-int mbedtls_load_key_fail_test()
+int mbedtls_load_key_fail_test(void)
 {
     int ret = 0;
 
@@ -867,7 +867,7 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
     return ret;
 }
 
-int mbedtls_retrieve_pubkey_test()
+int mbedtls_retrieve_pubkey_test(void)
 {
     int ret = 0;
     if ((ret = ptls_mbedtls_init()) != 0) {
@@ -1162,7 +1162,7 @@ static int test_sign_verify_one(char const* key_path_ref, char const * cert_path
     return ret;
 }
 
-int mbedtls_sign_verify_test()
+int mbedtls_sign_verify_test(void)
 {
     int ret = 0;
 
@@ -1196,7 +1196,7 @@ int mbedtls_sign_verify_test()
     return ret;
 }
 
-int mbedtls_configure_test()
+int mbedtls_configure_test(void)
 {
     int ret = 0;
     int cipher_suite_match_low = 0;

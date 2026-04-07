@@ -526,7 +526,7 @@ int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_f
     return picoquic_save_tokens(quic, ticket_store_filename);
 }
 
-void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint64_t current_time)
+void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     char const* sni = (cnx->sni == NULL) ? "" : cnx->sni;
     size_t sni_length = strlen(sni);
@@ -572,9 +572,8 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 
 void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t current_time = picoquic_get_tls_time(cnx->quic);
     if (cnx->client_mode) {
-        picoquic_update_stored_ticket(cnx, path_x, current_time);
+        picoquic_update_stored_ticket(cnx, path_x);
     }
     else {
         uint8_t* ip_addr;

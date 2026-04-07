@@ -834,7 +834,7 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
         int code = -1;
         for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
             if (qpack_static[i].header == http_header_content_type &&
-                qpack_static[i].enum_as_int == content_type) {
+                qpack_static[i].enum_as_int == (int)content_type) {
                 code = qpack_static[i].index;
                 break;
             }

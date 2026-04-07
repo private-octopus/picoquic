@@ -577,7 +577,7 @@ static void app_limited_config_set_default( app_limited_test_config_t* config, u
     config->nb_losses_max = 10;
 }
 
-int app_limited_reno_test()
+int app_limited_reno_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 1);
@@ -586,7 +586,7 @@ int app_limited_reno_test()
     return app_limited_test_one(&config);
 }
 
-int app_limited_cubic_test()
+int app_limited_cubic_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 2);
@@ -597,7 +597,7 @@ int app_limited_cubic_test()
     return app_limited_test_one(&config);
 }
 
-int app_limited_bbr_test()
+int app_limited_bbr_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 3);
@@ -606,7 +606,7 @@ int app_limited_bbr_test()
     return app_limited_test_one(&config);
 }
 
-int app_limited_rpr_test()
+int app_limited_rpr_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 4);
@@ -621,7 +621,7 @@ int app_limited_rpr_test()
 }
 
 #if 0
-int app_limited_safe_test()
+int app_limited_safe_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 5);

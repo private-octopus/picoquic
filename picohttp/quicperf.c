@@ -462,7 +462,7 @@ static void* quicperf_stream_ctx_value(picosplay_node_t* node)
 }
 
 
-static void quicperf_stream_ctx_delete(void* tree, picosplay_node_t* node)
+static void quicperf_stream_ctx_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);

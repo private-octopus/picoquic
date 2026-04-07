@@ -42,7 +42,7 @@
 /* Test of the pacing functions.
 */
 
-int pacing_test()
+int pacing_test(void)
 {
     /* Create a connection so as to instantiate the pacing context */
     int ret = 0;
@@ -81,7 +81,7 @@ int pacing_test()
 
     if (ret == 0) {
         /* Set pacing parameters to specified value */
-        picoquic_update_pacing_rate(cnx, cnx->path[0], (double)test_byte_per_sec, test_quantum);
+        picoquic_update_pacing_rate(cnx->path[0], (double)test_byte_per_sec, test_quantum);
         /* Run a loop of N tests based on next wake time. */
         while (ret == 0 && nb_sent < nb_target) {
             nb_round++;
@@ -211,7 +211,7 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
     return ret;
 }
 
-int pacing_bbr_test()
+int pacing_bbr_test(void)
 {
     /* BBRv3 includes a short term loop that detects losses and tune the
     * sending rate accordingly. The packet losses cause startup to 
@@ -223,25 +223,25 @@ int pacing_bbr_test()
     return ret;
 }
 
-int pacing_cubic_test()
+int pacing_cubic_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_cubic_algorithm, 900000, 210);
     return ret;
 }
 
-int pacing_dcubic_test()
+int pacing_dcubic_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_dcubic_algorithm, 900000, 240);
     return ret;
 }
 
-int pacing_fast_test()
+int pacing_fast_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_fastcc_algorithm, 1000000, 180);
     return ret;
 }
 
-int pacing_newreno_test()
+int pacing_newreno_test(void)
 {
     int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
     return ret;
@@ -294,7 +294,7 @@ pacing_test_t pacing_events[] = {
 
 size_t nb_pacing_events = sizeof(pacing_events) / sizeof(pacing_test_t);
 
-int pacing_repeat_test()
+int pacing_repeat_test(void)
 {
     int ret = 0;
     picoquic_pacing_t pacing = { 0 };
@@ -316,7 +316,7 @@ int pacing_repeat_test()
             }
             /* Check that the value are as expected */
             if (pacing.rate != pacing_events[i].rate ||
-                pacing.packet_time_nanosec != pacing_events[i].expected_packet_nanosec ||
+                (uint64_t)pacing.packet_time_nanosec != pacing_events[i].expected_packet_nanosec ||
                 pacing.bucket_max != pacing_events[i].expected_bucket_nanosec) {
                 DBG_PRINTF("Event %d, expected rate: " PRIu64 ", Packet_n: " PRIu64 ", Bucket: " PRIu64,
                     i, pacing.rate, pacing.packet_time_nanosec, pacing.bucket_max);

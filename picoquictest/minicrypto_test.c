@@ -60,7 +60,7 @@ static test_api_stream_desc_t test_scenario_minicrypto[] = {
     { 4, 0, 2000, 2000 }
 };
 
-int minicrypto_test()
+int minicrypto_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -112,7 +112,7 @@ int minicrypto_test()
 extern ptls_cipher_suite_t ptls_minicrypto_aes128gcmsha256;
 extern picoquic_set_private_key_from_file_t picoquic_minicrypto_set_key_fn;
 extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
-int minicrypto_is_last_test()
+int minicrypto_is_last_test(void)
 {
     int ret = 0;
     int expected_aes128gcm_sha256 = 1;

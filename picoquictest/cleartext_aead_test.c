@@ -72,7 +72,7 @@ void cleartext_aead_init_packet(picoquic_packet_header* ph,
     }
 }
 
-int cleartext_aead_test()
+int cleartext_aead_test(void)
 {
     int ret = 0;
     uint8_t clear_text[1536];
@@ -210,7 +210,7 @@ int cleartext_aead_test()
     return ret;
 }
 
-static int cleartext_iv_cmp(void * void_aead, uint8_t * ref_iv, size_t iv_length)
+static int cleartext_iv_cmp(void* UNUSED(void_aead), uint8_t* UNUSED(ref_iv), size_t UNUSED(iv_length))
 {
 #if 0
     ptls_aead_context_t* aead = (ptls_aead_context_t*)void_aead;
@@ -296,7 +296,7 @@ int cleartext_aead_vector_test_one(picoquic_connection_id_t test_id, uint32_t te
  * Test the CTR primitives used for PN encryption
  */
 
-int pn_ctr_test()
+int pn_ctr_test(void)
 {
     int ret = 0;
 
@@ -425,7 +425,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
  * client and server produce the correct results.
  */
 
-int cleartext_pn_enc_test()
+int cleartext_pn_enc_test(void)
 {
     int ret = 0;
     struct sockaddr_in test_addr_c, test_addr_s;
@@ -535,7 +535,7 @@ int cleartext_pn_enc_test()
 
 /* Test vector copied from Kazuho Ohu's test code in quicly -- then changed */
 
-int cleartext_pn_vector_test()
+int cleartext_pn_vector_test(void)
 {
     int ret = 0;
 #if 0
@@ -849,7 +849,7 @@ static int draft17_label_expansion_test(ptls_cipher_suite_t * cipher, char const
 
 #if 0
 /* TODO: restore this test once we have a valid incoming message for draft-17 */
-static int draft31_incoming_initial_test()
+static int draft31_incoming_initial_test(void)
 {
     int ret = 0;
     /* Create a server context */
@@ -908,7 +908,7 @@ static int draft31_incoming_initial_test()
 #endif
 
 
-int draft17_vector_test()
+int draft17_vector_test(void)
 {
     int ret = 0;
     int version_index = 0;
@@ -1029,7 +1029,7 @@ int draft17_vector_test()
         /* TODO: reset this test once we have draft-17 samples. */
         /* Final integration test: verify that the incoming packet can be decrypted */
         if (ret == 0) {
-            ret = draft31_incoming_initial_test();
+            ret = draft31_incoming_initial_test(void);
         }
 #endif
     }
@@ -1075,7 +1075,7 @@ static const size_t key_rotation_test_target_size[] = {
     sizeof(key_rotation_test_target_poly),
     0 };
 
-int key_rotation_vector_test()
+int key_rotation_vector_test(void)
 {
     int ret = 0;
     ptls_cipher_suite_t* key_rotation_test_suites[4] = {
@@ -1167,7 +1167,7 @@ static uint8_t retry_protection_packet_draft25[36] = {
 
 extern uint8_t picoquic_retry_protection_key_25[16];
 
-int retry_protection_vector_test()
+int retry_protection_vector_test(void)
 {
     /* First, create a protection context to test the basic mechanisms */
     int ret = 0;
@@ -1320,7 +1320,7 @@ const uint8_t v2_sample_retry[] = {
     0xbf, 0xe3, 0x39, 0x52, 0xd9, 0x55, 0x54, 0x36,
     0x65, 0xdc, 0xc7, 0xb6};
 
-int retry_protection_v2_test()
+int retry_protection_v2_test(void)
 {
     int ret = 0;
     void* protection_ctx_v2 = NULL;
