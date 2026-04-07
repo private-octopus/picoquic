@@ -34,7 +34,7 @@ extern uint64_t picohttp_random_stress_context;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {

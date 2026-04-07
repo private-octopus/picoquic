@@ -916,9 +916,9 @@ int picoquic_incoming_version_negotiation(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    struct sockaddr* UNUSED(addr_from),
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t UNUSED(current_time))
 {
     int ret = 0;
 #ifdef _WINDOWS
@@ -1220,7 +1220,7 @@ int picoquic_queue_retry_packet(
     size_t token_size;
     picoquic_connection_id_t s_cid = { 0 };
 
-    picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+    picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
     if (picoquic_prepare_retry_token(quic, addr_from,
@@ -1242,8 +1242,7 @@ int picoquic_queue_busy_packet(
     const struct sockaddr* addr_from,
     const struct sockaddr* addr_to,
     int if_index_to,
-    picoquic_packet_header* ph,
-    uint64_t current_time)
+    picoquic_packet_header* ph)
 {
     int ret = 0;
     picoquic_connection_id_t s_cid = { 0 };
@@ -1261,7 +1260,7 @@ int picoquic_queue_busy_packet(
         uint8_t payload[4] = { picoquic_frame_type_connection_close, PICOQUIC_TRANSPORT_SERVER_BUSY, 0, 0 };
         size_t payload_length = 0;
 
-        picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+        picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
         /* Prepare long header:  Initial */
@@ -1706,8 +1705,8 @@ int picoquic_incoming_server_handshake(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     picoquic_stream_data_node_t* received_data,
-    struct sockaddr* addr_to,
-    unsigned long if_index_to,
+    struct sockaddr* UNUSED(addr_to),
+    unsigned long UNUSED(if_index_to),
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
@@ -1920,7 +1919,6 @@ int picoquic_incoming_1rtt(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
-    unsigned char received_ecn,
     int path_is_not_allocated,
     uint64_t current_time)
 {
@@ -1947,7 +1945,7 @@ int picoquic_incoming_1rtt(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    cnx, bytes + ph->offset, ph->payload_length, &closing_received);
+                    bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {
@@ -2041,7 +2039,7 @@ int  picoquic_incoming_not_decrypted(
             * Setting epoch parameter = -1 guarantees the hint is only used if the RTT is not
             * yet known.
             */
-            picoquic_update_path_rtt(cnx, cnx->path[0], cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
+            picoquic_update_path_rtt(cnx, cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&
                 ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {
@@ -2109,7 +2107,7 @@ int picoquic_incoming_segment(
     if (ret == 0 && cnx != NULL) {
         if (ph.ptype == picoquic_packet_1rtt_protected) {
             /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, decrypted_data, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
+            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id);
         }
         else {
             path_id = 0;
@@ -2197,7 +2195,7 @@ int picoquic_incoming_segment(
         /* Incoming packet could not be processed, need to send a Retry. */
         if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU){
             if (quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) {
-                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph, current_time);
+                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph);
             }
         }
     } else if (ret == 0) {
@@ -2296,7 +2294,7 @@ int picoquic_incoming_segment(
                 break;
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_1rtt(cnx, path_id, bytes, decrypted_data,
-                    &ph, addr_from, addr_to, if_index_to, received_ecn,
+                    &ph, addr_from, addr_to, if_index_to,
                     path_is_not_allocated, current_time);
                 break;
             default:

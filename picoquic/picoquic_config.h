@@ -159,7 +159,7 @@ typedef struct st_picoquic_quic_config_t {
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);
 void picoquic_config_usage_file(FILE* F);
-void picoquic_config_usage();
+void picoquic_config_usage(void);
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
 /* picoquic_config_command_line:

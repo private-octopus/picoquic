@@ -602,7 +602,7 @@ void picoquic_config_usage_file(FILE* F)
     }
 }
 
-void picoquic_config_usage()
+void picoquic_config_usage(void)
 {
     picoquic_config_usage_file(stderr);
 }

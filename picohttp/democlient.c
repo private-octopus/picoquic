@@ -727,9 +727,9 @@ char const * demo_client_parse_stream_spaces(char const * text) {
     return text;
 }
 
-char const * demo_client_parse_stream_repeat(char const * text, int * number)
+char const * demo_client_parse_stream_repeat(char const * text, uint64_t * number)
 {
-    int rep = 0;
+    uint64_t rep = 0;
 
     if (*text == '*') {
         text++;

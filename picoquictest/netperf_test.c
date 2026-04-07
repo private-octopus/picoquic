@@ -261,7 +261,7 @@ int netperf_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
 }
 
 int netperf_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max,
+    uint64_t* simulated_time, uint64_t max_data, uint64_t queue_delay_max,
     uint8_t* send_buffer, size_t send_buffer_size)
 {
     uint64_t loss_mask = 0;
@@ -397,7 +397,7 @@ int netperf_one_scenario(test_api_stream_desc_t* scenario,
     }
 
     if (ret == 0) {
-        ret = netperf_scenario_body_connect(test_ctx, &simulated_time, stream0_target,
+        ret = netperf_scenario_body_connect(test_ctx, &simulated_time,
             max_data, queue_delay_max, send_buffer, send_buffer_size);
 
         /* Prepare to send data */
@@ -481,7 +481,7 @@ static test_api_stream_desc_t netperf_scenario_basic[] = {
     { 4, 0, 257, 1000000 }
 };
 
-int netperf_basic_test()
+int netperf_basic_test(void)
 {
     int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
         NULL,
@@ -490,7 +490,7 @@ int netperf_basic_test()
     return ret;
 }
 
-int netperf_bbr_test()
+int netperf_bbr_test(void)
 {
     int ret = netperf_one_scenario(netperf_scenario_basic, sizeof(netperf_scenario_basic),
         picoquic_bbr_algorithm,
@@ -649,7 +649,7 @@ static test_api_stream_desc_t nat_attack_scenario[] = {
     { 32, 0, 256000, 1000000 }
 };
 
-int nat_attack_test()
+int nat_attack_test(void)
 {
     /* Create a connection context */
     uint64_t simulated_time = 0;

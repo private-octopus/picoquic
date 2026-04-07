@@ -62,7 +62,7 @@
 char const* cc_compete_batch_scenario_4M = "=b1:*1:397:4000000;";
 char const* cc_compete_batch_scenario_10M = "=b1:*1:397:10000000;";
 
-int cc_compete_cubic2_test()
+int cc_compete_cubic2_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xcb, 0xcb, 0, 0, 0, 0}, 8 };
@@ -82,7 +82,7 @@ int cc_compete_cubic2_test()
 }
 
 
-int cc_compete_c4c4_test()
+int cc_compete_c4c4_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xc4, 0xc4, 0, 0, 0, 0}, 8 };
@@ -101,7 +101,7 @@ int cc_compete_c4c4_test()
     return picoquic_ns(&spec, NULL);
 }
 
-int cc_compete_prague2_test()
+int cc_compete_prague2_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xa9, 0xa9, 0, 0, 0, 0}, 8 };
@@ -131,7 +131,7 @@ int cc_compete_prague2_test()
 * slowly after that.
  */
 
-int cc_compete_d_cubic_test()
+int cc_compete_d_cubic_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xc0, 0xdc, 0xcb, 0, 0, 0, 0}, 8 };
@@ -153,7 +153,7 @@ int cc_compete_d_cubic_test()
 
 /* Check that the picoquic_ns simulations can correctly test asymmetric paths.
  */
-int cc_ns_asym_test()
+int cc_ns_asym_test(void)
  {
      picoquic_ns_spec_t spec = { 0 };
      picoquic_connection_id_t icid = { { 0xcc, 0xa5, 0xcb, 0, 0, 0, 0, 0}, 8 };
@@ -184,7 +184,7 @@ char const* cc_compete_media_scenario = "=a1:d50:p2:S:n250:80; \
      = vmid: s30 :p6:S:n150 : 6250 : G30 : I62500 : D250000;";
 #define MEDIA_TEST_LOG "ns_mediatest_log.txt"
 
-int cc_ns_media_test()
+int cc_ns_media_test(void)
 {
     int ret = 0;
     picoquic_ns_spec_t spec = { 0 };
@@ -224,7 +224,7 @@ int cc_ns_media_test()
 
 /* Check that the picoquic_ns simulations can correctly test the black hole scenario.
  */
-int cc_ns_blackhole_test()
+int cc_ns_blackhole_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xb1, 0xcb, 0, 0, 0, 0, 0}, 8 };
@@ -248,7 +248,7 @@ int cc_ns_blackhole_test()
 
 /* Check that the picoquic_ns simulations can correctly test the drop_and_back scenario.
  */
-int cc_ns_drop_and_back_test()
+int cc_ns_drop_and_back_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xdb, 0xcb, 0, 0, 0, 0, 0}, 8 };
@@ -272,7 +272,7 @@ int cc_ns_drop_and_back_test()
 
 /* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
  */
-int cc_ns_low_and_up_test()
+int cc_ns_low_and_up_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0x1a, 0xcb, 0, 0, 0, 0, 0}, 8 };
@@ -297,7 +297,7 @@ int cc_ns_low_and_up_test()
 /* Check that the picoquic_ns simulations can correctly test the wifi fade scenario.
 * also check the cc options are handled as expected.
  */
-int cc_ns_wifi_fade_test()
+int cc_ns_wifi_fade_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xff, 0xbb, 0, 0, 0, 0, 0}, 8 };
@@ -324,7 +324,7 @@ int cc_ns_wifi_fade_test()
 
 /* Check that the picoquic_ns simulations can correctly test the low_and_up scenario.
  */
-int cc_ns_wifi_suspension_test()
+int cc_ns_wifi_suspension_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xf5, 0xbb, 0, 0, 0, 0, 0}, 8 };
@@ -353,7 +353,7 @@ int cc_ns_wifi_suspension_test()
 *
 */
 
-int cc_ns_wifi_bad_cubic_test()
+int cc_ns_wifi_bad_cubic_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xfb, 0xcb, 0, 0, 0, 0, 0}, 8 };
@@ -373,7 +373,7 @@ int cc_ns_wifi_bad_cubic_test()
     return picoquic_ns(&spec, NULL);
 }
 
-int cc_ns_wifi_bad_bbr_test()
+int cc_ns_wifi_bad_bbr_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0xfb, 0xbb, 0, 0, 0, 0, 0}, 8 };
@@ -397,12 +397,12 @@ int cc_ns_wifi_bad_bbr_test()
 * being that the "varylink" structure is user specified.
 */
 picoquic_ns_link_spec_t cc_varylink_test_spec[] = {
-    { 1000000,  0.01,  0.01, 5000, 0, 15000, 0 },
-    { 2000000,  0.001,  0.001, 5000, 0, 15000, 0, 2, 8 },
-    { UINT64_MAX,  0.01,  0.01, 5000, 0, 15000, 0 }
+    { 1000000,  0.01,  0.01, 5000, 0, 15000, 0, 0, 0, 0 },
+    { 2000000,  0.001,  0.001, 5000, 0, 15000, 0, 2, 8, 0 },
+    { UINT64_MAX,  0.01,  0.01, 5000, 0, 15000, 0, 0, 0, 0 }
 };
 
-int cc_ns_varylink_test()
+int cc_ns_varylink_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0x11, 0xbb, 0, 0, 0, 0, 0}, 8 };
@@ -434,7 +434,7 @@ int cc_ns_varylink_test()
  */
 static char const* cc_compete_satellite_scenario = "=b1:*1:397:20000000;";
 
-int cc_ns_satellite_test()
+int cc_ns_satellite_test(void)
 {
     picoquic_ns_spec_t spec = { 0 };
     picoquic_connection_id_t icid = { { 0xcc, 0x5a, 0xbb, 0, 0, 0, 0, 0}, 8 };

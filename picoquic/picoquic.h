@@ -166,8 +166,16 @@ extern "C" {
 #define PICOQUIC_ECN_ECT_1 0x01
 #define PICOQUIC_ECN_CE 0x03
 
-
-
+/* Convenience macro for handling unused attribute in functions that
+* must be defined with a specific signature, for example as callback.
+ */
+#ifndef UNUSED
+#if defined(__GNUC__) || defined(__clang__)
+#define UNUSED(x) x __attribute__((unused))
+#else
+#define UNUSED(x) x
+#endif
+#endif
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -1067,7 +1075,7 @@ void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
-    uint64_t reason, char const* phrase, uint64_t current_time);
+    uint64_t reason, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
@@ -1690,7 +1698,7 @@ typedef struct st_picoquic_per_ack_state_t {
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,

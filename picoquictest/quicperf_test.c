@@ -400,7 +400,7 @@ int quicperf_parse_test_one(const quicperf_test_line_t* tl)
     return ret;
 }
 
-int quicperf_parse_test()
+int quicperf_parse_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < nb_test_lines; i++) {
@@ -579,7 +579,7 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
     return ret;
 }
 
-int quicperf_batch_test()
+int quicperf_batch_test(void)
 {
     char const* batch_scenario = "=b1:*1:397:1000000;";
     quicperf_test_target_t batch_target = {
@@ -594,7 +594,7 @@ int quicperf_batch_test()
     return quicperf_e2e_test(0xba, batch_scenario, 1200000, 1, &batch_target);
 }
 
-int quicperf_datagram_test()
+int quicperf_datagram_test(void)
 {
     char const* datagram_scenario = "=a1:d50:n250:100;";
     quicperf_test_target_t datagram_target = {
@@ -609,7 +609,7 @@ int quicperf_datagram_test()
     return quicperf_e2e_test(0xda, datagram_scenario, 6000000, 1, &datagram_target);
 }
 
-int quicperf_media_test()
+int quicperf_media_test(void)
 {
     char const* media_scenario = "=v1:s30:n150:2000:G30:I20000;";
     quicperf_test_target_t media_target = {
@@ -624,7 +624,7 @@ int quicperf_media_test()
     return quicperf_e2e_test(0x1a,media_scenario, 6000000, 1, &media_target);
 }
 
-int quicperf_multi_test()
+int quicperf_multi_test(void)
 {
     char const* multi_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \
@@ -659,7 +659,7 @@ int quicperf_multi_test()
     return quicperf_e2e_test(0x17, multi_scenario, 6000000, 3, multi_target);
 }
 
-int quicperf_overflow_test()
+int quicperf_overflow_test(void)
 {
     char const* overflow_scenario = "=a1:d50:p2:S:n250:80; \
      = vlow: s30 :p4:S:n150 : 3750 : G30 : I37500; \

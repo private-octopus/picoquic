@@ -33,7 +33,7 @@ static test_api_stream_desc_t test_scenario_address_discovery[] = {
     { 4, 0, 257, 100000 }
 };
 
-int address_discovery_test()
+int address_discovery_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_connection_id_t initial_cid = { {0xad, 0xd8, 0xd1, 0x5c, 0, 0, 0, 0}, 8 };
@@ -41,7 +41,7 @@ int address_discovery_test()
     uint64_t loss_mask = 0;
     int ret = 0;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;

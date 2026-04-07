@@ -36,7 +36,7 @@
 /* Verify that the getter/setter functions work as expected 
  */
 
-int getter_test()
+int getter_test(void)
 {
     /* Create a connection context so we can test the various API */
     uint64_t simulated_time = 0;

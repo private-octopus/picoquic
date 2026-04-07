@@ -81,7 +81,7 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
     initial_cid.id[2] = test_id;
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.enable_time_stamp = 3;
     client_parameters.max_idle_timeout = (uint32_t)((spec->latency * 5)/1000);
     if (spec->initial_flow_control_credit > client_parameters.initial_max_data) {
@@ -94,11 +94,11 @@ static int dtn_test_one(uint8_t test_id, dtn_test_spec_t * spec)
         client_parameters.initial_max_stream_data_bidi_remote = spec->initial_flow_control_credit;
     }
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 0);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.enable_time_stamp = 3;
     server_parameters.max_idle_timeout = client_parameters.max_idle_timeout;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -178,7 +178,7 @@ void dtn_set_basic_test_spec(dtn_test_spec_t* spec)
     spec->has_loss = 0;
 }
 
-int dtn_basic_test()
+int dtn_basic_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -193,7 +193,7 @@ static test_api_stream_desc_t dtn_scenario_data[] = {
 };
 
 
-int dtn_data_test()
+int dtn_data_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -212,7 +212,7 @@ static test_api_stream_desc_t dtn_scenario_silence[] = {
     { 12, 8, 257, 257 }
 };
 
-int dtn_silence_test()
+int dtn_silence_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
@@ -224,7 +224,7 @@ int dtn_silence_test()
     return dtn_test_one(0x51, &spec);
 }
 
-int dtn_twenty_test()
+int dtn_twenty_test(void)
 {
     /* Simple test. */
     dtn_test_spec_t spec;
