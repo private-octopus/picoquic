@@ -223,7 +223,7 @@ int cc_ns_media_test(void)
 }
 
 /* Check that the picoquic_ns media simulations can correctly be repeated */
-int cc_ns_media_repeat_test()
+int cc_ns_media_repeat_test(void)
 {
     int ret = 0;
     picoquic_ns_spec_t spec = { 0 };
