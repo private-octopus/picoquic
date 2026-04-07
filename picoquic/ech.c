@@ -230,8 +230,8 @@ typedef struct st_ech_opener_callback_t {
 /* Perform the key exchange using the public key provided by the client
  * in the "enc" parameter and the private key corresponding to the config ID */
 ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
-    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* tls, 
-    uint8_t config_id, ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
+    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* UNUSED(tls), 
+    uint8_t UNUSED(config_id), ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
 {
     ptls_aead_context_t* aead = NULL;
     ptls_buffer_t infobuf;

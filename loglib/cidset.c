@@ -38,7 +38,7 @@ static int picoquic_cid_compare(const void* key0, const void* key1)
     return picoquic_compare_connection_id(cid0, cid1);
 }
 
-picohash_table * cidset_create()
+picohash_table * cidset_create(void)
 {
     return picohash_create(32, picoquic_cid_hash, picoquic_cid_compare);
 }

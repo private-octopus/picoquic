@@ -47,7 +47,7 @@
 #define TEST_CNX_COUNT 7
 #define TEST_CNX_ID(x) {{ x, x, x, x, x, x, x, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} , 8 }
 
-int create_cnx_test()
+int create_cnx_test(void)
 {
     int ret = 0;
     picoquic_quic_t* quic = NULL;
@@ -233,7 +233,7 @@ int create_cnx_test()
     return ret;
 }
 
-int create_quic_test()
+int create_quic_test(void)
 {
     int ret = 0;
     char const* bad_dir = "..";

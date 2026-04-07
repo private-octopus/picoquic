@@ -144,7 +144,7 @@ int check_ack_ranges(picoquic_sack_list_t* sack_list)
 }
 
 
-int sacktest()
+int sacktest(void)
 {
     int ret = 0;
     picoquic_cnx_t *cnx;
@@ -301,7 +301,7 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
                 ret = -1;
             }
 
-            for (int i = 0; ret == 0 && i < num_block; i++) {
+            for (uint64_t i = 0; ret == 0 && i < num_block; i++) {
                 size_t l_gap = 0;
                 size_t l_range = 0;
                 uint64_t gap = 0;
@@ -362,7 +362,7 @@ static int basic_ack_parse(uint8_t* bytes, size_t bytes_max,
 }
 
 
-int sendacktest()
+int sendacktest(void)
 {
     int ret = 0;
     picoquic_quic_t* quic;
@@ -536,7 +536,7 @@ int sendack_loop_test_one(uint64_t ack_gap, uint64_t ack_delay)
     return ret;
 }
 
-int sendack_loop_test()
+int sendack_loop_test(void)
 {
     int ret;
     uint64_t ack_gap[3] = { 0, 2, 10000 };
@@ -569,7 +569,7 @@ static const test_ack_range_t ack_range[] = {
 
 static const size_t nb_ack_range = sizeof(ack_range) / sizeof(test_ack_range_t);
 
-int ackrange_test()
+int ackrange_test(void)
 {
     int ret = 0;
     picoquic_sack_list_t sack0;
@@ -781,13 +781,13 @@ int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double r
     return ret;
 }
 
-int ack_disorder_test()
+int ack_disorder_test(void)
 {
     int ret = ack_disorder_test_one(ACK_DISORDER_LOG, 0, 133.0);
     return ret;
 }
 
-int ack_horizon_test()
+int ack_horizon_test(void)
 {
     int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 1000000, 196.0);
     return ret;

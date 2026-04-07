@@ -36,7 +36,7 @@ static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:
 #else
 static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:h";
 #endif
-int config_option_letters_test()
+int config_option_letters_test(void)
 {
     char option_text[256];
     int ret = picoquic_config_option_letters(option_text, sizeof(option_text), NULL);
@@ -343,7 +343,7 @@ static picoquic_congestion_algorithm_t const* config_test_cc_algo_list[3] = {
     NULL, NULL, NULL
 };
 
-static void config_test_register_cc_algorithms()
+static void config_test_register_cc_algorithms(void)
 {
     config_test_cc_algo_list[0] = picoquic_newreno_algorithm;
     config_test_cc_algo_list[1] = picoquic_cubic_algorithm;
@@ -591,7 +591,7 @@ int config_test_parse_command_line_ex(const picoquic_quic_config_t* expected, co
     return (ret);
 }
 
-int config_set_option_test_one()
+int config_set_option_test_one(void)
 {
     int ret = 0;
     char const* ticket_store = "ticket_store.bin";
@@ -617,7 +617,7 @@ int config_set_option_test_one()
     return (ret);
 }
 
-int config_option_test()
+int config_option_test(void)
 {
     int ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
@@ -767,7 +767,7 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     return(ret);
 }
 
-int config_quic_test()
+int config_quic_test(void)
 {
     int ret = 0;
     config_test_register_cc_algorithms();
@@ -782,7 +782,7 @@ int config_quic_test()
 #define CONFIG_USAGE_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "config_usage_ref.txt"
 #define CONFIG_USAGE_TXT "config_usage.txt"
 
-int config_usage_test()
+int config_usage_test(void)
 {
 
     FILE* F = NULL;
@@ -815,6 +815,8 @@ typedef struct st_test_preferred_addr_t {
     picoquic_tp_preferred_address_t preferred_address;
 } test_preferred_addr_t;
 
+#define NULLCID { { 0 }, 0 }
+
 test_preferred_addr_t test_preferred_address_cases[] = {
     {
         "none",
@@ -834,8 +836,10 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             1,
             { 192, 0, 2, 1 },
             4433,
-            { 0 },
-            0
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+            0,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
     {
@@ -846,10 +850,12 @@ test_preferred_addr_t test_preferred_address_cases[] = {
         1,
         {
             1,
-            { 0 },
+            { 0, 0, 0, 0 },
             0,
             { 0x20,  0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-            4433
+            4433,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
     {
@@ -863,7 +869,9 @@ test_preferred_addr_t test_preferred_address_cases[] = {
             { 192, 0, 2, 1 },
             4433,
             { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-            4433
+            4433,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
         }
     },
     {
@@ -884,7 +892,7 @@ test_preferred_addr_t test_preferred_address_cases[] = {
     }
 };
 
-int config_preferred_test()
+int config_preferred_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < sizeof(test_preferred_address_cases) / sizeof(test_preferred_addr_t); i++) {
@@ -902,7 +910,7 @@ int config_preferred_test()
                 memcmp(test_preferred_address_cases[i].preferred_address.ipv4Address, preferred_address.ipv4Address, 4) != 0 ||
                 test_preferred_address_cases[i].preferred_address.ipv4Port != preferred_address.ipv4Port ||
                 memcmp(test_preferred_address_cases[i].preferred_address.ipv6Address, preferred_address.ipv6Address, 16) != 0 ||
-                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port != 0) {
+                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port) {
                 DBG_PRINTF("Test case %s: expected and actual preferred addresses differ", test_preferred_address_cases[i].test_name);
                 ret = -1;
             }
@@ -945,7 +953,7 @@ test_set_port_t test_set_port_cases[] = {
     { "Sabc:4433", 0, 0, 0, 0 },
 };
 
-int config_set_port_test()
+int config_set_port_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < sizeof(test_set_port_cases) / sizeof(test_set_port_t); i++) {

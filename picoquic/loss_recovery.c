@@ -291,7 +291,7 @@ static void picoquic_check_path_mtu_on_losses(
 static void picoquic_count_and_notify_loss(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, int timer_based_retransmit, uint64_t current_time);
 
-static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time);
 
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
@@ -449,7 +449,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
                     if (cnx->is_multipath_enabled && cnx->nb_paths > 1) {
-                        picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
+                        picoquic_retransmit_path_packet_queue(cnx, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&
                         cnx->cnx_state >= picoquic_state_ready) {
@@ -968,7 +968,7 @@ static int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
 
 /* In multipath operation, schedule all packets queued on a path for retransmission
  */
-static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time)
 {
     picoquic_packet_t* old_p = pkt_ctx->pending_first;
@@ -1020,7 +1020,7 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
             pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
         }
         if (pkt_ctx != NULL) {
-            picoquic_retransmit_path_packet_queue(cnx, path_x, pkt_ctx, current_time);
+            picoquic_retransmit_path_packet_queue(cnx, pkt_ctx, current_time);
         }
     }
 }

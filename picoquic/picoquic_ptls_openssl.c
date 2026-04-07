@@ -67,7 +67,7 @@ static int openssl_is_init = 0;
 static OSSL_PROVIDER* openssl_default_provider = NULL;
 #endif
 
-static void picoquic_init_openssl()
+static void picoquic_init_openssl(void)
 {
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
@@ -86,7 +86,7 @@ static void picoquic_init_openssl()
     }
 }
 
-static void picoquic_clear_openssl()
+static void picoquic_clear_openssl(void)
 {
     if (openssl_is_init) {
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -333,7 +333,7 @@ int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 /* Clear the recorded errors in the crypto stack, e.g. before
 * processing a new message.
 */
-void picoquic_openssl_clear_crypto_errors()
+void picoquic_openssl_clear_crypto_errors(void)
 {
     ERR_clear_error();
 }

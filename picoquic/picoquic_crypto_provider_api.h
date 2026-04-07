@@ -48,7 +48,7 @@ extern "C" {
         unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
     typedef int (*picoquic_set_tls_root_certificates_t)(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count);
     typedef int (*picoquic_explain_crypto_error_t)(char const** err_file, int* err_line);
-    typedef void (*picoquic_clear_crypto_errors_t)();
+    typedef void (*picoquic_clear_crypto_errors_t)(void);
     typedef void (*picoquic_set_random_provider_in_ctx_t)(ptls_context_t* ctx);
     typedef void (*picoquic_crypto_random_provider_t)(void *buf, size_t len);
     typedef int (*picoquic_keyex_from_key_file_t)(ptls_key_exchange_context_t** keyex, const char* keypem);

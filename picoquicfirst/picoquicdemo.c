@@ -109,7 +109,7 @@ typedef struct st_server_loop_cb_t {
 } server_loop_cb_t;
 
 static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
-    void* callback_ctx, void * callback_arg)
+    void* callback_ctx, void * UNUSED(callback_arg))
 {
     int ret = 0;
     server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
@@ -164,10 +164,10 @@ typedef struct st_demoserver_post_test_t {
     char posted[256];
 } demoserver_post_test_t;
 
-int demoserver_post_callback(picoquic_cnx_t* cnx,
+int demoserver_post_callback(picoquic_cnx_t* UNUSED(cnx),
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
-    void * callback_ctx)
+    void* UNUSED(callback_ctx))
 {
     int ret = 0;
     demoserver_post_test_t* ctx = (demoserver_post_test_t*)stream_ctx->path_callback_ctx;
@@ -279,7 +279,7 @@ picohttp_server_path_item_t path_item_list[2] =
     }
 };
 
-int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
+int quic_server(picoquic_quic_config_t * config, int just_once)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -604,7 +604,7 @@ void client_handle_path_allowed(picoquic_cnx_t* cnx, void* v_cb_ctx)
     }
 }
 
-int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+int client_loop_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
@@ -1310,8 +1310,7 @@ int quic_client(const char* ip_address_text, int server_port,
     return ret;
 }
 
-/* TODO: rewrite using common code */
-void usage()
+void usage(void)
 {
     fprintf(stderr, "PicoQUIC demo client and server\n");
     fprintf(stderr, "Usage: picoquicdemo <options> [server_name [port [scenario]]] \n");
@@ -1448,7 +1447,7 @@ int main(int argc, char** argv)
         /* Run as server */
         printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
             PICOQUIC_VERSION, config.server_port, server_name, just_once, config.do_retry);
-        ret = quic_server(server_name, &config, just_once);
+        ret = quic_server(&config, just_once);
         printf("Server exit with code = %d\n", ret);
     }
     else {

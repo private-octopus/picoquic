@@ -98,7 +98,7 @@ int picomask_callback(picoquic_cnx_t* cnx,
     struct st_h3zero_stream_ctx_t* stream_ctx,
     void* path_app_ctx);
 
-int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni, size_t max_nb_udp,
+int picomask_register_proxy_client(picoquic_quic_t* quic, char const* proxy_sni,
     struct sockaddr* proxy_addr, uint64_t current_time, const char* path_template);
 
 picomask_udp_ctx_t* picomask_udp_ctx_find(picomask_ctx_t* picomask_ctx, const struct sockaddr* target_addr);

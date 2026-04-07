@@ -168,6 +168,11 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 {
     int ret = 0;
 
+    /* Add silly instruction to bypass "argument not use" warning without changing the signature */
+    if (is_one_way_delay_enabled && rtt_measurement == 0) {
+        return 0;
+    }
+
     if(current_time > rtt_track->last_rtt_sample_time + 1000) {
         picoquic_cc_filter_rtt_min_max(rtt_track, rtt_measurement);
         rtt_track->last_rtt_sample_time = current_time;
@@ -180,6 +185,9 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
                 rtt_track->rtt_filtered_min = rtt_track->sample_max;
             }
             delta_max = rtt_track->rtt_filtered_min / 4;
+            if (delta_max < packet_time) {
+                delta_max = packet_time;
+            }
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
                 if (rtt_track->sample_min > rtt_track->rtt_filtered_min + delta_max) {

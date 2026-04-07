@@ -143,7 +143,7 @@ int edge_case_prepare(picoquic_test_tls_api_ctx_t** p_test_ctx, uint8_t edge_cas
         }
         else {
             uint32_t ticket_version = 0;
-            int ret = tls_api_one_scenario_body_connect(*p_test_ctx, simulated_time, 0, 0, 0);
+            int ret = tls_api_one_scenario_body_connect(*p_test_ctx, simulated_time, 0, 0);
 
             /* Finish sending data */
             if (ret == 0) {
@@ -295,7 +295,7 @@ int edge_case_complete(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulate
 /* Edge case zero: verify that the common code
  * works.
  */
-int ec00_zero_test()
+int ec00_zero_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -331,11 +331,11 @@ int ec00_zero_test()
  * state. 
  */
 
-int ec2f_second_flight_nack_test()
+int ec2f_second_flight_nack_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b111000001;
+    uint64_t initial_losses = 0x1c1;
     uint8_t test_case_id = 0x2f;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 1, &simulated_time, initial_losses, 9);
 
@@ -400,7 +400,7 @@ void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* F)
     }
 }
 
-int eccf_corrupted_file_fuzz_test()
+int eccf_corrupted_file_fuzz_test(void)
 {
     int ret = 0;
     FILE* F = picoquic_file_open("ECCF_Fuzz_report.csv", "w");
@@ -418,11 +418,11 @@ int eccf_corrupted_file_fuzz_test()
 /* Amplification test using large 
  * server hello with losses.
  */
-int eca1_amplification_loss_test()
+int eca1_amplification_loss_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b0111111110100;
+    uint64_t initial_losses = 0x0FF4;
     uint8_t test_case_id = 0xa1;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 16);
 
@@ -442,7 +442,7 @@ int eca1_amplification_loss_test()
  * is acceptable.
  */
 
-int ecf1_final_loss_test()
+int ecf1_final_loss_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -493,11 +493,11 @@ int ecf1_final_loss_test()
  * of the clien't ack, and the server then sending a bogus repeat.
  */
 
-int ec5c_silly_cid_test()
+int ec5c_silly_cid_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b0000011110000010000100;
+    uint64_t initial_losses = 0x01e084;
     uint8_t test_case_id = 0x5c;
     int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, initial_losses, 48);
 
@@ -531,11 +531,11 @@ int ec5c_silly_cid_test()
  * preemptive repeats before giving up. Repro, then verify.
  */
 
-int ec9a_preemptive_amok_test()
+int ec9a_preemptive_amok_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    uint64_t initial_losses = 0b100000000000;
+    uint64_t initial_losses = 0x800;
     uint8_t test_case_id = 0x9a;
     uint64_t cnx_server_idle_timeout = 0;
     uint64_t cnx_server_nb_preemptive_repeat = 0;
@@ -720,7 +720,7 @@ int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t ser
     return ret;
 }
 
-int idle_timeout_test()
+int idle_timeout_test(void)
 {
     int ret = 0;
 
@@ -843,7 +843,7 @@ int idle_server_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t hand
     return ret;
 }
 
-int idle_server_test()
+int idle_server_test(void)
 {
     int ret = 0;
 
@@ -928,8 +928,7 @@ int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uin
     return ret;
 }
 
-int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size,
-    uint64_t simulated_time, uint64_t stream_id, int do_not_create)
+int reset_repeat_test_need_repeat(int test_id, picoquic_cnx_t* cnx, const uint8_t* frame, size_t frame_size)
 {
     int no_need_to_repeat = 0;
     int do_not_detect_spurious = 0;
@@ -1168,16 +1167,13 @@ int reset_repeat_test_one(uint8_t test_id)
         * there any more, this means the original reset was
         * successful, there is no need to resend it.
         */
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, max_stream_data_frame, sizeof(max_stream_data_frame));
         break;
     case reset_need_reset:
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, reset_frame, sizeof(reset_frame));
         break;
     case reset_need_stop_sending:
-        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame),
-            simulated_time, data_stream_id, 1);
+        ret = reset_repeat_test_need_repeat(test_id, test_ctx->cnx_client, stop_sending_frame, sizeof(stop_sending_frame));
         break;
     default:
         DBG_PRINTF("What test is that: %d?", test_id);
@@ -1194,42 +1190,42 @@ int reset_repeat_test_one(uint8_t test_id)
     return ret;
 }
 
-int reset_ack_max_test()
+int reset_ack_max_test(void)
 {
     return reset_repeat_test_one(reset_ack_max_stream);
 }
 
-int reset_ack_reset_test()
+int reset_ack_reset_test(void)
 {
     return reset_repeat_test_one(reset_ack_reset);
 }
 
-int reset_extra_max_test()
+int reset_extra_max_test(void)
 {
     return reset_repeat_test_one(reset_extra_max_stream);
 }
 
-int reset_extra_reset_test()
+int reset_extra_reset_test(void)
 {
     return reset_repeat_test_one(reset_extra_reset);
 }
 
-int reset_extra_stop_test()
+int reset_extra_stop_test(void)
 {
     return reset_repeat_test_one(reset_extra_stop_sending);
 }
 
-int reset_need_max_test()
+int reset_need_max_test(void)
 {
     return reset_repeat_test_one(reset_need_max_stream);
 }
 
-int reset_need_reset_test()
+int reset_need_reset_test(void)
 {
     return reset_repeat_test_one(reset_need_reset);
 }
 
-int reset_need_stop_test()
+int reset_need_stop_test(void)
 {
     return reset_repeat_test_one(reset_need_stop_sending);
 }
@@ -1342,7 +1338,7 @@ int initial_pto_ack(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* p_simulated
     return ret;
 }
 
-int initial_pto_test()
+int initial_pto_test(void)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t *test_ctx = NULL;
@@ -1494,7 +1490,7 @@ int pto_server_prepare(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t simulated
     return ret;
 }
 
-int initial_pto_srv_test()
+int initial_pto_srv_test(void)
 {
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1633,7 +1629,7 @@ int crypto_hs_offset_test_one(picoquic_packet_context_enum pc)
     return ret;
 }
 
-int crypto_hs_offset_test()
+int crypto_hs_offset_test(void)
 {
     picoquic_packet_context_enum pc[] = { picoquic_packet_context_initial,
         picoquic_packet_context_handshake, picoquic_packet_context_application };
@@ -1686,7 +1682,7 @@ int reset_loop_prepare_to_send(reset_loop_callback_t * cb, int stream_rank, void
 
 int reset_loop_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
 
     int ret = 0;
@@ -1758,7 +1754,7 @@ int reset_loop_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int reset_loop_test()
+int reset_loop_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -2014,17 +2010,17 @@ int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
     return ret;
 }
 
-int reset_stream_at_basic_test()
+int reset_stream_at_basic_test(void)
 {
     return reset_stream_at_test_one(rsat_basic);
 }
 
-int reset_stream_at_limit_test()
+int reset_stream_at_limit_test(void)
 {
     return reset_stream_at_test_one(rsat_limit);
 }
 
-int reset_stream_at_loss_test()
+int reset_stream_at_loss_test(void)
 {
     return reset_stream_at_test_one(rsat_loss);
 }
@@ -2036,7 +2032,7 @@ typedef struct {
     const char* expected;
 } error_name_case_t;
 
-int error_name_test()
+int error_name_test(void)
 {
     int ret = 0;
     int failures = 0;

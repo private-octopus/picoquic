@@ -946,7 +946,7 @@ int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balanc
             ret = -1;
         }
         else {
-            uint64_t server_id64 = picoquic_lb_compat_cid_verify(quic, quic->cnx_id_callback_ctx, &result);
+            uint64_t server_id64 = picoquic_lb_compat_cid_verify(quic->cnx_id_callback_ctx, &result);
 
             if (server_id64 != config->server_id64) {
                 DBG_PRINTF("CID test #%d fails, server id decode to %" PRIu64 " instead of %" PRIu64,
@@ -963,7 +963,7 @@ int cid_for_lb_test_one(picoquic_quic_t* quic, int test_id, picoquic_load_balanc
 }
 
 
-int cid_for_lb_test()
+int cid_for_lb_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
@@ -1134,7 +1134,7 @@ static size_t nb_cid_for_lb_bad_txt = sizeof(cid_for_lb_bad_txt) / sizeof(char c
 static char fuzz_c[] = { 0, 0xff, '0', '9', 'a', 'z', '-' };
 static size_t nb_fuzz_c = sizeof(fuzz_c) / sizeof(char);
 
-int cid_for_lb_cli_test()
+int cid_for_lb_cli_test(void)
 {
     int ret = 0;
     picoquic_load_balancer_config_t config;
