@@ -346,9 +346,9 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
         picoquic_log_app_message(cnx, "Allocated prefix for control stream %" PRIu64, stream_ctx->stream_id);
     }
     /* set the required stream parameters for the state of the stream. */
-    stream_ctx->is_open = 1;
-    stream_ctx->path_callback = wt_callback;
-    stream_ctx->path_callback_ctx = wt_ctx;
+    stream_ctx->cfs.is_open = 1;
+    stream_ctx->sfs.path_callback = wt_callback;
+    stream_ctx->sfs.path_callback_ctx = wt_ctx;
 
     /* Declare the outgoing connection through the callback, so it can update its own state */
     ret = wt_callback(cnx, NULL, 0, picohttp_callback_connecting, stream_ctx, wt_ctx);
@@ -563,8 +563,8 @@ void picowt_deregister(picoquic_cnx_t* cnx,
             if (control_stream_id == stream_ctx->ps.stream_state.control_stream_id &&
                 control_stream_id != stream_ctx->stream_id) {
                 stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
-                stream_ctx->path_callback = NULL;
-                stream_ctx->path_callback_ctx = NULL;
+                stream_ctx->sfs.path_callback = NULL;
+                stream_ctx->sfs.path_callback_ctx = NULL;
                 h3zero_forget_stream(cnx, stream_ctx);
                 picosplay_delete_hint(&h3_ctx->h3_stream_tree, next);
             }

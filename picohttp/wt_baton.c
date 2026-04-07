@@ -178,8 +178,8 @@ int wt_baton_relay(picoquic_cnx_t* cnx,
         baton_ctx->lanes[lane_id].padding_required = UINT64_MAX;
         baton_ctx->lanes[lane_id].padding_sent = 0;
 
-        stream_ctx->path_callback = wt_baton_callback;
-        stream_ctx->path_callback_ctx = baton_ctx;
+        stream_ctx->sfs.path_callback = wt_baton_callback;
+        stream_ctx->sfs.path_callback_ctx = baton_ctx;
 
         ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
@@ -598,8 +598,8 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             }
 
             if (ret == 0) {
-                stream_ctx->path_callback = wt_baton_callback;
-                stream_ctx->path_callback_ctx = baton_ctx;
+                stream_ctx->sfs.path_callback = wt_baton_callback;
+                stream_ctx->sfs.path_callback_ctx = baton_ctx;
                 baton_ctx->connection_ready = 1;
                 if (baton_ctx->initial_baton == 0) {
                     baton_ctx->initial_baton = (uint8_t)picoquic_public_uniform_random(32) + 128;

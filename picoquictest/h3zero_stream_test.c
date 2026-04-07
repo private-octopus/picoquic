@@ -640,7 +640,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
         cnx->cnx_state = picoquic_state_ready;
         ret = h3zero_client_data_set_file_name(stream_ctx, path_name);
         if (ret == 0) {
-            stream_ctx->is_open = 1;
+            stream_ctx->cfs.is_open = 1;
         }
     }
     bytes = buffer;
@@ -734,7 +734,7 @@ int h3zero_error_client_stream_test(void)
         if ((stream_ctx->file_path = picoquic_string_duplicate(path_name)) == NULL) {
             ret = -1;
         } else {
-            stream_ctx->is_open = 1;
+            stream_ctx->cfs.is_open = 1;
 
             if (h3zero_client_open_stream_file(cnx, h3_ctx, stream_ctx) == 0) {
                 ret = -1;

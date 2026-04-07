@@ -34,7 +34,18 @@
     <ClCompile Include="h3zero_url_template.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picomask.c" />
+    <ClCompile Include="picomask.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h09_server.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="h09_common.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="wt_h09.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">
@@ -67,7 +78,15 @@
     <ClInclude Include="h3zero_url_template.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="picomask.h" />
+    <ClInclude Include="picomask.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="h09_server.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="h09_common.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">

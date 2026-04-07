@@ -139,6 +139,8 @@
   <ItemGroup>
     <ClCompile Include="democlient.c" />
     <ClCompile Include="demoserver.c" />
+    <ClCompile Include="h09_common.c" />
+    <ClCompile Include="h09_server.c" />
     <ClCompile Include="h3zero.c" />
     <ClCompile Include="h3zero_client.c" />
     <ClCompile Include="h3zero_common.c" />
@@ -149,10 +151,13 @@
     <ClCompile Include="quicperf.c" />
     <ClCompile Include="webtransport.c" />
     <ClCompile Include="wt_baton.c" />
+    <ClCompile Include="wt_h09.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h" />
     <ClInclude Include="demoserver.h" />
+    <ClInclude Include="h09_common.h" />
+    <ClInclude Include="h09_server.h" />
     <ClInclude Include="h3zero.h" />
     <ClInclude Include="h3zero_common.h" />
     <ClInclude Include="h3zero_uri.h" />

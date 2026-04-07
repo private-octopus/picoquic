@@ -28,6 +28,8 @@
 #include "tls_api.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
+#include "h09_common.h"
+#include "h09_server.h"
 #include "democlient.h"
 #include "demoserver.h"
 #ifdef _WINDOWS
@@ -2101,8 +2103,7 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
             fin_or_event = picoquic_callback_stream_data;
         }
 
-        ret = picoquic_h09_server_process_data_header(bytes + l, available, fin_or_event,
-            stream_ctx, &processed);
+        ret = h09_server_process_data_header(bytes + l, available, fin_or_event, &stream_ctx->ps.hq, &processed);
 
         total_processed += processed;
         if (processed < available) {
@@ -2288,7 +2289,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* UNUSED(cnx),
     void* UNUSED(callback_ctx))
 {
     int ret = 0;
-    hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
+    hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->sfs.path_callback_ctx;
 
     switch (event) {
     case picohttp_callback_get: /* Received a get command */
@@ -2302,7 +2303,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* UNUSED(cnx),
             }
             else {
                 memset(ctx, 0, sizeof(hzero_post_echo_ctx_t));
-                stream_ctx->path_callback_ctx = (void *) ctx;
+                stream_ctx->sfs.path_callback_ctx = (void *) ctx;
             }
         }
         else {
@@ -2362,8 +2363,8 @@ int h3zero_test_ping_callback(picoquic_cnx_t* UNUSED(cnx),
         }
         break;
     case picohttp_callback_free: /* stream is abandoned */
-        stream_ctx->path_callback = NULL;
-        stream_ctx->path_callback_ctx = NULL;
+        stream_ctx->sfs.path_callback = NULL;
+        stream_ctx->sfs.path_callback_ctx = NULL;
        
         if (ctx != NULL) {
             free(ctx);

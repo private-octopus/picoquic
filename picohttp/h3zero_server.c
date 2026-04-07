@@ -197,7 +197,7 @@ int h3zero_server_prepare_to_send(void* context, size_t space, h3zero_stream_ctx
     }
 
     if (ret == 0) {
-        ret = h3zero_prepare_and_send_data(context, space, stream_ctx->echo_length, &stream_ctx->echo_sent,
+        ret = h3zero_prepare_and_send_data(context, space, stream_ctx->sfs.echo_length, &stream_ctx->sfs.echo_sent,
             stream_ctx->F);
     }
 
