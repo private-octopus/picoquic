@@ -25,6 +25,7 @@
 #include "picosocks.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picoquic_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -342,7 +343,7 @@ struct st_picoquic_network_thread_ctx_t* picoquic_get_thread_ctx(picoquic_quic_t
 * creation from configuration.
 */
 int picoquic_server_set_context(picoquic_quic_t** qserver,
-    struct st_picoquic_quic_config_t* config,
+    picoquic_quic_config_t* config,
     uint64_t current_time,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,

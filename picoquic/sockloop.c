@@ -1880,7 +1880,7 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 */
 
 int picoquic_server_set_context(picoquic_quic_t** qserver,
-    struct st_picoquic_quic_config_t* config,
+    picoquic_quic_config_t* config,
     uint64_t current_time,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,
