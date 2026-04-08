@@ -88,7 +88,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(solutionDir)\picoquictest;$(SolutionDir)\loglib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)picoquicfirst;$(solutionDir)picoquictest;$(SolutionDir)loglib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -105,7 +105,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(solutionDir)\picoquictest;$(SolutionDir)\loglib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)picoquicfirst;$(solutionDir)picoquictest;$(SolutionDir)loglib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -122,7 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(SolutionDir)\picoquicfirst;$(solutionDir)\picoquictest;$(SolutionDir)\loglib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)picoquicfirst;$(solutionDir)picoquictest;$(SolutionDir)loglib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -139,7 +139,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\picoquic;$(SolutionDir)\picohttp;$(solutionDir)\picoquictest;$(SolutionDir)\loglib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)picoquic;$(SolutionDir)picohttp;$(SolutionDir)picoquicfirst;$(solutionDir)picoquictest;$(SolutionDir)loglib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

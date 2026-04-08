@@ -109,6 +109,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pqbench_app", "pqbench_app\
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "p_sim", "p_sim\p_sim.vcxproj", "{4DF60A09-EDB5-4141-8ABE-6331F4257290}"
+	ProjectSection(ProjectDependencies) = postProject
+		{63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F} = {63E1E6B7-DB5F-4EDC-8AC8-7E9F5990D11F}
+		{998765EE-64DF-49C1-8471-A79E2DA7CD21} = {998765EE-64DF-49C1-8471-A79E2DA7CD21}
+		{C8F3740E-56FB-4BE7-9D8C-30A954846146} = {C8F3740E-56FB-4BE7-9D8C-30A954846146}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
