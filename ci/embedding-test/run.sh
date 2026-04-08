@@ -32,7 +32,6 @@ cmake -S "$PICOQUIC_ROOT" -B "$BUILD_DIR/picoquic" \
     -DCMAKE_INSTALL_PREFIX="$STANDALONE_INSTALL" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
-    -DBUILD_PICO_SIM=OFF \
     "$@"
 cmake --build "$BUILD_DIR/picoquic"
 cmake --install "$BUILD_DIR/picoquic"

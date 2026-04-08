@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.13)
 # Building tests by default depends on whether this is a subproject
 if(DEFINED PROJECT_NAME)
     option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
+    option(BUILD_PICO_SIM "Build pico_sim" OFF)
 else()
     option(picoquic_BUILD_TESTS "Build Tests for picoquic" ON)
+    option(BUILD_PICO_SIM "Build pico_sim" ON)
 endif()
 
 project(picoquic
@@ -27,7 +29,6 @@ option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
-option(BUILD_PICO_SIM "Build pico_sim" ON)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -119,6 +120,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
+    picoquic/dualq_aqm.c
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
@@ -152,7 +154,6 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/bytestream.h
     picoquic/cc_common.h
     picoquic/cidset.h
-    picoquic/dualq_aqm.c
     picoquic/performance_log.h
     picoquic/picohash.h
     picoquic/picoquic_binlog.h
@@ -373,23 +374,23 @@ macro(set_picoquic_compile_settings)
             CXX_EXTENSIONS YES)
     target_compile_options(${ARGV0}
         PRIVATE
-            $<$<C_COMPILER_ID:Clang>: -O3 -Wall -fno-exceptions
+            $<$<C_COMPILER_ID:Clang>: -O0 -Wall -fno-exceptions
                 -fno-signed-zeros -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_C_FLAGS}>
-            $<$<C_COMPILER_ID:AppleClang>: -O3 -Wall -fno-exceptions
+            $<$<C_COMPILER_ID:AppleClang>: -O0 -Wall -fno-exceptions
                 -fno-signed-zeros -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_C_FLAGS}>
-            $<$<C_COMPILER_ID:GNU>: -O3 -Wall -fno-exceptions
+            $<$<C_COMPILER_ID:GNU>: -O0 -Wall -fno-exceptions
                 -fno-signed-zeros -frename-registers -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_C_FLAGS}>
             $<$<C_COMPILER_ID:MSVC>: >
-            $<$<CXX_COMPILER_ID:Clang>: -O3 -Wall -fno-exceptions
+            $<$<CXX_COMPILER_ID:Clang>: -O0 -Wall -fno-exceptions
                 -fno-signed-zeros -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
             $<$<CXX_COMPILER_ID:AppleClang>: -O3 -Wall -fno-exceptions
                 -fno-signed-zeros -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
-            $<$<CXX_COMPILER_ID:GNU>: -O3 -Wall -fno-exceptions
+            $<$<CXX_COMPILER_ID:GNU>: -O0 -Wall -fno-exceptions
                 -fno-signed-zeros -frename-registers -fno-trapping-math
                 ${PICOQUIC_ADDITIONAL_CXX_FLAGS}>
             $<$<CXX_COMPILER_ID:MSVC>: >)
@@ -432,6 +433,7 @@ endif()
 
 if (BUILD_LOGLIB)
     add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    target_link_libraries(picoquic-log PUBLIC picoquic-core)
     target_include_directories(picoquic-log
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
@@ -455,14 +457,16 @@ if (BUILD_HTTP)
             ${OPENSSL_LIBRARIES}
             ${MBEDTLS_LIBRARIES}
         PUBLIC
-            picoquic-core)
+            picoquic-core
+            picoquic-log)
     target_include_directories(picohttp-core
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
             ${OPENSSL_INCLUDE_DIR}
             ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic)
+            picoquic
+            picohttp)
     set_picoquic_compile_settings(picohttp-core)
 endif()
 
@@ -498,7 +502,7 @@ if(BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
-if(BUILD_PICO_SIM)
+if(BUILD_PICO_SIM AND BUILD_HTTP)
     add_executable(pico_sim
         p_sim/pico_sim.c
         picoquicfirst/getopt.c)
@@ -507,9 +511,9 @@ if(BUILD_PICO_SIM)
             ${PTLS_LIBRARIES}
             ${OPENSSL_LIBRARIES}
             ${MBEDTLS_LIBRARIES}
-            picoquic-log
+            picohttp-core
             picoquic-core
-            picohttp-core)
+            picoquic-log)
     target_include_directories(pico_sim PRIVATE picoquicfirst picohttp loglib picoquic)
     set_picoquic_compile_settings(pico_sim)
 endif()
@@ -526,7 +530,7 @@ include(CTest)
 if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
-    target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
+    target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log picohttp-core)
     target_include_directories(picoquic-test
         PRIVATE
             ${MBEDTLS_INCLUDE_DIRS}
