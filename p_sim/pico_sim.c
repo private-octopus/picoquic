@@ -26,7 +26,7 @@ void release_spec_data(picoquic_ns_spec_t* spec);
 #define PICOQUIC_DIR "."
 #endif
 
-void usage()
+void usage(void)
 {
     fprintf(stderr, "Pico_sim, picoquic network simulator\n\n");
     fprintf(stderr, "Usage: pico_sim [options] simulation_specification\n\n");
@@ -187,7 +187,7 @@ int parse_spec_file(picoquic_ns_spec_t * spec, FILE* F)
         }
 
         if (len > 0) {
-            for (int i = 0; i < nb_params; i++) {
+            for (size_t i = 0; i < nb_params; i++) {
                 if (len > params[i].p_len &&
                     strncmp(line, params[i].p_name, params[i].p_len) == 0)
                 {
@@ -483,17 +483,14 @@ int parse_text(char const** x, char const* val)
 {
     int ret = 0;
     size_t l = strlen(val);
-
-    if (val > 0) {
-        char* y = malloc(l + 1);
-        if (y == NULL) {
-            ret = -1;
-        }
-        else {
-            memcpy(y, val, l);
-            y[l] = 0;
-            *x = y;
-        }
+    char* y = malloc(l + 1);
+    if (y == NULL) {
+        ret = -1;
+    }
+    else {
+        memcpy(y, val, l);
+        y[l] = 0;
+        *x = y;
     }
     return ret;
 }
