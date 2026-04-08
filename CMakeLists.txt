@@ -498,9 +498,6 @@ endif()
 
 if (BUILD_PICO_SIM)
     add_executable(pico_sim
-        p_sim/if (BUILD_PICO_SIM)
-    add_executable(if (BUILD_PICO_SIM)
-    add_executable(pico_sim
         p_sim/pico_sim.c
         picoquicfirst/getopt.c)
     target_link_libraries(pico_sim
