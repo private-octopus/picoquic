@@ -162,7 +162,6 @@
     <ClCompile Include="cpu_limited.c" />
     <ClCompile Include="datagram_tests.c" />
     <ClCompile Include="delay_tolerant_test.c" />
-    <ClCompile Include="dualq_aqm.c" />
     <ClCompile Include="dualq_aqm_test.c" />
     <ClCompile Include="ech_test.c" />
     <ClCompile Include="edge_cases.c" />
