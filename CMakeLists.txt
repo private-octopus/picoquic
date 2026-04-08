@@ -29,6 +29,13 @@ option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 option(BUILD_PICO_SIM "Build pico_sim" ON)
 
+
+if(BUILD_PICO_SIM)
+    message(STATUS "BUILD_PICO_SIM is enabled")
+else()
+    message(STATUS "BUILD_PICO_SIM is disabled")
+endif()
+
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
 if(DISABLE_DEBUG_PRINTF)
