@@ -28,10 +28,8 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "quicperf.h"
-#include "picoquic_binlog.h"
 #include "picoquic_logger.h"
 #include "picoquic_qlog.h"
-#include "picosocks.h"
 #include "picoquic_ns.h"
 #include "picoquictest_dualq.h"
 
