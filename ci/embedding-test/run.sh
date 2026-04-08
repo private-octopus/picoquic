@@ -40,6 +40,7 @@ cmake --install "$BUILD_DIR/picoquic"
 echo "==> Building and running install_test against standalone install"
 cmake -S "$SCRIPT_DIR/install_test" -B "$BUILD_DIR/install_test" \
     -DCMAKE_PREFIX_PATH="$STANDALONE_INSTALL" \
+    -DBUILD_PICO_SIM=OFF \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build "$BUILD_DIR/install_test"
 "$BUILD_DIR/install_test/install_test"

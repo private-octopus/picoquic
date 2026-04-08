@@ -503,8 +503,14 @@ if(BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
+
 if(BUILD_PICO_SIM)
-    message(STATUS "BUILD_PICO_SIM is enabled")
+    message(STATUS "BUILD_PICO_SIM is enabled after PQBENCH")
+else()
+    message(STATUS "BUILD_PICO_SIM is disabled")
+endif()
+
+if(BUILD_PICO_SIM)
     add_executable(pico_sim
         p_sim/pico_sim.c
         picoquicfirst/getopt.c)
