@@ -142,6 +142,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_cubic.h
      picoquic/picoquic_bbr.h
      picoquic/picoquic_bbr1.h
+     picoquic/picoquictest_dualq.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
      picoquic/c4.h
@@ -151,6 +152,7 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/bytestream.h
     picoquic/cc_common.h
     picoquic/cidset.h
+    picoquic/dualq_aqm.c
     picoquic/performance_log.h
     picoquic/picohash.h
     picoquic/picoquic_binlog.h
@@ -197,7 +199,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
-    picoquictest/dualq_aqm.c
     picoquictest/dualq_aqm_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
@@ -219,7 +220,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
-    picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
@@ -253,6 +253,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_url_template.c
     picohttp/picomask.c
     picohttp/quicperf.c
+    picohttp/picoquic_ns.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
 
@@ -264,6 +265,7 @@ set(PICOHTTP_HEADERS
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picoquic_ns.h
      picohttp/picomask.h
      picohttp/wt_baton.h)
 
@@ -496,15 +498,6 @@ if(BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
-if (BUILD_PICO_SIM)
-    if (BUILD_TESTING AND picoquic_BUILD_TESTS)
-        message(STATUS "Building pico_sim")
-    else ()
-        message(STATUS "Disabling pico_sim if test is not built.")
-        OPTION(BUILD_PICO_SIM OFF)
-    endif()
-endif()
-
 if(BUILD_PICO_SIM)
     add_executable(pico_sim
         p_sim/pico_sim.c
@@ -516,9 +509,8 @@ if(BUILD_PICO_SIM)
             ${MBEDTLS_LIBRARIES}
             picoquic-log
             picoquic-core
-            picoquic-test
             picohttp-core)
-    target_include_directories(pico_sim PRIVATE picoquicfirst picoquictest picohttp loglib picoquic)
+    target_include_directories(pico_sim PRIVATE picoquicfirst picohttp loglib picoquic)
     set_picoquic_compile_settings(pico_sim)
 endif()
 

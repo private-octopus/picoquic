@@ -35,6 +35,7 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="picomask.c" />
+    <ClCompile Include="picoquic_ns.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h">
