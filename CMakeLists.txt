@@ -487,7 +487,7 @@ if (BUILD_DEMO)
     set_picoquic_compile_settings(picoquicdemo)
 endif()
 
-if (BUILD_PQBENCH)
+if(BUILD_PQBENCH)
     add_executable(pqbench
         pqbench_app/pqbench.c
         picoquicfirst/getopt.c)
@@ -503,7 +503,8 @@ if (BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
-if (BUILD_PICO_SIM)
+if(BUILD_PICO_SIM)
+    message(STATUS "BUILD_PICO_SIM is enabled")
     add_executable(pico_sim
         p_sim/pico_sim.c
         picoquicfirst/getopt.c)
