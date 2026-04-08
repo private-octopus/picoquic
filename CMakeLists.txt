@@ -27,6 +27,7 @@ option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
+option(BUILD_PICO_SIM "Build pico_sim" ON)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -493,6 +494,26 @@ if (BUILD_PQBENCH)
             picohttp-core)
     target_include_directories(pqbench PRIVATE picohttp loglib picoquic)
     set_picoquic_compile_settings(pqbench)
+endif()
+
+if (BUILD_PICO_SIM)
+    add_executable(pico_sim
+        p_sim/if (BUILD_PICO_SIM)
+    add_executable(if (BUILD_PICO_SIM)
+    add_executable(pico_sim
+        p_sim/pico_sim.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(pico_sim
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-log
+            picoquic-core
+            picohttp-core
+            picoquic-test)
+    target_include_directories(pico_sim PRIVATE picoquicfirst picoquictest picohttp loglib picoquic)
+    set_picoquic_compile_settings(pico_sim)
 endif()
 
 if (BUILD_LOGREADER)
