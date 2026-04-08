@@ -250,9 +250,8 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
                 if (rep_id > 0) {
                     int dot_index = 0;
                     int copy_index = 0;
-                    int suffix_index = 0;
                     size_t nb_chars = 0;
-                    while (p_log[copy_index] != 0 && copy_index < 511) {
+                    while (copy_index < 511 && p_log[copy_index] != 0) {
                         if (p_log[copy_index] == '.') {
                             dot_index = copy_index;
                         }
