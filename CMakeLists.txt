@@ -29,13 +29,6 @@ option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
 option(BUILD_PICO_SIM "Build pico_sim" ON)
 
-
-if(BUILD_PICO_SIM)
-    message(STATUS "BUILD_PICO_SIM is enabled")
-else()
-    message(STATUS "BUILD_PICO_SIM is disabled")
-endif()
-
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
 if(DISABLE_DEBUG_PRINTF)
@@ -503,11 +496,13 @@ if(BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
-
-if(BUILD_PICO_SIM)
-    message(STATUS "BUILD_PICO_SIM is enabled after PQBENCH")
-else()
-    message(STATUS "BUILD_PICO_SIM is disabled")
+if (BUILD_PICO_SIM)
+    if (BUILD_TESTING AND picoquic_BUILD_TESTS)
+        message(STATUS "Building pico_sim")
+    else ()
+        message(STATUS "Disabling pico_sim if test is not built.")
+        OPTION(BUILD_PICO_SIM OFF)
+    endif()
 endif()
 
 if(BUILD_PICO_SIM)
