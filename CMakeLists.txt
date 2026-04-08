@@ -507,9 +507,9 @@ if(BUILD_PICO_SIM)
             ${PTLS_LIBRARIES}
             ${OPENSSL_LIBRARIES}
             ${MBEDTLS_LIBRARIES}
-            picoquic-log
+            picohttp-core
             picoquic-core
-            picohttp-core)
+            picoquic-log)
     target_include_directories(pico_sim PRIVATE picoquicfirst picohttp loglib picoquic)
     set_picoquic_compile_settings(pico_sim)
 endif()
