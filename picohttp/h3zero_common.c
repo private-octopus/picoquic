@@ -983,18 +983,23 @@ Picoquic POST Response\
 int h3zero_server_parse_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
 	char** file_path, char const* web_folder, int* file_error);
 
-int h3zero_find_path_item(const uint8_t * path, size_t path_length, const picohttp_server_path_item_t * path_table, size_t path_table_nb)
+int h3zero_find_path_item(const uint8_t* path, size_t path_length, const picohttp_server_path_item_t* path_table, size_t path_table_nb)
 {
-	size_t i = 0;
+    int wildcard_index = -1;
+    size_t i = 0;
 
-	while (i < path_table_nb) {
-		if (path_length >= path_table[i].path_length && memcmp(path, path_table[i].path, path_table[i].path_length) == 0){
-			if (path_length == path_table[i].path_length || path[path_table[i].path_length] == (uint8_t)'?')
-				return (int)i;
-		}
-		i++;
-	}
-	return -1;
+    while (i < path_table_nb) {
+        if (wildcard_index < 0 && path_table[i].path_length == 1 && path_table[i].path[0] == '*') {
+            /* Record wildcard as fallback; keep scanning for a specific match.
+             * Convention: place '*' last in the table for readability. */
+            wildcard_index = (int)i;
+        } else if (path_length >= path_table[i].path_length && memcmp(path, path_table[i].path, path_table[i].path_length) == 0) {
+            if (path_length == path_table[i].path_length || path[path_table[i].path_length] == (uint8_t)'?')
+                return (int)i;
+        }
+        i++;
+    }
+    return wildcard_index;
 }
 
 /* TODO find a better place. */
