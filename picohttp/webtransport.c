@@ -332,6 +332,11 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
     return ret;
 }
 
+const char* picowt_get_authority(h3zero_stream_ctx_t* stream_ctx)
+{
+    return (const char*)stream_ctx->ps.stream_state.header.authority;
+}
+
 /*
 * Connect
 */
