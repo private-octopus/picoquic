@@ -43,6 +43,8 @@
 #include "picoquic_qlog.h"
 
 int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time);
+int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time);
 
 #define QMUX_FIRST_DATA 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 uint8_t qmux_test_data[] = { QMUX_FIRST_DATA };
@@ -56,13 +58,11 @@ void qmux_test_simulate_remote(picoquic_cnx_t* cnx) {
     cnx->remote_parameters.initial_max_stream_id_bidir = 100;
 }
 
-
 int qmux_send_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     uint8_t buffer[1536];
-    size_t consumed = 0;
     size_t send_length = 0;
     uint64_t next_wake_time = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
@@ -82,6 +82,118 @@ int qmux_send_test(void)
             ret = -1;
         }
     }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* Check that frames can be received properly */
+/* TODO: run a test with all frames in skip frame test, to check
+* that allowed frames pass, and that not allowed frames are rejected. */ 
+
+/* Callback from Quic
+*/
+typedef struct st_qmux_test_callback_t {
+    int received_stream_0;
+    size_t stream_0_length_received;
+    int stream0_fin_received;
+    int stream0_data_matches;
+} qmux_test_callback_t;
+
+int qmux_test_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+
+    int ret = 0;
+    qmux_test_callback_t* qtc = (qmux_test_callback_t*)callback_ctx;
+
+    if (ret == 0) {
+        switch (fin_or_event) {
+        case picoquic_callback_stream_data:
+        case picoquic_callback_stream_fin:
+            if (stream_id == 0) {
+                qtc->received_stream_0 = 1;
+                qtc->stream_0_length_received = length;
+                if (length == sizeof(qmux_test_data) &&
+                    memcmp(bytes, qmux_test_data, length) == 0) {
+                    qtc->stream0_data_matches = 1;
+                }
+                if (fin_or_event == picoquic_callback_stream_fin) {
+                    qtc->stream0_fin_received = 1;
+                }
+            }
+            break;
+        case picoquic_callback_prepare_to_send:
+        case picoquic_callback_datagram:
+        case picoquic_callback_prepare_datagram:
+            /* not expected */
+            ret = -1;
+            break;
+        case picoquic_callback_stream_reset: /* Client reset stream #x */
+        case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
+            /* TODO: react to abandon stream, etc. */
+            break;
+        case picoquic_callback_stateless_reset: /* Received an error message */
+        case picoquic_callback_close: /* Received connection close */
+        case picoquic_callback_application_close: /* Received application close */
+            /* Remove the connection from the context, and then delete it */
+            picoquic_set_callback(cnx, NULL, NULL);
+            break;
+        case picoquic_callback_version_negotiation:
+            /* The server should never receive a version negotiation response */
+            break;
+        case picoquic_callback_stream_gap:
+            /* This callback is never used. */
+            break;
+        case picoquic_callback_almost_ready:
+        case picoquic_callback_ready:
+            /* should mark the first stream as ready, create it if necessary */
+            break;
+        case picoquic_callback_datagram_acked:
+            /* Ack for packet carrying datagram-object received from peer */
+        case picoquic_callback_datagram_lost:
+            /* Packet carrying datagram-object probably lost */
+        case picoquic_callback_datagram_spurious:
+            /* Packet carrying datagram-object was not really lost */
+            break;
+        case picoquic_callback_pacing_changed:
+            /* Notification of rate change from congestion controller */
+            break;
+        default:
+            /* unexpected */
+            break;
+        }
+    }
+
+    return ret;
+}
+
+
+
+int qmux_receive_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t next_wake_time = UINT64_MAX;
+    qmux_test_callback_t qtc = { 0 };
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    cnx->client_mode = 0; /* make sure we are in server mode, to accept the packet */
+    picoquic_set_callback(cnx, qmux_test_callback, &qtc);
+    if (ret == 0) {
+        /* prepare a packet */
+        ret = picoqmux_incoming_packet(cnx, 12345,
+            qmux_test_packet, sizeof(qmux_test_packet), &next_wake_time);
+        if (ret == 0 && !(
+            qtc.received_stream_0 &&
+            qtc.stream_0_length_received == sizeof(qmux_test_data) &&
+            qtc.stream0_fin_received &&
+            qtc.stream0_data_matches)) {
+            ret = -1;
+        }
+    }
+
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
     return ret;

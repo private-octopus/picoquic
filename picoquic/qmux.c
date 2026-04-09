@@ -117,3 +117,167 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
     *send_length = length;
     return ret;
 }
+
+
+/*
+ * Processing of the incoming QMUX packet.
+ */
+
+int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes,
+    size_t bytes_maxsize,
+    picoquic_stream_data_node_t* received_data,
+    uint64_t current_time)
+{
+    const uint8_t* bytes_max = bytes + bytes_maxsize;
+    int ack_needed = 0;
+    picoquic_packet_data_t packet_data;
+
+    memset(&packet_data, 0, sizeof(packet_data));
+
+    while (bytes != NULL && bytes < bytes_max) {
+        uint8_t first_byte = bytes[0];
+
+        if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+            bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, received_data, current_time);
+        }
+        else if (first_byte == picoquic_frame_type_ack) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+            bytes = NULL;
+        }
+        else if (first_byte == picoquic_frame_type_ack_ecn) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+            bytes = NULL;
+        }
+        else {
+            switch (first_byte) {
+            case picoquic_frame_type_padding:
+                bytes = picoquic_skip_0len_frame(bytes, bytes_max);
+                break;
+            case picoquic_frame_type_reset_stream:
+                bytes = picoquic_decode_reset_stream_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_connection_close:
+                bytes = picoquic_decode_connection_close_frame(cnx, bytes, bytes_max);
+                ack_needed = 0;
+                break;
+            case picoquic_frame_type_application_close:
+                bytes = picoquic_decode_application_close_frame(cnx, bytes, bytes_max);
+                ack_needed = 0;
+                break;
+            case picoquic_frame_type_max_data:
+                bytes = picoquic_decode_max_data_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_max_stream_data:
+                bytes = picoquic_decode_max_stream_data_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_max_streams_bidir:
+            case picoquic_frame_type_max_streams_unidir:
+                bytes = picoquic_decode_max_streams_frame(cnx, bytes, bytes_max, first_byte);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_ping:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_data_blocked:
+                bytes = picoquic_decode_blocked_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_stream_data_blocked:
+                bytes = picoquic_decode_stream_blocked_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_streams_blocked_unidir:
+            case picoquic_frame_type_streams_blocked_bidir:
+                bytes = picoquic_decode_streams_blocked_frame(cnx, bytes, bytes_max, first_byte);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_new_connection_id:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_stop_sending:
+                bytes = picoquic_decode_stop_sending_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_path_challenge:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_path_response:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_crypto_hs:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_new_token:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_retire_connection_id:
+                /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, 0);
+                ack_needed = 1;
+                break;
+            case picoquic_frame_type_handshake_done:
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
+                break;
+            case picoquic_frame_type_datagram:
+            case picoquic_frame_type_datagram_l:
+                /* Datagram carrying packets are acked, but not repeated */
+                ack_needed = 1;
+                bytes = picoquic_decode_datagram_frame(cnx, path_x, bytes, bytes_max);
+                break;
+            case picoquic_frame_type_reset_stream_at:
+                bytes = picoquic_decode_reset_stream_at_frame(cnx, bytes, bytes_max);
+                ack_needed = 1;
+                break;
+            default: {
+                uint64_t frame_id64;
+
+                if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
+                    switch (frame_id64) {
+                    case picoquic_frame_type_time_stamp:
+                        bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
+                        break;
+                    case picoquic_frame_type_observed_address_v4:
+                    case picoquic_frame_type_observed_address_v6:
+                        ack_needed = 1;
+                        bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
+                        break;
+                    default:
+                        /* Not expected! */
+                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, frame_id64);
+                        bytes = NULL;
+                        break;
+                    }
+                }
+            }
+            }
+        }
+    }
+    return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
+}
+
+int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time, 
+    const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time)
+{
+    int ret = 0;
+    picoquic_path_t* path_x = cnx->path[0];
+    picoquic_stream_data_node_t received_data = { 0 };
+
+    ret = picoqmux_decode_frames(cnx, path_x, receive_buffer,
+        receive_length, &received_data, current_time);
+
+    if (ret == 0) {
+        *next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
+    }
+    return ret;
+}
