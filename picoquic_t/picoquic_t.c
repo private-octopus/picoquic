@@ -312,6 +312,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_trace_parallel", qlog_trace_parallel_test },
     { "qlog_fns", qlog_fns_test },
     { "qlog_fns_ecn", qlog_fns_ecn_test },
+    { "qmux_send", qmux_send_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },

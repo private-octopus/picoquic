@@ -2845,7 +2845,7 @@ static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_pa
 * maybe because the buffer is too small.
 */
 
-static uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
     int is_first_in_packet, uint64_t max_priority_allowed, 
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
 {

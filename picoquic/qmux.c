@@ -26,6 +26,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    int is_first_in_packet, uint64_t max_priority_allowed,
+    int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret);
+
 /* QMux prepare: prepare a packet. */
 /*  Prepare the next packet to send when in the ready state */
 int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
@@ -35,7 +39,10 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
     uint8_t* bytes = send_buffer;
     uint8_t* bytes_max = send_buffer + send_buffer_max;
     uint8_t* bytes_next = bytes;
+    picoquic_path_t* path_x = cnx->path[0];
     int more_data = 0;
+    int is_pure_ack = 1;
+    int no_data_to_send = 0;
                 
     /* if necessary, prepare the MAX STREAM frames */
     if (ret == 0) {
@@ -64,7 +71,7 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
 
     /* If present, send misc frame */
     bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
-        &more_data, &is_pure_ack, pc);
+        &more_data, &is_pure_ack, picoquic_packet_context_application);
 
     /* Compute the length before entering the CC block */
     length = bytes_next - bytes;
@@ -85,12 +92,12 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
 
     if (ret == 0) {
         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
-            (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
+            (size_t)(bytes_next - bytes) == 0, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
     }
 
     length = bytes_next - bytes;
 
-    if (length <= header_length || is_pure_ack) {
+    if (length == 0 || is_pure_ack) {
         /* Mark the bandwidth estimation as application limited */
         path_x->delivered_limited_index = path_x->delivered;
         /* Notify the peer if something is blocked */
@@ -107,5 +114,6 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
         ret = 0;
     }
     /* Set sent length */
+    *send_length = length;
     return ret;
 }

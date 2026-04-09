@@ -248,6 +248,7 @@ int qlog_trace_ecn_test(void);
 int qlog_trace_parallel_test(void);
 int qlog_fns_test(void);
 int qlog_fns_ecn_test(void);
+int qmux_send_test(void);
 int perflog_test(void);
 int rebinding_stress_test(void);
 int many_short_loss_test(void);
