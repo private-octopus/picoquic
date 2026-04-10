@@ -478,6 +478,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->path, &parts->path_length);
                 }
                 break;
+            case http_pseudo_header_authority:
+                if (parts->authority != NULL) {
+                    /* Duplicate authority! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->authority, &parts->authority_length);
+                }
+                break;
             case http_header_range:
                 if (parts->range != NULL) {
                     /* Duplicate content type! */
@@ -537,11 +547,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range",
+     ":method", ":path", ":authority", ":status", "content-type", ":protocol", "origin", "range",
      H3ZERO_WT_AVAILABLE_PROTOCOLS, H3ZERO_WT_PROTOCOL,
      NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
+        http_pseudo_header_authority,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
         http_header_range, http_header_wt_available_protocols, http_header_wt_protocol
@@ -1112,6 +1123,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->path);
         *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
+    }
+    if (header->authority != NULL) {
+        free((uint8_t*)header->authority);
+        *((uint8_t**)&header->authority) = NULL;
+        header->authority_length = 0;
     }
     if (header->range != NULL) {
         free((uint8_t*)header->range);
