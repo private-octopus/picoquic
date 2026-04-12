@@ -1887,15 +1887,33 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive)
+        {
+            int ret = qmux_receive_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_send)
         {
             int ret = qmux_send_test();
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(qmux_receive)
+        TEST_METHOD(qmux_send_tp)
         {
-            int ret = qmux_receive_test();
+            int ret = qmux_send_tp_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_tp_receive)
+        {
+            int ret = qmux_tp_receive_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_tp_recv_errors)
+        {
+            int ret = qmux_tp_recv_errors_test();
             Assert::AreEqual(ret, 0);
         }
 
@@ -1905,6 +1923,7 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
         TEST_METHOD(nat_rebinding_stress)
         {
             int ret = rebinding_stress_test();

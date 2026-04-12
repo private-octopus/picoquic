@@ -45,6 +45,10 @@
 int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time);
 int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time,
     const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time);
+int picoqmux_has_sent_tp(picoquic_cnx_t* cnx);
+int picoqmux_has_received_tp(picoquic_cnx_t* cnx);
+void picoqmux_update_state_on_tp_sent(picoquic_cnx_t* cnx);
+void picoqmux_update_state_on_tp_received(picoquic_cnx_t* cnx);
 
 #define QMUX_FIRST_DATA 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 uint8_t qmux_test_data[] = { QMUX_FIRST_DATA };
@@ -68,6 +72,9 @@ int qmux_send_test(void)
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     if (ret == 0) {
+        /* simulate that TP has been sent and received. */
+        picoqmux_update_state_on_tp_sent(cnx);
+        picoqmux_update_state_on_tp_received(cnx);
         /* simulate flow control open. */
         qmux_test_simulate_remote(cnx);
         /* add test data to stream zero. */
@@ -169,8 +176,6 @@ int qmux_test_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-
-
 int qmux_receive_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -180,6 +185,7 @@ int qmux_receive_test(void)
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     cnx->client_mode = 0; /* make sure we are in server mode, to accept the packet */
+    picoqmux_update_state_on_tp_received(cnx); /* simulate that TP has been received. */
     picoquic_set_callback(cnx, qmux_test_callback, &qtc);
     if (ret == 0) {
         /* prepare a packet */
@@ -196,5 +202,123 @@ int qmux_receive_test(void)
 
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
+    return ret;
+}
+
+uint8_t qmux_test_tp_packet[] = {
+    0xff, 0x51, 0x53, 0x30, 0x0d, 0x0a, 0x0d, 0x0a,
+    0x40, 0x26, 0x05, 0x04, 0x80, 0x20, 0x00, 0x00,
+    0x04, 0x04, 0x80, 0x10, 0x00, 0x00, 0x08, 0x02,
+    0x42, 0x00, 0x01, 0x04, 0x80, 0x00, 0x75, 0x30,
+    0x09, 0x02, 0x42, 0x00, 0x06, 0x04, 0x80, 0x01,
+    0x00, 0x63, 0x07, 0x04, 0x80, 0x00, 0xff, 0xff };
+
+int qmux_send_tp_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[2048];
+    size_t send_length = 0;
+    uint64_t next_wake_time = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    if (ret == 0) {
+        /* prepare the packet */
+        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+
+        if (send_length != sizeof(qmux_test_tp_packet) ||
+            memcmp(buffer, qmux_test_tp_packet, send_length) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && cnx->cnx_state != picoquic_state_client_ready_start) {
+        ret = -1;
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int qmux_tp_receive_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t next_wake_time = UINT64_MAX;
+    qmux_test_callback_t qtc = { 0 };
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    cnx->client_mode = 0; /* make sure we are in server mode, to accept the packet */
+
+    picoquic_set_callback(cnx, qmux_test_callback, &qtc);
+    if (ret == 0) {
+        /* prepare a packet */
+        ret = picoqmux_incoming_packet(cnx, 12345,
+            qmux_test_tp_packet, sizeof(qmux_test_tp_packet), &next_wake_time);
+        if (ret == 0 && cnx->cnx_state != picoquic_state_server_false_start) {
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int qmux_tp_receive_error_one(int set_tp_received, int set_tp_sent,
+    uint8_t * message, size_t length, uint64_t expected)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t next_wake_time = UINT64_MAX;
+    qmux_test_callback_t qtc = { 0 };
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    cnx->client_mode = 0; /* make sure we are in server mode, to accept the packet */
+
+    picoquic_set_callback(cnx, qmux_test_callback, &qtc);
+
+    if (set_tp_received) {
+        picoqmux_update_state_on_tp_received(cnx);
+    }
+
+    if (set_tp_sent) {
+        picoqmux_update_state_on_tp_sent(cnx);
+    }
+
+    if (ret == 0) {
+        /* prepare a packet */
+        int r_ret = picoqmux_incoming_packet(cnx, 12345,
+            message, length, &next_wake_time);
+        if (r_ret == 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && cnx->cnx_state != picoquic_state_disconnecting &&
+        cnx->cnx_state != picoquic_state_handshake_failure) {
+        ret = -1;
+    }
+    if (ret == 0 && cnx->local_error != expected) {
+        ret = -1;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int qmux_tp_recv_errors_test(void)
+{
+    int ret = 0;
+    if (ret == 0) {
+        /* TP not received, but message is not TP */
+        ret = qmux_tp_receive_error_one(0, 0, qmux_test_data, sizeof(qmux_test_data),
+            PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+    }
+    if (ret == 0) {
+        /* TP received, but message is not duplicate TP */;
+        ret = qmux_tp_receive_error_one(1, 1, qmux_test_tp_packet, sizeof(qmux_test_tp_packet),
+            PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
     return ret;
 }
