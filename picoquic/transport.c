@@ -645,18 +645,18 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
                     else {
-                    /* The default for this parameter is the maximum permitted UDP payload of 65527. Values below 1200 are invalid. */
-                    uint64_t max_packet_size = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (ret == 0){
-                        if (max_packet_size < 1200 || max_packet_size > 65527) {
-                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max packet size TP");
-                        }
-                        else {
-                            cnx->remote_parameters.max_packet_size = (uint32_t)max_packet_size;
+                        /* The default for this parameter is the maximum permitted UDP payload of 65527. Values below 1200 are invalid. */
+                        uint64_t max_packet_size = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                        if (ret == 0) {
+                            if (max_packet_size < 1200 || max_packet_size > 65527) {
+                                ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max packet size TP");
+                            }
+                            else {
+                                cnx->remote_parameters.max_packet_size = (uint32_t)max_packet_size;
+                            }
                         }
                     }
                     break;
-                }
                 case picoquic_tp_stateless_reset_token:
                     if (extension_mode > 1) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
@@ -695,14 +695,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
                     else {
-                    uint64_t coded_length = picoquic_decode_transport_preferred_address_address(
-                        bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.preferred_address);
+                        uint64_t coded_length = picoquic_decode_transport_preferred_address_address(
+                            bytes + byte_index, (size_t)extension_length, &cnx->remote_parameters.preferred_address);
 
-                    if (coded_length != extension_length) {
-                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Preferred address TP");
+                        if (coded_length != extension_length) {
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Preferred address TP");
+                        }
                     }
                     break;
-                }
                 case picoquic_tp_disable_migration:
                     if (extension_mode > 1) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
@@ -976,8 +976,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "HCID missing");
         }
 
-        if (ret == 0) {
-            /* Reeciving server parameters */
+        if (ret == 0 && extension_mode == 1) {
+            /* Receiving server parameters */
             if ((present_flag & (1ull << picoquic_tp_handshake_connection_id)) != 0) {
                 /* The HCID extension is present. Verify that the original and retry cnxid are as expected */
                 if (cnx->original_cnxid.id_len != 0) {
