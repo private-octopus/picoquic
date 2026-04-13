@@ -1439,7 +1439,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             else {
                 /* Nothing to do with these incoming data, they are duplicate */
             }
-        } else if (received_data != NULL) {
+        } else {
             int new_data_available = 0;
 
             ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
@@ -1456,10 +1456,6 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 /* check how much data there is to send */
                 picoquic_stream_data_callback(cnx, stream);
             }
-        }
-        else {
-            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
-                picoquic_frame_type_stream_range_min, "Stream data received out of sequence");
         }
     }
 
