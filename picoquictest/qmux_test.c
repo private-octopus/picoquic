@@ -404,3 +404,47 @@ int qmux_send_qx_ping_r_test(void)
 
     return ret;
 }
+
+/* tests of closing frame */
+
+uint8_t qmux_cnx_close_packet [] = {
+    picoquic_frame_type_connection_close,
+    0x80, 0x00, 0xCF, 0xFF, 0,
+    9,
+    '1', '2', '3', '4', '5', '6', '7', '8', '9'
+};
+
+uint8_t qmux_app_close_packet[] = {
+    picoquic_frame_type_application_close,
+    0,
+    0
+};
+
+
+int qmux_receive_close_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
+{
+    int ret = 0;
+    if (cnx->cnx_state != picoquic_state_disconnected &&
+        cnx->cnx_state != picoquic_state_closing_received) {
+        ret = -1;
+    }
+    return ret;
+}
+
+int qmux_receive_cnx_close_test(void)
+{
+    int ret = qmux_receive_test_one(0, 1, 1, 
+        qmux_cnx_close_packet, sizeof(qmux_cnx_close_packet),
+        0, qmux_receive_close_check);
+
+    return ret;
+}
+
+int qmux_receive_app_close_test(void)
+{
+    int ret = qmux_receive_test_one(0, 1, 1,
+        qmux_app_close_packet, sizeof(qmux_app_close_packet),
+        0, qmux_receive_close_check);
+
+    return ret;
+}

@@ -301,7 +301,7 @@ const uint8_t* picoquic_parse_qx_ping_frame(const uint8_t* bytes, const uint8_t*
 
 const uint8_t* picoquic_decode_qx_ping_frame(picoquic_cnx_t* cnx,
     const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t frame_type, uint64_t current_time)
+    uint64_t frame_type, uint64_t UNUSED(current_time))
 {
     uint64_t sequence = 0;
 
