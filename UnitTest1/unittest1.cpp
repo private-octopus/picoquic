@@ -1905,15 +1905,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(qmux_tp_receive)
+        TEST_METHOD(qmux_receive_tp)
         {
-            int ret = qmux_tp_receive_test();
+            int ret = qmux_receive_tp_test();
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(qmux_tp_recv_errors)
+        TEST_METHOD(qmux_receive_errors)
         {
-            int ret = qmux_tp_recv_errors_test();
+            int ret = qmux_receive_errors_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_qx_ping)
+        {
+            int ret = qmux_receive_qx_ping_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_qx_ping_r)
+        {
+            int ret = qmux_send_qx_ping_r_test();
             Assert::AreEqual(ret, 0);
         }
 

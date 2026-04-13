@@ -32,7 +32,7 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
     int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret);
 
 
-/* QMUX states:
+/* QMUX starting states:
 * 
 *    picoquic_state_client_init,
 *    picoquic_state_server_init,
@@ -46,23 +46,39 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
 *   on start: picoquic_state_client_init
 *   after sending TP:
 *     if TP received: picoquic_state_ready
+*         callback ready.
 *     else: picoquic_state_client_ready_start
+*         callback almost ready.
 *   after receiving TP:
 *     if TP sent: picoquic_state_ready
+*         callback ready.
 *     else: picoquic_state_client_almost_ready
 * 
 * Server:
 *   on start: picoquic_state_server_init
 *   after sending TP:
 *     if TP received: picoquic_state_ready
+*         callback ready.
 *     else: server_almost_ready
 *   after receiving TP:
 *    if TP sent: picoquic_state_ready
+*         callback ready.
 *    else: picoquic_state_server_false_start
+*         callback almost ready.
 * 
 * On error:
 *    ...
 */
+
+void picoqmux_init(picoquic_cnx_t* cnx)
+{
+    cnx->is_qmux = 1;
+    cnx->qx_acked_last = UINT64_MAX;
+    cnx->qx_sent_last = UINT64_MAX;
+    cnx->qx_query_ack = UINT64_MAX;
+    cnx->qx_query_last = UINT64_MAX;
+}
+
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx)
 {
     return (cnx->cnx_state == picoquic_state_ready ||
@@ -117,6 +133,233 @@ void picoqmux_update_state_on_tp_received(picoquic_cnx_t* cnx)
     }
 }
 
+/*
+* QMUX closing is different from the quic logic:
+* 
+* As is with QUIC version 1, a connection can be closed either
+* by a CONNECTION_CLOSE frame or by an idle timeout.
+*
+* Unlike QUIC version 1, idle timeout handling does not rely on ACK frames.
+* Endpoints reset the idle timer when sending or receiving QMux frames.
+* When no other traffic is available, QX_PING frames can be used to elicit
+* a peer response and keep the connection active.
+*
+* Unlike QUIC version 1, there is no draining period; once an endpoint sends
+* or receives the CONNECTION_CLOSE frame or reaches the idle timeout,
+* all the resources allocated for the Service are freed and the underlying
+* transport is closed immediately.
+* 
+* The callback "picoquic_callback_close" and 
+* "picoquic_callback_application_close" are set just like QUIC (?)
+* 
+* In the "send" process, the closing logic is executed if the state
+* is either "picoquic_state_handshake_failure" or greater
+* than "picoquic_ready".
+* 
+* The current picoquic logic changes the state as follow:
+* 
+* - if a local decision to close is made, set the state to
+*   picoquic_state_handshake_failure or picoquic_state_disconnecting
+* - if a close connection frame is received, set the state to
+*   picoquic_state_disconnected or picoquic_state_closing_received
+* 
+* We will treat the state picoquic_state_closing_received as equivalent
+* to disconnected.
+* 
+* Formatting a close connection frame does not change the state in the
+* current code. In Qmux, this will trigger a change to disconnected.
+* 
+* If the connection is in disconnected phase, we want the close
+* packet to be queued. That is, defer the socket closure until the
+* last formated packet is sent.
+* 
+* The current picoquic code handles the timer based only on the value
+* of current time, last received time, and PTO. Instead, we will
+* handle that based on current time, last sent time, and PTO, with
+* probably a special case for the disconnected state.
+*/
+
+void picoqmux_send_closing(picoquic_cnx_t * cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
+{
+    if (cnx->cnx_state == picoquic_state_handshake_failure ||
+        cnx->cnx_state == picoquic_state_disconnecting) {
+        /* format the close connection or app connection frame */
+        uint8_t* bytes_next = send_buffer;
+        int more_data = 0;
+        int is_pure_ack = 1;
+        if (cnx->local_error == 0) {
+            bytes_next = picoquic_format_application_close_frame(cnx, bytes_next, bytes_next + send_buffer_max, &more_data, &is_pure_ack);
+        }
+        else {
+            bytes_next = picoquic_format_connection_close_frame(cnx, bytes_next, bytes_next + send_buffer_max, &more_data, &is_pure_ack);
+        }
+        if (bytes_next > send_buffer) {
+            *send_length = bytes_next - send_buffer;
+            cnx->cnx_state = picoquic_state_disconnected;
+        }
+        else {
+            /* do not change the state, since the frame was not sent. */
+            *send_length = 0;
+        }
+        /* reset the wakeup timer to immediate, to either send the frame at
+        * the next opportunity or close the socket.
+        */
+        *next_wake_time = current_time;
+    }
+}
+
+void picoqmux_check_idle_timer(picoquic_cnx_t* cnx, uint64_t current_time, 
+    uint64_t* next_wake_time)
+{
+    /* if already disconnected, nothing to do. */
+    if (cnx->cnx_state == picoquic_state_disconnected ||
+        cnx->cnx_state == picoquic_state_closing_received) {
+        /* Nothing to do, should close the socket. */
+        cnx->cnx_state = picoquic_state_disconnected;
+    }
+    else if (cnx->idle_timeout > 0){
+        uint64_t idle_timer = cnx->latest_progress_time + cnx->idle_timeout;
+        if (current_time >= idle_timer) {
+            /* Too long silence, break it. */
+            if (cnx->cnx_state != picoquic_state_handshake_failure &&
+                cnx->cnx_state <= picoquic_state_ready) {
+                cnx->local_error = PICOQUIC_ERROR_IDLE_TIMEOUT;
+                cnx->cnx_state = picoquic_state_disconnecting;
+            }
+        }
+        else {
+            *next_wake_time = idle_timer;
+        }
+    }
+}
+
+/* Update statistics after QX_PING response received
+* 
+* The path quality is copied from the path context:
+*   quality->cwin = path_x->cwin;
+*   quality->rtt = path_x->smoothed_rtt;
+*   quality->rtt_sample = path_x->rtt_sample;
+*   quality->rtt_min = path_x->rtt_min;
+*   quality->rtt_max = path_x->rtt_max;
+*   quality->rtt_variant = path_x->rtt_variant;
+*   quality->pacing_rate = path_x->pacing.rate;
+*   quality->receive_rate_estimate = path_x->receive_rate_estimate;
+*   quality->sent = picoquic_get_sequence_number(path_x->cnx, path_x, picoquic_packet_context_application);
+*   quality->lost = path_x->nb_losses_found;
+*   quality->timer_losses = path_x->nb_timer_losses;
+*   quality->spurious_losses = path_x->nb_spurious;
+*   quality->max_spurious_rtt = path_x->max_spurious_rtt;
+*   quality->max_reorder_delay = path_x->max_reorder_delay;
+*   quality->max_reorder_gap = path_x->max_reorder_gap;
+*   quality->bytes_in_transit = path_x->bytes_in_transit;
+*   quality->bytes_sent = path_x->bytes_sent;
+*   quality->bytes_received = path_x->received;
+*
+* We want compatibilty between QMux and QUIC, which requires updating
+* the "path" variables when QMux is received:
+* - get the RTT sample from the ping delay, and update accordingly.
+* - update the sequence number in the path context after sending packets
+* - keep loss, spurious, reorder = 0
+* - estimate bytes in transit from delta between sent before ping, sent after ACK
+* - update the byte sent variable per path
+* - update the bytes received per path
+* - estimate receive rate and send rate from measurement
+*/
+
+#if 0
+/*
+* On update, check whether an "updated" callback is required.
+*/
+void picoqmux_update_stats_after_qx(picoquic_cnx_t * cnx, uint64_t current_time)
+{
+    /* Compute the delta t between sent and acked,
+     * use it to update RTT estimate. 
+     */
+    uint64_t rtt_sample = current_time - cnx->qx_time_sent;
+    /* Compute the delta and the volume acked between
+     * this and the previous stamp.
+     */
+}
+#endif
+
+/* QX PING frames come in to variations:
+* FRAME_TYPE_QX_PING, FRAME_TYPE_QX_PING_R
+ */
+const uint8_t* picoquic_skip_qx_ping_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    /* This code assumes that the frame type is already skipped */
+    bytes = picoquic_frames_varint_skip(bytes, bytes_max);
+    return bytes;
+}
+
+const uint8_t* picoquic_parse_qx_ping_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* sequence)
+{
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, sequence);
+    return bytes;
+}
+
+const uint8_t* picoquic_decode_qx_ping_frame(picoquic_cnx_t* cnx,
+    const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t frame_type, uint64_t current_time)
+{
+    uint64_t sequence = 0;
+
+    /* This code assumes that the frame type is already skipped */
+    if (!cnx->is_qmux) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_time_stamp);
+        bytes = NULL;
+    }
+    else if ((bytes = picoquic_parse_qx_ping_frame(bytes, bytes_max, &sequence)) != NULL) {
+        if ((frame_type & 1) != 0) {
+            /* receiving a query */
+            int64_t delta = sequence - cnx->qx_query_last;
+            if (delta <= 0) {
+                /* Not in order */
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+                    frame_type);
+                bytes = NULL;
+            }
+            else {
+                cnx->qx_query_last = sequence;
+            }
+        }
+        else {
+            /* receiving a QX response */
+            int64_t delta = sequence - cnx->qx_sent_last;
+            if (delta > 0) {
+                /* Not in order */
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+                    frame_type);
+                bytes = NULL;
+            }
+            else if (delta == 0) {
+#if 0
+                /* TO: proper handling of QOS statistics. */
+                picoqmux_update_stats_after_qx(current_time);
+#endif
+                cnx->qx_acked_last = sequence;
+            }
+        }
+    }
+    return bytes;
+}
+
+uint8_t* picoquic_format_qx_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int is_response, int* more_data, uint64_t current_time)
+{
+    uint8_t* bytes0 = bytes;
+    uint64_t sequence = (is_response) ? cnx->qx_query_last : cnx->qx_sent_last;
+
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max,
+        (is_response)? FRAME_TYPE_QX_PING_R: FRAME_TYPE_QX_PING)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence)) == NULL) {
+        bytes = bytes0;
+        *more_data = 1;
+    }
+
+    return bytes;
+}
 
 /*
 * QX_TRANSPORT_PARAMETERS frames are formatted as shown in Figure 2.
@@ -295,6 +538,13 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
     int is_pure_ack = 1;
     int no_data_to_send = 0;
 
+
+    if (cnx->cnx_state == picoquic_state_handshake_failure ||
+        cnx->cnx_state > picoquic_state_ready) {
+        picoqmux_send_closing(cnx, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        return ret;
+    }
+
     /* If not yet sent, send the transport parameters */
     if (!picoqmux_has_sent_tp(cnx)) {
         bytes_next = picoquic_format_qmux_tp_frame(cnx, bytes_next, bytes_max);
@@ -304,6 +554,12 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
         else {
             picoqmux_update_state_on_tp_sent(cnx);
         }
+    }
+
+    /* if necessary, prepare the QX_PING_R frame */
+    if (ret == 0 && cnx->qx_query_last != cnx->qx_query_ack && bytes + 16 < bytes_max) {
+        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes, bytes_max, 1, &more_data, current_time);
+        cnx->qx_query_ack = cnx->qx_query_last;
     }
                 
     /* if necessary, prepare the MAX STREAM frames */
@@ -384,14 +640,57 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
     return ret;
 }
 
+/*  Prepare the next packets to send in the current buffer */
+int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
+{
+    int ret = 0;
+    *send_length = 0;
+
+    picoqmux_check_idle_timer(cnx, current_time, next_wake_time);
+
+    if (cnx->cnx_state == picoquic_state_disconnected) {
+        /* We check the disconnect state before sending a packet. This
+        * implies that the previous packet has been sent.
+        */
+        ret = PICOQUIC_ERROR_DISCONNECTED;
+    }
+    else {
+        for (;;) {
+            uint8_t* bytes = send_buffer + *send_length;
+            size_t max_length = send_buffer_max - *send_length;
+            size_t length = 0;
+            if (max_length < 255) {
+                *next_wake_time = current_time;
+                break;
+            }
+            else {
+                ret = picoqmux_prepare_packet(cnx, current_time, bytes, max_length, &length, next_wake_time);
+                if (ret < 0) {
+                    break;
+                }
+                else if (length == 0) {
+                    /* Nothing more to send. */
+                    break;
+                }
+                else {
+                    *send_length += length;
+                }
+            }
+        }
+        if (*send_length > 0) {
+            /* something sent. Notice progress. */
+            cnx->latest_progress_time = current_time;
+        }
+    }
+    return ret;
+}
+
 /*
  * Processing of the incoming QMUX packet.
  */
 
 int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes,
-    size_t bytes_maxsize,
-    picoquic_stream_data_node_t* received_data,
-    uint64_t current_time)
+    size_t bytes_maxsize, int64_t current_time)
 {
     const uint8_t* bytes_max = bytes + bytes_maxsize;
     picoquic_packet_data_t packet_data;
@@ -422,7 +721,7 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
         uint8_t first_byte = bytes[0];
 
         if (PICOQUIC_IN_RANGE(first_byte, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-            bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, received_data, current_time);
+            bytes = picoquic_decode_stream_frame(cnx, bytes, bytes_max, NULL, current_time);
         }
         else if (first_byte == picoquic_frame_type_ack) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
@@ -520,6 +819,10 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
                     case picoquic_frame_type_observed_address_v6:
                         bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
                         break;
+                    case FRAME_TYPE_QX_PING:
+                    case FRAME_TYPE_QX_PING_R:
+                        bytes = picoquic_decode_qx_ping_frame(cnx, bytes, bytes_max, frame_id64, current_time);
+                        break;
                     default:
                         /* Not expected! */
                         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, frame_id64);
@@ -539,12 +842,11 @@ int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time,
 {
     int ret = 0;
     picoquic_path_t* path_x = cnx->path[0];
-    picoquic_stream_data_node_t received_data = { 0 };
 
-    ret = picoqmux_decode_frames(cnx, path_x, receive_buffer,
-        receive_length, &received_data, current_time);
+    ret = picoqmux_decode_frames(cnx, path_x, receive_buffer, receive_length, current_time);
 
     if (ret == 0) {
+        cnx->latest_progress_time = current_time;
         *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
     }

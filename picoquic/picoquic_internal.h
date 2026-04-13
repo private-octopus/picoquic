@@ -168,6 +168,8 @@ typedef enum {
 } picoquic_frame_type_enum_t;
 
 #define FRAME_TYPE_QX_TRANSPORT_PARAMETERS 0x3f5153300d0a0d0aull /* Per qmux draft 01 */
+#define FRAME_TYPE_QX_PING   0x348c67529ef8c7bdull /* Per qmux draft 01 */
+#define FRAME_TYPE_QX_PING_R 0x348c67529ef8c7beull /* Per qmux draft 01 */
 
 /* PMTU discovery requirement status */
 
@@ -1305,7 +1307,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_subscribed_to_path_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_reset_stream_at_enabled : 1; /* Reset Stream At is supported */
-    
+    unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
+
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
     /* Spin bit policy */
@@ -1392,6 +1395,12 @@ typedef struct st_picoquic_cnx_t {
     picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
     /* Sequence number of the next observed address frame */
     uint64_t observed_number;
+    /* Handling of the QMux QX_PING frame */
+    uint64_t qx_acked_last; /* last qx_ping query of the peer acked */
+    uint64_t qx_query_last; /* sequence of last qx_ping query from the peer */
+    uint64_t qx_sent_last; /* last local qx_ping query sent to the peer */
+    uint64_t qx_query_ack; /* last local qx_ping query acked by the peer */
+   
     /* Statistics */
     uint64_t nb_bytes_queued;
     uint32_t nb_zero_rtt_sent;
