@@ -449,3 +449,33 @@ int qmux_send_qx_ping_r_test(void)
     return ret;
 }
 
+int qmux_send_cnx_close_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[2048];
+    size_t send_length = 0;
+    uint64_t next_wake_time = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+    picoqmux_init(cnx);
+
+    if (ret == 0) {
+        /* simulate that TP has been sent and received. */
+        picoqmux_update_state_on_tp_sent(cnx);
+        picoqmux_update_state_on_tp_received(cnx);
+        /* Simulate that the local application requests disconnect */
+        picoquic_close(cnx, 0);
+        /* prepare the packet */
+        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+
+        if (send_length != sizeof(qmux_app_close_packet) ||
+            memcmp(buffer, qmux_app_close_packet, send_length) != 0 ||
+            cnx->cnx_state != picoquic_state_disconnected) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}

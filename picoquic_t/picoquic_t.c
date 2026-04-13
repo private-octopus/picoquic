@@ -321,6 +321,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive_errors", qmux_receive_errors_test },
     { "qmux_receive_qx_ping", qmux_receive_qx_ping_test },
     { "qmux_send_qx_ping_r", qmux_send_qx_ping_r_test },
+    { "qmux_send_cnx_close", qmux_send_cnx_close_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
