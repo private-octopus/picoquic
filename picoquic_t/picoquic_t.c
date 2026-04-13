@@ -316,6 +316,8 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive", qmux_receive_test },
     { "qmux_send_tp", qmux_send_tp_test },
     { "qmux_receive_tp", qmux_receive_tp_test },
+    { "qmux_receive_app_close", qmux_receive_app_close_test },
+    { "qmux_receive_cnx_close", qmux_receive_cnx_close_test },
     { "qmux_receive_errors", qmux_receive_errors_test },
     { "qmux_receive_qx_ping", qmux_receive_qx_ping_test },
     { "qmux_send_qx_ping_r", qmux_send_qx_ping_r_test },

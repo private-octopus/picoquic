@@ -1911,6 +1911,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_app_close)
+        {
+            int ret = qmux_receive_app_close_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_cnx_close)
+        {
+            int ret = qmux_receive_cnx_close_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_errors)
         {
             int ret = qmux_receive_errors_test();
