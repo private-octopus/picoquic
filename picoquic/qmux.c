@@ -346,7 +346,7 @@ const uint8_t* picoquic_decode_qx_ping_frame(picoquic_cnx_t* cnx,
     return bytes;
 }
 
-uint8_t* picoquic_format_qx_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int is_response, int* more_data, uint64_t current_time)
+uint8_t* picoquic_format_qx_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int is_response, int* more_data)
 {
     uint8_t* bytes0 = bytes;
     uint64_t sequence = (is_response) ? cnx->qx_query_last : cnx->qx_sent_last;
@@ -558,7 +558,7 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
 
     /* if necessary, prepare the QX_PING_R frame */
     if (ret == 0 && cnx->qx_query_last != cnx->qx_query_ack && bytes + 16 < bytes_max) {
-        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes, bytes_max, 1, &more_data, current_time);
+        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes, bytes_max, 1, &more_data);
         cnx->qx_query_ack = cnx->qx_query_last;
     }
                 
