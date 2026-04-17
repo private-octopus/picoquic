@@ -286,9 +286,12 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
             a++;
         }
         while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t' && candidate_length < 254) {
-            candidate[candidate_length] = *a;
+            /* Skip quotes - HTTP structured fields use quoted strings */
+            if (*a != '"') {
+                candidate[candidate_length] = *a;
+                candidate_length++;
+            }
             a++;
-            candidate_length++;
         }
         while (*a == ' ' || *a == '\t') {
             a++;
@@ -310,7 +313,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
                 else {
                     if ((os + candidate_length == s_len ||
                         supported[os + candidate_length] == ' ' ||
-                        supported[os + candidate_length] == '\t ' ||
+                        supported[os + candidate_length] == '\t' ||
                         supported[os + candidate_length] == ',') &&
                         memcmp(&supported[os], candidate, candidate_length) == 0) {
                         /* found it. set the value. */
@@ -327,6 +330,11 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
         }
     }
     return ret;
+}
+
+const char* picowt_get_authority(h3zero_stream_ctx_t* stream_ctx)
+{
+    return (const char*)stream_ctx->ps.stream_state.header.authority;
 }
 
 /*
@@ -483,15 +491,14 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 * - Close session.
 * 
 */
-int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx,
-    const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
+int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {
     int ret = 0; 
     
     while (ret == 0 && bytes < bytes_max) {
         const uint8_t* bytes_first = bytes;
 
-        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule, stream_ctx);
+        bytes = h3zero_accumulate_capsule(bytes, bytes_max, &capsule->h3_capsule);
 
         if (bytes == NULL) {
             picoquic_log_app_message(cnx, "Cannot parse %zu capsule bytes", bytes_max - bytes_first);

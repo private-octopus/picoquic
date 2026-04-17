@@ -74,7 +74,7 @@ void picoquic_ptls_fusion_load(int unload)
     }
 }
 #else
-void picoquic_ptls_fusion_load(int unload)
+void picoquic_ptls_fusion_load(int UNUSED(unload))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(unload);

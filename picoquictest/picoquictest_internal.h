@@ -314,7 +314,7 @@ void test_api_delete_test_streams(picoquic_test_tls_api_ctx_t* test_ctx);
 int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out, int* was_active);
 
-int tls_api_one_scenario_init_ex(picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time, uint32_t proposed_version, picoquic_tp_t* client_params, picoquic_tp_t* server_params, picoquic_connection_id_t* icid, int cid_zero);
+int tls_api_one_scenario_init_ex(picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time, uint32_t proposed_version, picoquic_tp_t* client_params, picoquic_tp_t* server_params, picoquic_connection_id_t* icid);
 
 int tls_api_one_scenario_init(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
@@ -324,7 +324,7 @@ int tls_api_one_scenario_init(
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time);
 
-int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx,
     char const* sni, char const* alpn, uint64_t* simulated_time);
 
 int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
@@ -333,7 +333,7 @@ int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
 int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id);
 
 int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max);
+    uint64_t* simulated_time, uint64_t max_data, uint64_t queue_delay_max);
 
 int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t* simulated_time, int max_trials);

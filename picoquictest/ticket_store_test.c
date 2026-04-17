@@ -35,7 +35,11 @@ static picoquic_tp_t test_tp = {
     123, 456, 78, 91011, 1234, 567, 0, 0, 0, 0, 0, 0,
     { 0, {0,0,0,0}, 0, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0,
         {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}, 0
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}}, 0,
+        0 /* enable_loss_bit */, 0 /* enable_time_stamp */, 0 /* min_ack_delay */,
+        0 /* do_grease_quic_bit */, { 0 } /* version_negotiation */,
+        0 /* enable_bdp_frame */, 0 /* initial_max_path_id */,
+        0 /* address_discovery_mode */, 0 /* is_reset_stream_at_enabled */
 };
 
 static int create_test_ticket(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
@@ -102,7 +106,7 @@ static int ticket_store_compare(picoquic_stored_ticket_t* s1, picoquic_stored_ti
     return ret;
 }
 
-int ticket_store_test()
+int ticket_store_test(void)
 {
     int ret = 0;
     picoquic_stored_ticket_t* p_first_ticket = NULL;
@@ -335,7 +339,7 @@ static int token_store_compare(picoquic_stored_token_t* s1, picoquic_stored_toke
     return ret;
 }
 
-int token_store_test()
+int token_store_test(void)
 {
     int ret = 0;
     picoquic_stored_token_t* p_first_token = NULL;
@@ -476,7 +480,7 @@ static token_reuse_api_case_t token_reuse_api_cases[] = {
 
 static size_t nb_token_reuse_api_cases = sizeof(token_reuse_api_cases) / sizeof(token_reuse_api_case_t);
 
-int token_reuse_api_test()
+int token_reuse_api_test(void)
 {
     int ret = 0;
     uint64_t test_time = 4;
@@ -727,13 +731,13 @@ int ticket_seed_test_one(int bdp_option)
     return ret;
 }
 
-int ticket_seed_test() {
+int ticket_seed_test(void) {
     
    return ticket_seed_test_one(1);
 }
 
 
-int ticket_seed_from_bdp_frame_test() {
+int ticket_seed_from_bdp_frame_test(void) {
     
    return ticket_seed_test_one(2);
 }

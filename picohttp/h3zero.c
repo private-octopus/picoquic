@@ -34,6 +34,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#ifdef _WINDOWS
+#define picoquic_strncasecmp _strnicmp
+#else
+#include <strings.h>
+#define picoquic_strncasecmp strncasecmp
+#endif
 #include "h3zero.h"
 
 /*
@@ -472,6 +478,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->path, &parts->path_length);
                 }
                 break;
+            case http_pseudo_header_authority:
+                if (parts->authority != NULL) {
+                    /* Duplicate authority! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->authority, &parts->authority_length);
+                }
+                break;
             case http_header_range:
                 if (parts->range != NULL) {
                     /* Duplicate content type! */
@@ -531,11 +547,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range",
+     ":method", ":path", ":authority", ":status", "content-type", ":protocol", "origin", "range",
      H3ZERO_WT_AVAILABLE_PROTOCOLS, H3ZERO_WT_PROTOCOL,
      NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
+        http_pseudo_header_authority,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
         http_header_range, http_header_wt_available_protocols, http_header_wt_protocol
@@ -553,7 +570,7 @@ int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int i
 
     for (int i = 0; interesting_header_name[i] != NULL; i++) {
         if (strlen(interesting_header_name[i]) == name_length &&
-            memcmp(interesting_header_name[i], name, name_length) == 0) {
+            picoquic_strncasecmp(interesting_header_name[i], (const char*)name, name_length) == 0) {
             val = interesting_header[i];
             break;
         }
@@ -828,7 +845,7 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
         int code = -1;
         for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
             if (qpack_static[i].header == http_header_content_type &&
-                qpack_static[i].enum_as_int == content_type) {
+                qpack_static[i].enum_as_int == (int)content_type) {
                 code = qpack_static[i].index;
                 break;
             }
@@ -1106,6 +1123,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->path);
         *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
+    }
+    if (header->authority != NULL) {
+        free((uint8_t*)header->authority);
+        *((uint8_t**)&header->authority) = NULL;
+        header->authority_length = 0;
     }
     if (header->range != NULL) {
         free((uint8_t*)header->range);

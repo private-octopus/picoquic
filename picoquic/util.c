@@ -108,12 +108,12 @@ void debug_set_stream(FILE *F)
 #endif
 }
 
-FILE* get_debug_out()
+FILE* get_debug_out(void)
 {
     return debug_out;
 }
 
-int get_debug_suspended()
+int get_debug_suspended(void)
 {
     return debug_suspended;
 }
@@ -365,7 +365,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 }
 
 /* Hash connection ids for picohash_table's */
-uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed)
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * UNUSED(hash_seed))
 {
     uint64_t val64 = 0;
     size_t i = 0;

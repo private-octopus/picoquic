@@ -92,7 +92,7 @@
 #endif
 #endif
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(__FreeBSD__)
 #ifdef __LINUX__
 #include <linux/prctl.h>  /* Definition of PR_* constants */
 #else
@@ -355,8 +355,13 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #endif
 }
 
+#ifdef _WINDOWS
 int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
     picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+#else
+int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_use_gso),
+    picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+#endif
 {
     int ret = 0;
     struct sockaddr_storage local_address;
@@ -1733,8 +1738,10 @@ void picoquic_internal_thread_setname(char const * thread_name)
         }
     }
 #else
-#ifdef __APPLE__
+#if defined(__APPLE__)
     pthread_setname_np(thread_name);
+#elif defined(__FreeBSD__)
+    pthread_setname_np(pthread_self(), thread_name);
 #else
     int r=prctl(PR_SET_NAME, thread_name, 0, 0, 0);
     if (r != 0) {

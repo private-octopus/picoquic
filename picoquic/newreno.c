@@ -186,14 +186,13 @@ static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_
     path_x->cwin = nr_state->nrss.cwin;
 }
 
-static void picoquic_newreno_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const *option_string, uint64_t current_time)
+static void picoquic_newreno_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_newreno_state_t* nr_state = (picoquic_newreno_state_t*)malloc(sizeof(picoquic_newreno_state_t));
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(current_time);
     UNREFERENCED_PARAMETER(option_string);
-    UNREFERENCED_PARAMETER(cnx);
 #endif
 
     if (nr_state != NULL) {
@@ -291,7 +290,7 @@ static void picoquic_newreno_notify(
         }
 
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
             nr_state->nrss.ssthresh == UINT64_MAX);
     }
 }

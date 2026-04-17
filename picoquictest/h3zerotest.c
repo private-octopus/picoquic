@@ -80,7 +80,7 @@ static h3zero_test_integer_case_t h3zero_int_case[] = {
 
 static size_t nb_h3zero_int_case = sizeof(h3zero_int_case) / sizeof(h3zero_test_integer_case_t);
 
-int h3zero_integer_test() 
+int h3zero_integer_test(void) 
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < nb_h3zero_int_case; i++) {
@@ -105,7 +105,7 @@ int h3zero_integer_test()
                 DBG_PRINTF("Failed to decode case %d\n", (int)i);
                 ret = -1;
             }
-            else if ((bytes - h3zero_int_case[i].encoding) != h3zero_int_case[i].encoding_length) {
+            else if ((size_t)(bytes - h3zero_int_case[i].encoding) != h3zero_int_case[i].encoding_length) {
                 DBG_PRINTF("Bad decoding length case %d\n", (int)i);
                 ret = -1;
             }
@@ -126,7 +126,7 @@ int h3zero_integer_test()
                     DBG_PRINTF("Failed to encode case %d\n", (int)i);
                     ret = -1;
                 }
-                else if ((bytes - target) != h3zero_int_case[i].encoding_length) {
+                else if ((size_t)(bytes - target) != h3zero_int_case[i].encoding_length) {
                     DBG_PRINTF("Bad encoding length case %d\n", (int)i);
                     ret = -1;
                 }
@@ -172,7 +172,7 @@ static qpack_huffman_test_case_t qpack_huffman_test_case[] = {
 
 static size_t nb_qpack_huffman_test_case = sizeof(qpack_huffman_test_case) / sizeof(qpack_huffman_test_case_t);
 
-int qpack_huffman_test()
+int qpack_huffman_test(void)
 {
     int ret = 0;
     uint8_t data[256];
@@ -470,7 +470,7 @@ static h3zero_qpack_huffman_base_t h3zero_qpack_huffman_base[] = {
 
 static size_t nb_h3zero_qpack_huffman_base = sizeof(h3zero_qpack_huffman_base) / sizeof(h3zero_qpack_huffman_base_t);
 
-int qpack_huffman_base_test()
+int qpack_huffman_base_test(void)
 {
     int ret = 0;
     uint8_t data[256];
@@ -713,96 +713,118 @@ typedef struct st_qpack_test_case_t {
 static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_slash, sizeof(qpack_test_get_slash),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_null, sizeof(qpack_test_get_slash_null),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_prefix, sizeof(qpack_test_get_slash_prefix),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_index_html, sizeof(qpack_test_get_index_html),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_index_html_long, sizeof(qpack_test_get_index_html_long),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404, sizeof(qpack_test_status_404),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404_code, sizeof(qpack_test_status_404_code),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404_long, sizeof(qpack_test_status_404_long),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_response_html, sizeof(qpack_test_response_html),
-        { 0, NULL, 0, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
-        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_405_null, sizeof(qpack_test_status_405_null),
-        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0}
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
-        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_1234, sizeof(qpack_test_get_1234),
-        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_ats, sizeof(qpack_test_get_ats),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0}
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_post_zzz_null, sizeof(qpack_test_post_zzz_null),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0}
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_status200_akamai, sizeof(qpack_status200_akamai),
-        { h3zero_method_none, NULL, 0, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0}
+        { h3zero_method_none, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_get_long_file_name, sizeof(qpack_get_long_file_name),
-        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL, 0, 0, 0, NULL, 0}
+        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
-        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL, 0, 0, 0,
-        (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN}
+        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0,
+        (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_range, sizeof(qpack_test_get_slash_range),
         { h3zero_method_get, qpack_test_string_slash, 1,
-        qpack_test_range_text, sizeof(qpack_test_range_text),
-        0, 0, NULL, 0}
+        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
+        0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_range_long, sizeof(qpack_test_get_slash_range_long),
         { h3zero_method_get, qpack_test_string_slash, 1,
-        qpack_test_range_text, sizeof(qpack_test_range_text),
-        0, 0, NULL, 0}
+        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
+        0, 0, NULL, 0,
+        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     }
 };
 
@@ -820,7 +842,7 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
         DBG_PRINTF("Qpack case %d cannot be parsed", i);
         ret = -1;
     }
-    else if ((bytes - data) != data_length) {
+    else if ((size_t)(bytes - data) != data_length) {
         DBG_PRINTF("Qpack case %d parse wrong length", i);
         ret = -1;
     }
@@ -884,7 +906,7 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
     return ret;
 }
 
-int h3zero_parse_qpack_test()
+int h3zero_parse_qpack_test(void)
 {
     int ret = 0;
 
@@ -903,7 +925,7 @@ int h3zero_parse_qpack_test()
  * Prepare frames of the different supported types, and 
  * verify that they can be decoded as expected
  */
-int h3zero_prepare_qpack_test()
+int h3zero_prepare_qpack_test(void)
 {
     int ret = 0;
     int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, 20, -1 };
@@ -1087,7 +1109,7 @@ int h3zero_user_agent_test_one(int test_mode, char const * ua_string, uint8_t * 
     return ret;
 }
 
-int h3zero_user_agent_test()
+int h3zero_user_agent_test(void)
 {
     int ret = 0;
     char const* ua_string[3] = { NULL, H3ZERO_USER_AGENT_STRING, h3zero_test_ua_string };
@@ -1105,7 +1127,7 @@ int h3zero_user_agent_test()
     return ret;
 }
 
-int h3zero_null_sni_test()
+int h3zero_null_sni_test(void)
 {
     int ret = 0;
     int hret;
@@ -1135,7 +1157,7 @@ int h3zero_null_sni_test()
  * Verify that the parser does not crash or loop.
  */
 
-int h3zero_qpack_fuzz_test()
+int h3zero_qpack_fuzz_test(void)
 {
     uint8_t* bytes = malloc(PICOQUIC_MAX_PACKET_SIZE);
     size_t length = 0;
@@ -1258,21 +1280,29 @@ int h3zero_stream_test_one_split(uint8_t * bytes, size_t nb_bytes,
 
     for (int i = 0; ret == 0 && i < nb_splits && bytes != NULL; i++) {
         uint8_t* p = packet_buffer;
-        uint8_t* p_max;
+        uint8_t* p_max = NULL;
         size_t p_len = bmax[i] - bytes;
         memset(p, 0, sizeof(packet_buffer));
-        memcpy(p, bytes, p_len);
-        p_max = packet_buffer + p_len;
-        while (p != NULL && p < p_max) {
+        if (p_len <= nb_bytes) {
+            memcpy(p, bytes, p_len);
+            p_max = packet_buffer + p_len;
+        }
+        else {
+            ret = -1;
+        }
+        while (ret == 0 && p != NULL && p < p_max) {
             p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
             if (p != NULL && available_data > 0) {
                 if (nb_data + available_data > 64) {
                     ret = -1;
                 }
-                else {
+                else if (nb_data + available_data <= nb_bytes) {
                     memcpy(&data[nb_data], p, available_data);
                     p += available_data;
                     nb_data += available_data;
+                }
+                else {
+                    ret = -1;
                 }
             }
         }
@@ -1329,7 +1359,7 @@ int h3zero_stream_test_one(uint8_t * bytes, size_t nb_bytes,
     return ret;
 }
 
-int h3zero_stream_test()
+int h3zero_stream_test(void)
 {
     int ret = h3zero_stream_test_one(h3zero_stream_test1, sizeof(h3zero_stream_test1), NULL, 0, 0);
 
@@ -1539,13 +1569,13 @@ size_t h3zero_stream_fuzz_message(uint8_t* buffer, size_t buffer_size, size_t tr
     return message_size;
 }
 
-int h3zero_stream_fuzz_test()
+int h3zero_stream_fuzz_test(void)
 {
     int ret = 0;
     size_t buffer_size = 0x10000;
     uint8_t* packet_buffer = malloc(buffer_size);
-    int nb_good = 0;
-    int nb_bad = 0;
+    size_t nb_good = 0;
+    size_t nb_bad = 0;
     size_t nb_trials = 2048;
     int errors_found[6] = { 0, 0, 0, 0, 0, 0 };
     char const * errors_names[6] = {
@@ -1743,7 +1773,7 @@ int parse_demo_scenario_test_one(const char * text, picoquic_demo_stream_desc_t 
     return ret;
 }
 
-int parse_demo_scenario_test()
+int parse_demo_scenario_test(void)
 {
     int ret = 0;
 
@@ -1762,9 +1792,9 @@ int parse_demo_scenario_test()
  * network simulation.
  */
 static const picoquic_demo_stream_desc_t demo_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0 },
-    { 0, 4, 0, "12345", "doc-12345.txt", 0 },
-    { 0, 8, 4, "post-test", "post-test.html", 12345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "root.html", 0, 0 },
+    { 0, 4, 0, "12345", "doc-12345.txt", 0, 0 },
+    { 0, 8, 4, "post-test", "post-test.html", 12345, 0 }
 };
 
 static size_t const nb_demo_test_scenario = sizeof(demo_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -1839,7 +1869,7 @@ static int demo_server_test_specced(demo_server_test_spec_t * spec)
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, picoquic_bbr_algorithm);
 
             memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-            picoquic_init_transport_parameters(&client_parameters, 1);
+            picoquic_init_transport_parameters(&client_parameters);
             client_parameters.enable_time_stamp = 1;
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
         }
@@ -1988,21 +2018,21 @@ static int demo_server_test(char const* alpn, picoquic_stream_data_cb_fn server_
     return demo_server_test_specced(&test_spec);
 }
 
-int h3zero_server_test()
+int h3zero_server_test(void)
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, ".", ".", 0);
 }
 
-int h09_server_test()
+int h09_server_test(void)
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL,
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
         0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
-int h3zero_migration_disabled_test()
+int h3zero_migration_disabled_test(void)
 {
     demo_server_test_spec_t test_spec = {
         PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
@@ -2153,7 +2183,7 @@ int h09_header_split_test(const uint8_t* bytes, size_t length, size_t split, h09
     return ret;
 }
 
-int h09_header_test()
+int h09_header_test(void)
 {
     int ret = 0;
     const size_t split_test[4] = { 1024, 7, 3, 1 };
@@ -2208,7 +2238,7 @@ int h09_header_test()
     return ret;
 }
 
-int generic_server_test()
+int generic_server_test(void)
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
     char const* alpn_3 = PICOHTTP_ALPN_H3_LATEST;
@@ -2252,10 +2282,10 @@ typedef struct st_hzero_post_echo_ctx_t {
     uint8_t buf[PICOQUIC_ECHO_SIZE_MAX];
 } hzero_post_echo_ctx_t;
 
-int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
+int h3zero_test_ping_callback(picoquic_cnx_t* UNUSED(cnx),
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
-    void * callback_ctx)
+    void* UNUSED(callback_ctx))
 {
     int ret = 0;
     hzero_post_echo_ctx_t* ctx = (hzero_post_echo_ctx_t*)stream_ctx->path_callback_ctx;
@@ -2348,7 +2378,7 @@ int h3zero_test_ping_callback(picoquic_cnx_t* cnx,
 }
 
 static const picoquic_demo_stream_desc_t post_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 2345 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/ping", "ping-test.html", 2345, 0 }
 };
 
 picohttp_server_path_item_t ping_test_item = {
@@ -2369,19 +2399,19 @@ static size_t const nb_post_test_scenario = sizeof(post_test_scenario) / sizeof(
 
 static size_t const post_test_stream_length[] = { 2345 };
 
-int h3zero_post_test()
+int h3zero_post_test(void)
 {
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario,
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
-int h09_post_test()
+int h09_post_test(void)
 {
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, (void*)&ping_test_param, post_test_scenario, nb_post_test_scenario, 
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
-int demo_file_sanitize_test()
+int demo_file_sanitize_test(void)
 {
     int ret = 0;
     char const* good[] = {
@@ -2410,7 +2440,7 @@ int demo_file_sanitize_test()
     return ret;
 }
 
-int demo_file_access_test()
+int demo_file_access_test(void)
 {
     int ret = 0;
 #ifdef _WINDOWS
@@ -2522,7 +2552,7 @@ int demo_file_access_test()
 #define PICOQUIC_TEST_FILE_DEMO_FOLDER "picoquictest"
 
 static const picoquic_demo_stream_desc_t file_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/file_test_ref.txt", "file_test_ref.txt", 0, 0 }
 };
 
 static size_t const demo_file_test_stream_length[] = {
@@ -2555,7 +2585,7 @@ int file_test_compare(const picohttp_server_parameters_t * file_param, const pic
     return ret;
 }
 
-int demo_server_file_test()
+int demo_server_file_test(void)
 {
     int ret = 0;
     char file_name_buffer[1024];
@@ -2599,26 +2629,26 @@ int demo_server_file_test()
 }
 
 static const picoquic_demo_stream_desc_t satellite_test_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/10000000", "bin10M.txt", 0, 0 }
 };
 
 static const size_t nb_satellite_test_scenario = sizeof(satellite_test_scenario) / sizeof(picoquic_demo_stream_desc_t);
 
-int h3zero_satellite_test()
+int h3zero_satellite_test(void)
 {
     /* TODO check, max exec time increased from 10750000 to 10943826. */
     return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario,
         demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
-int h09_satellite_test()
+int h09_satellite_test(void)
 {
     /* TODO check, max exec time increased from 10750000 to 10943117. */
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL, satellite_test_scenario, nb_satellite_test_scenario, 
         demo_test_stream_length, 1, 0, 11000000, 0, NULL, NULL, NULL, 0);
 }
 
-int h09_lone_fin_test()
+int h09_lone_fin_test(void)
 {
     int ret = 0;
     char file_name_buffer[1024];
@@ -2642,7 +2672,7 @@ const char doc_name_long[] = { '/', FILE_NAME_LONG, 0};
 const char file_name_long[] = { '.', '/', FILE_NAME_LONG, 0 };
 
 static const picoquic_demo_stream_desc_t long_file_name_scenario[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, doc_name_long, file_name_long, 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, doc_name_long, file_name_long, 0, 0 }
 };
 
 static const size_t nb_long_file_name_scenario = sizeof(long_file_name_scenario) / sizeof(picoquic_demo_stream_desc_t);
@@ -2652,7 +2682,7 @@ static size_t const long_file_name_stream_length[] = {
     32
 };
 
-int h3_long_file_name_test()
+int h3_long_file_name_test(void)
 {
     int ret = 0;
 #ifdef _WINDOWS
@@ -2936,38 +2966,38 @@ int http_multi_file_test_one(char const * alpn, picoquic_stream_data_cb_fn serve
     return ret;
 }
 
-int h3_multi_file_test()
+int h3_multi_file_test(void)
 {
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, 0, 0);
 }
 
 #define H3ZERO_MULTI_LOSS_PATTERN 0xa242EDB710000ull
 
-int h3_multi_file_loss_test()
+int h3_multi_file_loss_test(void)
 {
     uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 0);
 }
 
-int h3_multi_file_preemptive_test()
+int h3_multi_file_preemptive_test(void)
 {
     uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, loss_pattern, 1);
 }
 
-int h09_multi_file_test()
+int h09_multi_file_test(void)
 {
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, 0, 0);
 }
 
-int h09_multi_file_loss_test()
+int h09_multi_file_loss_test(void)
 {
     uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, 
         loss_pattern, 0);
 }
 
-int h09_multi_file_preemptive_test()
+int h09_multi_file_preemptive_test(void)
 {
     uint64_t loss_pattern = H3ZERO_MULTI_LOSS_PATTERN;
     return http_multi_file_test_one(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback,
@@ -2988,25 +3018,25 @@ int h09_multi_file_preemptive_test()
 
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_1[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0},
-    { 0, 4, 0, "test.html", "test.html", 0 },
-    { 0, 8, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0},
+    { 0, 4, 0, "test.html", "test.html", 0 , 0},
+    { 0, 8, 0, "main.jpg", "main.jpg", 0, 0 },
+    { 0, 12, 0, "/bla/bla/", "_bla_bla_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_2[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 },
-    { 0, 4, 0, "main.jpg", "main.jpg", 0 },
-    { 0, 8, 4, "test.html", "test.html", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 },
+    { 0, 4, 0, "main.jpg", "main.jpg", 0, 0 },
+    { 0, 8, 4, "test.html", "test.html", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_3[] = {
-    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0 }
+    { 1000, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/", "_", 0, 0 }
 };
 
 static const picoquic_demo_stream_desc_t http_stress_scenario_4[] = {
-    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000 },
-    { 0, 4, 0, "/", "_", 0 }
+    { 0, 0, PICOQUIC_DEMO_STREAM_ID_INITIAL, "/cgi-sink", "_cgi-sink", 1000000, 0 },
+    { 0, 4, 0, "/", "_", 0, 0 }
 };
 
 typedef struct st_http_stress_scenario_list_t {
@@ -3437,22 +3467,22 @@ int http_stress_test_one(int do_corrupt, int do_drop, int initial_random)
     return ret;
 }
 
-int http_stress_test()
+int http_stress_test(void)
 {
     return http_stress_test_one(0, 0, 0);
 }
 
-int http_corrupt_test()
+int http_corrupt_test(void)
 {
     return http_stress_test_one(1, 0, 0);
 }
 
-int http_drop_test()
+int http_drop_test(void)
 {
     return http_stress_test_one(0, 1, 0);
 }
 
-int http_corrupt_rdpn_test()
+int http_corrupt_rdpn_test(void)
 {
     return http_stress_test_one(1, 0, 1);
 }
@@ -3468,7 +3498,7 @@ picoquic_alpn_enum alpn_proto_list[] = {
 char const* alpn_bad_list[] = {
     "h3-00", "hq", "hq-interop-00", "", "unknown", NULL };
 
-int demo_alpn_test()
+int demo_alpn_test(void)
 {
     int ret = 0;
     /* Try the list of correct and incorrect values */
@@ -3581,7 +3611,7 @@ h3zero_settings_t default_setting_expected = {
     1, 0, 0, 0, 1, 1, 0
 };
 
-int h3zero_settings_test()
+int h3zero_settings_test(void)
 {
     int ret = h3zero_settings_decode_test(h3zero_default_setting_frame + 1, h3zero_default_setting_frame_size - 1, &default_setting_expected, 1);
 
@@ -3639,7 +3669,7 @@ static const h3zero_string_content_type_compare_list_t h3zero_string_content_typ
 
 static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_content_type_compare_list) / sizeof(h3zero_string_content_type_compare_list_t);
 
-int h3zero_get_content_type_by_path_test() {
+int h3zero_get_content_type_by_path_test(void) {
     int ret = 0;
 
     for (size_t i = 0; i < nb_h3zero_string_content_type_compare; i++) {
@@ -3817,14 +3847,14 @@ static int h3_grease_test_one(int server_test)
     return ret;
 }
 
-int h3_grease_client_test()
+int h3_grease_client_test(void)
 {
     int ret = h3_grease_test_one(0);
 
     return ret;
 }
 
-int h3_grease_server_test()
+int h3_grease_server_test(void)
 {
     int ret = h3_grease_test_one(1);
 
@@ -4012,7 +4042,7 @@ int demo_ticket_test_one(char const* alpn, uint32_t proposed_version,
     return ret;
 }
 
-int demo_ticket_test()
+int demo_ticket_test(void)
 {
     int ret = demo_ticket_test_one("picoquic_test", 0x00000001,
         democlient_ticket_sample, sizeof(democlient_ticket_sample),
@@ -4065,7 +4095,7 @@ int demo_error_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx,
     return ret;
 }
 
-int demo_error_too_long()
+int demo_error_too_long(void)
 {
     int ret;
     picoquic_quic_t* quic = NULL;
@@ -4098,7 +4128,7 @@ int demo_error_too_long()
     return ret;
 }
 
-int demo_error_repeat()
+int demo_error_repeat(void)
 {
     int ret;
     picoquic_quic_t* quic = NULL;
@@ -4132,7 +4162,7 @@ int demo_error_repeat()
 
 int picoquic_demo_client_open_stream_file(picoquic_cnx_t* cnx, picoquic_demo_callback_ctx_t* ctx, picoquic_demo_client_stream_ctx_t* stream_ctx);
 
-int demo_error_sanitize()
+int demo_error_sanitize(void)
 {
     int ret;
     picoquic_quic_t* quic = NULL;
@@ -4221,7 +4251,7 @@ int demo_error_callback(picoquic_call_back_event_t fin_or_event, uint64_t stream
 
 void picoquic_demo_client_delete_stream_context(picoquic_demo_callback_ctx_t* ctx,
     picoquic_demo_client_stream_ctx_t* stream_ctx);
-int demo_error_double()
+int demo_error_double(void)
 {
     int ret;
     picoquic_quic_t* quic = NULL;
@@ -4277,7 +4307,7 @@ int demo_error_double()
 }
 
 
-int demo_error_test()
+int demo_error_test(void)
 {
     int ret = demo_error_too_long();
 

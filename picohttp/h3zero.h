@@ -50,8 +50,8 @@ extern "C" {
 #define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
-#define H3ZERO_WT_AVAILABLE_PROTOCOLS "WT-Available-Protocols"
-#define H3ZERO_WT_PROTOCOL "WT-Protocol"
+#define H3ZERO_WT_AVAILABLE_PROTOCOLS "wt-available-protocols"
+#define H3ZERO_WT_PROTOCOL "wt-protocol"
 
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
 #define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
@@ -190,6 +190,8 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * authority;
+    size_t authority_length;
     uint8_t const * range;
     size_t range_length;
     int status;

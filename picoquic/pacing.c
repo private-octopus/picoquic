@@ -257,13 +257,13 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_
 }
 
 /* Reset pacing data if congestion algorithm computes it directly */
-void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
+void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
 {
     picoquic_update_pacing_parameters(&path_x->pacing, pacing_rate,
         quantum, path_x->send_mtu, path_x->smoothed_rtt, path_x);
 }
 /* Reset pacing if expressed as CWIN and RTT */
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int slow_start)
+void picoquic_update_pacing_data(picoquic_path_t* path_x, int slow_start)
 {
     picoquic_update_pacing_window(&path_x->pacing, slow_start, path_x->cwin, path_x->send_mtu, path_x->smoothed_rtt,
         path_x);

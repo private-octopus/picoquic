@@ -1547,8 +1547,8 @@ int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
     return ret;
 }
 
-int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
-    uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
+int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED(cid), int client_mode,
+    uint32_t UNUSED(proposed_version), const picoquic_connection_id_t* UNUSED(remote_cnxid), void* ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
@@ -1593,7 +1593,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     return 0;
 }
 
-int qlog_connection_end(uint64_t time, void * ptr)
+int qlog_connection_end(uint64_t UNUSED(time), void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;

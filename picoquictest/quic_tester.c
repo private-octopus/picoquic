@@ -203,7 +203,7 @@ client hello. The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_test()
+int initial_ping_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -243,7 +243,7 @@ int initial_ping_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {
@@ -264,7 +264,7 @@ The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_ack_test()
+int initial_ping_ack_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -333,7 +333,7 @@ int initial_ping_ack_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {

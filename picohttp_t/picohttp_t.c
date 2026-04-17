@@ -34,7 +34,7 @@ extern uint64_t picohttp_random_stress_context;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {
@@ -106,6 +106,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_uri", picowt_baton_uri_test },
     { "picowt_baton_wrong", picowt_baton_wrong_test },
     { "picowt_baton_reset", picowt_baton_reset_test },
+    { "picowt_baton_wildcard", picowt_baton_wildcard_test },
     { "picowt_drain", picowt_drain_test },
     { "picowt_tp", picowt_tp_test },
     { "quicperf_parse", quicperf_parse_test },
@@ -128,7 +129,8 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_wifi_bad_bbr", cc_ns_wifi_bad_bbr_test },
     { "cc_ns_varylink", cc_ns_varylink_test },
     { "cc_ns_satellite", cc_ns_satellite_test },
-    { "cc_ns_media", cc_ns_media_test }
+    { "cc_ns_media", cc_ns_media_test },
+    { "cc_ns_media_repeat", cc_ns_media_repeat_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

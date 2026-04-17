@@ -44,7 +44,6 @@
 typedef struct st_test_ack_range_t {
     uint64_t start_of_sack_range;
     uint64_t end_of_sack_range;
-    uint64_t ack_time;
 } test_ack_range_t;
 
 static const test_ack_range_t test_range_in_1[] = {
@@ -91,25 +90,21 @@ typedef struct st_test_ack_of_ack_t {
     size_t nb_ack;
     test_ack_range_t const* result;
     size_t nb_result;
-    uint32_t version_flags;
 } test_ack_of_ack_t;
 
 static const test_ack_of_ack_t test_ack_of_ack_list[] = {
     { "simple",
         test_range_in_1, sizeof(test_range_in_1) / sizeof(test_ack_range_t),
         test_range_ack_1, sizeof(test_range_ack_1) / sizeof(test_ack_range_t),
-        test_range_res_1, sizeof(test_range_res_1) / sizeof(test_ack_range_t),
-        0 },
+        test_range_res_1, sizeof(test_range_res_1) / sizeof(test_ack_range_t)},
     { "two ranges",
         test_range_in_2, sizeof(test_range_in_2) / sizeof(test_ack_range_t),
         test_range_ack_2, sizeof(test_range_ack_2) / sizeof(test_ack_range_t),
-        test_range_res_2, sizeof(test_range_res_2) / sizeof(test_ack_range_t),
-        0 },
+        test_range_res_2, sizeof(test_range_res_2) / sizeof(test_ack_range_t)},
     { "no op",
         test_range_in_3, sizeof(test_range_in_3) / sizeof(test_ack_range_t),
         test_range_ack_3, sizeof(test_range_ack_3) / sizeof(test_ack_range_t),
-        test_range_res_3, sizeof(test_range_res_3) / sizeof(test_ack_range_t),
-        0 }
+        test_range_res_3, sizeof(test_range_res_3) / sizeof(test_ack_range_t)}
 };
 
 /*
@@ -155,7 +150,7 @@ static int cmp_test_sack_list(picoquic_sack_list_t* sack_list,
 }
 
 static size_t build_test_ack(test_ack_range_t const* ranges, size_t nb_ranges,
-    uint8_t* bytes, size_t bytes_max, uint32_t version_flags)
+    uint8_t* bytes, size_t bytes_max)
 {
     size_t byte_index = 0;
     uint64_t ack_range = 0;
@@ -198,8 +193,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
     }
 
     if (ret == 0) {
-        size_t ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack),
-            sample->version_flags);
+        size_t ack_length = build_test_ack(sample->ack, sample->nb_ack, ack, sizeof(ack));
         ret = picoquic_process_ack_of_ack_frame(&sack_list, ack, ack_length, &consumed, 0);
     }
 
@@ -219,7 +213,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
  * Perform the whole set of range tests 
  */
 
-int ack_of_ack_test()
+int ack_of_ack_test(void)
 {
     int ret = 0;
 

@@ -2221,7 +2221,7 @@ static void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list va
 
 static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time,
     uint64_t cid64,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
+    const struct sockaddr* addr_peer, const struct sockaddr* UNUSED(addr_local), size_t packet_length)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
@@ -2233,8 +2233,8 @@ static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curr
 }
 
 static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id, unsigned char ecn)
+    const struct sockaddr* addr_peer, const struct sockaddr* UNUSED(addr_local), size_t packet_length,
+    uint64_t UNUSED(unique_path_id), unsigned char UNUSED(ecn))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
@@ -2248,7 +2248,7 @@ static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_
     }
 }
 
-static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
+static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), int receiving, uint64_t UNUSED(current_time),
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2257,8 +2257,8 @@ static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int rec
     }
 }
 
-static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph,
-    size_t packet_size, int ret, uint64_t current_time)
+static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), picoquic_packet_header* ph,
+    size_t packet_size, int ret, uint64_t UNUSED(current_time))
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = cnx->quic->F_log;
@@ -2282,7 +2282,7 @@ static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     }
 }
 
-static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2294,9 +2294,9 @@ static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     }
 }
 
-static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
-    uint8_t* send_buffer, size_t send_length, uint64_t current_time)
+    uint8_t* send_buffer, size_t send_length, uint64_t UNUSED(current_time))
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_outgoing_segment(cnx->quic->F_log, 1,
@@ -2314,7 +2314,8 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 
         textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
-        fprintf(F, "Lost packet type %d, number %" PRIu64 ", size %zu", ptype, sequence_number, packet_size);
+        fprintf(F, "Lost packet type %d, path %" PRIu64 ", number %" PRIu64 ", size %zu", ptype,
+            path_x->unique_path_id, sequence_number, packet_size);
         if (dcid != NULL) {
             fprintf(F, ", DCID ");
             textlog_connection_id(F, dcid);
@@ -2324,7 +2325,7 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 }
 
 static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
-    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    uint8_t const* UNUSED(sni), size_t UNUSED(sni_len), uint8_t const* UNUSED(alpn), size_t UNUSED(alpn_len),
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
 #ifdef _WINDOWS
@@ -2332,8 +2333,6 @@ static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     UNREFERENCED_PARAMETER(sni_len);
     UNREFERENCED_PARAMETER(alpn);
     UNREFERENCED_PARAMETER(alpn_len);
-    UNREFERENCED_PARAMETER(alpn_list);
-    UNREFERENCED_PARAMETER(alpn_count);
 #endif
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
         /* TODO: alpn */
@@ -2360,14 +2359,14 @@ static void textlog_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ti
     }
 }
 
-static void textlog_new_connection(picoquic_cnx_t* cnx)
+static void textlog_new_connection(picoquic_cnx_t* UNUSED(cnx))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);
 #endif
 }
 
-static void textlog_close_connection(picoquic_cnx_t* cnx)
+static void textlog_close_connection(picoquic_cnx_t* UNUSED(cnx))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);

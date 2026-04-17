@@ -34,7 +34,7 @@
 // Adjust the signature if your implementation differs
 extern const uint8_t* qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding);
 
-int qlog_frames_test()
+int qlog_frames_test(void)
 {
     int ret = 0;
     char qlog_frames_test_ref[512];

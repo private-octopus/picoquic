@@ -357,7 +357,7 @@ int mediatest_check_stats(mediatest_ctx_t* mt_ctx, mediatest_spec_t * spec, medi
             ((media_type == media_test_video2) ? MEDIATEST_VIDEO2_PERIOD : MEDIATEST_VIDEO_PERIOD);
         uint64_t expected = MEDIATEST_DURATION / period;
 
-        if (stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
+        if ((uint64_t)stats->nb_frames != expected && mt_ctx->disruption_clear == 0) {
             ret = -1;
         }
         else if (stats->nb_frames != 0) {
@@ -1024,7 +1024,7 @@ int mediatest_configure_stream(mediatest_cnx_ctx_t * cnx_ctx, media_test_type_en
     return ret;
 }
 
-void mediatest_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
+void mediatest_init_transport_parameters(picoquic_tp_t* tp)
 {
     memset(tp, 0, sizeof(picoquic_tp_t));
     tp->initial_max_stream_data_bidi_local = 0x200000;
@@ -1145,7 +1145,7 @@ mediatest_ctx_t * mediatest_configure(int media_test_id,  mediatest_spec_t * spe
         /* Start the connection and create the context */
         if (cnx != NULL) {
             picoquic_tp_t client_parameters;
-            mediatest_init_transport_parameters(&client_parameters, 1);
+            mediatest_init_transport_parameters(&client_parameters);
             picoquic_set_transport_parameters(cnx, &client_parameters);
             picoquic_set_feedback_loss_notification(cnx, 1);
 
@@ -1340,7 +1340,7 @@ int mediatest_one(mediatest_id_enum media_test_id, mediatest_spec_t * spec)
 }
 
 /* Test cases */
-int mediatest_video_test()
+int mediatest_video_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1352,7 +1352,7 @@ int mediatest_video_test()
     return ret;
 }
 
-int mediatest_video_audio_test()
+int mediatest_video_audio_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1365,7 +1365,7 @@ int mediatest_video_audio_test()
     return ret;
 }
 
-int mediatest_video_data_audio_test()
+int mediatest_video_data_audio_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1379,7 +1379,7 @@ int mediatest_video_data_audio_test()
     return ret;
 }
 
-int mediatest_video2_down_test()
+int mediatest_video2_down_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1397,7 +1397,7 @@ int mediatest_video2_down_test()
     return ret;
 }
 
-int mediatest_video2_back_test()
+int mediatest_video2_back_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1415,7 +1415,7 @@ int mediatest_video2_back_test()
     return ret;
 }
 
-int mediatest_video2_probe_test()
+int mediatest_video2_probe_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1433,7 +1433,7 @@ int mediatest_video2_probe_test()
     return ret;
 }
 
-int mediatest_worst_test()
+int mediatest_worst_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1447,7 +1447,7 @@ int mediatest_worst_test()
     return ret;
 }
 
-int mediatest_no_coal_test()
+int mediatest_no_coal_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1462,7 +1462,7 @@ int mediatest_no_coal_test()
     return ret;
 }
 
-int mediatest_wifi_test()
+int mediatest_wifi_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1487,7 +1487,7 @@ int mediatest_wifi_test()
     return ret;
 }
 
-int mediatest_suspension_test()
+int mediatest_suspension_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };
@@ -1509,7 +1509,7 @@ int mediatest_suspension_test()
     return ret;
 }
 
-int mediatest_suspension2_test()
+int mediatest_suspension2_test(void)
 {
     int ret;
     mediatest_spec_t spec = { 0 };

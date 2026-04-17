@@ -156,7 +156,7 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
     return ret;
 }
 
-int memlog_test()
+int memlog_test(void)
 {
     int ret = memlog_test_one(0, MEMLOG_FILE, 0);
 

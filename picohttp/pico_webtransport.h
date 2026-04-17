@@ -83,7 +83,7 @@ extern "C" {
         size_t error_msg_len;
     } picowt_capsule_t;
 
-    int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
+    int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
     void picowt_release_capsule(picowt_capsule_t* capsule);
 
     void picowt_deregister(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
@@ -115,6 +115,12 @@ extern "C" {
      * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
      */
     int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
+
+    /* Get the authority from a WebTransport request.
+     * Returns a pointer to the null-terminated authority string, or NULL if not present.
+     * The pointer is valid for the lifetime of the stream context.
+     */
+    const char* picowt_get_authority(h3zero_stream_ctx_t* stream_ctx);
 
 #ifdef __cplusplus
 }

@@ -123,12 +123,11 @@ static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoqui
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
 
-void picoquic_prague_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+void picoquic_prague_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(option_string);
 #endif
 
@@ -194,7 +193,6 @@ static void picoquic_prague_initialize_era(
 static void picoquic_prague_enter_recovery(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification,
     picoquic_prague_state_t* pr_state,
     uint64_t current_time)
 {
@@ -305,7 +303,7 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
         /* CE mark received in intitial state:
          * exit and enter recovery.
          */
-        picoquic_prague_enter_recovery(cnx, path_x, picoquic_congestion_notification_ecn_ec, pr_state, current_time);
+        picoquic_prague_enter_recovery(cnx, path_x, pr_state, current_time);
     }
     else {
         path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
@@ -353,7 +351,7 @@ void picoquic_prague_notify(
             /* enter recovery on loss. We should do nothing on timeout */
             if (picoquic_cc_hystart_loss_test(&pr_state->rtt_filter, notification, ack_state->lost_packet_number,
                 PICOQUIC_SMOOTHED_LOSS_THRESHOLD) && current_time - pr_state->recovery_stamp > path_x->smoothed_rtt) {
-                picoquic_prague_enter_recovery(cnx, path_x, notification, pr_state, current_time);
+                picoquic_prague_enter_recovery(cnx, path_x, pr_state, current_time);
             }
             break;
         case picoquic_congestion_notification_timeout:
@@ -390,7 +388,7 @@ void picoquic_prague_notify(
             break;
         }
         /* Compute pacing data */
-        picoquic_update_pacing_data(cnx, path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
+        picoquic_update_pacing_data(path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
             pr_state->ssthresh == UINT64_MAX);
     }
 }

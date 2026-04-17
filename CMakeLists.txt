@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.13)
 # Building tests by default depends on whether this is a subproject
 if(DEFINED PROJECT_NAME)
     option(picoquic_BUILD_TESTS "Build Tests for picoquic" OFF)
+    option(BUILD_PICO_SIM "Build pico_sim" OFF)
 else()
     option(picoquic_BUILD_TESTS "Build Tests for picoquic" ON)
+    option(BUILD_PICO_SIM "Build pico_sim" ON)
 endif()
 
 project(picoquic
@@ -118,6 +120,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
+    picoquic/dualq_aqm.c
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
@@ -141,6 +144,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquic_cubic.h
      picoquic/picoquic_bbr.h
      picoquic/picoquic_bbr1.h
+     picoquic/picoquictest_dualq.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
      picoquic/c4.h
@@ -196,7 +200,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/cpu_limited.c
     picoquictest/datagram_tests.c
     picoquictest/delay_tolerant_test.c
-    picoquictest/dualq_aqm.c
     picoquictest/dualq_aqm_test.c
     picoquictest/ech_test.c
     picoquictest/edge_cases.c
@@ -218,7 +221,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/parseheadertest.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
-    picoquictest/picoquic_ns.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
@@ -252,6 +254,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/h3zero_url_template.c
     picohttp/picomask.c
     picohttp/quicperf.c
+    picohttp/picoquic_ns.c
     picohttp/webtransport.c
     picohttp/wt_baton.c)
 
@@ -263,6 +266,7 @@ set(PICOHTTP_HEADERS
      picohttp/democlient.h
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
+     picohttp/picoquic_ns.h
      picohttp/picomask.h
      picohttp/wt_baton.h)
 
@@ -273,6 +277,8 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
     picoquictest/webtransport_test.c)
+
+OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 if(PICOQUIC_FETCH_PTLS)
@@ -295,8 +301,6 @@ else()
     message(STATUS "PTLS compiled without support for Fusion")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
-
-OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 
 if(WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
@@ -429,6 +433,7 @@ endif()
 
 if (BUILD_LOGLIB)
     add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    target_link_libraries(picoquic-log PUBLIC picoquic-core)
     target_include_directories(picoquic-log
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
@@ -452,14 +457,16 @@ if (BUILD_HTTP)
             ${OPENSSL_LIBRARIES}
             ${MBEDTLS_LIBRARIES}
         PUBLIC
-            picoquic-core)
+            picoquic-core
+            picoquic-log)
     target_include_directories(picohttp-core
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
             ${OPENSSL_INCLUDE_DIR}
             ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic)
+            picoquic
+            picohttp)
     set_picoquic_compile_settings(picohttp-core)
 endif()
 
@@ -479,7 +486,7 @@ if (BUILD_DEMO)
     set_picoquic_compile_settings(picoquicdemo)
 endif()
 
-if (BUILD_PQBENCH)
+if(BUILD_PQBENCH)
     add_executable(pqbench
         pqbench_app/pqbench.c
         picoquicfirst/getopt.c)
@@ -495,6 +502,22 @@ if (BUILD_PQBENCH)
     set_picoquic_compile_settings(pqbench)
 endif()
 
+if(BUILD_PICO_SIM AND BUILD_HTTP)
+    add_executable(pico_sim
+        p_sim/pico_sim.c
+        picoquicfirst/getopt.c)
+    target_link_libraries(pico_sim
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picohttp-core
+            picoquic-core
+            picoquic-log)
+    target_include_directories(pico_sim PRIVATE picoquicfirst picohttp loglib picoquic)
+    set_picoquic_compile_settings(pico_sim)
+endif()
+
 if (BUILD_LOGREADER)
     add_executable(picolog_t picolog/picolog.c)
     target_link_libraries(picolog_t PRIVATE picoquic-log picoquic-core)
@@ -507,7 +530,7 @@ include(CTest)
 if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_library(picoquic-test STATIC ${PICOQUIC_TEST_LIBRARY_FILES})
-    target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log)
+    target_link_libraries(picoquic-test PUBLIC picoquic-core picoquic-log picohttp-core)
     target_include_directories(picoquic-test
         PRIVATE
             ${MBEDTLS_INCLUDE_DIRS}

@@ -91,10 +91,10 @@ static int picowt_baton_test_reset(wt_baton_ctx_t * baton_ctx, int* reset_needed
     return ret;
 }
 
-static int picowt_baton_test_one(
+static int picowt_baton_test_one_ex(
     uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
-    const char* server_qlog_dir)
+    const char* server_qlog_dir, picohttp_server_path_item_t* table, size_t table_nb)
 {
     char const* alpn = "h3";
     uint64_t simulated_time = 0;
@@ -178,8 +178,8 @@ static int picowt_baton_test_one(
             /* Initialize the server -- should include the path setup for connect action */
             memset(&server_param, 0, sizeof(picohttp_server_parameters_t));
             server_param.web_folder = NULL;
-            server_param.path_table = path_item_list;
-            server_param.path_table_nb = 1;
+            server_param.path_table = table;
+            server_param.path_table_nb = table_nb;
 
             picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
             picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
@@ -281,70 +281,89 @@ static int picowt_baton_test_one(
     return ret;
 }
 
-int picowt_baton_basic_test()
+static int picowt_baton_test_one(
+    uint8_t test_id, const char* baton_path,
+    uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
+    const char* server_qlog_dir)
+{
+    return picowt_baton_test_one_ex(test_id, baton_path, do_losses, completion_target,
+        client_qlog_dir, server_qlog_dir, path_item_list, 1);
+}
+
+int picowt_baton_basic_test(void)
 {
     int ret = picowt_baton_test_one(1, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_error_test()
+int picowt_baton_error_test(void)
 {
     int ret = picowt_baton_test_one(4, "/baton?inject=1", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_long_test()
+int picowt_baton_long_test(void)
 {
     int ret = picowt_baton_test_one(2, "/baton", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_wrong_test()
+int picowt_baton_wrong_test(void)
 {
     int ret = picowt_baton_test_one(3, "/wrong_baton", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_uri_test()
+int picowt_baton_uri_test(void)
 {
     int ret = picowt_baton_test_one(5, "/baton?baton=33", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_multi_test()
+int picowt_baton_multi_test(void)
 {
     int ret = picowt_baton_test_one(6, "/baton?baton=240&count=4", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_random_test()
+int picowt_baton_random_test(void)
 {
     int ret = picowt_baton_test_one(7, "/baton?count=4", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_krome_test()
+int picowt_baton_krome_test(void)
 {
     int ret = picowt_baton_test_one(8, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }
 
-int picowt_baton_reset_test()
+int picowt_baton_reset_test(void)
 {
     int ret = picowt_baton_test_one(9, "/baton?count=8", 0, 5000000, ".", ".");
 
     return ret;
 }
 
-int picowt_tp_test()
+int picowt_baton_wildcard_test(void)
+{
+    picohttp_server_path_item_t wildcard_table[1] = {
+        { "*", 1, wt_baton_callback, NULL }
+    };
+    /* /baton is not a specific entry in wildcard_table; the '*' handler must catch it */
+    return picowt_baton_test_one_ex(1, "/baton?baton=240", 0, 2000000, ".", ".",
+        wildcard_table, 1);
+}
+
+int picowt_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
@@ -431,7 +450,7 @@ int picowt_drain_test_one(int expect_error)
     return ret;
 }
 
-int picowt_drain_test()
+int picowt_drain_test(void)
 {
     int ret = picowt_drain_test_one(0);
 
