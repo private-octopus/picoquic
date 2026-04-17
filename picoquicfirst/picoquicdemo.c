@@ -471,13 +471,13 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
     if (str == NULL) {
         ret = -1;
     }
-    memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
+    memcpy(str, mp_config, sizeof(char) * config_len);
     ptr = str;
 
     while ((token = picoquic_strsep(&str, ","))) {
         struct sockaddr_storage ip;
         valid_new_entry = 0;
-        strncpy(alt_path, token, config_len);
+        memcpy(alt_path, token, sizeof(char) * (strnlen(token, config_len - 1) + 1));
 
         if ((token2 = picoquic_strsep(&token, "/")) != 0) {
             if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
