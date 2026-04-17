@@ -463,9 +463,10 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
 {
     int ret = 0;
     int valid_new_entry = 0;
-    char *token, *token2, *ptr, *str;
+    char *token, *token2, *end_ptr, *alt_path, *ptr, *str;
     uint16_t server_port = (default_server_ip->ss_family == AF_INET) ? ((struct sockaddr_in*)default_server_ip)->sin_port : ((struct sockaddr_in6*)default_server_ip)->sin6_port;
     str = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    alt_path = malloc(sizeof(char) * (strlen(mp_config) + 1));
     if (str == NULL) {
         ret = -1;
     }
@@ -475,26 +476,38 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
     while ((token = picoquic_strsep(&str, ","))) {
         struct sockaddr_storage ip;
         valid_new_entry = 0;
+        strcpy(alt_path, token);
 
         if ((token2 = picoquic_strsep(&token, "/")) != 0) {
-          if (picoquic_store_text_addr(&ip, token2, server_port) == 0) {
-            memcpy(alt_client_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
-            if ((token2 = picoquic_strsep(&token, "/")) != 0) {
-              if (atoi(token2) >= 0) {
-                *(src_if + (*nb_alt_paths)) = atoi(token2);
-                valid_new_entry = 1;
-                if (token && picoquic_store_text_addr(&ip, token, server_port) == 0) {
-                  memcpy(alt_server_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+            if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
+                memcpy(alt_client_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                if ((token2 = picoquic_strsep(&token, "/")) == NULL) {
+                    *(src_if + (*nb_alt_paths)) = 0;
+                    memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                    valid_new_entry = 1;
                 }
                 else {
-                  memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                    *(src_if + (*nb_alt_paths)) = (int)strtol(token2, &end_ptr, 10);
+                    if (*end_ptr) {
+                        fprintf(stdout, "Unexpected interface index %s, skipping the alternative path %s\n", token2, alt_path);
+                    }
+                    else {
+                        if (token) {
+                            if (picoquic_store_text_addr(&ip, token, server_port) == 0){
+                                memcpy(alt_server_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                                valid_new_entry = 1;
+                            }
+                        }
+                        else {
+                            memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                            valid_new_entry = 1;
+                        }
+                    }
                 }
-              }
             }
-          }
         }
 
-        if (valid_new_entry == 1){
+        if (valid_new_entry == 1 && alt_client_ip[*nb_alt_paths].ss_family == alt_server_ip[*nb_alt_paths].ss_family){
             (*nb_alt_paths)++;
             /* If more than PICOQUIC_NB_PATH_TARGET alt paths are specified, the remaining are ignored */
             if (*nb_alt_paths >= PICOQUIC_NB_PATH_TARGET) {
@@ -502,6 +515,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
             }
         }
     }
+    free(alt_path);
     free(ptr);
     return ret;
 }
@@ -1331,7 +1345,7 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A \"client ip/ifindex[/server ip][,client ip/ifindex[/server ip]]\"  IPs and client\n");
+    fprintf(stderr, "  -A \"client_ip/ifindex[/server_ip][,client_ip/ifindex[/server_ip]]\"  IPs and client\n");
     fprintf(stderr, "                        interface index for multipath alternative path,\n");
     fprintf(stderr, "                        e.g. \"10.0.0.2/3,10.0.0.3/4/10.1.1.1\".\n");
     fprintf(stderr, "                        This option only affects the behavior of the client.\n");
