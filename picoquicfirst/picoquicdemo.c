@@ -462,11 +462,12 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
   struct sockaddr_storage *alt_server_ip, int *nb_alt_paths, struct sockaddr_storage *default_server_ip)
 {
     int ret = 0;
+    unsigned long config_len = strlen(mp_config) + 1;
     int valid_new_entry = 0;
     char *token, *token2, *end_ptr, *alt_path, *ptr, *str;
     uint16_t server_port = (default_server_ip->ss_family == AF_INET) ? ((struct sockaddr_in*)default_server_ip)->sin_port : ((struct sockaddr_in6*)default_server_ip)->sin6_port;
-    str = malloc(sizeof(char) * (strlen(mp_config) + 1));
-    alt_path = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    str = malloc(sizeof(char) * config_len);
+    alt_path = malloc(sizeof(char) * config_len);
     if (str == NULL) {
         ret = -1;
     }
@@ -476,7 +477,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
     while ((token = picoquic_strsep(&str, ","))) {
         struct sockaddr_storage ip;
         valid_new_entry = 0;
-        strcpy(alt_path, token);
+        strncpy(alt_path, token, config_len);
 
         if ((token2 = picoquic_strsep(&token, "/")) != 0) {
             if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
