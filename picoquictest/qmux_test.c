@@ -43,8 +43,8 @@
 #include "picoquic_qlog.h"
 
 int picoqmux_init(picoquic_cnx_t* cnx);
-int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time);
-int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time,
+int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time);
+int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
     const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time);
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx);
 int picoqmux_has_received_tp(picoquic_cnx_t* cnx);
@@ -85,7 +85,7 @@ int qmux_send_test(void)
     }
     if (ret == 0) {
         /* prepare the packet */
-        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
 
         if (send_length != sizeof(qmux_test_packet) ||
             memcmp(buffer, qmux_test_packet, send_length) != 0) {
@@ -199,7 +199,7 @@ int qmux_send_tp_test(void)
 
     if (ret == 0) {
         /* prepare the packet */
-        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
 
         if (send_length != sizeof(qmux_test_tp_packet) ||
             memcmp(buffer, qmux_test_tp_packet, send_length) != 0) {
@@ -241,7 +241,7 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
     picoquic_set_callback(cnx, qmux_test_callback, &qtc);
     if (ret == 0) {
         /* prepare a packet */
-        int r_ret = picoqmux_incoming_packet(cnx, 12345,
+        int r_ret = picoqmux_incoming_cnx_packet(cnx, 12345,
             msg, length, &next_wake_time);
 
         if (r_ret == 0) {
@@ -436,7 +436,7 @@ int qmux_send_qx_ping_r_test(void)
         picoqmux_update_state_on_tp_sent(cnx);
         picoqmux_update_state_on_tp_received(cnx);
         /* prepare the packet */
-        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
 
         if (send_length != sizeof(qmux_qx_ping_r_packet) ||
             memcmp(buffer, qmux_qx_ping_r_packet, send_length) != 0) {
@@ -466,7 +466,7 @@ int qmux_send_cnx_close_test(void)
         /* Simulate that the local application requests disconnect */
         picoquic_close(cnx, 0);
         /* prepare the packet */
-        ret = picoqmux_prepare_packet(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
 
         if (send_length != sizeof(qmux_app_close_packet) ||
             memcmp(buffer, qmux_app_close_packet, send_length) != 0 ||
@@ -479,3 +479,22 @@ int qmux_send_cnx_close_test(void)
 
     return ret;
 }
+
+/*
+* Network simulation tests.
+* The simulations have to use an interface between the picoquic stack and the
+* network. This is logically split between:
+* - socket loop functions that wait for new TCP and new TCP data
+*   or permission to send.
+* - Qmux function that accumulate a segment of data per connection.
+* We assume that the Qmux function are implemented as a Qmux extension to the
+* picoquic_quic_t context. We need functions to:
+* - create a Qmux context: extension of picoquic_quic_t with new API.
+* - create a Qmux connection: chained to the Qmux context, create a
+*   tcp socket through an asynchronous call to the socket loop.
+* - receive data from a socket.
+* - request permission to write on a socket.
+* - get polled for writing on the socket if data is granted.
+* - ask the socket loop to close a socket.
+* - get notified that a socket is closed.
+*/

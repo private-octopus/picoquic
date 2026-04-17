@@ -641,7 +641,7 @@ int picoqmux_prepare_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t*
 }
 
 /*  Prepare the next packets to send in the current buffer */
-int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
+int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
 {
     int ret = 0;
     *send_length = 0;
@@ -837,7 +837,7 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
     return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
 }
 
-int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time, 
+int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, 
     const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time)
 {
     int ret = 0;
@@ -851,4 +851,168 @@ int picoqmux_incoming_packet(picoquic_cnx_t* cnx, uint64_t current_time,
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
     }
     return ret;
+}
+
+/* Connection context:
+ * The link between a QMUX connection context and a socket_id is
+ * tracked in the table "table_cnx_by_socket_id". This is a hash table
+ * in the QUIC context, with the "socket_id" used as the key.
+ * 
+ * The socket_id in NULL when the connection is created.
+ * It is added to the context via the call to picoqmux_set_cnx_socket,
+ * and removed from the context when the connection is deleted, or
+ * if the socket_id for the connection is reset to a NULL value.
+ * (TODO: synchronize QUIC context and socket loop.)
+ */
+
+static uint64_t picoquic_socket_id_hash(const void* key, const uint8_t* hash_seed)
+{
+    uint64_t h;
+    uint8_t bytes[sizeof(void*)];
+    const picoquic_cnx_t* cnx = (const picoquic_cnx_t*)key;
+    /* Using siphash, because CNX ID and IP address are chosen by third parties*/
+    h = picohash_siphash(&cnx->qmux_socket_id, (uint32_t)sizeof(void*), hash_seed);
+    return h;
+}
+
+static int picoquic_socket_id_compare(const void* key1, const void* key2)
+{
+    const picoquic_cnx_t* cnx1 = (const picoquic_cnx_t*)key1;
+    const picoquic_cnx_t* cnx2 = (const picoquic_cnx_t*)key2;
+    int ret = cnx1->qmux_socket_id == cnx2->qmux_socket_id;
+
+    return ret;
+}
+
+static picohash_item* picoquic_socket_id_to_item(const void* key)
+{
+    picoquic_cnx_t* cnx = (picoquic_cnx_t*)key;
+
+    return &cnx->registered_socket_id_item;
+}
+
+int picoquic_register_socket_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, void* socket_id)
+{
+    int ret = 0;
+    picoquic_cnx_t dummy_cnx = { 0 };
+    picohash_item* item;
+
+    dummy_cnx.qmux_socket_id = socket_id;
+    item = picohash_retrieve(quic->table_cnx_by_socket_id, &dummy_cnx);
+    if (item != NULL) {
+        ret = -1;
+    }
+    else {
+        cnx->qmux_socket_id = socket_id;
+        ret = picohash_insert(quic->table_cnx_by_socket_id, cnx);
+    }
+
+    return ret;
+}
+
+void picoquic_unregister_socket_id(picoquic_cnx_t* cnx)
+{
+    if (cnx->qmux_socket_id != NULL) {
+        picohash_item* item = picohash_retrieve(cnx->quic->table_cnx_by_socket_id, cnx);
+        if (item != NULL) {
+            picohash_delete_item(cnx->quic->table_cnx_by_socket_id, item, 0);
+        }
+        cnx->qmux_socket_id = NULL;
+        memset(&cnx->registered_socket_id_item, 0, sizeof(cnx->registered_socket_id_item));
+    }
+}
+
+
+/* Initiation of a QUIC context to make it QMUX ready.
+ */
+int picoqmux_set_context(picoquic_quic_t* quic)
+{
+    int ret = 0;
+
+    if ((quic->table_cnx_by_icid = picohash_create_ex((size_t)quic->max_number_connections,
+        picoquic_socket_id_hash, picoquic_socket_id_compare, picoquic_socket_id_to_item, quic->hash_seed)) == NULL) {
+        ret = -1; 
+    }
+
+    return ret;
+}
+
+int picoqmux_start_sockets(picoquic_quic_t* quic)
+{
+    /* Go through the list of pending qmux connections and start the
+     * required sockets */
+}
+
+int picoqmux_clear_context(picoquic_quic_t* quic)
+{
+    /* Terminate the pending sockets */
+    /* Terminate the active sockets */
+    /* Clear the socket_id table */
+}
+
+/*
+* QMux outgoing connection creation.
+* When creating a QMUx connection, the code needs to create an additional
+* TCP socket in the "socket loop" context.
+*
+* We want to preserve the possibility of using different variations of the
+* socket loop code. We do that by adding a call from the socket loop
+* to the QUIC context to set the "socket create" function and context.
+*
+* The socket create function allows for creation of new sockets from the
+* QUIC context. The main parameter is a socket address to which the
+* connection should be connected. (Questions: should there be an option
+* to bind the address to a specific local address before setting the
+* connect call? Should there be an option to create an extra UDP socket,
+* or just TCP?)
+*
+* This code assumes that the socket loop is created already. We need a special
+* logic to manage "pending" connections created before the socket loop
+* starts. Probably a queue of pending connection, which will be moved
+* to active connections as soon as sockets can be created.
+*/
+
+int picoqmux_create_cnx(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    if (cnx->quic->create_socket_fn == NULL) {
+        /* queue to the qmux pending list */
+    }
+    else {
+        /* create the required socket */
+        /* set the other qmux parameters */
+        /* register the socket */
+    }
+    return 0;
+}
+
+
+/*
+* QMux input call, from the socket loop.
+*/
+int picoqmux_incoming_cnx_packet(picoquic_quic_t* quic, uint64_t socket_id,
+    uint64_t current_time, const uint8_t* receive_buffer, size_t receive_length)
+{
+    /* Find the connection based on the socket ID.
+    * Possibly, create a connection if this is a new socket?
+     */
+
+     /* submit the data to the connection context. */
+
+     /* return an error if this socket should be closed. */
+}
+
+/*
+* QMux prepare call, from the socket loop.
+*/
+int picoqmux_prepare_packet(picoquic_quic_t* quic, uint64_t socket_id, uint64_t current_time,
+    uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
+{
+    /* Find the connection based on the socket ID.
+    * Possibly, create a connection if this is a new socket?
+    */
+
+    /* obtain the data from connection context. */
+
+    /* return an error if this socket should be closed. */
 }

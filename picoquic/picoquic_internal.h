@@ -654,6 +654,7 @@ typedef struct st_picoquic_quic_t {
     picohash_table* table_cnx_by_net;
     picohash_table* table_cnx_by_icid;
     picohash_table* table_cnx_by_secret;
+    picohash_table* table_cnx_by_socket_id; /* used for QMux */
 
     picohash_table* table_issued_tickets;
     picoquic_issued_ticket_t* table_issued_tickets_first;
@@ -696,6 +697,10 @@ typedef struct st_picoquic_quic_t {
     */ 
     uint64_t rtt_update_delta;
     uint64_t pacing_rate_update_delta;
+
+    /* Creation of additional socket, if authorized by packet loop. */
+    picoquic_create_socket_fn create_socket_fn;
+    void* create_socket_ctx;
 
     /* Logging APIS */
     void* F_log;
@@ -1395,6 +1400,9 @@ typedef struct st_picoquic_cnx_t {
     picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
     /* Sequence number of the next observed address frame */
     uint64_t observed_number;
+    /* Handling of QMUX socket */
+    void* qmux_socket_id;
+    picohash_item registered_socket_id_item;
     /* Handling of the QMux QX_PING frame */
     uint64_t qx_acked_last; /* last qx_ping query of the peer acked */
     uint64_t qx_query_last; /* sequence of last qx_ping query from the peer */
