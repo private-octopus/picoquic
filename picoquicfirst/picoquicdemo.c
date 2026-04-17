@@ -462,7 +462,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
   struct sockaddr_storage *alt_server_ip, int *nb_alt_paths, struct sockaddr_storage *default_server_ip)
 {
     int ret = 0;
-    unsigned long config_len = strlen(mp_config) + 1;
+    size_t config_len = strlen(mp_config) + 1;
     int valid_new_entry = 0;
     char *token, *token2, *end_ptr, *alt_path, *ptr, *str;
     uint16_t server_port = (default_server_ip->ss_family == AF_INET) ? ((struct sockaddr_in*)default_server_ip)->sin_port : ((struct sockaddr_in6*)default_server_ip)->sin6_port;
