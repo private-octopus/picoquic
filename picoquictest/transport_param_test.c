@@ -365,6 +365,23 @@ uint8_t client_param_err9[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID
 };
 
+/* error 10, Active CID limit too small */
+uint8_t client_param_err10[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_active_connection_id_limit, 1, 1
+};
+
+/* error 11, ack_delay_exponent over 20 */
+uint8_t client_param_err11[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_ack_delay_exponent , 1, 21
+};
 
 typedef struct st_transport_param_error_test_t {
     int mode;
@@ -380,8 +397,10 @@ static transport_param_error_test_t transport_param_error_case[] = {
     { 0, client_param_err5, sizeof(client_param_err5), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err6, sizeof(client_param_err6), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err7, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err8, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err9, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
+    { 0, client_param_err8, sizeof(client_param_err8), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err9, sizeof(client_param_err9), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err10, sizeof(client_param_err10), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err11, sizeof(client_param_err11), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
 };
 
 static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);

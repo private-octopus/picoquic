@@ -652,9 +652,17 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_ack_delay_exponent:
-                    cnx->remote_parameters.ack_delay_exponent = (uint8_t)
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                {
+                    uint64_t ad_exponent = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                    if (ad_exponent > 20){ 
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0,
+                            "ack delay exponent over 20");
+                    }
+                    else {
+                        cnx->remote_parameters.ack_delay_exponent = (uint8_t)ad_exponent;
+                    }
                     break;
+                }
                 case picoquic_tp_initial_max_streams_uni: {
                     uint64_t old_limit = cnx->max_stream_id_unidir_remote;
                     cnx->remote_parameters.initial_max_stream_id_unidir =
@@ -710,7 +718,9 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_active_connection_id_limit:
                     cnx->remote_parameters.active_connection_id_limit = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    /* TODO: may need to check the value, but conditions are unclear */
+                    if (cnx->remote_parameters.active_connection_id_limit < 2) {
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
+                    }
                     break;
                 case picoquic_tp_max_datagram_frame_size:
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
