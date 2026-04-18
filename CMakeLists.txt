@@ -440,8 +440,9 @@ if (BUILD_LOGLIB)
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic
-            loglib)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/loglib>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picoquic-log)
 endif()
 
@@ -453,6 +454,7 @@ endif()
 
 if (BUILD_HTTP)
     add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
+    add_library(picoquic::picohttp-core ALIAS picohttp-core)
     target_link_libraries(picohttp-core
         PRIVATE
             ${PTLS_LIBRARIES}
@@ -467,8 +469,9 @@ if (BUILD_HTTP)
             ${OPENSSL_INCLUDE_DIR}
             ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic
-            picohttp)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picohttp-core)
 endif()
 
@@ -631,7 +634,9 @@ endif()
 
 if (TARGET picohttp-core)
     install(TARGETS picohttp-core
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        EXPORT picoquic-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES
         ${PICOHTTP_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -644,7 +649,9 @@ endif()
 
 if (TARGET picoquic-log)
     install(TARGETS picoquic-log
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        EXPORT picoquic-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     install(FILES
         ${PICOQUIC_LOGLIB_HEADERS}

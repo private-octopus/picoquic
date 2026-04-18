@@ -713,116 +713,116 @@ typedef struct st_qpack_test_case_t {
 static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_slash, sizeof(qpack_test_get_slash),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_null, sizeof(qpack_test_get_slash_null),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_prefix, sizeof(qpack_test_get_slash_prefix),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_index_html, sizeof(qpack_test_get_index_html),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_index_html_long, sizeof(qpack_test_get_index_html_long),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404, sizeof(qpack_test_status_404),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404_code, sizeof(qpack_test_status_404_code),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_404_long, sizeof(qpack_test_status_404_long),
-        { 0, NULL, 0, NULL, 0, 404, 0, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_response_html, sizeof(qpack_test_response_html),
-        { 0, NULL, 0, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
-        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_status_405_null, sizeof(qpack_test_status_405_null),
-        { 0, NULL, 0, NULL, 0, 405, 0, NULL, 0,
+        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
-        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_1234, sizeof(qpack_test_get_1234),
-        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_ats, sizeof(qpack_test_get_ats),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_post_zzz_null, sizeof(qpack_test_post_zzz_null),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
+        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_status200_akamai, sizeof(qpack_status200_akamai),
-        { h3zero_method_none, NULL, 0, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0,
+        { h3zero_method_none, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_get_long_file_name, sizeof(qpack_get_long_file_name),
-        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL, 0, 0, 0, NULL, 0,
+        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
-        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL, 0, 0, 0,
+        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0,
         (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_range, sizeof(qpack_test_get_slash_range),
         { h3zero_method_get, qpack_test_string_slash, 1,
-        qpack_test_range_text, sizeof(qpack_test_range_text),
+        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
         0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     },
     {
         qpack_test_get_slash_range_long, sizeof(qpack_test_get_slash_range_long),
         { h3zero_method_get, qpack_test_string_slash, 1,
-        qpack_test_range_text, sizeof(qpack_test_range_text),
+        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
         0, 0, NULL, 0,
         NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
     }
@@ -4368,5 +4368,44 @@ int demo_error_test(void)
         ret = demo_error_double();
     }
 
+    return ret;
+}
+/* Test that h3zero_create_response_header_frame_ex quotes the WT-Protocol
+ * value as a Structured Header String on the wire (e.g., WT-Protocol: "moqt-16"),
+ * and that the parser correctly strips the quotes so callers see the bare protocol name.
+ */
+int h3zero_wt_protocol_response_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[256];
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint8_t* bytes;
+    h3zero_header_parts_t parts = { 0 };
+    char const* wt_protocol = "moqt-16";
+    size_t expected_len = strlen(wt_protocol);
+
+    /* Encode a 200 response with wt_protocol set */
+    bytes = h3zero_create_response_header_frame_ex(buffer, bytes_max,
+        h3zero_content_type_none, NULL, wt_protocol);
+    if (bytes == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_response_header_frame_ex returned NULL");
+        return -1;
+    }
+
+    /* Decode and verify the parser strips quotes, yielding the bare protocol name */
+    if (h3zero_parse_qpack_header_frame(buffer, bytes, &parts) == NULL) {
+        DBG_PRINTF("%s", "Failed to parse response header frame");
+        ret = -1;
+    } else if (parts.wt_protocol == NULL) {
+        DBG_PRINTF("%s", "wt_protocol not found in parsed header");
+        ret = -1;
+    } else if (parts.wt_protocol_length != expected_len ||
+               memcmp(parts.wt_protocol, wt_protocol, expected_len) != 0) {
+        DBG_PRINTF("wt_protocol value wrong: got \"%.*s\", expected \"%s\"",
+            (int)parts.wt_protocol_length, parts.wt_protocol, wt_protocol);
+        ret = -1;
+    }
+
+    h3zero_release_header_parts(&parts);
     return ret;
 }
