@@ -358,6 +358,7 @@ int h3zero_stream_fuzz_test(void);
 int parse_demo_scenario_test(void);
 int h3zero_server_test(void);
 int h3zero_migration_disabled_test(void);
+int h3zero_wt_protocol_response_test(void);
 int h09_server_test(void);
 int h09_header_test(void);
 int generic_server_test(void);
