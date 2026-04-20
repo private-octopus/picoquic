@@ -43,13 +43,64 @@
 #include "picoquic_qlog.h"
 
 int picoqmux_init(picoquic_cnx_t* cnx);
-int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time);
+picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time, int client_mode);
+int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length);
 int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length, uint64_t* next_wake_time);
+    const uint8_t* receive_buffer, size_t receive_length);
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx);
 int picoqmux_has_received_tp(picoquic_cnx_t* cnx);
 void picoqmux_update_state_on_tp_sent(picoquic_cnx_t* cnx);
 void picoqmux_update_state_on_tp_received(picoquic_cnx_t* cnx);
+
+
+/*
+* Network simulation tests.
+* The simulations have to use an interface between the picoquic stack and the
+* network. This is logically split between:
+* - socket loop functions that wait for new TCP and new TCP data
+*   or permission to send.
+* - Qmux function that accumulate a segment of data per connection.
+* We assume that the Qmux function are implemented as a Qmux extension to the
+* picoquic_quic_t context. We need functions to:
+* - create a Qmux context: extension of picoquic_quic_t with new API.
+* - create a Qmux connection: chained to the Qmux context, create a
+*   tcp socket through an asynchronous call to the socket loop.
+* - receive data from a socket.
+* - request permission to write on a socket.
+* - get polled for writing on the socket if data is granted.
+* - ask the socket loop to close a socket.
+* - get notified that a socket is closed.
+*/
+
+typedef  struct st_qmux_msg_t {
+    uint8_t* buffer;
+    size_t buffer_size;
+    size_t length;
+    int target_index;
+    uint64_t delivery_time;
+    struct st_qmux_msg_t* next;
+} qmux_msg_t;
+
+typedef struct st_qmux_sim_ctx_t {
+    uint64_t simulated_time;
+    int test_idle;
+    uint64_t delay;
+    picoquic_quic_t* quic[2];
+    picoquic_cnx_t* cnx[2];
+    qmux_msg_t* msg_queue;
+    qmux_msg_t* msg_last;
+    /* scenario handling */
+    int received_stream_0;
+    size_t stream_0_length_received;
+    int stream0_fin_received;
+    int stream0_data_matches;
+} qmux_sim_ctx_t;
+
+typedef struct st_qmux_sim_spec_t {
+    int test_idle;
+    uint64_t delay;
+    uint64_t expected_time;
+} qmux_sim_spec_t;
 
 #define QMUX_FIRST_DATA 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 uint8_t qmux_test_data[] = { QMUX_FIRST_DATA };
@@ -69,7 +120,6 @@ int qmux_send_test(void)
     picoquic_cnx_t* cnx = NULL;
     uint8_t buffer[1536];
     size_t send_length = 0;
-    uint64_t next_wake_time = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     picoqmux_init(cnx);
@@ -85,7 +135,7 @@ int qmux_send_test(void)
     }
     if (ret == 0) {
         /* prepare the packet */
-        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
 
         if (send_length != sizeof(qmux_test_packet) ||
             memcmp(buffer, qmux_test_packet, send_length) != 0) {
@@ -101,36 +151,30 @@ int qmux_send_test(void)
 /* TODO: run a test with all frames in skip frame test, to check
 * that allowed frames pass, and that not allowed frames are rejected. */ 
 
-/* Callback from Quic
-*/
-typedef struct st_qmux_test_callback_t {
-    int received_stream_0;
-    size_t stream_0_length_received;
-    int stream0_fin_received;
-    int stream0_data_matches;
-} qmux_test_callback_t;
-
 int qmux_test_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
 {
 
     int ret = 0;
-    qmux_test_callback_t* qtc = (qmux_test_callback_t*)callback_ctx;
+    qmux_sim_ctx_t* sim_ctx = (qmux_sim_ctx_t*)callback_ctx;
 
     if (ret == 0) {
         switch (fin_or_event) {
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             if (stream_id == 0) {
-                qtc->received_stream_0 = 1;
-                qtc->stream_0_length_received = length;
+                sim_ctx->received_stream_0 = 1;
+                sim_ctx->stream_0_length_received = length;
                 if (length == sizeof(qmux_test_data) &&
                     memcmp(bytes, qmux_test_data, length) == 0) {
-                    qtc->stream0_data_matches = 1;
+                    sim_ctx->stream0_data_matches = 1;
                 }
                 if (fin_or_event == picoquic_callback_stream_fin) {
-                    qtc->stream0_fin_received = 1;
+                    sim_ctx->stream0_fin_received = 1;
+                    if (!sim_ctx->test_idle) {
+                        picoquic_close_ex(cnx, 0, "data received.");
+                    }
                 }
             }
             break;
@@ -157,8 +201,12 @@ int qmux_test_callback(picoquic_cnx_t* cnx,
             /* This callback is never used. */
             break;
         case picoquic_callback_almost_ready:
+            break;
         case picoquic_callback_ready:
             /* should mark the first stream as ready, create it if necessary */
+            if (cnx->client_mode) {
+                picoquic_add_to_stream(cnx, 0, qmux_test_data, sizeof(qmux_test_data), 1);
+            }
             break;
         case picoquic_callback_datagram_acked:
             /* Ack for packet carrying datagram-object received from peer */
@@ -193,13 +241,12 @@ int qmux_send_tp_test(void)
     picoquic_cnx_t* cnx = NULL;
     uint8_t buffer[2048];
     size_t send_length = 0;
-    uint64_t next_wake_time = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
     picoqmux_init(cnx);
 
     if (ret == 0) {
         /* prepare the packet */
-        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
 
         if (send_length != sizeof(qmux_test_tp_packet) ||
             memcmp(buffer, qmux_test_tp_packet, send_length) != 0) {
@@ -215,9 +262,6 @@ int qmux_send_tp_test(void)
     return ret;
 }
 
-
-
-
 typedef int (*qmux_test_check_fn)(picoquic_cnx_t* cnx, uint64_t expected_error);
 
 int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
@@ -225,8 +269,7 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
-    uint64_t next_wake_time = UINT64_MAX;
-    qmux_test_callback_t qtc = { 0 };
+    qmux_sim_ctx_t qtc = { 0 };
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     cnx->client_mode = client_mode; /* as required for the test */
@@ -241,8 +284,7 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
     picoquic_set_callback(cnx, qmux_test_callback, &qtc);
     if (ret == 0) {
         /* prepare a packet */
-        int r_ret = picoqmux_incoming_cnx_packet(cnx, 12345,
-            msg, length, &next_wake_time);
+        int r_ret = picoqmux_incoming_cnx_packet(cnx, 12345, msg, length);
 
         if (r_ret == 0) {
             if (expected != 0) {
@@ -265,7 +307,7 @@ int qmux_receive_tp_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
 {
     int ret = 0;
 
-    qmux_test_callback_t* qtc = (qmux_test_callback_t *)picoquic_get_callback_context(cnx);
+    qmux_sim_ctx_t* qtc = (qmux_sim_ctx_t*)picoquic_get_callback_context(cnx);
 
     if (qtc == NULL || !(
         qtc->received_stream_0 &&
@@ -423,7 +465,6 @@ int qmux_send_qx_ping_r_test(void)
     picoquic_cnx_t* cnx = NULL;
     uint8_t buffer[2048];
     size_t send_length = 0;
-    uint64_t next_wake_time = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
     picoqmux_init(cnx);
 
@@ -436,7 +477,7 @@ int qmux_send_qx_ping_r_test(void)
         picoqmux_update_state_on_tp_sent(cnx);
         picoqmux_update_state_on_tp_received(cnx);
         /* prepare the packet */
-        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
 
         if (send_length != sizeof(qmux_qx_ping_r_packet) ||
             memcmp(buffer, qmux_qx_ping_r_packet, send_length) != 0) {
@@ -455,7 +496,6 @@ int qmux_send_cnx_close_test(void)
     picoquic_cnx_t* cnx = NULL;
     uint8_t buffer[2048];
     size_t send_length = 0;
-    uint64_t next_wake_time = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
     picoqmux_init(cnx);
 
@@ -466,7 +506,7 @@ int qmux_send_cnx_close_test(void)
         /* Simulate that the local application requests disconnect */
         picoquic_close(cnx, 0);
         /* prepare the packet */
-        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length, &next_wake_time);
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
 
         if (send_length != sizeof(qmux_app_close_packet) ||
             memcmp(buffer, qmux_app_close_packet, send_length) != 0 ||
@@ -480,21 +520,210 @@ int qmux_send_cnx_close_test(void)
     return ret;
 }
 
-/*
-* Network simulation tests.
-* The simulations have to use an interface between the picoquic stack and the
-* network. This is logically split between:
-* - socket loop functions that wait for new TCP and new TCP data
-*   or permission to send.
-* - Qmux function that accumulate a segment of data per connection.
-* We assume that the Qmux function are implemented as a Qmux extension to the
-* picoquic_quic_t context. We need functions to:
-* - create a Qmux context: extension of picoquic_quic_t with new API.
-* - create a Qmux connection: chained to the Qmux context, create a
-*   tcp socket through an asynchronous call to the socket loop.
-* - receive data from a socket.
-* - request permission to write on a socket.
-* - get polled for writing on the socket if data is granted.
-* - ask the socket loop to close a socket.
-* - get notified that a socket is closed.
-*/
+int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
+{
+    int ret = 0;
+    uint8_t reset_seed[16] = { 0 };
+    memset(sim_ctx, 0, sizeof(qmux_sim_ctx_t));
+    for (int i=0; i<2; i++){
+        if ((sim_ctx->quic[i] = picoquic_create(4, NULL, NULL, NULL, "qmux_test",
+            qmux_test_callback, sim_ctx, NULL, NULL, reset_seed,
+            sim_ctx->simulated_time, &sim_ctx->simulated_time,
+            NULL, NULL, 0)) == NULL) {
+            ret = -1;
+            break;
+        }
+    }
+    if (ret == 0) {
+        sim_ctx->test_idle = spec->test_idle;
+        sim_ctx->delay = spec->delay;
+    }
+    return ret;
+}
+
+void qmux_test_release(qmux_sim_ctx_t* sim_ctx)
+{
+    while (sim_ctx->msg_queue != NULL) {
+        qmux_msg_t* to_delete = sim_ctx->msg_queue;
+        sim_ctx->msg_queue = sim_ctx->msg_queue->next;
+        free(to_delete);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        if (sim_ctx->cnx[i] != NULL) {
+            picoquic_delete_cnx(sim_ctx->cnx[i]);
+            sim_ctx->cnx[i] = NULL;
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        if (sim_ctx->quic[i] != NULL) {
+            picoquic_free(sim_ctx->quic[i]);
+            sim_ctx->quic[i] = NULL;
+        }
+    }
+}
+
+int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
+{
+    int ret = 0;
+    qmux_msg_t* msg = sim_ctx->msg_queue;
+    sim_ctx->msg_queue = msg->next;
+    if (msg->next == NULL) {
+        sim_ctx->msg_last = NULL;
+    }
+
+    if (sim_ctx->cnx[msg->target_index] == NULL) {
+        /* submit message to connection */
+        if (sim_ctx->quic[msg->target_index] != NULL) {
+            /* submit to quic context and obtain the connection pointer */
+            sim_ctx->cnx[msg->target_index] = picoqmux_create_qmux_cnx(
+                sim_ctx->quic[msg->target_index], sim_ctx->simulated_time, 0);
+        }
+    }
+
+    if (sim_ctx->cnx[msg->target_index] == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoqmux_incoming_cnx_packet(sim_ctx->cnx[msg->target_index],
+            sim_ctx->simulated_time,
+            msg->buffer, msg->length);
+    }
+    free(msg);
+    return ret;
+}
+
+int qmux_loop_poll_connection(qmux_sim_ctx_t* sim_ctx, int cnx_index)
+{
+    int ret = 0;
+    size_t msg_alloc = sizeof(qmux_msg_t) + 0x4000;
+    qmux_msg_t* msg = (qmux_msg_t*)malloc(msg_alloc);
+    if (msg == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(msg, 0, sizeof(qmux_msg_t));
+        msg->buffer = (uint8_t*)msg + sizeof(qmux_msg_t);
+        msg->buffer_size = 0x4000;
+
+        ret = picoqmux_prepare_cnx_packets(sim_ctx->cnx[cnx_index],
+            sim_ctx->simulated_time, msg->buffer, msg->buffer_size, &msg->length);
+
+        if (msg->length > 0) {
+            msg->target_index = 1 - cnx_index;
+            msg->delivery_time = sim_ctx->simulated_time + sim_ctx->delay;
+            if (sim_ctx->msg_last == NULL) {
+                sim_ctx->msg_last = msg;
+                sim_ctx->msg_queue = msg;
+            }
+            else {
+                sim_ctx->msg_last->next = msg;
+                sim_ctx->msg_last = msg;
+            }
+        }
+        else {
+            free(msg);
+        }
+    }
+    return ret;
+}
+
+int qmux_loop_iterate(qmux_sim_ctx_t* sim_ctx)
+{
+    int ret = 0;
+    int next_cnx = -1;
+    int has_msg = 0;
+    uint64_t next_sim_time = UINT64_MAX;
+    for (int i = 0; i < 2; i++) {
+        if (sim_ctx->cnx[i] != NULL &&
+            sim_ctx->cnx[i]->cnx_state != picoquic_state_disconnected &&
+            sim_ctx->cnx[i]->next_wake_time < next_sim_time) {
+            next_sim_time = sim_ctx->cnx[i]->next_wake_time;
+            next_cnx = i;
+        }
+    }
+    if (sim_ctx->msg_queue != NULL &&
+        sim_ctx->msg_queue->delivery_time <= next_sim_time) {
+        next_sim_time = sim_ctx->msg_queue->delivery_time;
+        has_msg = 1;
+    }
+    if (next_sim_time > sim_ctx->simulated_time) {
+        sim_ctx->simulated_time = next_sim_time;
+    }
+    if (has_msg){
+        /* deliver the message */
+        qmux_loop_deliver_message(sim_ctx);
+    }
+    else if (next_cnx >= 0) {
+        /* get the next message from the specifed connection */
+        ret = qmux_loop_poll_connection(sim_ctx, next_cnx);
+    }
+    else {
+        ret = -1; /* Simulation is finished. */
+    }
+    return ret;
+}
+
+int qmux_loop_one(qmux_sim_spec_t * spec)
+{
+    int ret = 0;
+    qmux_sim_ctx_t sim_ctx;
+
+    ret = qmux_test_init(&sim_ctx, spec);
+
+    /* Start the loop by creating a client connection */
+    if (ret == 0 &&
+        (sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1)) == NULL) {
+        ret = -1;
+    }
+
+    /* Do a connection loop */
+    while (ret == 0) {
+        /* Do an iteration of the loop */
+        /* if both client and server have received enough data, exit */
+        if ((ret = qmux_loop_iterate(&sim_ctx)) == 0 &&
+            sim_ctx.cnx[0]->cnx_state == picoquic_state_disconnected) {
+            break;
+        }
+    }
+    /* Check the result */
+    if (ret == 0) {
+        if (sim_ctx.cnx[1] == NULL) {
+            ret = -1;
+        }
+        else if (sim_ctx.simulated_time > spec->expected_time) {
+            ret = -1;
+        }
+    }
+       
+    /* release everything. */
+    qmux_test_release(&sim_ctx);
+    return ret;
+}
+
+int qmux_loop_test(void)
+{
+    qmux_sim_spec_t spec = { 0 };
+
+    return qmux_loop_one(&spec);
+}
+
+int qmux_loop_delay_test(void)
+{
+    qmux_sim_spec_t spec = { 0 };
+    spec.delay = 15000;
+    spec.expected_time = 60000;
+
+    return qmux_loop_one(&spec);
+}
+
+int qmux_loop_idle_test(void)
+{
+    qmux_sim_spec_t spec = { 0 };
+    spec.delay = 15000;
+    spec.test_idle = 1;
+    spec.expected_time = 30030000;
+
+    return qmux_loop_one(&spec);
+}

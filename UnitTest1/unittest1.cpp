@@ -1947,6 +1947,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_loop)
+        {
+            int ret = qmux_loop_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop_delay)
+        {
+            int ret = qmux_loop_delay_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop_idle)
+        {
+            int ret = qmux_loop_idle_test();
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();

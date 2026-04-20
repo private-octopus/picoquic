@@ -701,6 +701,10 @@ typedef struct st_picoquic_quic_t {
     /* Creation of additional socket, if authorized by packet loop. */
     picoquic_create_socket_fn create_socket_fn;
     void* create_socket_ctx;
+    /* Handling of QMux*/
+    picoquic_cnx_t* qmux_pending_first;
+    picoquic_cnx_t* qmux_pending_last;
+    picohash_table* qmux_socket_id_table;
 
     /* Logging APIS */
     void* F_log;
@@ -1400,6 +1404,8 @@ typedef struct st_picoquic_cnx_t {
     picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
     /* Sequence number of the next observed address frame */
     uint64_t observed_number;
+    /* Handling of qmux queues */
+    picoquic_cnx_t* qmux_pending_next;
     /* Handling of QMUX socket */
     void* qmux_socket_id;
     picohash_item registered_socket_id_item;

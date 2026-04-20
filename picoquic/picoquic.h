@@ -1163,7 +1163,7 @@ void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate
 * that was created.
 */
 
-typedef void (*picoquic_create_socket_fn)(void* create_socket_ctx,
+typedef void* (*picoquic_create_socket_fn)(void* create_socket_ctx,
     int af, int type, int protocol,
     struct sockaddr* addr_local, struct sockaddr* addr_remote, int interface_index);
 
