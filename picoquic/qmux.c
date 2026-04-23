@@ -999,7 +999,7 @@ int picoqmux_incoming_handshake(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int picoqmux_start_client_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
+int picoqmux_start_client_cnx(picoquic_cnx_t* cnx)
 {
     int ret = 0;
     size_t consumed = 0;
@@ -1085,7 +1085,7 @@ picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current
     if (cnx != NULL) {
         picoqmux_init(cnx, is_cleartext);
         if ((client_mode &&
-            picoqmux_start_client_cnx(cnx, current_time) != 0) ||
+            picoqmux_start_client_cnx(cnx) != 0) ||
             (!client_mode &&
                 picoqmux_init_server_cnx(cnx) != 0)) {
             /* Cannot just do partial initialization! */
