@@ -551,8 +551,6 @@ int qmux_send_cnx_close_test(void)
 int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
 {
     int ret = 0;
-    uint8_t reset_seed[16] = { 0 };
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
