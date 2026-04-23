@@ -23,6 +23,8 @@
 #include "picoquic_internal.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
+#include <picotls.h>
+#include "picoquic_crypto_provider_api.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,9 +72,10 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
 *    ...
 */
 
-void picoqmux_init(picoquic_cnx_t* cnx)
+void picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext)
 {
     cnx->is_qmux = 1;
+    cnx->is_qmux_cleartext = is_cleartext;
     cnx->qx_acked_last = UINT64_MAX;
     cnx->qx_sent_last = UINT64_MAX;
     cnx->qx_query_ack = UINT64_MAX;
@@ -290,6 +293,48 @@ void picoqmux_update_stats_after_qx(picoquic_cnx_t * cnx, uint64_t current_time)
      */
 }
 #endif
+
+/* Create a QUIC context parameterized for Qmux */
+picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
+    char const* cert_file_name,
+    char const* key_file_name,
+    char const* cert_root_file_name,
+    char const* default_alpn,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_connection_id_cb_fn cnx_id_callback,
+    void* cnx_id_callback_ctx,
+    uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
+    uint64_t current_time,
+    uint64_t* p_simulated_time,
+    char const* ticket_file_name,
+    const uint8_t* ticket_encryption_key,
+    size_t ticket_encryption_key_length)
+{
+    /* TODO: reusing the whole creation process is a bit wasteful,
+    * as it entails creating several hash tables that are not useful for Qmux.
+    * Having specialized code would avoid that.
+     */
+    picoquic_quic_t* quic = picoquic_create(
+        max_nb_connections, cert_file_name, key_file_name, cert_root_file_name,
+        default_alpn, default_callback_fn, default_callback_ctx,
+        cnx_id_callback, cnx_id_callback_ctx,
+        reset_seed, current_time, p_simulated_time,
+        ticket_file_name, ticket_encryption_key, ticket_encryption_key_length);
+
+    if (quic != NULL) {
+        /* remove the callbacks that would interfere with QMux processing. */
+        ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+        /* ctx->on_client_hello? */
+        /* setting ctx->update_traffic_key is necessary for QUIC,
+         * but interferes with plain TLS key management. */
+        if (ctx->update_traffic_key != NULL) {
+            free(ctx->update_traffic_key);
+            ctx->update_traffic_key = NULL;
+        }
+    }
+    return quic;
+}
 
 /* QX PING frames come in to variations:
 * FRAME_TYPE_QX_PING, FRAME_TYPE_QX_PING_R
@@ -555,7 +600,7 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
     }
 
     /* If not yet sent, send the transport parameters */
-    if (!picoqmux_has_sent_tp(cnx)) {
+    else if (!picoqmux_has_sent_tp(cnx)) {
         bytes_next = picoquic_format_qmux_tp_frame(cnx, bytes_next, bytes_max);
         if (bytes_next == NULL) {
             ret = -1;
@@ -692,14 +737,6 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
                     *send_length += length;
                 }
             }
-        }
-        if (*send_length > 0) {
-            /* something sent. Notice progress. */
-            cnx->latest_progress_time = current_time;
-            cnx->next_wake_time = current_time;
-        }
-        else {
-            cnx->next_wake_time = next_wake_time;
         }
     }
     return ret;
@@ -873,19 +910,266 @@ int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
     return ret;
 }
 
-/* Creation of a basic connection 
+/* Handling of TLS */
+int picoqmux_send_handshake(picoquic_cnx_t* cnx, uint8_t* send_buffer,
+    size_t send_buffer_max, size_t* send_length)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    if (tls_ctx->tls_wbuf.off > 0) {
+        if (tls_ctx->tls_wbuf.off > send_buffer_max) {
+            /*oops, not good. */
+            ret = -1;
+        }
+        else
+        {
+            memcpy(send_buffer, tls_ctx->tls_wbuf.base, tls_ctx->tls_wbuf.off);
+            *send_length = tls_ctx->tls_wbuf.off;
+            tls_ctx->tls_wbuf.off = 0;
+        }
+    }
+    cnx->is_qmux_tls_ready = ptls_handshake_is_complete(tls_ctx->tls);
+    return ret;
+}
+
+int picoqmux_send_data(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer,
+    size_t send_buffer_max, size_t* send_length)
+{
+#define TLS_DATA_OVERHEAD 32
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    /* Prepare just enough data to fill the send buffer */
+    size_t max_data = (send_buffer_max - TLS_DATA_OVERHEAD > 0x4000) ?
+        0x4000 : send_buffer_max - TLS_DATA_OVERHEAD;
+    uint8_t p_buffer[0x4000];
+    size_t p_length = 0;
+    int ret = picoqmux_prepare_cnx_packets(cnx, current_time, p_buffer, max_data, &p_length);
+    if (ret == 0) {
+        ptls_buffer_t s_buf;
+        ptls_buffer_init(&s_buf, send_buffer, send_buffer_max);
+        ret = ptls_send(tls_ctx->tls, &s_buf, p_buffer, p_length);
+        if (ret == 0) {
+            *send_length = s_buf.off;
+        }
+    }
+    return ret;
+}
+
+int picoqmux_incoming_data(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* incoming, size_t incoming_length, size_t * consumed)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    size_t in_len = incoming_length;
+
+    ret = ptls_receive(tls_ctx->tls, &tls_ctx->tls_rbuf, incoming, &in_len);
+
+    if (ret == 0) {
+        *consumed = in_len;
+        if (tls_ctx->tls_rbuf.off > 0) {
+            ret = picoqmux_incoming_cnx_packet(cnx, current_time,
+                tls_ctx->tls_rbuf.base, tls_ctx->tls_rbuf.off);
+            tls_ctx->tls_rbuf.off = 0;
+        }
+    }
+
+    return ret;
+}
+
+int picoqmux_incoming_handshake(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length, size_t* consumed)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+
+    *consumed = receive_length;
+
+    ret = ptls_handshake(tls_ctx->tls, &tls_ctx->tls_wbuf,
+        receive_buffer, consumed, &tls_ctx->handshake_properties);
+
+    if (ret == 0) {
+        if (tls_ctx->tls_wbuf.off == 0) {
+            cnx->is_qmux_tls_ready = ptls_handshake_is_complete(tls_ctx->tls);
+        }
+    }
+    else if (ret == PTLS_ERROR_IN_PROGRESS) {
+        ret = 0;
+    }
+
+    return ret;
+}
+
+int picoqmux_start_client_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    int ret = 0;
+    uint64_t consumed = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
+    if (cnx->cnx_state != picoquic_state_client_init ||
+        cnx->tls_stream[0].sent_offset > 0 ||
+        cnx->tls_stream[0].send_queue != NULL) {
+        DBG_PRINTF("%s", "picoqmux_start_client_cnx called twice.");
+        return -1;
+    }
+
+    if (cnx->sni != NULL) {
+        ptls_set_server_name(tls_ctx->tls, cnx->sni, strlen(cnx->sni));
+    }
+
+    if (cnx->alpn != NULL) {
+        tls_ctx->alpn_vec[0].base = (uint8_t*)cnx->alpn;
+        tls_ctx->alpn_vec[0].len = strlen(cnx->alpn);
+        tls_ctx->handshake_properties.client.negotiated_protocols.count = 1;
+        tls_ctx->handshake_properties.client.negotiated_protocols.list = tls_ctx->alpn_vec;
+    }
+    else if (cnx->callback_fn != NULL) {
+        /* Get the default ALPN list for the callback function */
+        ret = cnx->callback_fn(cnx, 0, (uint8_t*)tls_ctx, 0, picoquic_callback_request_alpn_list, cnx->callback_ctx, NULL);
+
+        tls_ctx->handshake_properties.client.negotiated_protocols.count = tls_ctx->alpn_count;
+        tls_ctx->handshake_properties.client.negotiated_protocols.list = tls_ctx->alpn_vec;
+
+        if (ret != 0) {
+            DBG_PRINTF("ALPN list callback returns 0x%x", ret);
+        }
+    }
+
+    picoquic_log_new_connection(cnx);
+
+    /* A remote session ticket may have been loaded as part of initializing TLS,
+     * and remote parameters may have been initialized to the initial value
+     * of the previous session. Apply these new parameters. */
+    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_stream_id_bidir_remote =
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+    cnx->max_stream_id_unidir_remote =
+        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+    cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
+    cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+
+    ptls_buffer_init(&tls_ctx->tls_wbuf, "", 0);
+    ptls_buffer_init(&tls_ctx->tls_rbuf, "", 0);
+
+    ret = picoqmux_incoming_handshake(cnx, current_time, NULL, 0, &consumed);
+
+    return ret;
+}
+
+int picoqmux_init_server_cnx(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
+    ptls_buffer_init(&tls_ctx->tls_wbuf, "", 0);
+    ptls_buffer_init(&tls_ctx->tls_rbuf, "", 0);
+
+    return ret;
+}
+
+/* Creation of a basic connection
  */
-picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time, char client_mode)
+
+picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time,
+    int client_mode, int is_cleartext, char const* server, char const* alpn)
 {
     picoquic_cnx_t* cnx = picoquic_create_cnx(quic,
         picoquic_null_connection_id,
         picoquic_null_connection_id,
         NULL, current_time,
-        0, NULL, NULL, client_mode);
+        0, server, alpn, (char)client_mode);
+
+    /* TODO: may need to create the connection in a different way than QUIC,
+    * e.g., not using the QUIC extension. */
     if (cnx != NULL) {
-        picoqmux_init(cnx);
+        picoqmux_init(cnx, is_cleartext);
+        if ((client_mode &&
+            picoqmux_start_client_cnx(cnx, current_time) != 0) ||
+            (!client_mode &&
+                picoqmux_init_server_cnx(cnx) != 0)) {
+            /* Cannot just do partial initialization! */
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
     }
     return cnx;
 }
 
+int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer,
+    size_t send_buffer_max, size_t* send_length)
+{
+    int ret = 0;
 
+    /* Consider moving the timer protection here */
+    if (cnx->is_qmux_cleartext) {
+        ret = picoqmux_prepare_cnx_packets(cnx, current_time, send_buffer, send_buffer_max, send_length);
+    }
+    else if (cnx->is_qmux_tls_ready) {
+        /* TLS is negotiated: prepare and encrypt packets */
+        ret = picoqmux_send_data(cnx, current_time, send_buffer,
+            send_buffer_max, send_length);
+    }
+    else {
+        /* Perform the handshake */
+        ret = picoqmux_send_handshake(cnx, send_buffer, send_buffer_max, send_length);
+    }
+    if (ret == 0) {
+        if (*send_length > 0) {
+            /* something sent. Notice progress. */
+            cnx->latest_progress_time = current_time;
+            cnx->next_wake_time = current_time;
+        }
+        else if (cnx->idle_timeout > 0) {
+            cnx->next_wake_time = cnx->latest_progress_time + cnx->idle_timeout;
+        }
+        else {
+            cnx->next_wake_time = UINT64_MAX;
+        }
+    }
+    return ret;
+}
+
+int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length)
+{
+    int ret = 0;
+
+    if (cnx->is_qmux_cleartext) {
+        picoqmux_incoming_cnx_packet(cnx, current_time, receive_buffer, receive_length);
+    }
+    else
+    {
+        /* we can have here a concatenation of encrypted packets */
+        while (ret == 0 && receive_length > 0) {
+            size_t consumed = 0;
+            if (cnx->is_qmux_tls_ready) {
+                /* TLS is negotiated: receive data packets packets */
+                ret = picoqmux_incoming_data(cnx, current_time, receive_buffer, receive_length, &consumed);
+            }
+            else {
+                /* Perform the handshake */
+                ret = picoqmux_incoming_handshake(cnx, current_time, receive_buffer, receive_length,
+                    &consumed);
+            }
+            if (ret == 0) {
+                if (consumed >= receive_length) {
+                    receive_length = 0;
+                }
+                else {
+                    receive_buffer += consumed;
+                    receive_length -= consumed;
+                }
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* something received. Notice progress. */
+        cnx->latest_progress_time = current_time;
+        cnx->next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
+    }
+
+    return ret;
+}

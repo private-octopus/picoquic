@@ -42,8 +42,24 @@
 #include "picoquictest_internal.h"
 #include "picoquic_qlog.h"
 
-int picoqmux_init(picoquic_cnx_t* cnx);
-picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time, int client_mode);
+picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
+    char const* cert_file_name,
+    char const* key_file_name,
+    char const* cert_root_file_name,
+    char const* default_alpn,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_connection_id_cb_fn cnx_id_callback,
+    void* cnx_id_callback_ctx,
+    uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
+    uint64_t current_time,
+    uint64_t* p_simulated_time,
+    char const* ticket_file_name,
+    const uint8_t* ticket_encryption_key,
+    size_t ticket_encryption_key_length);
+int picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext);
+picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time,
+    int client_mode, int is_cleartext, char const* server, char const* alpn);
 int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length);
 int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
     const uint8_t* receive_buffer, size_t receive_length);
@@ -51,7 +67,10 @@ int picoqmux_has_sent_tp(picoquic_cnx_t* cnx);
 int picoqmux_has_received_tp(picoquic_cnx_t* cnx);
 void picoqmux_update_state_on_tp_sent(picoquic_cnx_t* cnx);
 void picoqmux_update_state_on_tp_received(picoquic_cnx_t* cnx);
-
+int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer,
+    size_t send_buffer_max, size_t* send_length);
+int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length);
 
 /*
 * Network simulation tests.
@@ -83,6 +102,7 @@ typedef  struct st_qmux_msg_t {
 
 typedef struct st_qmux_sim_ctx_t {
     uint64_t simulated_time;
+    int is_cleartext;
     int test_idle;
     uint64_t delay;
     picoquic_quic_t* quic[2];
@@ -98,6 +118,7 @@ typedef struct st_qmux_sim_ctx_t {
 
 typedef struct st_qmux_sim_spec_t {
     int test_idle;
+    int is_cleartext;
     uint64_t delay;
     uint64_t expected_time;
 } qmux_sim_spec_t;
@@ -122,7 +143,7 @@ int qmux_send_test(void)
     size_t send_length = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
-    picoqmux_init(cnx);
+    picoqmux_init(cnx, 1);
 
     if (ret == 0) {
         /* simulate that TP has been sent and received. */
@@ -146,6 +167,8 @@ int qmux_send_test(void)
 
     return ret;
 }
+
+/* ALPN list function -- need to set one? */
 
 /* Check that frames can be received properly */
 /* TODO: run a test with all frames in skip frame test, to check
@@ -208,6 +231,11 @@ int qmux_test_callback(picoquic_cnx_t* cnx,
                 picoquic_add_to_stream(cnx, 0, qmux_test_data, sizeof(qmux_test_data), 1);
             }
             break;
+        case picoquic_callback_request_alpn_list:
+            /* qmux_test_set_alpn_list((void*)bytes); */
+            break;
+        case picoquic_callback_set_alpn:
+            break;
         case picoquic_callback_datagram_acked:
             /* Ack for packet carrying datagram-object received from peer */
         case picoquic_callback_datagram_lost:
@@ -242,7 +270,7 @@ int qmux_send_tp_test(void)
     uint8_t buffer[2048];
     size_t send_length = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
-    picoqmux_init(cnx);
+    picoqmux_init(cnx, 1);
 
     if (ret == 0) {
         /* prepare the packet */
@@ -273,7 +301,7 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     cnx->client_mode = client_mode; /* as required for the test */
-    picoqmux_init(cnx);
+    picoqmux_init(cnx, 1);
     if (is_tp_received) {
         picoqmux_update_state_on_tp_received(cnx); /* simulate that TP has been received. */
     }
@@ -466,7 +494,7 @@ int qmux_send_qx_ping_r_test(void)
     uint8_t buffer[2048];
     size_t send_length = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
-    picoqmux_init(cnx);
+    picoqmux_init(cnx, 1);
 
     /* Simulate QX Ping received 
      */
@@ -497,7 +525,7 @@ int qmux_send_cnx_close_test(void)
     uint8_t buffer[2048];
     size_t send_length = 0;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
-    picoqmux_init(cnx);
+    picoqmux_init(cnx, 1);
 
     if (ret == 0) {
         /* simulate that TP has been sent and received. */
@@ -524,19 +552,49 @@ int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
 {
     int ret = 0;
     uint8_t reset_seed[16] = { 0 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+
     memset(sim_ctx, 0, sizeof(qmux_sim_ctx_t));
-    for (int i=0; i<2; i++){
-        if ((sim_ctx->quic[i] = picoquic_create(4, NULL, NULL, NULL, "qmux_test",
-            qmux_test_callback, sim_ctx, NULL, NULL, reset_seed,
-            sim_ctx->simulated_time, &sim_ctx->simulated_time,
-            NULL, NULL, 0)) == NULL) {
-            ret = -1;
-            break;
-        }
-    }
+
+    sim_ctx->is_cleartext = spec->is_cleartext;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
     if (ret == 0) {
-        sim_ctx->test_idle = spec->test_idle;
-        sim_ctx->delay = spec->delay;
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set key file names.");
+    }
+    else {
+        /* Test the creation of the client and server contexts */
+        sim_ctx->quic[0] = picoqmux_create(8, NULL, NULL, test_server_cert_store_file,
+            NULL, qmux_test_callback, sim_ctx, NULL, NULL, NULL, sim_ctx->simulated_time,
+            &sim_ctx->simulated_time, NULL, NULL, 0);
+
+        sim_ctx->quic[1] = picoqmux_create(8,
+            test_server_cert_file, test_server_key_file, NULL, "qmux_test",
+            qmux_test_callback, sim_ctx, NULL, NULL, NULL,
+            sim_ctx->simulated_time, &sim_ctx->simulated_time, NULL, NULL, 0);
+
+        if (sim_ctx->quic[0] == NULL || sim_ctx->quic[1] == NULL) {
+            ret = -1;
+        }
+        else {
+            sim_ctx->test_idle = spec->test_idle;
+            sim_ctx->delay = spec->delay;
+        }
     }
     return ret;
 }
@@ -577,7 +635,8 @@ int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
         if (sim_ctx->quic[msg->target_index] != NULL) {
             /* submit to quic context and obtain the connection pointer */
             sim_ctx->cnx[msg->target_index] = picoqmux_create_qmux_cnx(
-                sim_ctx->quic[msg->target_index], sim_ctx->simulated_time, 0);
+                sim_ctx->quic[msg->target_index], sim_ctx->simulated_time, 0, 
+                sim_ctx->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test");
         }
     }
 
@@ -585,7 +644,7 @@ int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
         ret = -1;
     }
     else {
-        ret = picoqmux_incoming_cnx_packet(sim_ctx->cnx[msg->target_index],
+        ret = picoqmux_incoming_packets(sim_ctx->cnx[msg->target_index],
             sim_ctx->simulated_time,
             msg->buffer, msg->length);
     }
@@ -606,7 +665,7 @@ int qmux_loop_poll_connection(qmux_sim_ctx_t* sim_ctx, int cnx_index)
         msg->buffer = (uint8_t*)msg + sizeof(qmux_msg_t);
         msg->buffer_size = 0x4000;
 
-        ret = picoqmux_prepare_cnx_packets(sim_ctx->cnx[cnx_index],
+        ret = picoqmux_prepare_packets(sim_ctx->cnx[cnx_index],
             sim_ctx->simulated_time, msg->buffer, msg->buffer_size, &msg->length);
 
         if (msg->length > 0) {
@@ -634,6 +693,7 @@ int qmux_loop_iterate(qmux_sim_ctx_t* sim_ctx)
     int next_cnx = -1;
     int has_msg = 0;
     uint64_t next_sim_time = UINT64_MAX;
+
     for (int i = 0; i < 2; i++) {
         if (sim_ctx->cnx[i] != NULL &&
             sim_ctx->cnx[i]->cnx_state != picoquic_state_disconnected &&
@@ -652,7 +712,7 @@ int qmux_loop_iterate(qmux_sim_ctx_t* sim_ctx)
     }
     if (has_msg){
         /* deliver the message */
-        qmux_loop_deliver_message(sim_ctx);
+        ret = qmux_loop_deliver_message(sim_ctx);
     }
     else if (next_cnx >= 0) {
         /* get the next message from the specifed connection */
@@ -674,7 +734,7 @@ int qmux_loop_one(qmux_sim_spec_t * spec)
     /* Start the loop by creating a client connection */
     if (ret == 0 &&
         (sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
-            sim_ctx.simulated_time, 1)) == NULL) {
+            sim_ctx.simulated_time, 1, spec->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test")) == NULL) {
         ret = -1;
     }
 
@@ -705,6 +765,7 @@ int qmux_loop_one(qmux_sim_spec_t * spec)
 int qmux_loop_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
+    spec.is_cleartext = 1;
 
     return qmux_loop_one(&spec);
 }
@@ -712,6 +773,7 @@ int qmux_loop_test(void)
 int qmux_loop_delay_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
+    spec.is_cleartext = 1;
     spec.delay = 15000;
     spec.expected_time = 60000;
 
@@ -721,9 +783,20 @@ int qmux_loop_delay_test(void)
 int qmux_loop_idle_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
+    spec.is_cleartext = 1;
     spec.delay = 15000;
     spec.test_idle = 1;
     spec.expected_time = 30030000;
+
+    return qmux_loop_one(&spec);
+}
+
+int qmux_loop_tls_test(void)
+{
+    qmux_sim_spec_t spec = { 0 };
+    spec.is_cleartext = 0;
+    spec.delay = 15000;
+    spec.expected_time = 90000;
 
     return qmux_loop_one(&spec);
 }

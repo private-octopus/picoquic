@@ -1317,6 +1317,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_reset_stream_at_enabled : 1; /* Reset Stream At is supported */
     unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
+    unsigned int is_qmux_cleartext : 1; /* This QMux connection is not encrypted */
+    unsigned int is_qmux_tls_ready : 1; /* TLS handshake of QMux connection not complete */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;

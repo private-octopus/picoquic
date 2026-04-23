@@ -1964,6 +1964,13 @@ namespace UnitTest1
             int ret = qmux_loop_idle_test();
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(qmux_loop_tls)
+        {
+            int ret = qmux_loop_tls_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();

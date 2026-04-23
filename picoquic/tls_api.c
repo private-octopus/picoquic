@@ -2086,10 +2086,15 @@ void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
         free(ctx->retry_configs.base);
     }
     ctx->retry_configs.len = 0;
+
+    ptls_buffer_dispose(&ctx->tls_wbuf);
+    ptls_buffer_dispose(&ctx->tls_rbuf);
+
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
     }
+
     free(ctx);
 }
 
