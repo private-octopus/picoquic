@@ -976,7 +976,7 @@ int picoqmux_incoming_data(picoquic_cnx_t* cnx, uint64_t current_time,
     return ret;
 }
 
-int picoqmux_incoming_handshake(picoquic_cnx_t* cnx, uint64_t current_time,
+int picoqmux_incoming_handshake(picoquic_cnx_t* cnx,
     const uint8_t* receive_buffer, size_t receive_length, size_t* consumed)
 {
     int ret = 0;
@@ -1002,7 +1002,7 @@ int picoqmux_incoming_handshake(picoquic_cnx_t* cnx, uint64_t current_time,
 int picoqmux_start_client_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
 {
     int ret = 0;
-    uint64_t consumed = 0;
+    size_t consumed = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     PICOQUIC_THREAD_CHECK(cnx->quic);
 
@@ -1051,7 +1051,7 @@ int picoqmux_start_client_cnx(picoquic_cnx_t* cnx, uint64_t current_time)
     ptls_buffer_init(&tls_ctx->tls_wbuf, "", 0);
     ptls_buffer_init(&tls_ctx->tls_rbuf, "", 0);
 
-    ret = picoqmux_incoming_handshake(cnx, current_time, NULL, 0, &consumed);
+    ret = picoqmux_incoming_handshake(cnx, NULL, 0, &consumed);
 
     return ret;
 }
@@ -1149,7 +1149,7 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
             }
             else {
                 /* Perform the handshake */
-                ret = picoqmux_incoming_handshake(cnx, current_time, receive_buffer, receive_length,
+                ret = picoqmux_incoming_handshake(cnx, receive_buffer, receive_length,
                     &consumed);
             }
             if (ret == 0) {
