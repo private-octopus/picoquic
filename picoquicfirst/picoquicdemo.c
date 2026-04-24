@@ -288,6 +288,12 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
     picohttp_server_parameters_t picoquic_file_param;
     server_loop_cb_t loop_cb_ctx;
 
+
+    if (config->nb_threads > 1) {
+        fprintf(stdout, "Sorry, but the program picoquicdemo is not designed to run threaded loops.\n");
+        return -1;
+    }
+
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = config->www_dir;
     picoquic_file_param.path_table = path_item_list;
@@ -295,80 +301,43 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
 
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;
+    current_time = picoquic_current_time();
+
+
+    if (config->ticket_file_name == NULL) {
+        ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
+    }
+    if (ret == 0 && config->token_file_name == NULL) {
+        ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
+    }
 
     /* Setup the server context */
     if (ret == 0) {
-        current_time = picoquic_current_time();
         /* Create QUIC context */
+        ret = picoquic_server_set_context(&qserver, config, current_time, NULL, &picoquic_file_param,
+            picoquic_demo_server_callback_select_alpn);
 
-        if (config->ticket_file_name == NULL) {
-            ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
-        }
-        if (ret == 0 && config->token_file_name == NULL) {
-            ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
-        }
         if (ret == 0) {
-            qserver = picoquic_create_and_configure(config, NULL, &picoquic_file_param, current_time, NULL);
-            if (qserver == NULL) {
-                ret = -1;
-            }
-            else {
-                picoquic_set_key_log_file_from_env(qserver);
+            /* Wait for packets */
+            picoquic_packet_loop_param_t param = { 0 };
+            picoquic_network_thread_ctx_t thread_ctx = { 0 };
 
-                picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
+            param.local_port = config->local_port;
+            param.public_port = config->server_port;
+            param.is_port_shared = config->is_port_shared;
+            param.local_af = 0;
+            param.dest_if = config->dest_if;
+            param.socket_buffer_size = config->socket_buffer_size;
+            param.do_not_use_gso = config->do_not_use_gso;
 
-                picoquic_use_unique_log_names(qserver, 1);
+            thread_ctx.quic = qserver;
+            thread_ctx.param = &param;
+            thread_ctx.loop_callback = server_loop_cb;
+            thread_ctx.loop_callback_ctx = &loop_cb_ctx;
 
-                if (config->qlog_dir != NULL)
-                {
-                    picoquic_set_qlog(qserver, config->qlog_dir);
-                }
-                if (config->performance_log != NULL)
-                {
-                    ret = picoquic_perflog_setup(qserver, config->performance_log);
-                }
-                if (ret == 0 && config->cnx_id_cbdata != NULL) {
-                    picoquic_load_balancer_config_t lb_config;
-                    ret = picoquic_lb_compat_cid_config_parse(&lb_config, config->cnx_id_cbdata, strlen(config->cnx_id_cbdata));
-                    if (ret != 0) {
-                        fprintf(stdout, "Cannot parse the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
-                    }
-                    else {
-                        ret = picoquic_lb_compat_cid_config(qserver, &lb_config);
-                        if (ret != 0) {
-                            fprintf(stdout, "Cannot set the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
-                        }
-                    }
-                }
-                if (ret == 0) {
-                    fprintf(stdout, "Accept enable multipath: %d.\n", qserver->default_multipath_option);
-                }
-                qserver->default_tp.is_reset_stream_at_enabled = 1;
-                qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
-            }
+            (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+            ret = thread_ctx.return_code;
         }
-    }
-
-    if (ret == 0) {
-        /* Wait for packets */
-        picoquic_packet_loop_param_t param = { 0 };
-        picoquic_network_thread_ctx_t thread_ctx = { 0 };
-
-        param.local_port = config->local_port;
-        param.public_port = config->server_port;
-        param.is_port_shared = config->is_port_shared;
-        param.local_af = 0;
-        param.dest_if = config->dest_if;
-        param.socket_buffer_size = config->socket_buffer_size;
-        param.do_not_use_gso = config->do_not_use_gso;
-
-        thread_ctx.quic = qserver;
-        thread_ctx.param = &param;
-        thread_ctx.loop_callback = server_loop_cb;
-        thread_ctx.loop_callback_ctx = &loop_cb_ctx;
-
-        (void)picoquic_packet_loop_v3((void*)&thread_ctx);
-        ret = thread_ctx.return_code;
     }
 
     /* And exit */
@@ -1017,6 +986,9 @@ int quic_client(const char* ip_address_text, int server_port,
 
             if (config->ech_target != NULL) {
                 picoquic_ech_configure_client(cnx_client, config->ech_target, config->ech_target_len);
+            }
+            else if (config->ech_target_len == SIZE_MAX) {
+                picoquic_ech_configure_client(cnx_client, NULL, 0);
             }
 
             if (ret == 0) {

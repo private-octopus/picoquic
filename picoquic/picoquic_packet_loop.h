@@ -25,6 +25,7 @@
 #include "picosocks.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
+#include "picoquic_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -206,6 +207,7 @@ typedef struct st_picoquic_network_thread_ctx_t {
 #endif
 #endif
     int is_threaded;
+    int is_param_allocated;
     int wake_up_defined;
     volatile int thread_is_ready;
     volatile int thread_should_close;
@@ -332,6 +334,60 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx);
 #endif
+
+/* Return the thread context associated with a QUIC context,
+* or a NULl pointer if there is none. */
+struct st_picoquic_network_thread_ctx_t* picoquic_get_thread_ctx(picoquic_quic_t* quic);
+
+/* Set a server context, using more parameters than the simple
+* creation from configuration.
+*/
+int picoquic_server_set_context(picoquic_quic_t** qserver,
+    picoquic_quic_config_t* config,
+    uint64_t current_time,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_alpn_select_fn_v2 alpn_select_fn);
+
+/*
+* Start a set of N threads. 
+* Each thread manages its own quic context, which is
+* created here from the config parameters. The thread interacts with the
+* application through:
+*
+* - wake up and stop/delete calls, using the standard thread API,
+* - the ALPN selection function, called when a new connection is created,
+*   which can set the callback function and the callback context for the connection.
+* - a callback function called from the packet loop, either when the
+*  thread is woken up, or when the packet loop needs to check application delays.
+* - per connection callbacks.
+*
+* The application will specialize the threads by providing the callback functions,
+* and their default context:
+* - the ALPN selection function is the same for all threads.
+* - the packet loop callback is the same for all threads, and its context.
+* - the default connection callback is the same for all threads.
+* - the default connection callback context is the same for all threads.
+*
+* The packet loop callback context is the same for all threads. The function
+* can retrieve the thread context from the "quic" context argument using
+* the function picoquic_get_thread_ctx_from_quic().
+*/
+
+int picoquic_start_server_threads(
+    struct st_picoquic_quic_config_t* config,
+    uint64_t current_time,
+    picoquic_alpn_select_fn_v2 alpn_select_fn,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    picoquic_packet_loop_cb_fn loop_callback_fn,
+    void* loop_callback_ctx,
+    picoquic_custom_thread_create_fn thread_create_fn,
+    picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn,
+    picoquic_network_thread_ctx_t** thread_ctxs,
+    int nb_threads_max,
+    int* nb_threads_created);
 
 /* Following declarations are used for unit tests. */
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
