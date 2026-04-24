@@ -285,7 +285,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             b84869f41414b6d0148db7728f1cf12f5b544874)
+        GIT_TAG             bfa67875982afc4c24f21e146cef4747fa189c2f)
     FetchContent_MakeAvailable(picotls)
 endif()
 

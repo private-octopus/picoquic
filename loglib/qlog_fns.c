@@ -27,6 +27,9 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_unified_log.h"
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
 #include "picotls.h"
 
 typedef struct st_qlog_fns_path_context_t {

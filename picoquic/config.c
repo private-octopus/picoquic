@@ -512,7 +512,11 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         if (nb_params != 1) {
             ret = -1;
         }
-        else {
+        else if (strcmp(params[0].param, "-") == 0) {
+            config->ech_target = NULL;
+            config->ech_target_len = SIZE_MAX;
+        }
+        else{
             ret = picoquic_base64_decode(&config->ech_target, &config->ech_target_len, params[0].param);
         }
         if (ret != 0) {
