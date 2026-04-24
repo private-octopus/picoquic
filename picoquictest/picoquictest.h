@@ -173,6 +173,7 @@ int client_only_test(void);
 int packet_enc_dec_test(void);
 int cleartext_pn_vector_test(void);
 int zero_rtt_spurious_test(void);
+int zero_rtt_bad_param_test(void);
 int zero_rtt_retry_test(void);
 int zero_rtt_no_coal_test(void);
 int zero_rtt_many_losses_test(void);

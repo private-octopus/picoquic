@@ -402,6 +402,7 @@ typedef struct st_zero_rtt_test_t {
     uint64_t extra_delay;
     int do_multipath;
     int propose_ech;
+    int change_params;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);

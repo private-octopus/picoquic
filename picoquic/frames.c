@@ -307,6 +307,12 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
 {
     picoquic_stream_head_t* stream;
     
+    if (!IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+        /* the peer cannot send data, and thus cannot reset the stream */
+        bytes = NULL;
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
+            picoquic_frame_type_reset_stream);
+    }
     if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
         /* Not finding the stream is only an error if the stream
          * was expected to be present, or created on demand. If the
@@ -654,7 +660,7 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
     }
     else if (cid_length > PICOQUIC_CONNECTION_ID_MAX_SIZE) {
         /* TODO: should be PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION if retire_before > sequence */
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
@@ -1502,9 +1508,10 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     int      fin;
     size_t   consumed;
     if (picoquic_parse_stream_header(bytes, bytes_max - bytes, &stream_id, &offset, &data_length, &fin, &consumed) != 0) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_stream_range_min);
         bytes = NULL;
     }else if (offset + data_length >= (1ull<<62)){
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_stream_range_min);
         bytes = NULL;
     }
     else {
@@ -4544,6 +4551,12 @@ const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const 
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_max_stream_data);
     }
+    else if (!IS_BIDIR_STREAM_ID(stream_id) && !IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+        /* the local host cannot send data, and thus cannot use max stream data */
+        bytes = NULL;
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
+            picoquic_frame_type_reset_stream);
+    }
     else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
         /* Maybe not an error if the stream is already closed, so just be tolerant */
         stream = picoquic_create_missing_streams(cnx, stream_id, 1);
@@ -4714,7 +4727,7 @@ const uint8_t* picoquic_decode_max_streams_frame(picoquic_cnx_t* cnx, const uint
         }
 
         if (max_stream_id >= (1ull << 62)) {
-            (void)picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR, max_streams_frame_type);
+            (void)picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, max_streams_frame_type);
             bytes = NULL;
         }
     }
@@ -5077,11 +5090,16 @@ const uint8_t* picoquic_decode_blocked_frame(picoquic_cnx_t* cnx, const uint8_t*
 
 const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    /* TODO: check that the stream number is valid */
-    if ((bytes = picoquic_frames_varint_skip(bytes+1, bytes_max)) == NULL ||
+    uint64_t stream_id = 0;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) == NULL ||
         (bytes = picoquic_frames_varint_skip(bytes,   bytes_max)) == NULL)
     {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 
+            picoquic_frame_type_stream_data_blocked);
+    }
+    else if (!IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_stream_data_blocked);
     }
     return bytes;

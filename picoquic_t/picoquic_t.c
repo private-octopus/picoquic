@@ -258,6 +258,7 @@ static const picoquic_test_def_t test_table[] = {
     { "packet_enc_dec", packet_enc_dec_test},
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
+    { "zero_rtt_bad_param", zero_rtt_bad_param_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "zero_rtt_no_coal", zero_rtt_no_coal_test },
     { "zero_rtt_many_losses", zero_rtt_many_losses_test },
