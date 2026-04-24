@@ -21,6 +21,9 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -190,6 +193,8 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * authority;
+    size_t authority_length;
     uint8_t const * range;
     size_t range_length;
     int status;

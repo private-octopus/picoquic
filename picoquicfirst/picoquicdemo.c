@@ -390,6 +390,7 @@ typedef struct st_client_loop_cb_t {
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
+    struct sockaddr_storage server_alt_address[PICOQUIC_NB_PATH_TARGET];
     int client_alt_if[PICOQUIC_NB_PATH_TARGET];
     int client_alt_state[PICOQUIC_NB_PATH_TARGET];
     int nb_alt_paths;
@@ -426,34 +427,57 @@ char * picoquic_strsep(char **stringp, const char *delim)
  * alt_ip is the ip of the alternative path
  * src_if is the index of the interface where the alt_ip is bounded with
  */
-int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_ip, int *nb_alt_paths)
+int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_client_ip,
+  struct sockaddr_storage *alt_server_ip, int *nb_alt_paths, struct sockaddr_storage *default_server_ip)
 {
     int ret = 0;
-    int valid_ip, valid_index = 0;
-    char *token, *token2, *ptr, *str;
-    str = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    size_t config_len = strlen(mp_config) + 1;
+    int valid_new_entry = 0;
+    char *token, *token2, *end_ptr, *alt_path, *ptr, *str;
+    uint16_t server_port = (default_server_ip->ss_family == AF_INET) ? ((struct sockaddr_in*)default_server_ip)->sin_port : ((struct sockaddr_in6*)default_server_ip)->sin6_port;
+    str = malloc(sizeof(char) * config_len);
+    alt_path = malloc(sizeof(char) * config_len);
     if (str == NULL) {
         ret = -1;
     }
-    memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
+    memcpy(str, mp_config, sizeof(char) * config_len);
     ptr = str;
 
     while ((token = picoquic_strsep(&str, ","))) {
         struct sockaddr_storage ip;
-        valid_index = valid_ip = 0;
+        valid_new_entry = 0;
+        memcpy(alt_path, token, sizeof(char) * (strnlen(token, config_len - 1) + 1));
 
-        while ((token2 = picoquic_strsep(&token, "/"))) {
+        if ((token2 = picoquic_strsep(&token, "/")) != 0) {
             if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
-                memcpy(alt_ip+(*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
-                valid_ip = 1;
-            }
-            if (atoi(token2) >= 0) {
-                *(src_if+(*nb_alt_paths)) = atoi(token2);
-                valid_index = 1;
+                memcpy(alt_client_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                if ((token2 = picoquic_strsep(&token, "/")) == NULL) {
+                    *(src_if + (*nb_alt_paths)) = 0;
+                    memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                    valid_new_entry = 1;
+                }
+                else {
+                    *(src_if + (*nb_alt_paths)) = (int)strtol(token2, &end_ptr, 10);
+                    if (*end_ptr) {
+                        fprintf(stdout, "Unexpected interface index %s, skipping the alternative path %s\n", token2, alt_path);
+                    }
+                    else {
+                        if (token) {
+                            if (picoquic_store_text_addr(&ip, token, server_port) == 0){
+                                memcpy(alt_server_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                                valid_new_entry = 1;
+                            }
+                        }
+                        else {
+                            memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                            valid_new_entry = 1;
+                        }
+                    }
+                }
             }
         }
 
-        if ((valid_ip == 1) && (valid_index == 1)){
+        if (valid_new_entry == 1 && alt_client_ip[*nb_alt_paths].ss_family == alt_server_ip[*nb_alt_paths].ss_family){
             (*nb_alt_paths)++;
             /* If more than PICOQUIC_NB_PATH_TARGET alt paths are specified, the remaining are ignored */
             if (*nb_alt_paths >= PICOQUIC_NB_PATH_TARGET) {
@@ -461,6 +485,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
             }
         }
     }
+    free(alt_path);
     free(ptr);
     return ret;
 }
@@ -532,7 +557,7 @@ int client_create_additional_path(picoquic_cnx_t* cnx, client_loop_cb_t* cb_ctx)
         }
 
         cb_ctx->client_alt_state[i] = 1; /* Unless we detect a transient error, mark this path as tried */
-        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_alt_address[i],
             addr_from, cb_ctx->client_alt_if[i], picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)), 0)) != 0) {
             /* Check whether the code returned a transient error */
             if (ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
@@ -994,7 +1019,9 @@ int quic_client(const char* ip_address_text, int server_port,
     /* Wait for packets */
     if (ret == 0) {
         if (config->multipath_alt_config != NULL) {
-            picoquic_parse_client_multipath_config(config->multipath_alt_config, loop_cb.client_alt_if, loop_cb.client_alt_address, &loop_cb.nb_alt_paths);
+            picoquic_parse_client_multipath_config(config->multipath_alt_config, loop_cb.client_alt_if,
+                loop_cb.client_alt_address, loop_cb.server_alt_address,
+                &loop_cb.nb_alt_paths, &loop_cb.server_address);
         }
 
         loop_cb.cnx_client = cnx_client;
@@ -1287,9 +1314,10 @@ void usage(void)
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative\n");
-    fprintf(stderr, "                        path, e.g. \"10.0.0.2/3,10.0.0.3/4\". This option only\n");
-    fprintf(stderr, "                        affects the behavior of the client.\n");
+    fprintf(stderr, "  -A \"client_ip/ifindex[/server_ip][,client_ip/ifindex[/server_ip]]\"  IPs and client\n");
+    fprintf(stderr, "                        interface index for multipath alternative path,\n");
+    fprintf(stderr, "                        e.g. \"10.0.0.2/3,10.0.0.3/4/10.1.1.1\".\n");
+    fprintf(stderr, "                        This option only affects the behavior of the client.\n");
     fprintf(stderr, "                        Use -A ::0/0 or -A 0.0.0.0/0 to test multipath with\n");
     fprintf(stderr, "                        a second path from the same IP and different port.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");

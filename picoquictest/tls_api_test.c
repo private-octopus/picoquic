@@ -4420,6 +4420,11 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
                 test_ctx->cnx_client->local_parameters.enable_time_stamp = 0;
             }
 
+            if (ret == 0 && i > 0 && zrt->change_params) {
+                test_ctx->qserver->default_tp.initial_max_data -= 1;
+                test_ctx->qserver->default_tp.initial_max_stream_id_bidir += 1;
+            }
+
             if (ret == 0 && zrt->propose_ech) {
                 ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
             }
@@ -4474,7 +4479,7 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
             }
         }
 
-        if (ret == 0 && zrt->use_badcrypt == 0 && zrt->hardreset == 0) {
+        if (ret == 0 && zrt->use_badcrypt == 0 && zrt->hardreset == 0 && zrt->change_params == 0) {
             int rtt_is_available = picoquic_is_0rtt_available(test_ctx->cnx_client);
 
             if ((rtt_is_available && i == 0) ||
@@ -4485,11 +4490,11 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
 
         if (ret == 0 && i == 1) {
             /* If resume succeeded, the second connection will have a type "PSK" */
-            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && (
+            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && zrt->change_params == 0 && (
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_server) == 0 || 
                 picoquic_tls_is_psk_handshake(test_ctx->cnx_client) == 0)) {
-                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), connection %d not PSK.\n",
-                    zrt->use_badcrypt, zrt->hardreset, i);
+                DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d, change: %d), connection %d not PSK.\n",
+                    zrt->use_badcrypt, zrt->hardreset, zrt->change_params, i);
                 ret = -1;
             } else {
                 /* run a receive loop until no outstanding data */
@@ -4530,7 +4535,7 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
 
         /* Verify that the 0RTT data was sent and acknowledged */
         if (ret == 0 && i == 1) {
-            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0) {
+            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && zrt->change_params == 0) {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
                         zrt->use_badcrypt, zrt->hardreset);
@@ -4555,13 +4560,13 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
                 }
             } else {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
-                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
-                        zrt->use_badcrypt, zrt->hardreset);
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d, change: %d), no zero RTT sent.\n",
+                        zrt->use_badcrypt, zrt->hardreset, zrt->change_params);
                     ret = -1;
                 }
-                else if (zrt->early_loss == 0 && zrt->hardreset == 0 && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
-                    DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), zero acked, not expected.\n",
-                        zrt->use_badcrypt, zrt->hardreset);
+                else if ((zrt->early_loss || zrt->change_params) && test_ctx->cnx_client->nb_zero_rtt_acked != 0) {
+                    DBG_PRINTF("Zero RTT test (badcrypt: %d, change : %d), zero rtt acked, not expected.\n",
+                        zrt->use_badcrypt, zrt->change_params);
                     ret = -1;
                 }
                 else if (test_ctx->sum_data_received_at_server == 0) {
@@ -4650,6 +4655,21 @@ int zero_rtt_spurious_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.use_badcrypt = 1;
+    return zero_rtt_test_one(&zrt);
+}
+
+
+/*
+* Zero RTT bad param test.
+* Check what happens if the client attempts to resume a connection using a ticket
+* issued on a previous instance, and the default TP parameters have changed.
+* We expect that the connection will not use 0RTT.
+*/
+
+int zero_rtt_bad_param_test(void)
+{
+    zero_rtt_test_t zrt = { 0 };
+    zrt.change_params = 1;
     return zero_rtt_test_one(&zrt);
 }
 

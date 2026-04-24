@@ -1095,6 +1095,26 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
     int ret = 0;
     picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)encrypt_ticket_ctx) + sizeof(ptls_encrypt_ticket_t));
     picoquic_quic_t* quic = *ppquic;
+    uint8_t param_verif[56];
+    uint8_t* param_bytes = param_verif;
+
+    /* Encode summary of default TLS parameters in a binary token that
+    * will be used as aead. This ensure that tokens issue with different
+    * parameters will not be accepted.
+    */
+    picoformat_64(param_bytes, quic->default_tp.active_connection_id_limit);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_data);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_data_bidi_local);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_data_bidi_remote);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_data_uni);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_id_bidir);
+    param_bytes += 8;
+    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_id_unidir);
 
     if (is_encrypt != 0) {
         ptls_aead_context_t* aead_enc = (ptls_aead_context_t*)quic->aead_encrypt_ticket_ctx;
@@ -1119,7 +1139,7 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             data_length += 4;
             /* Run AEAD encryption */
             dst->off += ptls_aead_encrypt(aead_enc, dst->base + dst->off,
-                dst->base + start_off, data_length, seq_num, NULL, 0);
+                dst->base + start_off, data_length, seq_num, param_verif, sizeof(param_verif));
             /* Remember issued ticket ID in connection context */
             quic->cnx_in_progress->issued_ticket_id = seq_num;
         }
@@ -1135,7 +1155,7 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             uint64_t seq_num = PICOPARSE_64(src.base);
             /* Decrypt */
             size_t decrypted = ptls_aead_decrypt(aead_dec, dst->base + dst->off,
-                src.base + 8, src.len - 8, seq_num, NULL, 0);
+                src.base + 8, src.len - 8, seq_num, param_verif, sizeof(param_verif));
 
             if (decrypted > src.len - 8) {
                 /* decryption error */

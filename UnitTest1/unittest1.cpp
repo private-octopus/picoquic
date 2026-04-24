@@ -1560,6 +1560,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(zero_rtt_bad_param)
+        {
+            int ret = zero_rtt_bad_param_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(zero_rtt_retry)
         {
             int ret = zero_rtt_retry_test();
@@ -3508,6 +3515,12 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_reset) {
             int ret = picowt_baton_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_wildcard) {
+            int ret = picowt_baton_wildcard_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -31,6 +31,7 @@
  * The server will start the connection by sending a setting frame, which will
  * specify a zero-length dynamic dictionary for QPACK.
  */
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -478,6 +479,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->path, &parts->path_length);
                 }
                 break;
+            case http_pseudo_header_authority:
+                if (parts->authority != NULL) {
+                    /* Duplicate authority! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->authority, &parts->authority_length);
+                }
+                break;
             case http_header_range:
                 if (parts->range != NULL) {
                     /* Duplicate content type! */
@@ -517,7 +528,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                 }
                 else {
                     bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->wt_protocol, &parts->wt_available_protocols_length);
+                        decoded_length, &parts->wt_protocol, &parts->wt_protocol_length);
+                    /* WT-Protocol is a Structured Header String — strip surrounding quotes */
+                    if (parts->wt_protocol != NULL && parts->wt_protocol_length >= 2 &&
+                        parts->wt_protocol[0] == '"' &&
+                        parts->wt_protocol[parts->wt_protocol_length - 1] == '"') {
+                        uint8_t* p = (uint8_t*)parts->wt_protocol;
+                        parts->wt_protocol_length -= 2;
+                        memmove(p, p + 1, parts->wt_protocol_length);
+                        p[parts->wt_protocol_length] = 0;
+                    }
                 }
                 break;
 
@@ -537,11 +557,12 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range",
+     ":method", ":path", ":authority", ":status", "content-type", ":protocol", "origin", "range",
      H3ZERO_WT_AVAILABLE_PROTOCOLS, H3ZERO_WT_PROTOCOL,
      NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
+        http_pseudo_header_authority,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
         http_header_range, http_header_wt_available_protocols, http_header_wt_protocol
@@ -998,9 +1019,12 @@ uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * byte
     }
 
     if (wt_protocol != NULL) {
+        /* WT-Protocol is a Structured Header String and must be quoted per spec */
+        char quoted[258];
+        int quoted_len = snprintf(quoted, sizeof(quoted), "\"%s\"", wt_protocol);
         bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max,
             (uint8_t*)H3ZERO_WT_PROTOCOL, strlen(H3ZERO_WT_PROTOCOL),
-            (uint8_t*)wt_protocol, strlen(wt_protocol));
+            (uint8_t*)quoted, (size_t)quoted_len);
     }
 
     return bytes;
@@ -1112,6 +1136,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->path);
         *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
+    }
+    if (header->authority != NULL) {
+        free((uint8_t*)header->authority);
+        *((uint8_t**)&header->authority) = NULL;
+        header->authority_length = 0;
     }
     if (header->range != NULL) {
         free((uint8_t*)header->range);
