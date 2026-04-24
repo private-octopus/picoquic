@@ -25,6 +25,7 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
+#pragma warning(disable:4204)
 #else
 #include <signal.h>
 #endif

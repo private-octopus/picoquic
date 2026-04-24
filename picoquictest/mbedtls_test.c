@@ -28,6 +28,7 @@
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #include <stddef.h>
@@ -41,7 +42,6 @@
 #include "performance_log.h"
 #include "picoquictest.h"
 #include "picoquic_crypto_provider_api.h"
-#include <picotls.h>
 #if 0
 #include "psa/crypto.h"
 #include "psa/crypto_struct.h"

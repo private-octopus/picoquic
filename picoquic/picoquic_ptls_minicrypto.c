@@ -26,6 +26,7 @@
 #include "wincompat.h"
 #include "ws2ipdef.h"
 #pragma warning(disable:4100)
+#pragma warning(disable:4204)
 #endif
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"

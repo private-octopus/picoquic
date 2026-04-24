@@ -25,6 +25,7 @@
 #include "tls_api.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #ifdef _WINDOWS
@@ -398,12 +399,14 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_da
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
     PICOQUIC_THREAD_CHECK(cnx->quic);
 
-    tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length);
+    tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length+1);
     if (tls_ctx->handshake_properties.client.ech.configs.base == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
     else {
-        memcpy(tls_ctx->handshake_properties.client.ech.configs.base, config_data, config_length);
+        if (config_length > 0) {
+            memcpy(tls_ctx->handshake_properties.client.ech.configs.base, config_data, config_length);
+        }
         tls_ctx->handshake_properties.client.ech.configs.len = config_length;
     }
     return ret;
