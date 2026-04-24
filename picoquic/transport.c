@@ -784,7 +784,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         if (cnx->remote_parameters.active_connection_id_limit < 2) {
                             ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
                         }
-                        break;
+                    }
+                    break;
                 case picoquic_tp_max_datagram_frame_size:
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -925,11 +926,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 default:
                     /* ignore unknown extensions */
                     break;
-                    }
+                }
 
-                    if (ret == 0) {
-                        byte_index += (size_t)extension_length;
-                    }
+                if (ret == 0) {
+                    byte_index += (size_t)extension_length;
                 }
             }
         }
