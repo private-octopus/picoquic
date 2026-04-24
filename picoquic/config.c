@@ -231,6 +231,7 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
     int is_port_shared = 0;
     int p1 = 0;
     int p2 = 0;
+    int nb_threads = 0;
 
     if (*p == 'S') {
         is_port_shared = 1;
@@ -249,6 +250,14 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
             p++;
         }
     }
+    if (*p == '*') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            nb_threads *= 10;
+            nb_threads += (*p - '0');
+            p++;
+        }
+    }
     if (*p != 0 || p1 < 0 || p1 > 65535 || p2 < 0 || p2 > 65535) {
         fprintf(stderr, "Invalid port: %s\n", config_optval_string(opval_buffer, 256, port_string, strlen(port_string)));
         ret = -1;
@@ -257,6 +266,7 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
         config->server_port = (uint16_t)p1;
         config->local_port = (uint16_t)p2;
         config->is_port_shared = is_port_shared;
+        config->nb_threads = nb_threads;
     }
     return ret;
 }
@@ -1109,3 +1119,7 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     }
     picoquic_config_init(config);
 }
+
+/* Set a server context, using more parameters than the simple
+* creation from configuration.
+ */

@@ -96,6 +96,7 @@ typedef struct st_picoquic_quic_config_t {
     uint16_t server_port;
     uint16_t local_port;
     int is_port_shared;
+    int nb_threads;
     int dest_if;
     int mtu_max;
     int cnx_id_length;
