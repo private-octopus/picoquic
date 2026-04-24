@@ -1018,6 +1018,9 @@ int quic_client(const char* ip_address_text, int server_port,
             if (config->ech_target != NULL) {
                 picoquic_ech_configure_client(cnx_client, config->ech_target, config->ech_target_len);
             }
+            else if (config->ech_target_len == SIZE_MAX) {
+                picoquic_ech_configure_client(cnx_client, NULL, 0);
+            }
 
             if (ret == 0) {
                 ret = picoquic_start_client_cnx(cnx_client);
