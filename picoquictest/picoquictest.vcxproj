@@ -191,6 +191,7 @@
     <ClCompile Include="pn2pn64test.c" />
     <ClCompile Include="qlog_frame_test.c" />
     <ClCompile Include="qlog_test.c" />
+    <ClCompile Include="qmux_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
     <ClCompile Include="rctl_aqm.c" />
