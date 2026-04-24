@@ -23,6 +23,9 @@
 #include "picoquic_internal.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
 #include <picotls.h>
 #include "picoquic_crypto_provider_api.h"
 #include <stdlib.h>

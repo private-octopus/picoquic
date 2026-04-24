@@ -611,7 +611,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     */
                     picoquic_update_stream_initial_remote(cnx);
                     break;
-                case picoquic_tp_initial_max_stream_data_uni: {
+                case picoquic_tp_initial_max_stream_data_uni:
                     cnx->remote_parameters.initial_max_stream_data_uni =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     /* If we sent zero rtt data, the streams were created with the
@@ -619,7 +619,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     */
                     picoquic_update_stream_initial_remote(cnx);
                     break;
-                }
                 case picoquic_tp_initial_max_data:
                     cnx->remote_parameters.initial_max_data =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -641,11 +640,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     break;
                 }
                 case picoquic_tp_idle_timeout:
-                    cnx->remote_parameters.max_idle_timeout = 
+                    cnx->remote_parameters.max_idle_timeout =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     break;
 
-                case picoquic_tp_max_packet_size: 
+                case picoquic_tp_max_packet_size:
                     if (extension_mode > 1) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
@@ -691,7 +690,6 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                     }
                     break;
-                }
                 case picoquic_tp_initial_max_streams_uni: {
                     uint64_t old_limit = cnx->max_stream_id_unidir_remote;
                     cnx->remote_parameters.initial_max_stream_id_unidir =
@@ -781,12 +779,12 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
                     else {
-                    cnx->remote_parameters.active_connection_id_limit = (uint32_t)
-                        picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (cnx->remote_parameters.active_connection_id_limit < 2) {
-                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
-                    }
-                    break;
+                        cnx->remote_parameters.active_connection_id_limit = (uint32_t)
+                            picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                        if (cnx->remote_parameters.active_connection_id_limit < 2) {
+                            ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
+                        }
+                        break;
                 case picoquic_tp_max_datagram_frame_size:
                     cnx->remote_parameters.max_datagram_frame_size = (uint32_t)
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
@@ -927,26 +925,26 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 default:
                     /* ignore unknown extensions */
                     break;
-                }
+                    }
 
-                if (ret == 0) {
-                    byte_index += (size_t)extension_length;
+                    if (ret == 0) {
+                        byte_index += (size_t)extension_length;
+                    }
                 }
             }
         }
     }
-
     /* Compute the negotiated version of the time out.
      * The parameter values are expressed in milliseconds,
      * but the connection context variable is in microseconds.
      * If the keep alive interval was set to a too short value,
      * reset it.
      */
-    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout*1000ull;
+    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout * 1000ull;
     if (cnx->local_parameters.max_idle_timeout == 0 ||
-        (cnx->remote_parameters.max_idle_timeout > 0 && cnx->remote_parameters.max_idle_timeout < 
+        (cnx->remote_parameters.max_idle_timeout > 0 && cnx->remote_parameters.max_idle_timeout <
             cnx->local_parameters.max_idle_timeout)) {
-        cnx->idle_timeout = cnx->remote_parameters.max_idle_timeout*1000ull;
+        cnx->idle_timeout = cnx->remote_parameters.max_idle_timeout * 1000ull;
     }
     if (cnx->idle_timeout == 0) {
         cnx->idle_timeout = UINT64_MAX;
