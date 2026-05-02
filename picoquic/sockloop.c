@@ -890,7 +890,7 @@ int picoquic_packet_loop_uring(
             /* timeout expired: no bytes received */
             *received_buffer = NULL;
             bytes_recv = 0;
-            *action = picoquic_packet_loop_action_time_out;
+            *action = picoquic_packet_loop_action_timeout;
         }
         else {
             /* error */
@@ -1001,7 +1001,7 @@ int picoquic_packet_loop_poll(
         DBG_PRINTF("Error: poll returns %d\n", ret_poll);
     }
     else if (ret_poll == 0) {
-        *action = picoquic_packet_loop_action_time_out;
+        *action = picoquic_packet_loop_action_timeout;
     }
     else if (ret_poll > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
@@ -1255,9 +1255,11 @@ int picoquic_packet_loop_udp_received(
     picoquic_cnx_t** last_cnx,
     picoquic_socket_ctx_t *s_ctx,
     int socket_rank,
+    uint8_t * received_buffer,
     int bytes_recv,
     struct sockaddr* addr_from,
-    struct sockaddr* addr_to,
+    struct sockaddr* addr_to, 
+    uint8_t received_ecn,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx,
     uint64_t current_time,
@@ -1279,9 +1281,9 @@ int picoquic_packet_loop_udp_received(
                 recv_length = s_ctx[socket_rank].udp_coalesced_size;
             }
             /* Submit the packet to the client */
-            ret = picoquic_incoming_packet_ex(quic, s_ctx[socket_rank].recv_buffer + recv_bytes,
+            ret = picoquic_incoming_packet_ex(quic, received_buffer + recv_bytes,
                 recv_length, addr_from, addr_to, s_ctx[socket_rank].dest_if,
-                s_ctx[socket_rank].received_ecn, last_cnx, current_time);
+                received_ecn, last_cnx, current_time);
             recv_bytes += recv_length;
         }
         if (ret == 0) {
@@ -1390,7 +1392,8 @@ int picoquic_packet_loop_do_udp_send(
 #if defined(_WINDOWS)
 #elif defined(PICOQUIC_WITH_IO_URING)
 #elif defined(PICOQUIC_WITH_POLL)
-                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available,
+                    sqmux_ctx, nb_qmux_sockets, thread_ctx, current_time);
 #endif
                 }
             }
@@ -1565,7 +1568,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     }
 #elif defined(PICOQUIC_WITH_POLL)
     if (ret == 0) {
-        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
+        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available,
+            sqmux_ctx, nb_qmux_sockets, thread_ctx, current_time);
     }
 #endif
 
@@ -1653,8 +1657,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             s_ctx, nb_sockets_available,
             sqmux_ctx, nb_qmux_sockets, current_time,
             poll_list, &addr_from, &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer), delta_t,
-            &is_wake_up_event, thread_ctx, &action, &socket_rank);
+            buffer, sizeof(buffer), delta_t, thread_ctx,
+            &action, &socket_rank);
         received_buffer = buffer;
 #else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
@@ -1686,7 +1690,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 break;
             case picoquic_packet_loop_action_udp_received:
                 ret = picoquic_packet_loop_udp_received(quic, &last_cnx, s_ctx, socket_rank,
-                    bytes_recv, (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to,
+                    received_buffer, bytes_recv, (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, received_ecn,
                     loop_callback, loop_callback_ctx, current_time, nb_loop_immediate, &loop_immediate);
                 if (ret == 0) {
                     if (loop_callback != NULL) {
