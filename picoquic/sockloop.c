@@ -972,7 +972,6 @@ int picoquic_packet_loop_poll(
     unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
-    int* is_wake_up_event,
     picoquic_network_thread_ctx_t* thread_ctx,
     picoquic_packet_loop_action_enum* action,
     int* socket_rank)
@@ -1005,8 +1004,7 @@ int picoquic_packet_loop_poll(
     }
     else if (ret_poll > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
-         * set the is_wake_up_event flag, and ignore the other file descriptors.
-         */
+         * set the action as wake_up */
 
         if (thread_ctx->wake_up_defined && poll_list[0].revents != 0) {
             /* Something was written on the "wakeup" pipe. Read it. */
@@ -1329,7 +1327,14 @@ int picoquic_packet_loop_do_udp_send(
     size_t* nb_packets_sent,
     size_t* bytes_sent,
     picoquic_connection_id_t* log_cid,
-    uint64_t current_time)
+#if defined(PICOQUIC_WITH_POLL)
+    struct pollfd* poll_list,
+    picoqmux_socket_ctx_t* sqmux_ctx,
+    int nb_qmux_sockets,
+    picoquic_network_thread_ctx_t* thread_ctx,
+#endif
+    uint64_t current_time
+)
 {
     int ret = 0;
     int sock_ret = 0;
@@ -1742,7 +1747,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #if defined(_WINDOWS)
 #elif defined(PICOQUIC_WITH_IO_URING)
 #elif defined(PICOQUIC_WITH_POLL)
-                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available,
+                        sqmux_ctx, nb_qmux_sockets, thread_ctx, current_time);
 #endif
                 }
                 ret = 0;
@@ -1769,7 +1775,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, &s_ctx[0], nb_sockets, nb_sockets_available, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index, ecn_value,
-                        send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid, current_time);
+                        send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,
+#if defined(PICOQUIC_WITH_POLL)
+                        poll_list, sqmux_ctx, nb_qmux_sockets, thread_ctx,
+#endif         
+                        current_time);
                 }
                 else {
                     break;
