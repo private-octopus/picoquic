@@ -433,6 +433,7 @@ endif()
 
 if (BUILD_LOGLIB)
     add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    add_library(picoquic::picoquic-log ALIAS picoquic-log)
     target_link_libraries(picoquic-log PUBLIC picoquic-core)
     target_include_directories(picoquic-log
         PRIVATE
