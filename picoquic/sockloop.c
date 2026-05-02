@@ -1256,7 +1256,8 @@ int picoquic_packet_loop_udp_received(
     uint8_t * received_buffer,
     int bytes_recv,
     struct sockaddr* addr_from,
-    struct sockaddr* addr_to, 
+    struct sockaddr* addr_to,
+    int if_index_to,
     uint8_t received_ecn,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx,
@@ -1280,7 +1281,7 @@ int picoquic_packet_loop_udp_received(
             }
             /* Submit the packet to the client */
             ret = picoquic_incoming_packet_ex(quic, received_buffer + recv_bytes,
-                recv_length, addr_from, addr_to, s_ctx[socket_rank].dest_if,
+                recv_length, addr_from, addr_to, if_index_to,
                 received_ecn, last_cnx, current_time);
             recv_bytes += recv_length;
         }
@@ -1695,7 +1696,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 break;
             case picoquic_packet_loop_action_udp_received:
                 ret = picoquic_packet_loop_udp_received(quic, &last_cnx, s_ctx, socket_rank,
-                    received_buffer, bytes_recv, (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, received_ecn,
+                    received_buffer, bytes_recv,
+                    (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     loop_callback, loop_callback_ctx, current_time, nb_loop_immediate, &loop_immediate);
                 if (ret == 0) {
                     if (loop_callback != NULL) {
