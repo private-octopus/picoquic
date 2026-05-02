@@ -815,6 +815,7 @@ int picoquic_packet_loop_uring(
     int* is_wake_up_event,
     unsigned char* received_ecn,
     uint8_t** received_buffer,
+    picoquic_packet_loop_action_enum* action,
     int* socket_rank)
 {
     int ret = 0;
@@ -839,6 +840,7 @@ int picoquic_packet_loop_uring(
         struct __kernel_timespec ts;
         int io_ret;
 
+        *action = picoquic_packet_loop_action_none;
         (void)io_uring_submit(ring);
         /* set the timeout value */
         ts.tv_sec = delta_t / 1000000;
@@ -861,6 +863,7 @@ int picoquic_packet_loop_uring(
                 else if (cqe->res == 0) {
                     bytes_recv = -1;
                 }
+                *action = picoquic_packet_loop_action_wake_up;
             }
             else {
                 /* sendmsg completed on socket id64 - 1. */
@@ -879,6 +882,7 @@ int picoquic_packet_loop_uring(
                     /* document bytes received */
                     bytes_recv = cqe->res;
                     *received_buffer = s_ctx[i].data_iovec.iov_base;
+                    *action = picoquic_packet_loop_action_udp_received;
                 }
             }
         }
@@ -886,6 +890,7 @@ int picoquic_packet_loop_uring(
             /* timeout expired: no bytes received */
             *received_buffer = NULL;
             bytes_recv = 0;
+            *action = picoquic_packet_loop_action_time_out;
         }
         else {
             /* error */
@@ -945,7 +950,7 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
     for (int i = 0; i < nb_qmux_sockets && i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
         poll_list[i_poll].fd = (int)sqmux_ctx[i].fd;
         poll_list[i_poll].events = POLLIN;
-        if (sqmux_ctx[i].cnx.next_wake_time <= current_time) {
+        if (sqmux_ctx[i].cnx->next_wake_time <= current_time) {
             poll_list[i_poll].events |= POLLOUT;
         }
     }
@@ -959,6 +964,7 @@ int picoquic_packet_loop_poll(
     int nb_sockets,
     picoqmux_socket_ctx_t* sqmux_ctx,
     int nb_qmux_sockets,
+    uint64_t current_time,
     struct pollfd* poll_list,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
@@ -968,6 +974,7 @@ int picoquic_packet_loop_poll(
     int64_t delta_t,
     int* is_wake_up_event,
     picoquic_network_thread_ctx_t* thread_ctx,
+    picoquic_packet_loop_action_enum* action,
     int* socket_rank)
 {
     /* Picoquic expresses times in microseconds, but the timeout 
@@ -993,9 +1000,14 @@ int picoquic_packet_loop_poll(
         bytes_recv = -1;
         DBG_PRINTF("Error: poll returns %d\n", ret_poll);
     }
+    else if (ret_poll == 0) {
+        *action = picoquic_packet_loop_action_time_out;
+    }
     else if (ret_poll > 0) {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
-         * set the is_wake_up_event flag, and ignore the other file descriptors. */
+         * set the is_wake_up_event flag, and ignore the other file descriptors.
+         */
+
         if (thread_ctx->wake_up_defined && poll_list[0].revents != 0) {
             /* Something was written on the "wakeup" pipe. Read it. */
             uint8_t eventbuf[8];
@@ -1035,6 +1047,7 @@ int picoquic_packet_loop_poll(
                         else if (addr_dest->ss_family == AF_INET) {
                             ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
                         }
+                        *action = picoquic_packet_loop_action_udp_received;
                         break;
                     }
                 }
@@ -1049,6 +1062,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     picoqmux_socket_ctx_t* sqmux_ctx,
     int nb_qmux_sockets,
+    uint64_t current_time,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
@@ -1057,8 +1071,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     int64_t delta_t,
     picoquic_network_thread_ctx_t* thread_ctx,
     picoquic_packet_loop_action_enum* next_action,
-    int* socket_rank,
-    uint64_t current_time)
+    int* socket_rank)
 {
     fd_set readfds;
     fd_set writefds;
@@ -1086,7 +1099,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             sockmax = (int)sqmux_ctx[i].fd;
         }
         FD_SET(sqmux_ctx[i].fd, &readfds);
-        if (sqmux_ctx[i].cnx.next_wake_time <= current_time) {
+        if (sqmux_ctx[i].cnx->next_wake_time <= current_time) {
             FD_SET(sqmux_ctx[i].fd, &writefds);
         }
     }
@@ -1132,12 +1145,12 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                 DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
             }
             else {
-                *action = picoquic_packet_loop_action_none;
+                *action = picoquic_packet_loop_action_wake_up;
             }
         }
         else
         {
-            /* Todo: return the qualified event */
+            /* return the first UDP socket that is ready to receive */
             for (int i = 0; i < nb_sockets; i++) {
                 if (FD_ISSET(s_ctx[i].fd, &readfds)) {
                     *socket_rank = i;
@@ -1158,13 +1171,31 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                         else if (addr_dest->ss_family == AF_INET) {
                             ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
                         }
+                        *action = picoquic_packet_loop_action_udp_received;
+                        break;
+                    }
+                }
+            }
+            if (ret == 0 && *action == picoquic_packet_loop_action_none) {
+                /* Return the first TCP socket */
+                /* return the first UDP socket that is ready to receive */
+                for (int i = 0; i < nb_qmux_sockets; i++) {
+                    if (FD_ISSET(s_ctx[i].fd, &readfds)) {
+                        *socket_rank = i;
+                        *action = (sqmux_ctx[i].is_accepting) ?
+                            picoquic_packet_loop_action_tcp_accept_ready :
+                            picoquic_packet_loop_action_tcp_read_read;
+                        break;
+                    }
+                    else if (FD_ISSET(s_ctx[i].fd, &writefds)) {
+                        *socket_rank = i;
+                        *action = picoquic_packet_loop_action_tcp_send_ready;
                         break;
                     }
                 }
             }
         }
     }
-
     return bytes_recv;
 }
 #endif
@@ -1621,19 +1652,16 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
             sqmux_ctx, nb_qmux_sockets, current_time,
-            poll_list,
-            &addr_from,
-            &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer),
-            delta_t, &is_wake_up_event, thread_ctx, &socket_rank, &action);
+            poll_list, &addr_from, &addr_to, &if_index_to, &received_ecn,
+            buffer, sizeof(buffer), delta_t,
+            &is_wake_up_event, thread_ctx, &action, &socket_rank);
         received_buffer = buffer;
 #else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
             sqmux_ctx, nb_qmux_sockets, current_time,
-            &addr_from,
-            &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer),
-            delta_t, &is_wake_up_event, thread_ctx, &socket_rank, &action);
+            &addr_from, &addr_to, &if_index_to, &received_ecn,
+            buffer, sizeof(buffer), delta_t, thread_ctx,
+            &action, &socket_rank);
         received_buffer = buffer;
 #endif
         current_time = picoquic_current_time();
