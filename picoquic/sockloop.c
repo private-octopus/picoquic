@@ -1342,6 +1342,7 @@ int picoquic_packet_loop_udp_received(
 int picoquic_packet_loop_do_udp_send(
     picoquic_quic_t* quic,
     picoquic_cnx_t* last_cnx,
+    SOCKET send_socket,
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     int nb_sockets_available,
@@ -1370,78 +1371,12 @@ int picoquic_packet_loop_do_udp_send(
     int sock_ret = 0;
     int sock_err = 0;
 
-    /* If send_msg_size is defined, sendmsg may send more than one packet.
-     * We compute that to update the number of packets sent in the loop.
-     */
-    *nb_packets_sent += (send_msg_size == 0) ? 1 :
-        (send_length + send_msg_size - 1) / (send_msg_size);
-    if (send_length > param->send_length_max) {
-        param->send_length_max = send_length;
-    }
-    /* We have multiple sockets, with support for
-    * either IPv6, or IPv4, or both, and binding to a port number.
-    * Find the first socket where:
-    * - the destination AF is supported.
-    * - either the source port is not specified, or it matches the local port.
-    */
-    SOCKET_TYPE send_socket = INVALID_SOCKET;
-    uint16_t send_port = (peer_addr->ss_family == AF_INET) ?
-        ((struct sockaddr_in*)local_addr)->sin_port :
-        ((struct sockaddr_in6*)local_addr)->sin6_port;
-
-    *bytes_sent += send_length;
-
-    /* TODO: verify htons/ntohs */
-    for (int i = 0; i < nb_sockets_available; i++) {
-        if (s_ctx[i].af == peer_addr->ss_family) {
-            send_socket = s_ctx[i].fd;
-            if (send_port == 0 && !param->prefer_extra_socket) {
-                break;
-            }
-            if (s_ctx[i].n_port == send_port) {
-                break;
-            }
-        }
-    }
-
-    if (send_socket == INVALID_SOCKET) {
-        if (nb_sockets_available < PICOQUIC_PACKET_LOOP_SOCKETS_MAX) {
-            picoquic_socket_ctx_t* new_ctx = &s_ctx[nb_sockets_available];
-            memset(new_ctx, 0, sizeof(*new_ctx));
-            new_ctx->af = peer_addr->ss_family;
-            if (peer_addr->ss_family == AF_INET6) {
-                new_ctx->port = ntohs(((struct sockaddr_in6*)peer_addr)->sin6_port);
-            }
-            else {
-                new_ctx->port = ntohs(((struct sockaddr_in*)peer_addr)->sin_port);
-            }
-            new_ctx->n_port = htons(new_ctx->port);
-            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx, ecn_value) == 0) {
-                send_socket = new_ctx->fd;
-                send_port = new_ctx->n_port;
-                nb_sockets_available++;
-                if (nb_sockets < nb_sockets_available) {
-                    DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
-                    nb_sockets = nb_sockets_available;
-
-#if defined(_WINDOWS)
-#elif defined(PICOQUIC_WITH_IO_URING)
-#elif defined(PICOQUIC_WITH_POLL)
-                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available,
-                    sqmux_ctx, nb_qmux_sockets, thread_ctx, current_time);
-#endif
-                }
-            }
-        }
-    }
-
     if (send_socket == INVALID_SOCKET) {
         sock_ret = -1;
         sock_err = -1;
     }
     else
     {
-// printf("EIO: Simulate EIO, L=%zu\n", send_length);
         if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
             /* Test hook, simulating a driver that does not support GSO */
             sock_ret = -1;
@@ -1453,9 +1388,6 @@ int picoquic_packet_loop_do_udp_send(
             sock_ret = picoquic_sendmsg(send_socket,
                 (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
-if (sock_ret < 0){
-printf("EIO, sock_ret=%d\n", sock_ret);
-}
         }
     }
     if (sock_ret <= 0) {
@@ -1808,10 +1740,73 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     send_buffer, send_buffer_size, &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx,
                     send_msg_ptr);
-
                 if (ret == 0 && send_length > 0) {
+                    /* If send_msg_size is defined, sendmsg may send more than one packet.
+                     * We compute that to update the number of packets sent in the loop.
+                     */
+                    nb_packets_sent += (send_msg_size == 0) ? 1 :
+                        (send_length + send_msg_size - 1) / (send_msg_size);
+                    if (send_length > param->send_length_max) {
+                        param->send_length_max = send_length;
+                    }
+                    /* We have multiple sockets, with support for
+                    * either IPv6, or IPv4, or both, and binding to a port number.
+                    * Find the first socket where:
+                    * - the destination AF is supported.
+                    * - either the source port is not specified, or it matches the local port.
+                    */
+                    SOCKET_TYPE send_socket = INVALID_SOCKET;
+                    uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
+                        ((struct sockaddr_in*)&local_addr)->sin_port :
+                        ((struct sockaddr_in6*)&local_addr)->sin6_port;
+
+                    bytes_sent += send_length;
+
+                    /* TODO: verify htons/ntohs */
+                    for (int i = 0; i < nb_sockets_available; i++) {
+                        if (s_ctx[i].af == peer_addr.ss_family) {
+                            send_socket = s_ctx[i].fd;
+                            if (send_port == 0 && !param->prefer_extra_socket) {
+                                break;
+                            }
+                            if (s_ctx[i].n_port == send_port) {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (send_socket == INVALID_SOCKET) {
+                        if (nb_sockets_available < PICOQUIC_PACKET_LOOP_SOCKETS_MAX) {
+                            picoquic_socket_ctx_t* new_ctx = &s_ctx[nb_sockets_available];
+                            memset(new_ctx, 0, sizeof(*new_ctx));
+                            new_ctx->af = peer_addr.ss_family;
+                            if (peer_addr.ss_family == AF_INET6) {
+                                new_ctx->port = ntohs(((struct sockaddr_in6*)&peer_addr)->sin6_port);
+                            }
+                            else {
+                                new_ctx->port = ntohs(((struct sockaddr_in*)&peer_addr)->sin_port);
+                            }
+                            new_ctx->n_port = htons(new_ctx->port);
+                            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx, ecn_value) == 0) {
+                                send_socket = new_ctx->fd;
+                                send_port = new_ctx->n_port;
+                                nb_sockets_available++;
+                                if (nb_sockets < nb_sockets_available) {
+                                    DBG_PRINTF("new socket, nb = %d", nb_sockets_available);
+                                    nb_sockets = nb_sockets_available;
+
+#if defined(_WINDOWS)
+#elif defined(PICOQUIC_WITH_IO_URING)
+#elif defined(PICOQUIC_WITH_POLL)
+                                    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets_available, thread_ctx);
+#endif
+                                }
+                            }
+                        }
+                    }
+                /*----------------------------------------------------------------------*/
                     ret = picoquic_packet_loop_do_udp_send(
-                        quic, last_cnx, s_ctx, nb_sockets, nb_sockets_available, param,
+                        quic, last_cnx, send_socket, s_ctx, nb_sockets, nb_sockets_available, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index, ecn_value,
                         send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,
 #if defined(PICOQUIC_WITH_POLL)
