@@ -964,7 +964,6 @@ int picoquic_packet_loop_poll(
     int nb_sockets,
     picoqmux_socket_ctx_t* sqmux_ctx,
     int nb_qmux_sockets,
-    uint64_t current_time,
     struct pollfd* poll_list,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
@@ -1268,8 +1267,10 @@ int picoquic_packet_loop_do_tcp_send(void)
 int picoquic_packet_loop_udp_received(
     picoquic_quic_t * quic,
     picoquic_cnx_t** last_cnx,
+#ifdef _WINDOWS
     picoquic_socket_ctx_t *s_ctx,
     int socket_rank,
+#endif
     uint8_t * received_buffer,
     int bytes_recv,
     struct sockaddr* addr_from,
@@ -1361,7 +1362,7 @@ int picoquic_packet_loop_do_udp_send(
     /* If send_msg_size is defined, sendmsg may send more than one packet.
      * We compute that to update the number of packets sent in the loop.
      */
-    nb_packets_sent += (send_msg_size == 0) ? 1 :
+    *nb_packets_sent += (send_msg_size == 0) ? 1 :
         (send_length + send_msg_size - 1) / (send_msg_size);
     if (send_length > param->send_length_max) {
         param->send_length_max = send_length;
@@ -1678,7 +1679,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets, current_time,
+            sqmux_ctx, nb_qmux_sockets,
             poll_list, &addr_from, &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer), delta_t, thread_ctx,
             &action, &socket_rank);
@@ -1712,7 +1713,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
                 break;
             case picoquic_packet_loop_action_udp_received:
-                ret = picoquic_packet_loop_udp_received(quic, &last_cnx, s_ctx, socket_rank,
+                ret = picoquic_packet_loop_udp_received(quic, &last_cnx,
+#ifdef _WINDOWS
+                    s_ctx, socket_rank,
+#endif
                     received_buffer, bytes_recv,
                     (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     loop_callback, loop_callback_ctx, current_time, nb_loop_immediate, &loop_immediate);
