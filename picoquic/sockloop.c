@@ -937,24 +937,25 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
 {
     memset(poll_list, 0, sizeof(struct pollfd)* (PICOQUIC_PACKET_LOOP_SOCKETS_MAX+1));
     int i_poll = 0;
+    int i_poll_qmux = nb_sockets;
 
     if (thread_ctx->wake_up_defined) {
         poll_list[0].fd = (int)thread_ctx->wake_up_pipe_fd[0];
         poll_list[0].events = POLLIN;
         i_poll = 1;
+        i_poll_qmux += 1;
     }
     for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++, i_poll++) {
         poll_list[i_poll+i].fd = (int)s_ctx[i].fd;
+        poll_list[i_poll+i].events = POLLIN;
     }
-    for (int i = 0; i < nb_qmux_sockets && i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
-        poll_list[i_poll].fd = (int)sqmux_ctx[i].fd;
-        poll_list[i_poll].events = POLLIN;
-        if (sqmux_ctx[i].cnx->next_wake_time <= current_time) {
-            poll_list[i_poll].events |= POLLOUT;
-        }
+    for (int i = 0; i < nb_qmux_sockets && i + i_poll_qmux < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++) {
+        poll_list[i + i_poll_qmux].fd = (int)sqmux_ctx[i].fd;
+        poll_list[i + i_poll_qmux].events =
+            (sqmux_ctx[i].cnx->next_wake_time <= current_time)?(POLLIN|POLLOUT):POLLIN;
     }
-    for (; i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
-        poll_list[i_poll].fd = -1;
+    for (int i = i_poll_qmux + nb_qmux_sockets; i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i++) {
+        poll_list[i].fd = -1;
     }
 }
 
