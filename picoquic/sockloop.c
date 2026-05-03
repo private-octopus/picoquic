@@ -1050,14 +1050,14 @@ int picoquic_packet_loop_poll(
                     }
                 }
             }
-            if (ret == 0 && *action == picoquic_packet_loop_action_none) {
+            if (bytes_recv == 0 && *action == picoquic_packet_loop_action_none) {
                 /* Try to find the first TCP event */
                 for (int i = 0; i < nb_qmux_sockets; i++) {
                     if ((poll_list[i + i_qmux_poll].revents & POLLIN) != 0) {
                         *socket_rank = i;
                         *action = (sqmux_ctx[i].is_accepting) ?
                             picoquic_packet_loop_action_tcp_accept_ready:
-                            picoquic_packet_loop_action_tcp_recv_ready;
+                            picoquic_packet_loop_action_tcp_read_ready;
                         break;
                     }
                     else if ((poll_list[i + i_qmux_poll].revents & POLLOUT) != 0) {
