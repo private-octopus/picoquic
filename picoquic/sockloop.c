@@ -1031,6 +1031,9 @@ int picoquic_packet_loop_poll(
             /* Find the first UDP event */
             for (int i = 0; i < nb_sockets; i++) {
                 if (poll_list[i+i_poll].revents != 0) {
+if(i > 0){
+printf("Migration: receive on socket %d\n", i);
+}
                     *socket_rank = i;
                     bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
                         addr_dest, dest_if, received_ecn,
@@ -1438,6 +1441,7 @@ int picoquic_packet_loop_do_udp_send(
     }
     else
     {
+// printf("EIO: Simulate EIO, L=%zu\n", send_length);
         if (param->simulate_eio && send_length > PICOQUIC_MAX_PACKET_SIZE) {
             /* Test hook, simulating a driver that does not support GSO */
             sock_ret = -1;
@@ -1449,6 +1453,9 @@ int picoquic_packet_loop_do_udp_send(
             sock_ret = picoquic_sendmsg(send_socket,
                 (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+if (sock_ret < 0){
+printf("EIO, sock_ret=%d\n", sock_ret);
+}
         }
     }
     if (sock_ret <= 0) {
@@ -1796,7 +1803,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 int if_index = 0;
 
                 send_length = 0;
-
+// printf("EIO-prepare L=%zu, P=%x\n", send_buffer_size, send_msg_ptr); 
                 ret = picoquic_prepare_next_packet_ex(quic, current_time,
                     send_buffer, send_buffer_size, &send_length,
                     &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx,
@@ -1804,7 +1811,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
                 if (ret == 0 && send_length > 0) {
                     ret = picoquic_packet_loop_do_udp_send(
-                        quic, last_cnx, &s_ctx[0], nb_sockets, nb_sockets_available, param,
+                        quic, last_cnx, s_ctx, nb_sockets, nb_sockets_available, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index, ecn_value,
                         send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,
 #if defined(PICOQUIC_WITH_POLL)
