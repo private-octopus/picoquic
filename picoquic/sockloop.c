@@ -1358,12 +1358,6 @@ int picoquic_packet_loop_do_udp_send(
     size_t* nb_packets_sent,
     size_t* bytes_sent,
     picoquic_connection_id_t* log_cid,
-#if 0
-    struct pollfd* poll_list,
-    picoqmux_socket_ctx_t* sqmux_ctx,
-    int nb_qmux_sockets,
-    picoquic_network_thread_ctx_t* thread_ctx,
-#endif
     uint64_t current_time
 )
 {
@@ -1810,10 +1804,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, send_socket, s_ctx, nb_sockets, nb_sockets_available, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index, ecn_value,
-                        send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,
-#if defined(PICOQUIC_WITH_POLL)
-                        poll_list, sqmux_ctx, nb_qmux_sockets, thread_ctx,
-#endif         
+                        send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,        
                         current_time);
                 }
                 else {
