@@ -1089,7 +1089,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     uint8_t* buffer, int buffer_max,
     int64_t delta_t,
     picoquic_network_thread_ctx_t* thread_ctx,
-    picoquic_packet_loop_action_enum* next_action,
+    picoquic_packet_loop_action_enum* action,
     int* socket_rank)
 {
     fd_set readfds;
@@ -1152,7 +1152,10 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
         bytes_recv = -1;
         DBG_PRINTF("Error: select returns %d\n", ret_select);
     }
-    else if (ret_select > 0) {
+    else if (ret_select == 0) {
+        *action = picoquic_packet_loop_action_timeout;
+    }
+    else {
         /* Check if the 'wake up' pipe is full. If it is, read the data on it,
          * set the is_wake_up_event flag, and ignore the other file descriptors. */
         if (thread_ctx->wake_up_defined && FD_ISSET(thread_ctx->wake_up_pipe_fd[0], &readfds)) {
@@ -1195,7 +1198,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                     }
                 }
             }
-            if (ret == 0 && *action == picoquic_packet_loop_action_none) {
+            if (bytes_recv == 0 && *action == picoquic_packet_loop_action_none) {
                 /* Return the first TCP socket */
                 /* return the first UDP socket that is ready to receive */
                 for (int i = 0; i < nb_qmux_sockets; i++) {
@@ -1203,7 +1206,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
                         *socket_rank = i;
                         *action = (sqmux_ctx[i].is_accepting) ?
                             picoquic_packet_loop_action_tcp_accept_ready :
-                            picoquic_packet_loop_action_tcp_read_read;
+                            picoquic_packet_loop_action_tcp_read_ready;
                         break;
                     }
                     else if (FD_ISSET(s_ctx[i].fd, &writefds)) {
