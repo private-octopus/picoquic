@@ -988,6 +988,7 @@ int picoquic_packet_loop_poll(
     int delta_t_ms = (int)((delta_t + 500) / 1000);
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
+    int i_qmux_poll = i_poll + nb_sockets;
     int ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
 
     if (received_ecn != NULL) {
@@ -1023,8 +1024,7 @@ int picoquic_packet_loop_poll(
         }
         else
         {
-            /* Try to find the first TCP event */
-            /* If there is none, find the first UDP event */
+            /* Find the first UDP event */
             for (int i = 0; i < nb_sockets; i++) {
                 if (poll_list[i+i_poll].revents != 0) {
                     *socket_rank = i;
@@ -1046,6 +1046,23 @@ int picoquic_packet_loop_poll(
                             ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
                         }
                         *action = picoquic_packet_loop_action_udp_received;
+                        break;
+                    }
+                }
+            }
+            if (ret == 0 && *action == picoquic_packet_loop_action_none) {
+                /* Try to find the first TCP event */
+                for (int i = 0; i < nb_qmux_sockets; i++) {
+                    if ((poll_list[i + i_qmux_poll].revents & POLLIN) != 0) {
+                        *socket_rank = i;
+                        *action = (sqmux_ctx[i].is_accepting) ?
+                            picoquic_packet_loop_action_tcp_accept_ready:
+                            picoquic_packet_loop_action_tcp_recv_ready;
+                        break;
+                    }
+                    else if ((poll_list[i + i_qmux_poll].revents & POLLOUT) != 0) {
+                        *socket_rank = i;
+                        *action = picoquic_packet_loop_action_tcp_send_ready;
                         break;
                     }
                 }
@@ -1227,21 +1244,21 @@ static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_d
 }
 
 /* Process an incoming connection on a TCP "listen" socket */
-int picoquic_packet_loop_do_tcp_accept()
+int picoquic_packet_loop_do_tcp_accept(void)
 {
     int ret = -1;
     return ret;
 }
 
 /* Process incoming data on a TCP socket */
-int picoquic_packet_loop_do_tcp_read()
+int picoquic_packet_loop_do_tcp_read(void)
 {
     int ret = -1;
     return ret;
 }
 
 /* Process sending opportunity on a TCP socket */
-int picoquic_packet_loop_do_tcp_send()
+int picoquic_packet_loop_do_tcp_send(void)
 {
     int ret = -1;
     return ret;
