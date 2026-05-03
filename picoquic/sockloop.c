@@ -944,8 +944,7 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
         i_poll = 1;
     }
     for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++, i_poll++) {
-        poll_list[i_poll].fd = (int)s_ctx[i].fd;
-        poll_list[i_poll].events = POLLIN;
+        poll_list[i_poll+i].fd = (int)s_ctx[i].fd;
     }
     for (int i = 0; i < nb_qmux_sockets && i_poll < PICOQUIC_PACKET_LOOP_SOCKETS_MAX + 1; i_poll++) {
         poll_list[i_poll].fd = (int)sqmux_ctx[i].fd;
@@ -964,6 +963,7 @@ int picoquic_packet_loop_poll(
     int nb_sockets,
     picoqmux_socket_ctx_t* sqmux_ctx,
     int nb_qmux_sockets,
+    uint64_t current_time,
     struct pollfd* poll_list,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
@@ -988,7 +988,11 @@ int picoquic_packet_loop_poll(
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
     int i_qmux_poll = i_poll + nb_sockets;
-    int ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
+    int ret_poll;
+
+    picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, sqmux_ctx, nb_qmux_sockets,
+        thread_ctx, current_time);
+    ret_poll = poll(poll_list, nb_sockets + i_poll, delta_t_ms);
 
     if (received_ecn != NULL) {
         *received_ecn = 0;
@@ -1679,7 +1683,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets,
+            sqmux_ctx, nb_qmux_sockets, current_time,
             poll_list, &addr_from, &addr_to, &if_index_to, &received_ecn,
             buffer, sizeof(buffer), delta_t, thread_ctx,
             &action, &socket_rank);
