@@ -642,6 +642,8 @@ typedef struct st_picoquic_quic_t {
 
     struct st_picoquic_cnx_t* cnx_list;
     struct st_picoquic_cnx_t* cnx_last;
+    struct st_picoquic_cnx_t* cnx_wake_ready_first;
+    struct st_picoquic_cnx_t* cnx_wake_ready_last;
     picosplay_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
@@ -1273,6 +1275,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int initial_repeat_needed : 1; /* Path has not been validated, repeated initial was received */
     unsigned int is_loss_bit_enabled_incoming : 1; /* Read the loss bits in incoming packets */
     unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
+    unsigned int is_wake_ready : 1; /* Connection is in the due-now wake FIFO */
+    unsigned int is_wake_tree : 1; /* Connection is in the future wake-time tree */
     unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
@@ -1365,6 +1369,8 @@ typedef struct st_picoquic_cnx_t {
     /* Next time sending data is expected */
     uint64_t next_wake_time;
     picosplay_node_t cnx_wake_node;
+    struct st_picoquic_cnx_t* cnx_wake_next;
+    struct st_picoquic_cnx_t* cnx_wake_previous;
     /* Wakeup time requested by the application */
     uint64_t app_wake_time;
     /* TLS context, TLS Send Buffer, streams, epochs */

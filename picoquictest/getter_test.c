@@ -398,6 +398,60 @@ int getter_test(void)
     }
 
     if (ret == 0) {
+        uint64_t now = simulated_time;
+        picoquic_connection_id_t cid1 = { { 0x42, 0, 0, 0, 0, 0, 0, 1 }, 8 };
+        picoquic_connection_id_t cid2 = { { 0x42, 0, 0, 0, 0, 0, 0, 2 }, 8 };
+        picoquic_cnx_t* cnx1 = picoquic_create_cnx(test_ctx->qclient, cid1, cid1,
+            (struct sockaddr*)&test_ctx->server_addr, now + 1000000,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+        picoquic_cnx_t* cnx2 = picoquic_create_cnx(test_ctx->qclient, cid2, cid2,
+            (struct sockaddr*)&test_ctx->server_addr, now + 2000000,
+            PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (cnx1 == NULL || cnx2 == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx, now + 3000000);
+            picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx1, now);
+            picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx2, now);
+
+            if (!cnx1->is_wake_ready || !cnx2->is_wake_ready ||
+                cnx1->is_wake_tree || cnx2->is_wake_tree ||
+                test_ctx->qclient->cnx_wake_ready_first != cnx1 ||
+                test_ctx->qclient->cnx_wake_ready_last != cnx2 ||
+                picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, now) != cnx1) {
+                ret = -1;
+            }
+            else {
+                picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx1, now);
+                if (test_ctx->qclient->cnx_wake_ready_first != cnx2 ||
+                    test_ctx->qclient->cnx_wake_ready_last != cnx1 ||
+                    picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, now) != cnx2) {
+                    ret = -1;
+                }
+                else {
+                    picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx1, now + 1000);
+                    if (cnx1->is_wake_ready || !cnx1->is_wake_tree ||
+                        test_ctx->qclient->cnx_wake_ready_first != cnx2 ||
+                        picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, now) != cnx2) {
+                        ret = -1;
+                    }
+                }
+            }
+
+            picoquic_reinsert_by_wake_time(test_ctx->qclient, cnx, now + 4000);
+        }
+
+        if (cnx1 != NULL) {
+            picoquic_delete_cnx(cnx1);
+        }
+        if (cnx2 != NULL) {
+            picoquic_delete_cnx(cnx2);
+        }
+    }
+
+    if (ret == 0) {
         uint64_t wake_time = picoquic_get_next_wake_time(test_ctx->qclient, UINT64_MAX);
 
         if (wake_time > 2 && picoquic_get_earliest_cnx_to_wake(test_ctx->qclient, wake_time / 2) != NULL) {
