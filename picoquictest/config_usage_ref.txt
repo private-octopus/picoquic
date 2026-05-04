@@ -50,4 +50,5 @@ Picoquic options:
   -Z bytes        Set the flow control's initial max data.
   -4 ip[:port]    Preferred address for v4 connections.
   -6 ipv6[:port]  Preferred address for v6 connections.
+  -Y tcp-port     Use QMUX in addition to QUIC
   -h              This help message
