@@ -1894,12 +1894,97 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive)
+        {
+            int ret = qmux_receive_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send)
+        {
+            int ret = qmux_send_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_tp)
+        {
+            int ret = qmux_send_tp_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_tp)
+        {
+            int ret = qmux_receive_tp_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_app_close)
+        {
+            int ret = qmux_receive_app_close_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_cnx_close)
+        {
+            int ret = qmux_receive_cnx_close_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_errors)
+        {
+            int ret = qmux_receive_errors_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_qx_ping)
+        {
+            int ret = qmux_receive_qx_ping_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_qx_ping_r)
+        {
+            int ret = qmux_send_qx_ping_r_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_cnx_close)
+        {
+            int ret = qmux_send_cnx_close_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop)
+        {
+            int ret = qmux_loop_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop_delay)
+        {
+            int ret = qmux_loop_delay_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop_idle)
+        {
+            int ret = qmux_loop_idle_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_loop_tls)
+        {
+            int ret = qmux_loop_tls_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();
 
             Assert::AreEqual(ret, 0);
         }
+
         TEST_METHOD(nat_rebinding_stress)
         {
             int ret = rebinding_stress_test();

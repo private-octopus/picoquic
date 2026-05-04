@@ -74,6 +74,7 @@ typedef enum {
     picoquic_option_BDP_frame,
     picoquic_option_CWIN_MAX,
     picoquic_option_SSLKEYLOG,
+    picoquic_option_QMUX,
     picoquic_option_AddressDiscovery,
     picoquic_option_ECH_server,
     picoquic_option_ECH_client,
@@ -155,6 +156,7 @@ typedef struct st_picoquic_quic_config_t {
     /* Preferred address, encoded as strings */
     char const* preferred_address_v4;
     char const* preferred_address_v6;
+    char const* qmux_string;
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);

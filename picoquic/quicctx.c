@@ -2847,6 +2847,17 @@ void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate
     quic->rtt_update_delta = rtt_delta;
 }
 
+#if 0
+/* Setting the socket creation function */
+
+int picoquic_set_socket_fn(picoquic_quic_t* quic, picoquic_create_socket_fn socket_fn, void* create_socket_ctx)
+{
+    return 0;
+}
+#endif
+
+/* management of path */
+
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id)
 {
     int ret = -1;

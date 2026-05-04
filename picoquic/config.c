@@ -108,6 +108,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
     { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
     { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
+    { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -541,6 +542,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_Preferred_V6:
         ret = config_set_string_param(&config->preferred_address_v6, params, nb_params, 0);
+        break;
+    case picoquic_option_QMUX:
+        ret = config_set_string_param(&config->qmux_string, params, nb_params, 0);
         break;
     case picoquic_option_HELP:
         ret = -1;
@@ -1116,6 +1120,9 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     }
     if (config->preferred_address_v6 != NULL) {
         free((void*)config->preferred_address_v6);
+    }
+    if (config->qmux_string != NULL) {
+        free((void*)config->qmux_string);
     }
     picoquic_config_init(config);
 }

@@ -29,31 +29,6 @@
 
 static const size_t challenge_length = 8;
 
-int picoquic_process_ack_of_max_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_process_ack_of_max_stream_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_size, size_t* consumed);
-int picoquic_process_ack_of_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_size, size_t* consumed);
-int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* p_last_byte, int* no_need_to_repeat);
-int picoquic_path_available_or_backup_frame_need_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-        size_t bytes_max, size_t* consumed);
-int picoquic_paths_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_process_ack_of_paths_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_path_cid_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    const uint8_t* bytes_max, int* no_need_to_repeat);
-int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
-    size_t bytes_max, size_t* consumed);
-int picoquic_process_ack_of_observed_address_frame(picoquic_path_t* path_x, const uint8_t* bytes,
-    size_t bytes_max, uint64_t ftype, size_t* consumed);
-
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
     /* Verify the stream ID control conditions */
@@ -5150,7 +5125,7 @@ const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const 
 }
 
 
-static const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t frame = bytes[0];
     do {

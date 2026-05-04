@@ -32,9 +32,9 @@
 #include "picoquic_bbr.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:h";
 #endif
 int config_option_letters_test(void)
 {
@@ -133,6 +133,7 @@ static picoquic_quic_config_t param1 = {
     1000001, /* flow_control_max */
     "192.0.2.1", /* Preferred Address V4 */
     "2001:db8::1", /* Preferred Address V6 */
+    "443" /* QMux port */
 };
 
 static char const* config_argv1[] = {
@@ -168,6 +169,7 @@ static char const* config_argv1[] = {
     "-Z", "1000001",
     "-4", "192.0.2.1",
     "-6", "2001:db8::1",
+    "-Y", "443",
     NULL
 };
 
@@ -237,6 +239,7 @@ static picoquic_quic_config_t param2 = {
     0, /* flow control max */
     NULL,
     NULL,
+    NULL
 };
 
 static const char* config_argv2[] = {
