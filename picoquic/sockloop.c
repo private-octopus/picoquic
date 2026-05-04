@@ -945,7 +945,7 @@ void picoquic_packet_loop_set_fds(struct pollfd * poll_list,
         i_poll = 1;
         i_poll_qmux += 1;
     }
-    for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++, i_poll++) {
+    for (int i = 0; i < nb_sockets && i < PICOQUIC_PACKET_LOOP_SOCKETS_MAX; i++) {
         poll_list[i_poll+i].fd = (int)s_ctx[i].fd;
         poll_list[i_poll+i].events = POLLIN;
     }
@@ -1031,14 +1031,10 @@ int picoquic_packet_loop_poll(
             /* Find the first UDP event */
             for (int i = 0; i < nb_sockets; i++) {
                 if (poll_list[i+i_poll].revents != 0) {
-if(i > 0){
-printf("Migration: receive on socket %d\n", i);
-}
                     *socket_rank = i;
                     bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
                         addr_dest, dest_if, received_ecn,
                         buffer, buffer_max);
-
                     if (bytes_recv <= 0) {
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
