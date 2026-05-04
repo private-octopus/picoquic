@@ -1343,23 +1343,16 @@ int picoquic_packet_loop_do_udp_send(
     picoquic_quic_t* quic,
     picoquic_cnx_t* last_cnx,
     SOCKET_TYPE send_socket,
-    picoquic_socket_ctx_t* s_ctx,
-    int nb_sockets,
-    int nb_sockets_available,
     picoquic_packet_loop_param_t* param,
     uint8_t* send_buffer,
     size_t send_length,
     struct sockaddr_storage* peer_addr,
     struct sockaddr_storage* local_addr,
     int if_index,
-    uint8_t ecn_value,
     size_t send_msg_size,
     size_t* send_msg_ptr,
-    size_t* nb_packets_sent,
-    size_t* bytes_sent,
     picoquic_connection_id_t* log_cid,
-    uint64_t current_time
-)
+    uint64_t current_time)
 {
     int ret = 0;
     int sock_ret = 0;
@@ -1607,7 +1600,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
         /* ToDo: update for QMux*/
 #if defined(_WINDOWS)
-        bytes_recv = picoquic_packet_loop_wait(&s_ctx[0], nb_sockets_available,
+        bytes_recv = picoquic_packet_loop_wait(s_ctx, nb_sockets_available,
             sqmux_ctx, nb_qmux_sockets, current_time,
             &addr_from, &addr_to, &if_index_to, &received_ecn, &received_buffer,
             delta_t, thread_ctx, &action, &socket_rank);
@@ -1800,12 +1793,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             }
                         }
                     }
-
                     ret = picoquic_packet_loop_do_udp_send(
-                        quic, last_cnx, send_socket, s_ctx, nb_sockets, nb_sockets_available, param,
-                        send_buffer, send_length, &peer_addr, &local_addr, if_index, ecn_value,
-                        send_msg_size, send_msg_ptr, &nb_packets_sent, &bytes_sent, &log_cid,        
-                        current_time);
+                        quic, last_cnx, send_socket, param,
+                        send_buffer, send_length, &peer_addr, &local_addr, if_index,
+                        send_msg_size, send_msg_ptr, &log_cid, current_time);
                 }
                 else {
                     break;
