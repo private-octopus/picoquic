@@ -1,6 +1,6 @@
 /*
 * Author: Christian Huitema
-* Copyright (c) 2025, Private Octopus, Inc.
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -41,36 +41,7 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic_qlog.h"
-
-picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
-    char const* cert_file_name,
-    char const* key_file_name,
-    char const* cert_root_file_name,
-    char const* default_alpn,
-    picoquic_stream_data_cb_fn default_callback_fn,
-    void* default_callback_ctx,
-    picoquic_connection_id_cb_fn cnx_id_callback,
-    void* cnx_id_callback_ctx,
-    uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
-    uint64_t current_time,
-    uint64_t* p_simulated_time,
-    char const* ticket_file_name,
-    const uint8_t* ticket_encryption_key,
-    size_t ticket_encryption_key_length);
-int picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext);
-picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time,
-    int client_mode, int is_cleartext, char const* server, char const* alpn);
-int picoqmux_prepare_cnx_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length);
-int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length);
-int picoqmux_has_sent_tp(picoquic_cnx_t* cnx);
-int picoqmux_has_received_tp(picoquic_cnx_t* cnx);
-void picoqmux_update_state_on_tp_sent(picoquic_cnx_t* cnx);
-void picoqmux_update_state_on_tp_received(picoquic_cnx_t* cnx);
-int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer,
-    size_t send_buffer_max, size_t* send_length);
-int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length);
+#include "picoqmux.h"
 
 /*
 * Network simulation tests.
@@ -578,12 +549,12 @@ int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
     else {
         /* Test the creation of the client and server contexts */
         sim_ctx->quic[0] = picoqmux_create(8, NULL, NULL, test_server_cert_store_file,
-            NULL, qmux_test_callback, sim_ctx, NULL, NULL, NULL, sim_ctx->simulated_time,
+            NULL, qmux_test_callback, sim_ctx, NULL, sim_ctx->simulated_time,
             &sim_ctx->simulated_time, NULL, NULL, 0);
 
         sim_ctx->quic[1] = picoqmux_create(8,
             test_server_cert_file, test_server_key_file, NULL, "qmux_test",
-            qmux_test_callback, sim_ctx, NULL, NULL, NULL,
+            qmux_test_callback, sim_ctx, NULL,
             sim_ctx->simulated_time, &sim_ctx->simulated_time, NULL, NULL, 0);
 
         if (sim_ctx->quic[0] == NULL || sim_ctx->quic[1] == NULL) {

@@ -3195,6 +3195,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(config_qmux) {
+            int ret = config_qmux_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(config_usage) {
             int ret= config_usage_test();
 

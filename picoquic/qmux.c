@@ -305,8 +305,6 @@ picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
     char const* default_alpn,
     picoquic_stream_data_cb_fn default_callback_fn,
     void* default_callback_ctx,
-    picoquic_connection_id_cb_fn cnx_id_callback,
-    void* cnx_id_callback_ctx,
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE],
     uint64_t current_time,
     uint64_t* p_simulated_time,
@@ -321,7 +319,7 @@ picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
     picoquic_quic_t* quic = picoquic_create(
         max_nb_connections, cert_file_name, key_file_name, cert_root_file_name,
         default_alpn, default_callback_fn, default_callback_ctx,
-        cnx_id_callback, cnx_id_callback_ctx,
+        NULL, NULL,
         reset_seed, current_time, p_simulated_time,
         ticket_file_name, ticket_encryption_key, ticket_encryption_key_length);
 

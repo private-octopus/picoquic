@@ -593,6 +593,7 @@ int nat_attack_test(void);
 int config_option_letters_test(void);
 int config_option_test(void);
 int config_quic_test(void);
+int config_qmux_test(void);
 int config_usage_test(void);
 int config_preferred_test(void);
 int config_set_port_test(void);
