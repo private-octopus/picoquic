@@ -521,7 +521,124 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_
     return nb_sockets;
 }
 
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_ctx)
+{
+    if (sqmux_ctx != NULL) {
+        if (sqmux_ctx->fd != INVALID_SOCKET) {
+            SOCKET_CLOSE(sqmux_ctx->fd);
+            sqmux_ctx->fd = INVALID_SOCKET;
+        }
+        free(sqmux_ctx);
+    }
+}
 
+#ifdef _WINDOWS
+static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* sqmux_ctx)
+{
+    int ret = 0;
+    if ((sqmux_ctx->overlap_r.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT ||
+        (sqmux_ctx->overlap_w.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT) {
+        int last_error = WSAGetLastError();
+        DBG_PRINTF("Could not initialize Windows parameters on QMUX socket %d= %d!\n",
+            (int)sqmux_ctx->fd, last_error);
+        ret = -1;
+    }
+    return ret;
+}
+#endif
+
+picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
+    picoquic_quic_t* qmux, int af, uint16_t public_port, int is_port_shared)
+{
+    picoqmux_socket_ctx_t* sqmux_ctx = NULL;
+    int opt_val = 1;
+    if (qmux == NULL) {
+        return NULL;
+    }
+    if ((sqmux_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
+        DBG_PRINTF("Cannot allocate memory for QMUX socket context\n");
+        return NULL;
+    }
+    memset(sqmux_ctx, 0, sizeof(picoqmux_socket_ctx_t));
+
+#ifdef _WINDOWS
+    sqmux_ctx->overlap_r.hEvent = WSA_INVALID_EVENT;
+    sqmux_ctx->overlap_w.hEvent = WSA_INVALID_EVENT;
+    sqmux_ctx->fd = WSASocket(af, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
+#else
+    s_ctx->fd = socket(s_ctx->af, SOCK_STREAM, IPPROTO_TCP);
+#endif
+
+    if (sqmux_ctx->fd == INVALID_SOCKET ||
+#ifdef _WINDOWS
+        picoquic_packet_loop_set_qmux_windows_socket(sqmux_ctx) != 0 ||
+#endif
+        (is_port_shared && setsockopt(sqmux_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
+        (public_port != 0 && picoquic_bind_to_port(sqmux_ctx->fd, af, public_port) != 0)) {
+        DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", af, public_port);
+        picoquic_packet_loop_free_qmux_socket(sqmux_ctx);
+        return NULL;
+    }
+
+    /* TODO: listen, or asynchronous connect */
+
+    return sqmux_ctx;
+}
+
+void picoquic_packet_loop_free_qmux_sockets(picoqmux_socket_ctx_t** sqmux_ctx,
+    int nb_qmux_sockets)
+{
+    if (sqmux_ctx != NULL) {
+        for (int i = 0; i < nb_qmux_sockets; i++) {
+            picoquic_packet_loop_free_qmux_socket(&sqmux_ctx[i]);
+        }
+        free(sqmux_ctx);
+        *sqmux_ctx = NULL;
+    }
+}
+
+int picoquic_packet_open_tcp_sockets(
+    picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets,
+    int* max_qmux_socket,
+    int public_port)
+{
+    int ret = 0;
+
+    *sqmux_ctx = NULL;
+    *nb_qmux_sockets = 0;
+    *max_qmux_socket = 0;
+
+    if (qmux != NULL) {
+        *max_qmux_socket = qmux->max_number_connections + 2;
+        *sqmux_ctx = (picoqmux_socket_ctx_t**)malloc(sizeof(picoqmux_socket_ctx_t*) * (*max_qmux_socket));
+        if (*sqmux_ctx == NULL) {
+            DBG_PRINTF("Cannot allocate memory for QMUX socket context\n");
+            *max_qmux_socket = 0;
+            ret = -1;
+        }
+        else {
+            memset(sqmux_ctx, 0, sizeof(picoqmux_socket_ctx_t*) * (*max_qmux_socket));
+            if (public_port != 0) {
+                for (int i = 0; i < 2; i++) {
+                    sqmux_ctx[i]->is_accepting = 1;
+                    if ((sqmux_ctx[i] = picoquic_packet_loop_open_qmux_socket(qmux,
+                        (i == 0) ? AF_INET : AF_INET6, public_port, 1)) == NULL) {
+                        ret = -1;
+                        break;
+                    }
+                    (*nb_qmux_sockets)++;
+                }
+            }
+        }
+        if (ret != 0) {
+            /* Free the qmux contexts */
+            picoquic_packet_loop_free_qmux_sockets(sqmux_ctx, nb_qmux_sockets);
+        }
+    }
+    return ret;
+}
 #if defined(_WINDOWS)
 /*
 * Windows: use asynchronous receive. Asynchronous receive requires
@@ -1432,7 +1549,7 @@ int picoquic_packet_loop_do_udp_send(
 }
 
 #ifdef _WINDOWS
-    DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
+DWORD WINAPI picoquic_packet_loop_v3(LPVOID v_ctx)
 #else
 void* picoquic_packet_loop_v3(void* v_ctx)
 #endif
@@ -2009,7 +2126,8 @@ void picoquic_internal_thread_delete(void** v_thread_id)
     picoquic_delete_thread((picoquic_thread_t *)v_thread_id);
 }
 
-picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_quic_t* quic, picoquic_packet_loop_param_t* param,
+picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread_qmux(picoquic_quic_t* quic,
+    picoquic_quic_t * qmux, picoquic_packet_loop_param_t* param,
     picoquic_custom_thread_create_fn thread_create_fn, picoquic_custom_thread_delete_fn thread_delete_fn,
     picoquic_custom_thread_setname_fn thread_setname_fn, char const* thread_name,
     picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
@@ -2026,6 +2144,7 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_qui
         quic->v_thread_ctx = thread_ctx;
         /* Fill the arguments in the context */
         thread_ctx->quic = quic;
+        thread_ctx->qmux = qmux;
         thread_ctx->param = param;
         thread_ctx->loop_callback = loop_callback;
         thread_ctx->loop_callback_ctx = loop_callback_ctx;
@@ -2053,6 +2172,13 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_qui
         }
     }
     return thread_ctx;
+}
+
+picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(picoquic_quic_t* quic, picoquic_packet_loop_param_t* param,
+    picoquic_custom_thread_create_fn thread_create_fn, picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn, char const* thread_name,
+    picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret) {
+    return picoquic_start_custom_network_thread_qmux(quic, NULL, param, thread_create_fn, thread_delete_fn, thread_setname_fn, thread_name, loop_callback, loop_callback_ctx, ret);
 }
 
 picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* quic,

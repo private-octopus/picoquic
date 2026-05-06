@@ -86,11 +86,11 @@ typedef struct st_picoqmux_socket_ctx_t {
     SOCKET_TYPE fd;
     int af;
     uint16_t port; /* Port number to which the socket is bound */
-    int is_port_shared : 1; /* Whether the socket is shared with other threads, e.g., port 443 between several H3 threads */
     /* Flags -- TBD */
     unsigned int is_accepting : 1;
     /* Connection context: initiated when initiating the socket, used for interactions. */
     picoquic_cnx_t* cnx;
+#if 0
     /* Receive data buffer -- size ought to be 0x40000!
     * no buffer allocated if accepting.
      */
@@ -106,12 +106,15 @@ typedef struct st_picoqmux_socket_ctx_t {
     /* send buffer  -- buffer size ought to be 0x40000! */
     size_t send_buffer_size;
     uint8_t* send_buffer;
+#endif
 #if defined(_WINDOWS)
     /* Windows specific */
     WSAOVERLAPPED overlap_r;
     WSAOVERLAPPED overlap_w;
+#if 0
     int so_sndbuf;
     int so_rcvbuf;
+#endif
 #elif defined(PICOQUIC_WITH_IO_URING)
     /* Declare the buffers required for io_uring */
     struct msghdr msg;
@@ -247,6 +250,7 @@ typedef void (*picoquic_custom_thread_delete_fn)(void** thread_id);
 
 typedef struct st_picoquic_network_thread_ctx_t {
     picoquic_quic_t* quic;
+    picoquic_quic_t* qmux;
     picoquic_packet_loop_param_t* param;
     picoquic_packet_loop_cb_fn loop_callback;
     picoquic_custom_thread_delete_fn thread_delete_fn;
@@ -279,7 +283,6 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(
     void* loop_callback_ctx,
     int * ret);
 
-/*
 picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(
     picoquic_quic_t* quic,
     picoquic_quic_t* qmux,
@@ -287,7 +290,6 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx,
     int* ret);
-*/
 
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
@@ -354,6 +356,9 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 * different concepts, and there may be good reasons to change a thread priority
 * after creation. Developers can use the system or framework APIs after the
 * thread is created, using the thread handle in thread_ctx->pthread.
+* 
+* The "_qmux" variant adds an additional parameter "picoquic_quic_t qmux", which is
+* used when the thread needs to manage QMux sockets.
 */
 
 picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(
@@ -367,19 +372,14 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(
     void* loop_callback_ctx,
     int * ret);
 
-/*
+
 picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread_qmux(
-    picoquic_quic_t* quic,
-    picoquic_quic_t* qmux,
-    picoquic_packet_loop_param_t* param,
+    picoquic_quic_t* quic, picoquic_quic_t* qmux, picoquic_packet_loop_param_t* param,
     picoquic_custom_thread_create_fn thread_create_fn,
     picoquic_custom_thread_delete_fn thread_delete_fn,
     picoquic_custom_thread_setname_fn thread_setname_fn,
     char const* thread_name,
-    picoquic_packet_loop_cb_fn loop_callback,
-    void* loop_callback_ctx,
-    int* ret);
-*/
+    picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret);
 
 /* Implementations of picoquic_custom_thread_create_fn and 
 * picoquic_custom_thread_delete_fn for the native thread types.

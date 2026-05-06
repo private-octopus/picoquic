@@ -29,6 +29,7 @@
 #include "autoqlog.h"
 #include "picoquic_packet_loop.h"
 #include "picosocks.h"
+#include "picoqmux.h"
 
 
 #ifndef SLEEP
@@ -731,3 +732,127 @@ int sockloop_thread_name_test(void)
 
     return(sockloop_test_one(&spec));
 }
+
+/* Add tests of a QMUX loop. */
+
+int sockloop_qmux_one(
+    sockloop_test_spec_t* spec)
+{
+    int ret = 0;
+    picoquic_quic_t* qserver = NULL;
+    picoquic_quic_t* qmux = NULL;
+    sockloop_test_cb_t loop_cb = { 0 };
+    picoquic_packet_loop_param_t param = { 0 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    const uint8_t test_ticket_encrypt_key[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        /* Create a pro-forma QUIc server */
+        qserver = picoquic_create(8,
+            NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, NULL, NULL,
+            0, NULL, NULL, NULL, 0);
+        /* Create a QMux context */
+        qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, 0, NULL,
+            0, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+        if (qserver == NULL || qmux == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        param.local_port = spec->port;
+        param.local_af = (spec->ipv6_only) ? AF_INET6 : 0;
+        param.socket_buffer_size = spec->socket_buffer_size;
+        loop_cb.param = &param;
+
+        if (spec->use_background_thread) {
+            picoquic_network_thread_ctx_t* thread_ctx = NULL;
+
+            if (spec->thread_name != NULL) {
+                thread_ctx = picoquic_start_custom_network_thread_qmux(qserver, qmux, &param,
+                    picoquic_internal_thread_create, picoquic_internal_thread_delete,
+                    picoquic_internal_thread_setname, spec->thread_name, sockloop_test_cb, &loop_cb, &ret);
+            }
+            else {
+                thread_ctx = picoquic_start_network_thread(qserver, &param, sockloop_test_cb, &loop_cb, &ret);
+            }
+            if (thread_ctx == NULL) {
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                for (int i = 0; i < 2000; i++) {
+                    if (thread_ctx->thread_is_ready) {
+                        DBG_PRINTF("Thread is ready after %dms", i);
+                        break;
+                    }
+                    else {
+                        SLEEP(1);
+                    }
+                }
+                if (!thread_ctx->thread_is_ready) {
+                    DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                    ret = -1;
+                }
+                else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                    DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                    ret = -1;
+                }
+                else {
+#if 0
+                    for (int i = 0; i < 50; i++) {
+                        /* TODO: completion test for QMUX test. */
+                        if (sockloop_test_received_finished(test_ctx)) {
+                            DBG_PRINTF("Receive finished after %dms", 100 * i);
+                            break;
+                        }
+                        else {
+                            SLEEP(100);
+                        }
+                    }
+#endif
+                }
+                picoquic_delete_network_thread(thread_ctx);
+            }
+        }
+        else {
+            /* TODO -- proper initialization */
+            picoquic_network_thread_ctx_t t_ctx = { 0 };
+            t_ctx.quic = qserver;
+            t_ctx.qmux = qmux;
+            t_ctx.param = &param;
+            t_ctx.loop_callback = sockloop_test_cb;
+            t_ctx.loop_callback_ctx = &loop_cb;
+
+            (void)picoquic_packet_loop_v3((void*)&t_ctx);
+            return t_ctx.return_code;
+        }
+    }
+
+
+
+    return -1;
+}
+
+

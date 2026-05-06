@@ -1108,7 +1108,7 @@ picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
             config->ticket_encryption_key_length);
 
         if (qmux == NULL) {
-            DBG_PRINTF("Could not create QMUX context.");
+            DBG_PRINTF("%s", "Could not create QMUX context.");
         }
         else {
             if (config->bin_dir != NULL) {

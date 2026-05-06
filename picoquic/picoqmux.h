@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PICOQUIC_PACKET_LOOP_H
-#define PICOQUIC_PACKET_LOOP_H
+#ifndef PICOQMUX_H
+#define PICOQMUX_H
 
 #include "picoquic.h"
 #include "picoquic_utils.h"
@@ -60,4 +60,4 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
 #ifdef __cplusplus
 }
 #endif
-#endif
+#endif /* PICOQMUX_H */
