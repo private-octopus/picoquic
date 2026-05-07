@@ -781,6 +781,8 @@ int sockloop_qmux_one(
 
     if (ret == 0) {
         param.local_port = spec->port;
+        param.qmux_port = spec->port;
+
         param.local_af = (spec->ipv6_only) ? AF_INET6 : 0;
         param.socket_buffer_size = spec->socket_buffer_size;
         loop_cb.param = &param;
@@ -849,9 +851,6 @@ int sockloop_qmux_one(
             return t_ctx.return_code;
         }
     }
-
-
-
     return -1;
 }
 

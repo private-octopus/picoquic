@@ -195,7 +195,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int dest_if;
     uint16_t public_port;
     int is_port_shared; /* public port is shared with other threads, e.g., port 443 between several H3 threads */
-    uint16_t qmux_public_port;
+    uint16_t qmux_port;
     int qmux_is_port_shared; /* public qmux port is shared with other threads, e.g., port 443 between several H3 threads */
     int socket_buffer_size;
     int do_not_use_gso;
