@@ -883,6 +883,9 @@ static int picoquic_set_tp_value_by_type(picoquic_tp_t* tp, uint64_t tp_type, ui
     case picoquic_tp_reset_stream_at:
         tp->is_reset_stream_at_enabled = (tp_value != 0);
         break;
+    case picoquic_tp_flexicast_support:
+        tp->flexicast_support = (uint8_t)tp_value;
+        break;
     default:
         ret = -1;
         break;
@@ -946,6 +949,16 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 
     if (multipath_option & 1) {
         quic->default_tp.initial_max_path_id = 2;
+    }
+}
+
+void picoquic_set_default_flexicast_option(picoquic_quic_t* quic, int flexicast_option)
+{
+    PICOQUIC_THREAD_CHECK(quic);
+    quic->default_flexicast_option = flexicast_option;
+    
+    if (flexicast_option & 1) {
+        quic->default_tp.flexicast_support = 1;
     }
 }
 

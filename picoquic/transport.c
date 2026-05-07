@@ -303,6 +303,17 @@ int picoquic_negotiate_multipath_option(picoquic_cnx_t* cnx)
     return ret;
 }
 
+int picoquic_negotiate_flexicast_option(picoquic_cnx_t* cnx)
+{
+    cnx->is_flexicast_enabled = 0;
+
+    if (cnx->is_multipath_enabled && cnx->remote_parameters.flexicast_support &&
+        cnx->local_parameters.flexicast_support) {
+        cnx->is_flexicast_enabled = 1;
+    }
+    return 0;
+}
+
 int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
     uint8_t* bytes, size_t bytes_length, size_t* consumed)
 {
@@ -470,6 +481,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at);
     }
 
+    if ((cnx->local_parameters.flexicast_support != 0) && bytes != NULL){
+        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max,
+            picoquic_tp_flexicast_support);
+    }
+
     /* This test extension must be the last one in the encoding, as it consumes all the available space */
     if (extension_mode == 1 && !cnx->test_large_chello &&
         cnx->quic->test_large_server_flight && bytes != NULL){
@@ -529,6 +545,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.initial_max_path_id = 0;
     cnx->remote_parameters.address_discovery_mode = 0;
     cnx->remote_parameters.is_reset_stream_at_enabled = 0;
+    cnx->remote_parameters.flexicast_support=0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -840,6 +857,13 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         cnx->remote_parameters.is_reset_stream_at_enabled = 1;
                     }
                     break;
+                case picoquic_tp_flexicast_support:
+                    if (extension_length != 0) {
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Flexicast Enable At TP");
+                    }
+                    else {
+                        cnx->remote_parameters.flexicast_support = 1;
+                    }
                 default:
                     /* ignore unknown extensions */
                     break;
@@ -947,6 +971,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     if (ret == 0) {
         /* Negotiate the multipath option */
         ret = picoquic_negotiate_multipath_option(cnx);
+
+        if (ret == 0) {
+            ret = picoquic_negotiate_flexicast_option(cnx);
+        }
     }
 
     /* Loss bit is only enabled if negotiated by both parties */

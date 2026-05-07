@@ -120,6 +120,9 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
 int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
     char const* v4_text, char const* v6_text, uint16_t preferred_port);
 
+int picoquic_is_flexicast_address(struct sockaddr* addr);
+int picoquic_find_flow_by_cid(picoquic_cnx_t *cnx, picoquic_connection_id_t *connection_id);
+
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);
 int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const char * solution_path, const char * file_name);
@@ -171,12 +174,15 @@ int picoquic_file_delete(char const* file_name, int* last_err);
 /* Skip and decoding functions */
 const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t size);
 const uint8_t* picoquic_frames_varint_skip(const uint8_t * bytes, const uint8_t * bytes_max);
+const uint8_t* picoquic_frames_addr_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint8_t ip_version);
 const uint8_t* picoquic_frames_varint_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n64);
 const uint8_t* picoquic_frames_varlen_decode(const uint8_t * bytes, const uint8_t * bytes_max, size_t * n);
 const uint8_t* picoquic_frames_uint8_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint8_t * n);
 const uint8_t* picoquic_frames_uint16_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint16_t * n);
 const uint8_t* picoquic_frames_uint32_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint32_t * n);
 const uint8_t* picoquic_frames_uint64_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n);
+const uint8_t* picoquic_frames_fc_flow_id_decode(const uint8_t * bytes, const uint8_t* bytes_max, uint8_t len, picoquic_fc_flow_id_t * fc_flow_id);
+const uint8_t* picoquic_frames_addr_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t ip_family, struct sockaddr* addr);
 const uint8_t* picoquic_frames_length_data_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t * bytes_max, picoquic_connection_id_t * cid);
 
@@ -195,9 +201,13 @@ uint8_t* picoquic_frames_uint16_encode(uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* picoquic_frames_uint24_encode(uint8_t * bytes, const uint8_t * bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint32_encode(uint8_t* bytes, const uint8_t* bytes_max, uint32_t n);
 uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max, uint64_t n);
+uint8_t* picoquic_frames_fc_flow_id_encode(uint8_t * bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t * fc_flow_id);
+uint8_t* picoquic_frames_addr_encode(uint8_t* bytes, const uint8_t* bytes_max, struct sockaddr* addr);
 uint8_t* picoquic_frames_length_data_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v);
 uint8_t* picoquic_frames_cid_encode(uint8_t* bytes, const uint8_t* bytes_max, const picoquic_connection_id_t* cid);
 uint8_t* picoquic_frames_charz_encode(uint8_t * bytes, const uint8_t * bytes_max, char const* s);
+
+int picoquic_find_or_create_flow(picoquic_cnx_t *cnx, picoquic_fc_flow_id_t *flow_id);
 
 /* Constant time memory comparison may be required on some platforms for testing reset secrets */
 int picoquic_constant_time_memcmp(const uint8_t* x, const uint8_t* y, size_t l);

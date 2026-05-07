@@ -291,6 +291,9 @@ void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, 
   */
 picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, uint64_t* next_wake_time)
 {
+    if (path_x->receive_only_fc_flow_path) 
+        return NULL;
+
     /* examine each tuple record */
     picoquic_tuple_t* tuple = path_x->first_tuple;
 
@@ -397,7 +400,7 @@ void picoquic_sort_available_paths(picoquic_cnx_t* cnx, uint64_t current_time, u
         /* Clear the nominal ack path flag from all path -- it will be reset to the low RTT path later */
         path_x->is_nominal_ack_path = 0;
         /* Only continue processing if the path is available */
-        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
+        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit || path_x->receive_only_fc_flow_path) {
             continue;
         }
         /* This path is a candidate for min rtt */
@@ -511,7 +514,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
     /* First check whether path contol messages are needed */
     for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
     {
-        if (cnx->path[path_index]->path_is_demoted) {
+        if (cnx->path[path_index]->path_is_demoted || cnx->path[path_index]->receive_only_fc_flow_path) {
             continue;
         }
         else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {

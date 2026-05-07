@@ -239,6 +239,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_initial_max_path_id 0x3e /* per draft quic multipath 20 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
+#define picoquic_tp_flexicast_support 0Xedf3
 
 /* Packet contexts */
 typedef enum {
@@ -293,11 +294,17 @@ typedef enum {
  */
 #define PICOQUIC_CONNECTION_ID_MIN_SIZE 0
 #define PICOQUIC_CONNECTION_ID_MAX_SIZE 20
+#define PICOQUIC_FC_FLOW_ID_MAX_SIZE 20
 
 typedef struct st_picoquic_connection_id_t {
     uint8_t id[PICOQUIC_CONNECTION_ID_MAX_SIZE];
     uint8_t id_len;
 } picoquic_connection_id_t;
+
+typedef struct st_picoquic_fc_flow_id_t {
+    uint8_t id[PICOQUIC_FC_FLOW_ID_MAX_SIZE];
+    uint8_t id_len;
+} picoquic_fc_flow_id_t;
 
 
 /* forward definition to avoid full dependency on picotls.h */
@@ -397,6 +404,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
+    uint8_t flexicast_support; /* 0=none, 1=ipv4, 2=ipv6, 3=both */
 } picoquic_tp_t;
 
 /*
@@ -758,6 +766,9 @@ void picoquic_set_default_lossbit_policy(picoquic_quic_t* quic, picoquic_lossbit
 
 /* Set the multipath option for the context */
 void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_option);
+
+/* Set the flexicast option for the context */
+void picoquic_set_default_flexicast_option(picoquic_quic_t* quic, int flexicast_option);
 
 /* Set the Address Discovery mode for the context */
 void picoquic_set_default_address_discovery_mode(picoquic_quic_t* quic, int mode);

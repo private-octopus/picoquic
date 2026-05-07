@@ -110,6 +110,12 @@ const char* picoquic_frame_name(uint64_t ftype)
         return "observed_address_v4";
     case picoquic_frame_type_observed_address_v6:
         return "observed_address_v6";
+    case picoquic_frame_type_fc_announce:
+        return "fc_announce";
+    case picoquic_frame_type_fc_state:
+        return "fc_state";
+    case picoquic_frame_type_fc_key:
+        return "fc_key";
     default:
         return "unknown";
     }

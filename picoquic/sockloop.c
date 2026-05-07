@@ -512,6 +512,90 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_
     return nb_sockets;
 }
 
+int picoquic_join_multicast_tree(picoquic_fc_flow_t *flow, picoquic_socket_ctx_t *s_ctx)
+{
+    if (flow->group_addr.sa_family == AF_INET) {
+        struct ip_mreq group;
+        group.imr_multiaddr.s_addr = ((struct sockaddr_in*) &flow->group_addr)->sin_addr.s_addr;
+        group.imr_interface.s_addr = ((struct sockaddr_in*) &flow->unicast_addr)->sin_addr.s_addr;
+        return setsockopt(s_ctx->fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&group, sizeof(struct ip_mreq)) < 0;
+    }
+    else {
+        struct ipv6_mreq group;
+        group.ipv6mr_multiaddr = ((struct sockaddr_in6*) &flow->group_addr)->sin6_addr;
+        group.ipv6mr_interface = 0;
+        return setsockopt(s_ctx->fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, (char *)&group, sizeof(struct ipv6_mreq)) < 0;
+    }
+    return 0;
+}
+
+int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can_be_shared,
+    int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+{
+    /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
+    int sock_ret = 0;
+
+    s_ctx->af = flow->group_addr.sa_family;
+    s_ctx->port = flow->udp_port;
+    s_ctx->n_port = htons(flow->udp_port);
+    s_ctx->is_port_shared = 0;
+    if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, s_ctx, ecn_value)) == 0) {
+        if (picoquic_is_flexicast_address(&flow->group_addr)) {
+            if (!picoquic_join_multicast_tree(flow, s_ctx))
+                return 0;
+        }
+        
+    }
+    if (sock_ret == 0 && can_be_shared != 0) {
+        s_ctx->is_port_shared = (can_be_shared != 0);
+        if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, s_ctx, ecn_value)) == 0) {
+            if (picoquic_is_flexicast_address(&flow->group_addr)) {
+                if (!picoquic_join_multicast_tree(flow, s_ctx))
+                    return 0;
+            }
+        }
+    }
+
+    DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", s_ctx->af, s_ctx->port);
+    picoquic_packet_loop_close_socket(s_ctx);
+    return 1;
+}
+
+void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_loop_param_t *param, picoquic_socket_ctx_t* s_ctx, int *nb_sockets, uint8_t ecn_value)
+{
+    if (quic->current_number_connections > 0) {
+        for (int i = 0; i < quic->current_number_connections; i++) {
+            picoquic_cnx_t cnx = quic->cnx_list[i];
+            if (cnx.is_flexicast_enabled && cnx.need_flow_update &&
+                cnx.nb_flows > 0) {
+                for (int j = 0; j < cnx.nb_flows; j++) {
+                    picoquic_fc_flow_t *flow = cnx.flows[j];
+                    if (flow->tree_joined == 0 &&
+                        !picoquic_packet_loop_open_flexicast_socket(
+                            flow,
+                            flow->udp_port ==
+                            (
+                            flow->unicast_addr.sa_family == AF_INET ?
+                                    ((struct sockaddr_in *)&flow->unicast_addr)->sin_port
+                                :
+                                    ((struct sockaddr_in6 *)&flow->unicast_addr)->sin6_port
+                            ) || flow->udp_port <= 1000,
+                            param->socket_buffer_size,
+                            0,
+                            param->do_not_use_gso,
+                            &s_ctx[*nb_sockets],
+                            ecn_value
+                        )
+                    ) {
+                        (*nb_sockets)++;
+                        flow->tree_joined = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /*
 * Windows: use asynchronous receive. Asynchronous receive requires
 * declaring an overlap context and event per socket, as well as a
@@ -1237,6 +1321,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         uint8_t received_ecn;
         uint8_t* received_buffer;
         uint64_t previous_time;
+
+        packet_loop_open_flexicast_sockets(quic, param, s_ctx, &nb_sockets, ecn_value);
 
         if_index_to = 0;
         /* The "loop immediate" condition is set when a packet has been

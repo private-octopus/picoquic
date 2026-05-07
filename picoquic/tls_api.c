@@ -1339,6 +1339,10 @@ static int picoquic_set_key_from_secret(ptls_cipher_suite_t * cipher, int is_enc
     return ret;
 }
 
+int picoquic_set_fc_decryption_from_secret(ptls_cipher_suite_t * cipher, picoquic_crypto_context_t * ctx, const void *secret, const char *prefix_label)
+{
+    return picoquic_set_key_from_secret(cipher, 0, 0, ctx, secret, prefix_label);
+}
 
 /* Key update callback: this is called by TLS whenever the session key has changed,
  * from the function "setup_traffic_protection" in picotls.c.

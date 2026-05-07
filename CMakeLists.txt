@@ -104,6 +104,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/packet.c
     picoquic/packet_names.c
     picoquic/paths.c
+    picoquic/flexicast.c
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c

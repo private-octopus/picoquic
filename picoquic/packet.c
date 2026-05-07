@@ -657,8 +657,15 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         int need_integrity_check = 1;
         picoquic_ack_context_t* ack_ctx = picoquic_ack_ctx_from_cnx_context(cnx, picoquic_packet_context_application, ph->l_cid);
 
+        int i;
+        if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id))>0) {
+            decoded = picoquic_aead_decrypt_generic(decoded_bytes+ph->offset,
+                bytes + ph->offset, ph->pn_offset, ph->pn64, decoded_bytes, ph->offset,
+                cnx->flows[i]->crypto_context.aead_decrypt);
+        }
+
         /* Manage key rotation */
-        if (ph->key_phase == cnx->key_phase_dec) {
+        else if (ph->key_phase == cnx->key_phase_dec) {
             /* AEAD Decrypt */
             if (cnx->is_multipath_enabled && ph->ptype == picoquic_packet_1rtt_protected) {
                 decoded = picoquic_aead_decrypt_mp(decoded_bytes + ph->offset,

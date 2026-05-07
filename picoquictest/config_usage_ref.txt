@@ -51,3 +51,4 @@ Picoquic options:
   -4 ip[:port]    Preferred address for v4 connections.
   -6 ipv6[:port]  Preferred address for v6 connections.
   -h              This help message
+  -f              Enable flexicast support
