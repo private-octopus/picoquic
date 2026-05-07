@@ -1169,17 +1169,18 @@ int picoquic_packet_loop_poll(
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
     int i_qmux_poll = i_poll + nb_sockets;
+    int poll_max = i_qmux_poll + nb_qmux_sockets;
     int ret_poll;
 
-    if (poll_list_size < (size_t)(nb_sockets + nb_qmux_sockets + i_poll)) {
-        DBG_PRINTF("Error: poll list size %d is too small for %d sockets and %d qmux sockets\n",
-            (int)poll_list_size, nb_sockets, nb_qmux_sockets);
+    if (poll_list_size < (size_t)poll_max) {
+        DBG_PRINTF("Error: poll list size %d is too small for %d sockets and %d qmux sockets (%d)\n",
+            (int)poll_list_size, nb_sockets, nb_qmux_sockets, poll_max);
         return -1;
     }
 
     picoquic_packet_loop_set_fds(poll_list, poll_list_size, s_ctx, nb_sockets, sqmux_ctx, nb_qmux_sockets,
         thread_ctx, current_time);
-    ret_poll = poll(poll_list, nb_sockets + i_qmux_poll, delta_t_ms);
+    ret_poll = poll(poll_list, poll_max, delta_t_ms);
 
     if (received_ecn != NULL) {
         *received_ecn = 0;
