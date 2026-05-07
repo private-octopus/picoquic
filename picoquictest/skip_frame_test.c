@@ -622,7 +622,6 @@ static uint8_t test_frame_type_path_available_bad[] = {
     /* Missing sequence */
 };
 
-
 static uint8_t test_frame_type_bdp_bad[] = {
     (uint8_t)(0x80 | (picoquic_frame_type_bdp >> 24)), (uint8_t)(picoquic_frame_type_bdp >> 16),
     (uint8_t)(picoquic_frame_type_bdp >> 8), (uint8_t)(picoquic_frame_type_bdp & 0xFF),
@@ -653,6 +652,7 @@ static uint8_t test_frame_type_bad_ack_first_range[] = {
 #define ERR_F PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR
 #define ERR_P PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION
 #define ERR_S PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR
+#define ERR_ST PICOQUIC_TRANSPORT_STREAM_STATE_ERROR
 
 test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_reset_stream_offset", test_frame_type_bad_reset_stream_offset, 0, 0, 3, PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR, 0),
@@ -661,14 +661,14 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_connection_close", test_type_bad_connection_close, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_connection_close2", test_type_bad_connection_close2, 0, 1, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_application_close", test_type_bad_application_close, 0, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM_OLD("bad_max_stream_stream", test_frame_type_bad_max_stream_stream, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM_OLD("bad_max_streams_bidir", test_frame_type_max_bad_streams_bidir, 0, 0, 3, ERR_S, 0),
-    TEST_SKIP_ITEM_OLD("bad_max_streams_unidir", test_frame_type_bad_max_streams_unidir, 0, 0, 3, ERR_S, 0),
+    TEST_SKIP_ITEM_OLD("bad_max_stream_stream", test_frame_type_bad_max_stream_stream, 0, 0, 3, ERR_ST, 0),
+    TEST_SKIP_ITEM_OLD("bad_max_streams_bidir", test_frame_type_max_bad_streams_bidir, 0, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_max_streams_unidir", test_frame_type_bad_max_streams_unidir, 0, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_new_connection_id_length", test_frame_type_bad_new_cid_length, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_new_connection_id_retire", test_frame_type_bad_new_cid_retire, 0, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("illegal_new_cid_retire", test_frame_type_illegal_new_cid_retire, 0, 0, 3, ERR_F, 0),
-    TEST_SKIP_ITEM_OLD("too_long_new_cid", test_frame_type_too_long_new_cid, 0, 0, 3, ERR_P, 0),
-    TEST_SKIP_ITEM_OLD("bad_stop_sending", test_frame_type_bad_stop_sending, 0, 0, 3, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR, 0),
+    TEST_SKIP_ITEM_OLD("too_long_new_cid", test_frame_type_too_long_new_cid, 0, 0, 3, ERR_F, 0),
+    TEST_SKIP_ITEM_OLD("bad_stop_sending", test_frame_type_bad_stop_sending, 0, 0, 3, ERR_ST, 0),
     TEST_SKIP_ITEM_OLD("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
@@ -677,7 +677,7 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_ack_blocks", test_frame_type_bad_ack_blocks, 1, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3, ERR_F, 1),
-    TEST_SKIP_ITEM_OLD("stream_hang", test_frame_stream_hang, 1, 0, 3, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0),
+    TEST_SKIP_ITEM_OLD("stream_hang", test_frame_stream_hang, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_path_available", test_frame_type_path_available_bad, 0, 1, 3, ERR_F, 1, 1),

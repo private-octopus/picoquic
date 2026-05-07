@@ -574,11 +574,13 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
             selected_ctx = i;
             is_stateless = 1;
             next_time = test_ctx->simulated_time;
-        } else if (test_ctx->qctx[i]->cnx_wake_first != NULL) {
-            if (test_ctx->qctx[i]->cnx_wake_first->next_wake_time < next_time) {
+        }
+        else {
+            uint64_t wake_time = picoquic_get_next_wake_time(test_ctx->qctx[i], test_ctx->simulated_time);
+            if (wake_time < next_time) {
                 selected_ctx = i;
                 is_stateless = 0;
-                next_time = test_ctx->qctx[i]->cnx_wake_first->next_wake_time;
+                next_time = wake_time;
             }
         }
     }
@@ -642,19 +644,21 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
                 picoquic_delete_stateless_packet(sp);
             }
         }
-        else if (test_ctx->qctx[selected_ctx]->cnx_wake_first == NULL) {
-            ret = -1; /* unexpected */
-        }
         else {
-            /* check whether there is something to send */
+            picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(test_ctx->qctx[selected_ctx], test_ctx->simulated_time);
+            if (cnx == NULL) {
+                ret = -1; /* unexpected */
+            }
+            else {
+                /* check whether there is something to send */
 
-            ret = picoquic_prepare_packet(test_ctx->qctx[selected_ctx]->cnx_wake_first, test_ctx->simulated_time,
-                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                &packet->addr_to, &packet->addr_from);
-            if (ret != 0)
-            {
-                /* useless test, but makes it easier to add a breakpoint under debugger */
-                ret = -1;
+                ret = picoquic_prepare_packet(cnx, test_ctx->simulated_time,
+                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                    &packet->addr_to, &packet->addr_from);
+                if (ret != 0) {
+                    /* useless test, but makes it easier to add a breakpoint under debugger */
+                    ret = -1;
+                }
             }
         }
 

@@ -1,139 +1,59 @@
 # Running picoquic on multiple threads in parallel
 
-Picoquic was designed as a singled threaded module, with the assumption that
+Picoquic was initially designed as a singled threaded module,
+with the assumption that
 deployments requiring higher performance would simply run multiple instances
-of picoquic in multiple parallel processes. But just saying that does not
-mean that developers would not keep wondering why, for example,
-they cannot have more than one network thread within a picoquic instance.
-Why could not the application just say "create 15 network threads" instead
-of "create just one"? Deployments would be easier if picoquic could manage
-all the complexity of handling load balancing between multiple threads,
-instead of leaving that to each application.
-
-The first step with any big question like that is to document the issue
-and explore possible solutions. That's what this document does. Or attempts to do.
+of picoquic in multiple parallel processes. Per developper demand, we have
+extended it with support for multithread operations:
 
 
-# Parallelism by connection
+- Support for multiple network threads
+- Support for "shared" UDP ports in the socket loop
+- Support for thread specific port
+- Support for Preferred Address redirection
+- Software option to verify proper use of the picoquic API in threaded environments
 
-The simplest design is to handle paraellism at the "connection" level.
-The connection object (`picoquic_cnx_t`) and the related path object
-(`picoquic_path_t`) hold much of the state variables enabling the
-handling of the connection.
+With these new features, developers can "scale up" deployments of services that
+use picoquic, using multiple servers, multiple processes or multiple threads.
 
-We briefly considered a "pipeline" option, in which CPU intensive functions
-like send and receive packets or perform crypto would be delegated to a set of
-of threads, while the "main" object would be single threaded. The pipeline option
-would have some advantages, like guaranteeing that the application level API do
-not change, or enabling high performance even if the system is only handling
-a small number of connections. One downside is that the "main" thread would
-become a bottleneck, but we could worry later about parallelizing that thread.
-However, the remaining downside is that this is effectively "packet level"
-parallelism, requiring context switching or message passing for each packet.
-These context switchings can easily negate any potential performance
-gain in the architecture.
+## Supported architectures
 
-We also considered parallelism at lower levels, such as "paths" or "streams",
-but handling paths, streams or connections in different streams would create
-contentions on the connection context, and require some systems of locks
-that could also easily negate the performance gains.
+We support three variants of parallelism: multiple threads in a single process,
+multiple processes, and multiple hosts. Each of these variants use one or all
+of the features listed above:
 
-In what follows, we will consier three forms of parallelism: multiple threads
-in a single process, multiple processes, and multiple hosts.
+| Feature | Multiple threads | Multiple processes | Multiple hosts |
+|---------|------------------|--------------------|----------------|
+| Multiple network threads | Yes | No | Maybe |
+| Shared UDP port | Yes | Yes | Yes |
+| Thread specific port | Yes | Yes | Yes |
+| Preferred address migration | Yes | Yes | Yes |
+| API usage check | Yes | No | Maybe |
 
-## One process, multiple threads
+## Starting multiple threads
 
-~~~
-              +----------------+
-              | Application    |
-              +----------------+
-                  ^  ^  ^
-                  |  |  | API
-                  |  |  |
-              +---v--|--|----------+
-              |  +---v--|-------------+
-  Network     |  |  +---v----------------+
-  threads     |  |  |  Connection states |
-              +--|  |    Shared UDP port +----> packets out
-                 +--|                    +<---- packets in
-                    +--------------------+
-~~~
+The default socket loop can be started either "in line", as a single separate thread,
+or as multiple threads. Each thread is started by calling the function
+`picoquic_start_network_thread`:
 
-The basic architecture would be to have multiple network threads. Each network
-threads manages a set of connections, and holds the "connection contexts" for
-these connections. All these connections access a "shared socket".
+```
+picoquic_network_thread_ctx_t* picoquic_start_network_thread(
+    picoquic_quic_t* quic,
+    picoquic_packet_loop_param_t* param,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx,
+    int * ret);
+```
 
+When starting multiple threads, the application shall use a separate quic context,
+and a separate "param" structure for each thread. 
 
-## Multiple processes
+The network thread launched by `picoquic_start_network_thread` will use the
+default thread handling functions for the local operating system. Applications
+that want different functions can use `picoquic_start_custom_network_thread`
+to pass pointers to these functions.
 
-This paper is focused on parallelism between threads in a single process.
-We know of existing deployments that instead use parallelism between
-multiple processes.
-
-
-~~~
-              +--------------------------------+
-              |             +-----------------+|
-              | Application | Network loop    ||
-     +------->|             | Shared UDP port +----> packets out 
-     |        |             |                 +<---- packets in
-     |        |             +-----------------+|
-     |        +--------------------------------+
-     |        ...
-     |        ...
-     |        ...
-     |        +--------------------------------+
-     |        |             +-----------------+|
-     |     +->| Application | Network loop    ||
-     |     |  |             | Shared UDP port +----> packets out
-     |     |  |             |                 +<---- packets in
-     |     |  |             +-----------------+|
-     |     |  +--------------------------------+
-     v     v
- +---------------+
- | Coordinating  |
- | process       |      
- +---------------+
-~~~
-
-Each of the processes includes a "network loop" and its own application
-code. These processes share a single port, such as all listening and sending
-on UDP port 443. If applications need to share data or otherwise
-synchronize, they will typically exchange messages with a coordinating
-process.
-
-In the most simple cases, such as a static web server, the application
-will just read and write data from and to local storage, the need for
-coordination is minimal, and the architecture works very well.
-In more complex cases, the processes will need to share much more information,
-often going through a "back end" service that manages the data base.
-
-The "multi thread" architecture allows these coordination to happen
-within a single process, allowing for example access to shared memory.
-This may be more efficient in applications like a "media over QUIC"
-relay, in which multiple threads share and dynamically update a
-"media cache".
-
-## Multiple Hosts
-
-Both the thread level and process level parallelism are single CPU
-solutions. Host CPUs are often multicore. The goal is to create as
-many threads or as many processes as available cores on the CPU,
-so as to fully use the CPU's resource. If the application demands
-more resource than what a single CPU can provide, we will need to
-consider load balancing across multiple hosts.
-
-In these solutions, a load balancer is typically used to direct
-incoming packets to the relevant server, or possibly to the
-relevant process on a server. Many load balancers operate
-at the UDP level, assigning incoming packets to a specific
-server based on a hash of the IP and UDP headers. QUIC aware
-load balancers assign packets to servers based on the Destination
-CID field of the header. An example of such specification
-can be found in the
-[QUIC LB draft](https://datatracker.ietf.org/doc/draft-ietf-quic-load-balancers/).
-
-# Sharing the UDP port
+## Support for shared UDP ports
 
 The deployments assume that external peers see a single system,
 a single combination of IP address and UDP port. Whether the
@@ -143,305 +63,68 @@ or a thread to handle the UDP connection, and making sure that
 all packets used by that connection are processed by the
 same thread.
 
-## Using SO_REUSEPORT
+The thread creation function documents the use of a shared port
+in the `param` structure, which has the following members:
 
-The simplest way to share a UDP port in Linux is to use
-the socket option "SO_REUSEPORT", which the manual describes as:
+```
+typedef struct st_picoquic_packet_loop_param_t {
+    uint16_t local_port; /* Default port for outgoing connection */
+    int local_af;
+    int dest_if;
+    uint16_t public_port;
+    int is_port_shared;
+    int socket_buffer_size;
+    int do_not_use_gso;
+    int extra_socket_required;
+    int prefer_extra_socket;
+    int simulate_eio;
+    size_t send_length_max;
+} picoquic_packet_loop_param_t;
+```
 
-- SO_REUSEPORT (since Linux 3.9)
+These arguments describe the sockets that need to be created.
+The "local port" is used for outgoing connections, and is not
+shared with any other thread. The "public port" is used for
+incoming connections; for a web server it will typically
+be set to 443. If "is port shared" is set to a non zero value,
+the socket will be opened with the "SO_REUSEADDRESS" option,
+and the "SO_REUSEPORT" option if supported by the OS.
 
-    Permits multiple AF_INET or AF_INET6 sockets to be bound to
-    an identical socket address.  This option must be set on
-    each socket (including the first socket) prior to calling
-    bind(2) on the socket.  To prevent port hijacking, all of
-    the processes binding to the same address must have the
-    same effective UID.  This option can be employed with both
-    TCP and UDP sockets.
 
-    ...
-
-    For UDP sockets, the use of this option can provide better
-    distribution of incoming datagrams to multiple processes
-    (or threads) as compared to the traditional technique of
-    having multiple processes compete to receive datagrams on
-    the same socket.
+## Thread specific port and preferred address migration
 
 The default behavior of the Linux stack is to distribute packets to
-sockets in the group using a 4-tuple hash. This would work for
-basic QUIC connections in which the local host is the server, as long
-as they are not using path migration or multipath, which could be
-enforced by using the `disable_migration` transport parameter.
+sockets bound to the same address and port using a 4-tuple hash.
+The allocation of hashes to hash bucket should remain stable for
+the duration of the initial handshake, but there is no guarantee
+that it will remain stable fot the entire duration of a long
+running connection.
 
-There is an issue with connections started by the local host as a client,
-because the 4-tuple hash
-of the outgoing UDP header will not always match the socket number
-associated with the thread or process starting the connection. The
-simple solution is to use a separate socket for starting client connections,
-with each thread or process using a separate random port.
+The QUIC specification specifies a "preferred address migration"
+that allows a server to migrate an incoming connection to a
+"preferred address". The server document its preferred addresses
+(IPv4 and IPv6) and port number in a transport parameter, and the
+client migrates to one of these addresses as soon as the handshake
+completes.
 
-## Sharing the UDP port, with EBPF
+TODO: how does it work.
 
-If we want to support either connection migration or multipath,
-we need to use a BPF or EBPF script.
 
-- SO_ATTACH_REUSEPORT_CBPF
-- SO_ATTACH_REUSEPORT_EBPF
 
-    For use with the SO_REUSEPORT option, these options allow
-    the user to set a classic BPF (SO_ATTACH_REUSEPORT_CBPF) or
-    an extended BPF (SO_ATTACH_REUSEPORT_EBPF) program which
-    defines how packets are assigned to the sockets in the
-    reuseport group (that is, all sockets which have
-    SO_REUSEPORT set and are using the same local address to
-    receive packets).
+## API usage in multithread environments
 
-    The BPF program must return an index between 0 and N-1
-    representing the socket which should receive the packet
-    (where N is the number of sockets in the group).  If the
-    BPF program returns an invalid index, socket selection will
-    fall back to the plain SO_REUSEPORT mechanism.
-
-    Sockets are numbered in the order in which they are added
-    to the group (that is, the order of bind(2) calls for UDP
-    sockets or the order of listen(2) calls for TCP sockets).
-    New sockets added to a reuseport group will inherit the BPF
-    program.  When a socket is removed from a reuseport group
-    (via close(2)), the last socket in the group will be moved
-    into the closed socket's position.
-
-    These options may be set repeatedly at any time on any
-    socket in the group to replace the current BPF program used
-    by all sockets in the group.
-
-    SO_ATTACH_REUSEPORT_CBPF takes the same argument type as
-    SO_ATTACH_FILTER and SO_ATTACH_REUSEPORT_EBPF takes the
-    same argument type as SO_ATTACH_BPF.
-
-    UDP support for this feature is available since Linux 4.5;
-    TCP support is available since Linux 4.6.
-
-Using EBPF, we could parse the destination CID of the incoming packet,
-and return the corresponding socket number. Path migration and multipath
-can be supported, as long as each of the processes or threads using
-the port number generates CID that can be properly parsed by the
-EBPF script.
-
-With EBPF, the same socket can be use for QUIC connections accepted by the
-local host as a server and for QUIC connections started by the local
-host as a client, as long as all connections use the CID that match the
-local socket.
-
-## Parsing the CID
-
-In the EBPF solution, the script needs to parse the CID to extract the
-"thread number", or in the case of process parallelism the process
-number. This is the same issue encountered by load balancers in
-host parallelism deployments. We will asssume that the CID will
-be compatible with the format specified by the
-[QUIC LB draft](https://datatracker.ietf.org/doc/draft-ietf-quic-load-balancers/):
-
-| First Octet | Server ID | Nonce          |
-|-------------|-----------|----------------|
-
-In that format, the Server ID identifies the server in multi-host
-deployment. The nonce is set by the server, and must be
-different for all CID issued by that server. We will need to
-complement that format as:
-
-| First Octet | Server ID | Thread ID | Nonce |
-|-------------|-----------|-----------|-------|
-
-EBPF script must return a socket ID, defined by the order in which the sockets
-are created. We will use need to ensure that EBPF socket ID matches the
-Thread ID. The length of the server ID and thread ID are deployment parameters.
-For single-server deployments, we may omit the Server ID.
-
-The QUIC LB draft supports encryption, the format being:
-
-~~~
-+-------------+------------------------------------+
-| First Octet | Encrypted bits                     |
-|             | +-----------+-----------+--------+ |
-|             | | Server ID | Thread ID | Nonce  | |
-|             | +-----------+-----------+--------+ |
-+-------------+------------------------------------+
-~~~
-
-The first octet is defined as:
-
-~~~
-   First Octet {
-     Config Rotation (3),
-     CID Len or Random Bits (5),
-   }
-~~~
-
-## Long term sharing and preferred address
-
-The classic load sharing relies on anycast routing or hash based load balancing.
-Both keep the routing stable enough in the short term, but are known to change
-over time. Hash based load balancing buckets get redefined to better balance the
-load, anycast routing changes as the network topology evolve. QUIC has a
-solution: the server can indicate a "preferred address" during the connection
-handshake, and the client can migrate the connection to that address once
-the handshake completes.
-
-We could certainly support the preferred address mechanism in the picoquic
-socket loop. The network thread would need to open two sockets: one
-for the shared UDP port, and one for an instance specific connection.
-This will ensure that the connection survices any change in balancing
-or routing.
-
-Preferred address migration has a downside. It introduces overhead, and
-possibly some additional delays at the beginning of the connection. This
-is mostly an issue if the traffic is made of many very short connections,
-as for example in a simple web server. It is much less of an issue
-if the connections last a long time, as for example media over QUIC.
-
-We noticed that if the QUIC instance manages both incoming "server"
-connection and outgoing "client" connection, having an instance-specific
-socket helps manage the client connections. Once we have made the design
-choice of supporting outgoing connections, it makes sense to also
-support preferred address migration for the server connections.
-
-### Preferred address migration and firewalls
-
-Preferred address migration looks attractive, but we have to be concerned
-with firewall rules. Servers may well be located behind firewalls.
-AWS deployments, for example, require that port
-numbers be explicitly open in the firewall. We could imagine opening a
-range of port numbers, but then we would need to ensure that the
-nework threads use port numbers in that range.
-
-# Managing tokens and tickets
-
-In QUIC, tokens and session resumption tickets are used to speed up the
-establishment of new sessions. They are created by the server, passed to
-the client over a connection, and used by the client to start a new connection.
-If we have multiple servers, we must assume that the server processing the
-new connection is not the same as the server that created the token or the ticket.
-We can manage that using a Session Ticket Encryption key (STEK) shared by all
-servers in the cluster, but we have to be concerned with potential attacks
-in which the same token or ticket is used multiple times. We also need to
-be concerned with management of tokens and tickets for clients.
-
-## Preventing token reuse attacks
-
-Token reuse would allow attackers to bypass address validation and amplification
-limits. A valid token could be distributed to a botnet and used in a denial of
-service attack against the server cluster, or also as a reflection attack against
-a third party target. Picoquic prevents that by keeping track of used tokens in
-the QUIC context, but we need to use a separate QUIC context for each thread.
-Without a global check, the botnet would be able to use the
-same token once per server, process and thread.
-
-We could use a shared database of used tokens, or maybe a simple
-Bloom filter if we are only concerned with threads on a single server.
-Each server thread would check the database of the filter
-before accepting the token. If a taken is already used, address validation will
-remained required. This solves the problem, but requires some kind of
-remote procedure call (RPC) to a central database, or some shared memory
-and locking mechanism to access the Bloom filter, neither of which is
-very attractive.
-
-## Mitigating session ticket reuse
-
-Session ticket reuse is probably not very interesting as a denial-of-service
-attack because the botnet could just as well start a series of new sessions.
-Reusing the session ticket would just make the new sessions easier to
-process by the server, which means the DOS attack would be weaker.
-But if the session ticket is use as a zero RTT replay, the reuse will
-allow for multiple "zero RTT replays" which will only be limited by the
-standard protection built in TLS 1.3: the ticket can only be replayed
-for a very short time window after the capture the capture of the zero RTT
-exchange.
-
-The zero RTT attack is of course mitigated if the server application does
-not use zero RTT, or if the zero RTT data is designed to be replayable
-without changing the state of the system.
-
-## Enabling client more tokens and tickets
-
-If the service assumes that servers will perform client mode connections,
-these client mode connections will need to retrieve previously obtained
-sessions and tickets. A general solution would require managing a centralized
-data base of tokens and tickets, accessible by all server threads.
-
-However, it may be sufficient to build an "affinity" mechanism, in which
-the service will try to reuse the same thread or process for its outgoing
-connection to a given server. For example, the client could pick the
-thread or process from a hash of the server name. If the affinity
-mechanism works well enough, the chosen thread or process will have
-a valid store of tickets and tokens for the selected server name.
-
-# API discussion
-
-The previous part of this document discussed network connectivity issues,
-ensuring that the UDP packets can be routed to the appropriate server process
-or server thread. We also have an API issue. The current architecture assumes
-that the application interacts with exactly one network thread. The current model
-assumes that all picoquic API are used within the context of this
-network thread.
-
-~~~
-   +-----------------------------------------------------------+
-   | +--------------+      +---------------------------------+ |
-   | | application  |      | Network thread                  | |
-   | |  thread(s)   |      |                                 | |
-   | |  wake-up  ----------->       Wait loop                | |
-   | |  function    |      |            |                    | |
-   | |              |      |       +----+-----+ packets,     | |
-   | |              |      |       |          | timers       | |
-   | |              |      | +-----v----+ +---v------------+ | |
-   | |  Handler <-------------> Wake up | | Picoquic stack | | |
-   | |              |      | | callback | |                | | |
-   | |              |      | |     ------->                | | |
-   | |              |      | +----------+ |                | | |
-   | |              |      | +----------+ |                | | |
-   | |              |      | | Callback | | Per connection | | |
-   | |              |      | | handler  | | callbacks      | | |
-   | |              |      | |          <------            | | |
-   | |  Handler <------------->         | |                | | |
-   | |              |      | |      ------->               | | |
-   | |              |      | |          | |                | | |
-   | |              |      | +----------+ +----------------+ | |
-   | +--------------+      +---------------------------------+ |
-   +-----------------------------------------------------------+
-~~~
-
-In this model, the application thread does not directly call the 
-picoquic APIs, except possibly during the thread initialization phase.
-Once the thread are initialized, it waits for timers or external
-events. 
-
-The application thread(s) can call the wake up function,
-for example if it wants to send data or create a
-new connection, in which case the network thread stops waiting
-and performs a wakeup callback. Within that call back,
-the application can call picoquic APIs such as create a connection,
-close a connection, or mark a stream ready for writing. It
-will do that based on instructions provided by the application
-thread.
-
-The picoquic stack will also issue "per connection" callbacks
-on when new connection are created, when data is received,
-when the stack is ready to send "just in time" data, or when
-other connection events occur. The application provides a
-handler for those callback events. The handler code executes
-in the context of the network thread and can call picoquic
-APIs. Implementations will need to implement code to
-safely exchange data between the network thread and the
-application thread.
-
-That model works well as long as the process handles a single
-network thread, including in "parallel process" scenarios,
-but it breaks if the application uses multiple network threads.
-
-## Handling multiple threads
-
-If a connection context
-is tied to a thread, the picoquic APIs that operate on the connection
-should be executed in that thread. 
+As noted in the introduction, the picoquic APIs are not thread safe.
+It is important that the API is only used in the same thread that
+also handles the picoquic context and the attached connection.
+In many scenarios, the developers will want to have at least two threads:
+one managing the application, and another managing the picoquic
+stack. The requirement then is to perform all API calls from within
+the network thread. In more complex scenarios, the process may manage
+several application threads and several network thread. There will
+be a picoquic context and a set of connections for each thread.
+The requirement in that case is to perform all API calls from within
+the same network thread that manages the relevant connection
+or the QUIC context.
 
 ~~~
    +-----------------------------------------------------------+
@@ -450,7 +133,7 @@ should be executed in that thread.
    | +--------------+  | | +---------------------------------+ |
    | | application  |  | | | Network thread                  | |
    | |  thread(s)   |  | | |                                 | |
-   | |  wake-up  ?--------->       Wait loop                | |
+   | |  wake-up  ?--------->       Wait loop                 | |
    | |  function ?-------> |            |                    | |
    | |           ?-----> | |       +----+-----+ packets,     | |
    | |              |  | | |       |          | timers       | |
@@ -471,110 +154,157 @@ should be executed in that thread.
    +-----------------------------------------------------------+
 ~~~
 
-Suppose for example the application needs to create a new connection.
-It will need first to select the network thread in which it wants to
-create the connection, and wake up that specific thread. If it wants
-to mark a stream as "ready to send", it should wake up the thread
-that handles the corresponding connection. When that
-thread executes the wake up call back, the callback code will need
-to find out what the application intended to do on that thread,
-and then perform the command. The main requirement is that the
-application be "thread aware", which at a minimum requires
-using thread-specific wake up calls, and also knowing which connection
-executes on what thread.
+The architecture diagram above describes the a typical multithread
+scenario. Each network thread manages a separate picoquic stack,
+and interfaces with the application with two types of callbacks:
 
-The handling of connection callbacks does not need to change much.
-When a callback is received, the callback handler will interact
-with the application to provide data that was received, or get
-data to send, or signal connection events -- pretty much in the
-same way as if there was just one network thread. However,
-there is still a risk of confusion if the logical response
-to a call back on one connection involves a different connection.
+- wake up callbacks, which can be triggered by the thread wake up API
+- connection callbacks, which are triggered by connection events such
+  as data arrival.
 
-## Isolating connections from each other
+The application should keep track of the QUIC connections. When it
+want to issue a call to a picoquic API, it can do it from within a
+callback, for example when receiving data. It can also trigger the 
+callback by waking up the stack. For example, if the application
+has a message to send on a connection identified as `cnx`, it
+should:
 
-The design rule for so far for picoquic was that the picoquic
-API should only be used in the context of "the" network thread.
-If we handle multiple network threads, we need to be much more
-specific: an API that changes the state of a connection should
-only be used in the context of the specific network
-thread that affects the connection.
+1. In the application thread:
+    - Identify the thread associated with the connection, and find
+   the associated thread context (noted `thread_ctx` here),
+    - Wake up the thread associated with the connection, calling:
+```
+        ret = picoquic_wake_up_network_thread(thread_ctx);
+```
+2. In the wake up call back for the selected thread:
+    - Mark the connection as ready to send a message on the selected stream:
+```
+        ret - picoquic_mark_active_stream(cnx, stream_id, 1, (void*)stream_ctx);
+```
+3. In the picoquic call back `picoquic_callback_prepare_to_send`
+    - copy the parts of the message that have not yet been sent
+      in the buffer returned by the call to `picoquic_provide_stream_data_buffer`
+ 
+Calls to create new connection, or change the state of a connection, will
+follow a similar pattern.
 
+### Debugging the API usage
+
+The rule for using the picoquic API is hopefully clear, but mistakes happen.
+For example, the application might call an API like `picoquic_create_cnx`
+or `picoquic_add_to_stream` directly from the main thread, or possibly
+from a callback issued for another connection in a different thread.
 For example, we can imagine "relay" style application
 receiving data on a connection, and immediately queuing that
 data on a different connection. The first call is executed on
 the first connection's thread, but the second connection cannot
 be accessed safely in that thread. Another thread might be
 accessing the connection at the same time, risking a race
-condition. 
+condition.
 
 Race conditions are a pain to debug. The developer is faced with
-random errors that are typically very hard to debug.
-It is much more reliable to prevent these errors, having the
-API fail if it is not executed within the context of the
+random errors that are often very hard to understand. The program
+may continue to execute for some time, until the corrupted state
+causes a visible error or a crash. At that point, the developer has
+a difficult task that requires analyzing logs and memory states, and
+trying to reproduce a variety of hypotheses.
+
+To debug these issues, picoquic has the compile option
+`PICOQUIC_WITH_THREAD_CHECK`, which can be instantiated with
+the `cmake` option `WITH_THREAD_CHECK=ON`. If picoquic is compiled
+with that option, all API's defined in `picoquic.h` will check that
+they are executing in the proper thread, and if not will execute
+a `debugbreak()`, allowing the developer to quickly locate
+and correct the threading issue. Instead of a hard-to-debug error, the
+API will fail in an obvious way if it is not executed within the context of the
 application thread.
 
-The typical solution would be to
-call an API like `gettid(2)` on Linux, compare it to the
-thread ID of the connection, and react if the two do not match.
-We may discuss whether this should be performed all the time,
-or merely in debug mode. In debug mode, the reaction can be to
-just trigger a breakpoint. If that breakpoint breaks during test,
-the developer can examine the stack, find the offending code
-line, and correct it. If the tests have good coverage, the
-application will soon reach the desired quality level.
+This debug option is clearly not meant to be used in production. The
+intent is to use it when trying to reproduce a bug, or possibly when
+running a test suite.
 
-# Looking at the context variables
+# Further work
 
-Should we have a QUIC context per thread, or a common QUIC
-context for all threads?
+In the current stage of development, the support for multiple threads is
+basic. It relies on the use of shared UDP ports, and the use of preferred
+address migration. The support for session resume tickets and
+connection tokens is minimal.
 
-Having a QUIC context per thread will probably work, but the threads
-must all have access to the same keys. There may be issues with some
-functions, like those ensuring on a server that session resume ticket
-are used only once. We need more discussion there.
+## Managing tokens and tickets
 
-# TODO list
+In QUIC, tokens and session resumption tickets are used to speed up the
+establishment of new sessions. They are created by the server, passed to
+the client over a connection, and used by the client to start a new connection.
+If we have multiple servers, we must assume that the server processing the
+new connection is not the same as the server that created the token or the ticket.
+We can manage that using a Session Ticket Encryption key (STEK) shared by all
+servers in the cluster, but we have to be concerned with potential attacks
+in which the same token or ticket is used multiple times. We also need to
+be concerned with management of tokens and tickets for clients.
 
-To implement the "basic UDP port sharing", we need:
+In the current state of multithreading, we use a simple solution: the encryption
+key for tickets and tokens is read from the "config" structure. If the
+application does not set that key, the stack generates a random key that
+is shared by all threads in the process. This allows picoquic to support
+the basic functions like session resume and 0-RTT, with the following
+limitations:
 
-1- Manage a thread ID and a corresponding socket ID
+- if the deployment uses multiple processes or multiple servers
+  sharing the same UDP port, it needs to use the same key in all processes and servers,
+  which means that the key needs to be set in the "config" structure.
+- The same key will be used for the duration of the process.
+- The stack only keeps trace of used tokens or tickets in the context of a single thread,
+  which means that the same token can be used once per thread, process and server.
 
-2- Add a "per thread" socket in the socket loop, to use either
-   for "client mode connection" or for "preferred address"
-   migration
+The current code is designed for multithreaded servers. It can be used for clients,
+but tickets and tokens are only remembered in the context of a thread. The session
+resume and 0-RTT functions will only work if the application always call a given
+server from the same thread.
 
-3- Server side support of the "preferred address migration"
+There are many potential way to improve this. We could expose an API that the
+application could use to reset the ticket encryption key in each thread. We could
+provide some kind of management interface so an administrator can provide the
+new key to multiple application. We could design a centralized service that keeps
+track of used tokens and tickets. All that is for further study.
 
-4- Use a CID generation function that includes the thread ID,
-   so threads can generate CIDs without risk of collision.
+## Future work: Sharing the UDP port, with CID and EBPF
 
-To make the UDP port sharing more robust, we need:
+We need to use "preferred address" migration if assignment of
+sockets to connections is based on hashes of addresses and ports:
+the hash buckets may change over time, which could lead to
+connection failures. The preferred address migration would not
+be needed if the routing of connection to sockets was based
+on Connection ID, and if the connection ID somehow encoded
+the specific server in charge of the connection.
 
-5- Develop an EBPF script to direct packets to the right socket
+The QUIC 
+[load balancing draft](https://datatracker.ietf.org/doc/html/draft-ietf-quic-load-balancers)
+solves a related problem, the routing of packets to the "right" server in
+a server farm. It does so by structuring and then encrypting the CID.
+The logical structure of the CID is:
 
-If we want to use multiple network thread, we need to:
+~~~
+QUIC-LB Connection ID {
+    First Octet (8),
+    Plaintext Block (40..152),
+}
+Plaintext Block {
+    Server ID (8..),
+    Nonce (32..),
+}
+~~~
 
-6- Add a pointer `picoquic_network_thread_ctx_t *` to the
-   connection context to tie a connection to a thread
+The first octet contains 1 bit identifying the current encryption key,
+and then a few bits for the length of the server ID. The load balancer
+decrypts the CID in incoming packets, retrieves the server ID, and route
+the packets to that server.
 
-7- Possibly, add a `connection thread wakeup` API to ease
-   application development
+If servers have multiple threads or multiple processes, we will need to
+extend the server ID to identify not just the specific server, but
+also the specific socket on that server. We will then associate an
+EBNF script with the shared port using the socket option
+SO_ATTACH_REUSEPORT_EBPF. The script will have to decode the incoming
+CID, retrieve the socket identifier, and route the packet to
+that specific socket. 
 
-8- Document the thread ID in the wake up callback
-
-9- Add a `THREAD_DEBUG` mode to detect misuse of the per
-   connection API
-
-10- Finish the study of which parts of `picoquic_quic_t`
-   should remain in a per thread context and which would
-   need to move to a global context
-
-
-
-
-
-
-
-
-
+This is not yet implemented.

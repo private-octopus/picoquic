@@ -21,6 +21,9 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

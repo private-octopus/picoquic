@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.47.0
+        VERSION 1.1.48.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -286,7 +286,7 @@ if(PICOQUIC_FETCH_PTLS)
     include(FetchContent)
     FetchContent_Declare(picotls
         GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             b84869f41414b6d0148db7728f1cf12f5b544874)
+        GIT_TAG             bfa67875982afc4c24f21e146cef4747fa189c2f)
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -439,8 +439,9 @@ if (BUILD_LOGLIB)
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic
-            loglib)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/loglib>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picoquic-log)
 endif()
 
@@ -452,6 +453,7 @@ endif()
 
 if (BUILD_HTTP)
     add_library(picohttp-core ${PICOHTTP_LIBRARY_FILES})
+    add_library(picoquic::picohttp-core ALIAS picohttp-core)
     target_link_libraries(picohttp-core
         PRIVATE
             ${PTLS_LIBRARIES}
@@ -466,8 +468,9 @@ if (BUILD_HTTP)
             ${OPENSSL_INCLUDE_DIR}
             ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
-            picoquic
-            picohttp)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picohttp-core)
 endif()
 
@@ -630,7 +633,9 @@ endif()
 
 if (TARGET picohttp-core)
     install(TARGETS picohttp-core
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        EXPORT picoquic-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES
         ${PICOHTTP_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -643,7 +648,9 @@ endif()
 
 if (TARGET picoquic-log)
     install(TARGETS picoquic-log
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        EXPORT picoquic-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     install(FILES
         ${PICOQUIC_LOGLIB_HEADERS}

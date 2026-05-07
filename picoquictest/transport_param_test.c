@@ -365,6 +365,52 @@ uint8_t client_param_err9[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID
 };
 
+/* error 10, Active CID limit too small */
+uint8_t client_param_err10[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_active_connection_id_limit, 1, 1
+};
+
+/* error 11, ack_delay_exponent over 20 */
+uint8_t client_param_err11[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_ack_delay_exponent , 1, 21
+};
+
+/* error 12, max_ack_delay larger than 2^16 */
+uint8_t client_param_err12[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_max_ack_delay , 4, 0x80, 0x00, 0x40, 0x01
+};
+
+/* error 13, max_streams_bidir larger than or equal to 2^60 */
+uint8_t client_param_err13[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_initial_max_streams_bidi, 8,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+/* error 14, max_streams_unidir larger than or equal to 2^60 */
+uint8_t client_param_err14[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_initial_max_streams_uni, 8,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
 
 typedef struct st_transport_param_error_test_t {
     int mode;
@@ -380,8 +426,13 @@ static transport_param_error_test_t transport_param_error_case[] = {
     { 0, client_param_err5, sizeof(client_param_err5), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err6, sizeof(client_param_err6), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err7, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err8, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err9, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
+    { 0, client_param_err8, sizeof(client_param_err8), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err9, sizeof(client_param_err9), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err10, sizeof(client_param_err10), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err11, sizeof(client_param_err11), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err12, sizeof(client_param_err12), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err13, sizeof(client_param_err13), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err14, sizeof(client_param_err14), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
 };
 
 static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);

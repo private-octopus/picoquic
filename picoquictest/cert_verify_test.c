@@ -25,6 +25,7 @@
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #include <stddef.h>

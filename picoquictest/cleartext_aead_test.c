@@ -25,6 +25,9 @@
 #include "picoquic_internal.h"
 #include "tls_api.h"
 #include "picoquic_utils.h"
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
 #include "picotls.h"
 #include "picoquic_lb.h"
 #include <string.h>

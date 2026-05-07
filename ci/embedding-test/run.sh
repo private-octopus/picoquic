@@ -42,6 +42,9 @@ cmake -S "$SCRIPT_DIR/install_test" -B "$BUILD_DIR/install_test" \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build "$BUILD_DIR/install_test"
 "$BUILD_DIR/install_test/install_test"
+if [ -f "$BUILD_DIR/install_test/install_test_http" ]; then
+    "$BUILD_DIR/install_test/install_test_http"
+fi
 
 # --- FetchContent re-export test ---
 # Validates that a library embedding picoquic via FetchContent correctly

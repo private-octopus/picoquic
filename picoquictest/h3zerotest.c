@@ -4370,3 +4370,42 @@ int demo_error_test(void)
 
     return ret;
 }
+/* Test that h3zero_create_response_header_frame_ex quotes the WT-Protocol
+ * value as a Structured Header String on the wire (e.g., WT-Protocol: "moqt-16"),
+ * and that the parser correctly strips the quotes so callers see the bare protocol name.
+ */
+int h3zero_wt_protocol_response_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[256];
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint8_t* bytes;
+    h3zero_header_parts_t parts = { 0 };
+    char const* wt_protocol = "moqt-16";
+    size_t expected_len = strlen(wt_protocol);
+
+    /* Encode a 200 response with wt_protocol set */
+    bytes = h3zero_create_response_header_frame_ex(buffer, bytes_max,
+        h3zero_content_type_none, NULL, wt_protocol);
+    if (bytes == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_response_header_frame_ex returned NULL");
+        return -1;
+    }
+
+    /* Decode and verify the parser strips quotes, yielding the bare protocol name */
+    if (h3zero_parse_qpack_header_frame(buffer, bytes, &parts) == NULL) {
+        DBG_PRINTF("%s", "Failed to parse response header frame");
+        ret = -1;
+    } else if (parts.wt_protocol == NULL) {
+        DBG_PRINTF("%s", "wt_protocol not found in parsed header");
+        ret = -1;
+    } else if (parts.wt_protocol_length != expected_len ||
+               memcmp(parts.wt_protocol, wt_protocol, expected_len) != 0) {
+        DBG_PRINTF("wt_protocol value wrong: got \"%.*s\", expected \"%s\"",
+            (int)parts.wt_protocol_length, parts.wt_protocol, wt_protocol);
+        ret = -1;
+    }
+
+    h3zero_release_header_parts(&parts);
+    return ret;
+}
