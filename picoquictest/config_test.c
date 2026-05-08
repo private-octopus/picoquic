@@ -869,7 +869,7 @@ int config_qmux_test_one(picoquic_quic_config_t* config, int qmux_port, int nb_c
         if (nb_connections!= nb_connections_used) {
             ret = -1;
         }
-        if (nb_connections > 0 && nb_connections != qmux->max_number_connections) {
+        if (nb_connections > 0 && nb_connections != (int)qmux->max_number_connections) {
             ret = -1;
         }
         if (config->alpn != NULL &&
