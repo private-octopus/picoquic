@@ -541,14 +541,14 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
 }
 
 #ifdef _WINDOWS
-static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* sqmux_ctx)
+static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx)
 {
     int ret = 0;
-    if ((sqmux_ctx->overlap_r.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT ||
-        (sqmux_ctx->overlap_w.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT) {
+    if ((sqmux_sock_ctx->overlap_r.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT ||
+        (sqmux_sock_ctx->overlap_w.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == WSA_INVALID_EVENT) {
         int last_error = WSAGetLastError();
         DBG_PRINTF("Could not initialize Windows parameters on QMUX socket %d= %d!\n",
-            (int)sqmux_ctx->fd, last_error);
+            (int)sqmux_sock_ctx->fd, last_error);
         ret = -1;
     }
     return ret;
@@ -556,7 +556,7 @@ static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* s
 #endif
 
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
-    picoquic_quic_t* qmux, int af, uint16_t public_port,
+    picoquic_quic_t * qmux, int af, uint16_t public_port,
     int is_port_shared, int is_accepting)
 {
     picoqmux_socket_ctx_t* sqmux_sock_ctx = NULL;
@@ -607,10 +607,7 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
 * See https://cr.yp.to/docs/connect.html for more details.
 */
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
-    picoquic_quic_t* qmux, struct sockaddr* dest, picoquic_cnx_t* cnx,
-    picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int* max_qmux_socket)
+    picoquic_quic_t* qmux, struct sockaddr* dest, picoquic_cnx_t* cnx)
 {
     picoqmux_socket_ctx_t* sqmux_sock_ctx = picoquic_packet_loop_open_qmux_socket(
         qmux, dest->sa_family, 0, 0, 0);
@@ -1099,7 +1096,7 @@ void io_uring_cancel_and_free(
 */
 void picoquic_packet_loop_set_fds(
     struct pollfd* poll_list,
-    size_t poll_list_size,
+    size_tpoll_list_size,
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     picoqmux_socket_ctx_t** sqmux_ctx,
@@ -1133,7 +1130,7 @@ void picoquic_packet_loop_set_fds(
         poll_list[i + i_poll_qmux].events =
             (sqmux_ctx[i]->cnx->next_wake_time <= current_time)?(POLLIN|POLLOUT):POLLIN;
     }
-    for (int i = i_poll_qmux + nb_qmux_sockets; i < poll_list_size; i++) {
+    for (int i = i_poll_qmux + nb_qmux_sockets; i < (int)poll_list_size; i++) {
         poll_list[i].fd = -1;
     }
 }
@@ -1304,7 +1301,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             sockmax = (int)sqmux_ctx[i]->fd;
         }
         FD_SET(sqmux_ctx[i]->fd, &readfds);
-        if (sqmux_ctx[i]->wcnx->next_wake_time <= current_time) {
+        if (sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
             FD_SET(sqmux_ctx[i]->fd, &writefds);
         }
     }
@@ -1387,7 +1384,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             if (bytes_recv == 0 && *action == picoquic_packet_loop_action_none) {
                 /* Return the first TCP socket ready to write or receive */
                 for (int i = 0; i < nb_qmux_sockets; i++) {
-                    if (FD_ISSET(s_ctx[i]->fd, &readfds)) {
+                    if (FD_ISSET(sqmux_ctx[i]->fd, &readfds)) {
                         *socket_rank = i;
                         *action = (sqmux_ctx[i]->is_accepting) ?
                             picoquic_packet_loop_action_tcp_accept_ready :
@@ -2010,6 +2007,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         io_uring_cancel_and_free(&ring, s_ctx, nb_sockets, thread_ctx);
     }
 #elif defined(PICOQUIC_WITH_POLL)
+    if (poll_list != NULL){
+        free(poll_list);
+        poll_list = NULL;
+    }
 #else
 #endif
 
