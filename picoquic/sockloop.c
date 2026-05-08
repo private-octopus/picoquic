@@ -1096,7 +1096,7 @@ void io_uring_cancel_and_free(
 */
 void picoquic_packet_loop_set_fds(
     struct pollfd* poll_list,
-    size_tpoll_list_size,
+    size_t poll_list_size,
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
     picoqmux_socket_ctx_t** sqmux_ctx,
