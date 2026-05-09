@@ -127,6 +127,7 @@
 #include "performance_log.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_unified_log.h"
+#include "picoqmux.h"
 
 #if defined(_WINDOWS)
 #ifdef UDP_SEND_MSG_SIZE
@@ -1433,23 +1434,125 @@ static int monitor_system_call_duration(packet_loop_system_call_duration_t* sc_d
 }
 
 /* Process an incoming connection on a TCP "listen" socket */
-int picoquic_packet_loop_do_tcp_accept(void)
+int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets,
+    int max_qmux_sockets,
+    int socket_rank,
+    uint64_t current_time)
 {
-    int ret = -1;
+    int ret = 0;
+    SOCKET_TYPE new_socket;
+    struct sockaddr_storage addr_from;
+    socklen_t addr_from_len = sizeof(addr_from);
+    picoquic_cnx_t* cnx = NULL;
+
+    new_socket = accept(sqmux_ctx[socket_rank]->fd, (struct sockaddr*)&addr_from, &addr_from_len);
+
+    if (new_socket == INVALID_SOCKET ||
+        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL)) == NULL ||
+        (sqmux_ctx[*nb_qmux_sockets] = picoquic_packet_loop_open_qmux_socket(
+            qmux, addr_from.ss_family, 0, 0, 0)) == NULL) {
+        if (new_socket != INVALID_SOCKET) {
+            SOCKET_CLOSE(new_socket);
+        }
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
+        ret = -1;
+    }
+    else {
+        sqmux_ctx[*nb_qmux_sockets]->cnx = cnx;
+        (*nb_qmux_sockets)++;
+    }
     return ret;
 }
 
-/* Process incoming data on a TCP socket */
-int picoquic_packet_loop_do_tcp_read(void)
+/* Closing a TCP socket, and notifying the qmux connection */
+void picoquic_packet_loop_tcp_close(
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets,
+    int max_qmux_sockets,
+    int socket_rank,
+    uint64_t current_time)
 {
-    int ret = -1;
+    /* close the socket, and remove it from the list. */
+    if (sqmux_ctx[socket_rank]->fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(sqmux_ctx[socket_rank]->fd);
+        sqmux_ctx[socket_rank]->fd = INVALID_SOCKET;
+    }
+    /* signal the connection loss to the quic connection, so
+     * that it can close itself. */
+    if (sqmux_ctx[socket_rank]->cnx != NULL) {
+        picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, NULL, 0, 1);
+        sqmux_ctx[socket_rank]->cnx = NULL;
+    }
+}
+
+/* Process incoming data on a TCP socket */
+int picoquic_packet_loop_do_tcp_read(
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets,
+    int max_qmux_sockets,
+    int socket_rank,
+    uint64_t current_time,
+    uint8_t * qmux_buffer,
+    size_t qmux_buffer_size)
+{
+    /* assume that a global read buffer is available, and fill it */
+    int ret = 0;
+    int recv_len = recv(sqmux_ctx[socket_rank]->fd, (char*)qmux_buffer, (int)qmux_buffer_size, 0);
+    if (recv_len <= 0) {
+        /* error or connection closed. */
+        if (recv_len < 0) {
+            DBG_PRINTF("Error: recv returns %d\n", recv_len);
+        }
+        else {
+            DBG_PRINTF("Connection closed by peer.\n");
+        }
+        /* close the socket, and remove it from the list. */
+        picoquic_packet_loop_tcp_close(sqmux_ctx,
+            nb_qmux_sockets,
+            max_qmux_sockets,
+            socket_rank,
+            current_time);
+    }
+    else {
+        /* TODO: submit the data to the quic connection. */
+        picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, qmux_buffer, (size_t)recv_len, 0);
+    }
     return ret;
 }
 
 /* Process sending opportunity on a TCP socket */
-int picoquic_packet_loop_do_tcp_send(void)
+int picoquic_packet_loop_do_tcp_send(
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets,
+    int max_qmux_sockets,
+    int socket_rank,
+    uint64_t current_time,
+    uint8_t* qmux_buffer,
+    size_t qmux_buffer_size)
 {
-    int ret = -1;
+    size_t send_length = 0;
+    int ret = picoqmux_prepare_packets(sqmux_ctx[socket_rank]->cnx, current_time,
+        qmux_buffer, qmux_buffer_size, &send_length);
+
+    if (ret == 0 && send_length > 0) {
+        int sent_length = send(sqmux_ctx[socket_rank]->fd, (const char*)qmux_buffer, (int)send_length, 0);
+
+        if (sent_length <= 0) {
+            ret = -1;
+        }
+    }
+    if (ret < 0) {
+        /* Socket error, could not send data, maybe closed. */
+        picoquic_packet_loop_tcp_close(sqmux_ctx,
+            nb_qmux_sockets,
+            max_qmux_sockets,
+            socket_rank,
+            current_time);
+    }
     return ret;
 }
 
@@ -1649,6 +1752,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     int nb_qmux_sockets = 0;
     int max_qmux_sockets = 0;
     int nb_sockets_available = 0;
+    uint8_t* qmux_buffer = NULL;
+    size_t qmux_buffer_size = 0;
     picoquic_cnx_t* last_cnx = NULL;
     int loop_immediate = 0;
     unsigned int nb_loop_immediate = 0;
@@ -1665,7 +1770,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     struct pollfd* poll_list = NULL;
     size_t poll_list_size = 0;
 #endif
-
     PICOQUIC_THREAD_SET_CHECK(thread_ctx->quic);
 
     if (thread_ctx->thread_name != NULL) {
@@ -1684,10 +1788,18 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (qmux != NULL) {
-        ret = picoquic_packet_loop_open_qmux_sockets(qmux, &sqmux_ctx,
-            &nb_qmux_sockets, &max_qmux_sockets, param->qmux_port);
-        if (nb_qmux_sockets < 0 || max_qmux_sockets <= 0) {
-            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        qmux_buffer_size = 0x4000;
+        qmux_buffer = (uint8_t*)malloc(qmux_buffer_size);
+
+        if (qmux_buffer == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            ret = picoquic_packet_loop_open_qmux_sockets(qmux, &sqmux_ctx,
+                &nb_qmux_sockets, &max_qmux_sockets, param->qmux_port);
+            if (nb_qmux_sockets < 0 || max_qmux_sockets <= 0) {
+                ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            }
         }
     }
     if (ret == 0 && loop_callback != NULL) {
@@ -1853,13 +1965,18 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 }
                 break;
             case picoquic_packet_loop_action_tcp_accept_ready:
-                ret = picoquic_packet_loop_do_tcp_accept();
+                ret = picoquic_packet_loop_do_tcp_accept(qmux, sqmux_ctx, 
+                    &nb_qmux_sockets, max_qmux_sockets, socket_rank, current_time);
                 break;
             case picoquic_packet_loop_action_tcp_read_ready:
-                ret = picoquic_packet_loop_do_tcp_read();
+                ret = picoquic_packet_loop_do_tcp_read( sqmux_ctx,
+                    &nb_qmux_sockets, max_qmux_sockets, socket_rank,
+                    current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_tcp_send_ready:
-                ret = picoquic_packet_loop_do_tcp_send();
+                ret = picoquic_packet_loop_do_tcp_send(sqmux_ctx,
+                    &nb_qmux_sockets, max_qmux_sockets, socket_rank,
+                    current_time, qmux_buffer, qmux_buffer_size);
                 break;
             default:
                 break;
@@ -2014,6 +2131,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #else
 #endif
 
+
     if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
         /* Normal termination requested by the application, returns no error */
         ret = 0;
@@ -2029,6 +2147,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     if (send_buffer != NULL) {
         free(send_buffer);
     }
+
+    if (qmux_buffer != NULL) {
+        free(qmux_buffer);
+    }
+
     thread_ctx->return_code = ret;
 
 #ifdef _WINDOWS

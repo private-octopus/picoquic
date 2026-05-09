@@ -75,6 +75,8 @@ typedef struct st_qmux_sim_ctx_t {
     uint64_t simulated_time;
     int is_cleartext;
     int test_idle;
+    int test_close;
+    int should_close_tcp;
     uint64_t delay;
     picoquic_quic_t* quic[2];
     picoquic_cnx_t* cnx[2];
@@ -90,6 +92,7 @@ typedef struct st_qmux_sim_ctx_t {
 typedef struct st_qmux_sim_spec_t {
     int test_idle;
     int is_cleartext;
+    int test_close;
     uint64_t delay;
     uint64_t expected_time;
 } qmux_sim_spec_t;
@@ -166,7 +169,11 @@ int qmux_test_callback(picoquic_cnx_t* cnx,
                 }
                 if (fin_or_event == picoquic_callback_stream_fin) {
                     sim_ctx->stream0_fin_received = 1;
-                    if (!sim_ctx->test_idle) {
+                    if (sim_ctx->test_close) {
+                        sim_ctx->should_close_tcp = 1;
+                        picoquic_connection_disconnect(cnx);
+                    }
+                    else if (!sim_ctx->test_idle) {
                         picoquic_close_ex(cnx, 0, "data received.");
                     }
                 }
@@ -562,6 +569,7 @@ int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
         }
         else {
             sim_ctx->test_idle = spec->test_idle;
+            sim_ctx->test_close = spec->test_close;
             sim_ctx->delay = spec->delay;
         }
     }
@@ -615,7 +623,13 @@ int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
     else {
         ret = picoqmux_incoming_packets(sim_ctx->cnx[msg->target_index],
             sim_ctx->simulated_time,
-            msg->buffer, msg->length);
+            msg->buffer, msg->length, 0);
+        if (sim_ctx->should_close_tcp) {
+            /* simulate that the TCP connection is closed */
+            ret = picoqmux_incoming_packets(sim_ctx->cnx[msg->target_index],
+                sim_ctx->simulated_time,
+                NULL, 0, 1);
+        }
     }
     free(msg);
     return ret;
@@ -661,6 +675,7 @@ int qmux_loop_iterate(qmux_sim_ctx_t* sim_ctx)
     int ret = 0;
     int next_cnx = -1;
     int has_msg = 0;
+    int should_close = 0;
     uint64_t next_sim_time = UINT64_MAX;
 
     for (int i = 0; i < 2; i++) {
@@ -676,10 +691,27 @@ int qmux_loop_iterate(qmux_sim_ctx_t* sim_ctx)
         next_sim_time = sim_ctx->msg_queue->delivery_time;
         has_msg = 1;
     }
+    if (sim_ctx->should_close_tcp) {
+        for (int i = 0; i < 2; i++) {
+            if (sim_ctx->cnx[i] != NULL &&
+                sim_ctx->cnx[i]->cnx_state != picoquic_state_disconnected) {
+                next_sim_time = sim_ctx->simulated_time;
+                next_cnx = i;
+                should_close = 1;
+                break;
+            }
+        }
+    }
     if (next_sim_time > sim_ctx->simulated_time) {
         sim_ctx->simulated_time = next_sim_time;
     }
-    if (has_msg){
+    if (should_close) {
+        /* simulate that the TCP connection is closed */
+        ret = picoqmux_incoming_packets(sim_ctx->cnx[next_cnx],
+            sim_ctx->simulated_time,
+            NULL, 0, 1);
+    }
+    else if (has_msg){
         /* deliver the message */
         ret = qmux_loop_deliver_message(sim_ctx);
     }
@@ -769,3 +801,15 @@ int qmux_loop_tls_test(void)
 
     return qmux_loop_one(&spec);
 }
+
+int qmux_loop_tls_close_test(void)
+{
+    qmux_sim_spec_t spec = { 0 };
+    spec.is_cleartext = 0;
+    spec.test_close = 1;
+    spec.delay = 15000;
+    spec.expected_time = 90000;
+
+    return qmux_loop_one(&spec);
+}
+

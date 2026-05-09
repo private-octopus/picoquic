@@ -1132,7 +1132,8 @@ int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t
 }
 
 int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length)
+    const uint8_t* receive_buffer, size_t receive_length,
+    int is_tcp_closed)
 {
     int ret = 0;
 
@@ -1165,7 +1166,11 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
         }
     }
 
-    if (ret == 0) {
+    if (is_tcp_closed) {
+        /* Signal that the qmux connection is now closed */
+        picoquic_connection_disconnect(cnx);
+    }
+    else if (ret == 0) {
         /* something received. Notice progress. */
         cnx->latest_progress_time = current_time;
         cnx->next_wake_time = current_time;
