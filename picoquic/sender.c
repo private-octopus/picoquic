@@ -296,10 +296,12 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     if (ret == 0) {
+        if (length > 0 || set_fin) {
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        }
         cnx->nb_bytes_queued += length;
         stream->is_active = 0;
         stream->app_stream_ctx = app_stream_ctx;

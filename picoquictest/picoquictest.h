@@ -277,6 +277,7 @@ int reset_stream_at_basic_test(void);
 int reset_stream_at_limit_test(void);
 int reset_stream_at_loss_test(void);
 int stream_state_local_reuse_test(void);
+int add_to_stream_fin_only_wakes_cnx_test(void);
 int initial_pto_test(void);
 int initial_pto_srv_test(void);
 int ready_to_send_test(void);
