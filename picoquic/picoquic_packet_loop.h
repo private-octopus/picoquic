@@ -81,15 +81,29 @@ typedef struct st_picoquic_socket_ctx_t {
 
 /* variation of the socket descriptor for TCP sockets used by QMux
 */
+#ifdef _WINDOWS
+typedef struct st_picoquic_sockloop_win_buf_t {
+    uint8_t* buf;
+    size_t buf_size;
+    size_t buf_len;
+    WSABUF wsaBuf;
+    WSAOVERLAPPED overlap;
+} picoquic_sockloop_win_buf_t;
+#endif
 
 typedef struct st_picoqmux_socket_ctx_t {
     SOCKET_TYPE fd;
     int af;
     uint16_t port; /* Port number to which the socket is bound */
-    /* Flags -- TBD */
-    unsigned int is_accepting : 1;
+    unsigned int is_listening : 1; /* this is a listening socket, do not expect to send / recv data */
+    unsigned int is_accepting : 1; /* if waiting for completion of "accept call" on new socket */
+    unsigned int is_connecting : 1; /* if waiting for completion of "connect call" on new socket */
+    unsigned int is_sending : 1; /* if waiting for completion of a send() call */
+    unsigned int is_receiving : 1; /* if waiting for completion of a recv() call */
     /* Connection context: initiated when initiating the socket, used for interactions. */
     picoquic_cnx_t* cnx;
+    struct sockaddr_storage local_addr;
+    struct sockaddr_storage remote_addr;
 #if 0
     /* Receive data buffer -- size ought to be 0x40000!
     * no buffer allocated if accepting.
@@ -97,8 +111,6 @@ typedef struct st_picoqmux_socket_ctx_t {
     size_t recv_buffer_size;
     uint8_t* recv_buffer;
     /* address specifications. Discuss: useful for statistics. */
-    struct sockaddr_storage addr_from; 
-    struct sockaddr_storage addr_dest;
     socklen_t from_length;
     socklen_t dest_length;
     int dest_if;
@@ -109,8 +121,10 @@ typedef struct st_picoqmux_socket_ctx_t {
 #endif
 #if defined(_WINDOWS)
     /* Windows specific */
-    WSAOVERLAPPED overlap_r;
-    WSAOVERLAPPED overlap_w;
+    picoquic_sockloop_win_buf_t winbuf_r;
+    picoquic_sockloop_win_buf_t winbuf_w;
+    LPFN_ACCEPTEX lpfnAcceptEx;
+    SOCKET_TYPE accepting_socket;
 #if 0
     int so_sndbuf;
     int so_rcvbuf;
@@ -131,7 +145,7 @@ typedef enum {
     picoquic_packet_loop_action_wake_up,
     picoquic_packet_loop_action_udp_received,
     picoquic_packet_loop_action_tcp_accept_ready,
-    picoquic_packet_loop_action_tcp_read_ready,
+    picoquic_packet_loop_action_tcp_recv_ready,
     picoquic_packet_loop_action_tcp_send_ready,
     picoquic_packet_loop_action_max
 } picoquic_packet_loop_action_enum;

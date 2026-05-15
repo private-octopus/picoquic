@@ -83,6 +83,7 @@ void picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext)
     cnx->qx_sent_last = UINT64_MAX;
     cnx->qx_query_ack = UINT64_MAX;
     cnx->qx_query_last = UINT64_MAX;
+    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout;
 }
 
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx)
@@ -333,6 +334,8 @@ picoquic_quic_t* picoqmux_create(uint32_t max_nb_connections,
             free(ctx->update_traffic_key);
             ctx->update_traffic_key = NULL;
         }
+        /* set the default idle timeout to 120 seconds */
+        picoquic_set_default_idle_timeout(quic, 120000);
     }
     return quic;
 }
@@ -1073,12 +1076,13 @@ int picoqmux_init_server_cnx(picoquic_cnx_t* cnx)
  */
 
 picoquic_cnx_t* picoqmux_create_qmux_cnx(picoquic_quic_t* quic, uint64_t current_time,
-    int client_mode, int is_cleartext, char const* server, char const* alpn)
+    int client_mode, int is_cleartext, char const* server, char const* alpn,
+    struct sockaddr * dest)
 {
     picoquic_cnx_t* cnx = picoquic_create_cnx(quic,
         picoquic_null_connection_id,
         picoquic_null_connection_id,
-        NULL, current_time,
+        dest, current_time,
         0, server, alpn, (char)client_mode);
 
     /* TODO: may need to create the connection in a different way than QUIC,

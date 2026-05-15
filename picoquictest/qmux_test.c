@@ -613,7 +613,7 @@ int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
             /* submit to quic context and obtain the connection pointer */
             sim_ctx->cnx[msg->target_index] = picoqmux_create_qmux_cnx(
                 sim_ctx->quic[msg->target_index], sim_ctx->simulated_time, 0, 
-                sim_ctx->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test");
+                sim_ctx->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test", NULL);
         }
     }
 
@@ -735,7 +735,7 @@ int qmux_loop_one(qmux_sim_spec_t * spec)
     /* Start the loop by creating a client connection */
     if (ret == 0 &&
         (sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
-            sim_ctx.simulated_time, 1, spec->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test")) == NULL) {
+            sim_ctx.simulated_time, 1, spec->is_cleartext, PICOQUIC_TEST_SNI, "qmux_test", NULL)) == NULL) {
         ret = -1;
     }
 
