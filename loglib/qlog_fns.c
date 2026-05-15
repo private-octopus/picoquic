@@ -526,7 +526,7 @@ void qlog_fns_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     fprintf(f, "\n        \"packet_type\" : \"%s\"", picoquic_packet_type_name(ptype));
     fprintf(f, ",\n        \"packet_number\" : %" PRIu64, sequence_number);
 
-    if (dcid->id_len > 0) {
+    if (dcid != NULL && dcid->id_len > 0) {
         fprintf(f, ",\n        \"dcid\" : ");
         qlog_frame_hex_string(f, dcid->id, dcid->id + dcid->id_len, dcid->id_len);
     }
