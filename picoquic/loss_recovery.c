@@ -908,6 +908,13 @@ static void picoquic_count_and_notify_loss(
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
+        if (timer_based_retransmit == 0) {
+            if (old_p->send_path->nb_loss_ranges_found == 0 ||
+                old_p->sequence_number != old_p->send_path->latest_repeat_loss_packet_number + 1) {
+                old_p->send_path->nb_loss_ranges_found++;
+            }
+            old_p->send_path->latest_repeat_loss_packet_number = old_p->sequence_number;
+        }
         if (timer_based_retransmit) {
             old_p->send_path->nb_timer_losses++;
         }
@@ -922,8 +929,17 @@ static void picoquic_count_and_notify_loss(
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = old_p->pc;
+            ack_state.rtt_measurement = old_p->send_path->rtt_sample;
             ack_state.lost_packet_number = old_p->sequence_number;
+            ack_state.lost_packet_sent_time = old_p->send_time;
             ack_state.nb_bytes_newly_lost = old_p->length;
+            ack_state.nb_bytes_lost_since_packet_sent = (old_p->send_path->total_bytes_lost > old_p->lost_prior) ?
+                old_p->send_path->total_bytes_lost - old_p->lost_prior : old_p->length;
+            ack_state.nb_bytes_delivered_since_packet_sent = (old_p->send_path->delivered > old_p->delivered_prior) ?
+                old_p->send_path->delivered - old_p->delivered_prior : 0;
+            ack_state.inflight_prior = old_p->inflight_prior;
+            ack_state.is_app_limited = old_p->delivered_app_limited;
+            ack_state.is_cwnd_limited = old_p->sent_cwin_limited;
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                 &ack_state, current_time);

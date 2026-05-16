@@ -188,6 +188,12 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         }
         if (cnx->congestion_alg != NULL) {
             perflog_item->v[picoquic_perflog_ccalgo] = cnx->congestion_alg->congestion_algorithm_number;
+            if (cnx->path != NULL && cnx->path[0] != NULL &&
+                cnx->path[0]->congestion_alg_state != NULL) {
+                cnx->congestion_alg->alg_observe(cnx->path[0],
+                    &perflog_item->v[picoquic_perflog_cc_state],
+                    &perflog_item->v[picoquic_perflog_cc_param]);
+            }
         }
         
         if (perflog_ctx->first == NULL) {
@@ -270,6 +276,8 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_bwe_max: return("bwe_max");
     case picoquic_perflog_pacing_quantum_max: return("p_quantum");
     case picoquic_perflog_pacing_rate: return("p_rate");
+    case picoquic_perflog_cc_state: return("cc_state");
+    case picoquic_perflog_cc_param: return("cc_param");
     default:
         break;
     }

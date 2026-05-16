@@ -719,7 +719,7 @@ int test_packet_encrypt_one(
         picoquic_finalize_and_protect_packet(cnx_client, packet,
             ret, length, header_length, checksum_overhead,
             &send_length, send_buffer, PICOQUIC_MAX_PACKET_SIZE,
-            path_x, current_time);
+            path_x, current_time, 0);
 
         expected_header.ptype = packet->ptype;
         expected_header.offset = packet->offset;

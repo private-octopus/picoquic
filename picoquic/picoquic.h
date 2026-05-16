@@ -1679,7 +1679,8 @@ typedef enum {
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset,
-    picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
+    picoquic_congestion_notification_lost_feedback, /* notification of lost feedback */
+    picoquic_congestion_notification_restart_from_idle /* notification before ack-eliciting restart from idle */
 } picoquic_congestion_notification_t;
 
 typedef struct st_picoquic_per_ack_state_t {
@@ -1688,6 +1689,7 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
     uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
+    uint64_t nb_loss_ranges_newly_lost; /* Number of discontiguous packet loss ranges found because of this ACK */
     uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
     uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
     uint64_t inflight_prior;

@@ -390,7 +390,7 @@ static int tls_api_inject_packet(picoquic_test_tls_api_ctx_t* test_ctx, int from
 
         picoquic_finalize_and_protect_packet(cnx, packet, 0, length, header_length, checksum_overhead,
             &sim_packet->length, sim_packet->bytes, sizeof(sim_packet->bytes),
-            path_x, current_time);
+            path_x, current_time, 0);
         /* Forward on selected link */
         picoquictest_sim_link_submit((from_client) ? test_ctx->c_to_s_link : test_ctx->s_to_c_link, sim_packet, current_time);
     }
@@ -8178,7 +8178,7 @@ int false_migration_inject(picoquic_test_tls_api_ctx_t* test_ctx, int target_cli
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             &sim_packet->length, sim_packet->bytes, PICOQUIC_MAX_PACKET_SIZE,
-            path_x, simulated_time);
+            path_x, simulated_time, 0);
 
         picoquic_store_addr(&sim_packet->addr_from, (struct sockaddr *)&false_address);
 
