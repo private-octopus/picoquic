@@ -1067,6 +1067,10 @@ typedef struct st_picoquic_path_t {
     /* If using unique path id multipath */
     picoquic_ack_context_t ack_ctx;
     picoquic_packet_context_t pkt_ctx;
+    /* Remote ECN counters attributed to packets sent on this path. */
+    uint64_t ecn_ect0_total_remote;
+    uint64_t ecn_ect1_total_remote;
+    uint64_t ecn_ce_total_remote;
     /* First tuple is the one used by default for the path */
     picoquic_tuple_t* first_tuple;
     /* Manage the transmission of observed addresses */
@@ -1121,6 +1125,8 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
     uint64_t nb_losses_found;
+    uint64_t nb_loss_ranges_found;
+    uint64_t latest_repeat_loss_packet_number;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
                                          
@@ -1773,11 +1779,11 @@ size_t picoquic_pad_to_target_length(uint8_t* bytes, size_t length, size_t targe
 void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_path_t * path_x, uint64_t current_time, picoquic_tuple_t * tuple);
+    picoquic_path_t * path_x, uint64_t current_time, picoquic_tuple_t * tuple, int is_ack_eliciting);
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_t* packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
-    picoquic_path_t* path_x, uint64_t current_time);
+    picoquic_path_t* path_x, uint64_t current_time, int is_ack_eliciting);
 
 void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time);

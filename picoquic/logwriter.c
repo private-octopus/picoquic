@@ -1210,8 +1210,8 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t curre
         uint64_t cc_state = 0;
         uint64_t cc_param = 0;
 
-        if (cnx->path[0]->congestion_alg_state != NULL) {
-            cnx->congestion_alg->alg_observe(cnx->path[0], &cc_state, &cc_param);
+        if (path_x->congestion_alg_state != NULL) {
+            cnx->congestion_alg->alg_observe(path_x, &cc_state, &cc_param);
         }
         bytewrite_vint(ps_msg, cc_state);
         bytewrite_vint(ps_msg, cc_param);

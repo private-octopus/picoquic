@@ -227,6 +227,24 @@ int test_datagram_ack(picoquic_cnx_t* cnx,
     return ret;
 }
 
+static void test_datagram_monitor_app_limited_samples(
+    test_datagram_send_recv_ctx_t* dg_ctx, picoquic_cnx_t* cnx)
+{
+    if (cnx != NULL && cnx->path[0] != NULL) {
+        int side = cnx->client_mode;
+        picoquic_path_t* path_x = cnx->path[0];
+
+        if (path_x->delivered_last != 0 &&
+            path_x->delivered_last != dg_ctx->last_bw_sample_delivered[side]) {
+            dg_ctx->last_bw_sample_delivered[side] = path_x->delivered_last;
+            dg_ctx->nb_bw_samples[side]++;
+            if (path_x->last_bw_estimate_path_limited) {
+                dg_ctx->nb_app_limited_bw_samples[side]++;
+            }
+        }
+    }
+}
+
 
 /* Datagram too long tests.
 * we want to test what happens if the application uses the "queue" API
@@ -431,6 +449,9 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
 
         ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
 
+        test_datagram_monitor_app_limited_samples(dg_ctx, test_ctx->cnx_client);
+        test_datagram_monitor_app_limited_samples(dg_ctx, test_ctx->cnx_server);
+
         if (was_active) {
             nb_inactive = 0;
         }
@@ -557,6 +578,27 @@ int datagram_test_one(uint8_t test_id, test_datagram_send_recv_ctx_t *dg_ctx, ui
             if (dg_ctx->dg_number_delta_max[i] > dg_ctx->dg_number_delta_target[i]) {
                 DBG_PRINTF("delta number max[%d]=%" PRIu64 ", delta number max[%d] = %" PRIu64,
                     i, dg_ctx->dg_number_delta_max[i], i, dg_ctx->dg_number_delta_target[i]);
+            }
+        }
+
+        if (ret == 0 && dg_ctx->min_bw_samples != 0) {
+            uint64_t nb_bw_samples = dg_ctx->nb_bw_samples[0] + dg_ctx->nb_bw_samples[1];
+
+            if (nb_bw_samples < dg_ctx->min_bw_samples) {
+                DBG_PRINTF("Datagram bw samples %" PRIu64 " instead of %" PRIu64,
+                    nb_bw_samples, dg_ctx->min_bw_samples);
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && dg_ctx->min_app_limited_bw_samples != 0) {
+            uint64_t nb_app_limited_bw_samples =
+                dg_ctx->nb_app_limited_bw_samples[0] + dg_ctx->nb_app_limited_bw_samples[1];
+
+            if (nb_app_limited_bw_samples < dg_ctx->min_app_limited_bw_samples) {
+                DBG_PRINTF("Datagram app-limited bw samples %" PRIu64 " instead of %" PRIu64,
+                    nb_app_limited_bw_samples, dg_ctx->min_app_limited_bw_samples);
+                ret = -1;
             }
         }
     }
@@ -707,6 +749,23 @@ int datagram_wifi_test(void)
     dg_ctx.link_latency = 25000;
 
     return datagram_test_one(8, &dg_ctx, 0);
+}
+
+int datagram_app_limited_bbr_test(void)
+{
+    test_datagram_send_recv_ctx_t dg_ctx = { 0 };
+    dg_ctx.dg_max_size = PICOQUIC_MAX_PACKET_SIZE;
+    dg_ctx.dg_target[0] = 8;
+    dg_ctx.dg_target[1] = 8;
+    dg_ctx.send_delay = 750000;
+    dg_ctx.next_gen_time[0] = 500000;
+    dg_ctx.next_gen_time[1] = 500000;
+    dg_ctx.link_latency = 10000;
+    dg_ctx.nb_trials_max = 64000;
+    dg_ctx.min_bw_samples = 1;
+    dg_ctx.min_app_limited_bw_samples = 1;
+
+    return datagram_test_one(11, &dg_ctx, 0);
 }
 
 int datagram_small_packet_test(void)

@@ -183,6 +183,7 @@
         "packet_number" : 7,
         "dcid" : "0203040506070809",
         "packet_size" : 1424}}],
+[51190, "recovery", "congestion_state_updated", {"old": "0","new": "1","cc_param": 7680}],
 [51190, "recovery", "metrics_updated", {"cwnd": 7680,"pacing_rate": 11520000000,"bytes_in_flight": 4050,"smoothed_rtt": 21518,"latest_rtt": 21194}],
 [51190, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 1415, "packet_number": 14, "dcid": "0203040506070809" }, "frames": [{ 
     "frame_type": "stream", "id": 8, "offset": 2878, "length": 1399, "fin": false , "begins_with": "3e3f404142434445"}]}],

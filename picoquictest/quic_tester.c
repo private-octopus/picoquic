@@ -143,7 +143,7 @@ void tester_finalize_packet(picoquic_cnx_t* cnx,
     picoquic_finalize_and_protect_packet(cnx, packet,
         0, length, packet->offset, packet->checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time);
+        path_x, current_time, 0);
 }
 
 int tester_push_frame_packet(picoquic_test_tls_api_ctx_t* test_ctx,

@@ -42,6 +42,8 @@ typedef struct st_qlog_fns_path_context_t {
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
     uint64_t smoothed_rtt_for_bug;
+    uint64_t cc_state;
+    uint64_t cc_param;
 
     unsigned int last_bw_estimate_path_limited : 1;
 } qlog_fns_path_context_t;
@@ -780,7 +782,25 @@ void qlog_fns_cc_dump_path(picoquic_path_t* path,
     qlog_fns_context_t * ctx, qlog_fns_path_context_t * path_ctx,  uint64_t current_time)
 {
     FILE* f = ctx->f_txtlog;
+    uint64_t cc_state = 0;
+    uint64_t cc_param = 0;
     /* TODO: manage the path_ctx values! Create new paths? */
+
+    if (path->cnx->congestion_alg != NULL &&
+        path->congestion_alg_state != NULL) {
+        path->cnx->congestion_alg->alg_observe(path, &cc_state, &cc_param);
+    }
+
+    if (cc_state != path_ctx->cc_state) {
+        qlog_fns_event_start(ctx, path, 0, current_time, "recovery", "congestion_state_updated");
+        fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
+            path_ctx->cc_state, cc_state, cc_param);
+        path_ctx->cc_state = cc_state;
+        path_ctx->cc_param = cc_param;
+    }
+    else {
+        path_ctx->cc_param = cc_param;
+    }
 
     if (path->cwin != path_ctx->cwin ||
         path->rtt_sample != path_ctx->rtt_sample ||
