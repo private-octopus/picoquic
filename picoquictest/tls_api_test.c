@@ -10884,22 +10884,6 @@ int initial_race_test(void)
  * Test connection establishment with AEGIS
  */
 
-static int tls_api_cipher_list_contains(ptls_cipher_suite_t** suites, uint16_t cipher_suite_id)
-{
-    int ret = 0;
-
-    if (suites != NULL) {
-        for (size_t i = 0; suites[i] != NULL; i++) {
-            if (suites[i]->id == cipher_suite_id) {
-                ret = 1;
-                break;
-            }
-        }
-    }
-
-    return ret;
-}
-
 static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx)
 {
     uint16_t cipher_suite_id = 0;
@@ -10921,6 +10905,24 @@ static int aegis_is_available(void)
     return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256, 0) != NULL &&
         picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512, 0) != NULL;
 }
+
+#ifdef PICOQUIC_WITH_AEGIS
+static int tls_api_cipher_list_contains(ptls_cipher_suite_t** suites, uint16_t cipher_suite_id)
+{
+    int ret = 0;
+
+    if (suites != NULL) {
+        for (size_t i = 0; suites[i] != NULL; i++) {
+            if (suites[i]->id == cipher_suite_id) {
+                ret = 1;
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+#endif
 
 int aegis_cipher_suite_test(void)
 {
@@ -10980,6 +10982,7 @@ int aegis_cipher_suite_test(void)
     return ret;
 }
 
+#ifdef PICOQUIC_WITH_AEGIS
 static int aegis_hp_vector_one(int cipher_suite_id, const uint8_t* key,
     const uint8_t* sample, const uint8_t* expected_mask)
 {
@@ -11009,6 +11012,7 @@ static int aegis_hp_vector_one(int cipher_suite_id, const uint8_t* key,
 
     return ret;
 }
+#endif
 
 int aegis_hp_vector_test(void)
 {
