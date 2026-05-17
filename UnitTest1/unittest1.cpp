@@ -1985,6 +1985,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_send_qx_ping_r_append)
+        {
+            int ret = qmux_send_qx_ping_r_append_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_send_cnx_close)
         {
             int ret = qmux_send_cnx_close_test();

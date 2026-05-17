@@ -629,6 +629,38 @@ int qmux_send_qx_ping_r_test(void)
     return ret;
 }
 
+int qmux_send_qx_ping_r_append_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[2048];
+    uint8_t expected[2048];
+    size_t send_length = 0;
+    size_t expected_length = sizeof(qmux_test_tp_packet) + sizeof(qmux_qx_ping_r_packet) - 1;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+    picoqmux_init(cnx, 1);
+
+    cnx->qx_query_last = 0;
+
+    if (ret == 0) {
+        picoqmux_update_state_on_tp_received(cnx);
+        expected[0] = (uint8_t)(expected_length - 1);
+        memcpy(expected + 1, qmux_test_tp_packet + 1, sizeof(qmux_test_tp_packet) - 1);
+        memcpy(expected + sizeof(qmux_test_tp_packet),
+            qmux_qx_ping_r_packet + 1, sizeof(qmux_qx_ping_r_packet) - 1);
+
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
+        if (send_length != expected_length ||
+            memcmp(buffer, expected, send_length) != 0 ||
+            cnx->qx_query_ack != cnx->qx_query_last) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 int qmux_send_cnx_close_test(void)
 {
     picoquic_quic_t* quic = NULL;
