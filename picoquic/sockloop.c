@@ -2123,6 +2123,15 @@ int picoquic_packet_loop_do_tcp_read(
     else {
         /* Submit the data to the quic connection. */
         picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, buf, (size_t)recv_len, 0);
+        if (sqmux_ctx[socket_rank]->cnx != NULL &&
+            (sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_disconnected ||
+                sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received)) {
+            picoquic_packet_loop_tcp_close(sqmux_ctx,
+                nb_qmux_sockets,
+                max_qmux_sockets,
+                socket_rank,
+                current_time);
+        }
     }
     return ret;
 }

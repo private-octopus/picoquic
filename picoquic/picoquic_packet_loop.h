@@ -485,6 +485,9 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
 int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
     picoqmux_socket_ctx_t** sqmux_ctx, int* nb_qmux_sockets,
     int max_qmux_sockets, int socket_rank, uint64_t current_time);
+int picoquic_packet_loop_do_tcp_read(picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets, int max_qmux_sockets, int socket_rank,
+    uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
 
 #ifdef __cplusplus
 }

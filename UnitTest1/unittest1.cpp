@@ -2069,6 +2069,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_socket_close_on_receive)
+        {
+            int ret = qmux_socket_close_on_receive_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_loop_tls)
         {
             int ret = qmux_loop_tls_test();
