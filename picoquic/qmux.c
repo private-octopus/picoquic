@@ -779,12 +779,12 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
 
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) == NULL ||
             frame_id64 != FRAME_TYPE_QX_TRANSPORT_PARAMETERS) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, bytes == NULL ? 0 : (uint8_t)frame_id64);
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
             return -1;
         } else {
             bytes = picoquic_decode_qmux_tp_frame(cnx, bytes, bytes_max);
             if (bytes == NULL) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0x3f);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                 return -1;
             }
             else {
@@ -869,8 +869,8 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
                 bytes = NULL;
                 break;
             case picoquic_frame_type_retire_connection_id:
-                /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, 0);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
                 break;
             case picoquic_frame_type_handshake_done:
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
@@ -881,13 +881,18 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
                 bytes = picoquic_decode_datagram_frame(cnx, path_x, bytes, bytes_max);
                 break;
             case picoquic_frame_type_reset_stream_at:
-                bytes = picoquic_decode_reset_stream_at_frame(cnx, bytes, bytes_max);
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, first_byte);
+                bytes = NULL;
                 break;
             default: {
                 uint64_t frame_id64;
 
                 if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64)) != NULL) {
                     switch (frame_id64) {
+                    case FRAME_TYPE_QX_TRANSPORT_PARAMETERS:
+                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
+                        bytes = NULL;
+                        break;
                     case picoquic_frame_type_time_stamp:
                         bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
                         break;
