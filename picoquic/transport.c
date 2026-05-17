@@ -410,7 +410,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.max_datagram_frame_size);
     }
 
-    if (cnx->grease_transport_parameters) {
+    if (extension_mode <= 1 && cnx->grease_transport_parameters) {
         /* Do not use a purely random value, so we can repetitive tests */
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
@@ -421,7 +421,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
     }
 
-    if (cnx->test_large_chello && bytes != NULL &&
+    if (extension_mode <= 1 && cnx->test_large_chello && bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_test_large_chello)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1200)) != NULL){
         if (bytes + 1200 > bytes_max) {
@@ -476,7 +476,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    if (cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
+    if (extension_mode <= 1 && cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at);
     }
 

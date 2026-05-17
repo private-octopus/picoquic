@@ -254,6 +254,7 @@ int qlog_fns_ecn_test(void);
 int qmux_send_test(void);
 int qmux_receive_test(void);
 int qmux_send_tp_test(void);
+int qmux_send_extension_tp_filter_test(void);
 int qmux_receive_tp_test(void);
 int qmux_receive_app_close_test(void);
 int qmux_receive_cnx_close_test(void);
