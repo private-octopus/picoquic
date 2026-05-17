@@ -591,6 +591,19 @@ static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* s
 }
 #endif
 
+#ifndef _WINDOWS
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx)
+{
+    if (sqmux_sock_ctx != NULL) {
+        if (sqmux_sock_ctx->fd != INVALID_SOCKET) {
+            SOCKET_CLOSE(sqmux_sock_ctx->fd);
+            sqmux_sock_ctx->fd = INVALID_SOCKET;
+        }
+        free(sqmux_sock_ctx);
+    }
+}
+#endif
+
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
     int af, uint16_t public_port,
     int is_port_shared, int is_listening)
@@ -1059,8 +1072,10 @@ int picoquic_packet_loop_open_qmux_sockets(
                 }
             }
             if (ret == 0) {
+#ifdef _WINDOWS
                 ret = picoquic_packet_loop_start_windows_accept_sockets(
                     *sqmux_ctx, nb_qmux_sockets, *max_qmux_socket);
+#endif
             }
         }
         if (ret != 0) {
@@ -2015,7 +2030,7 @@ int picoquic_packet_loop_do_tcp_read(
             DBG_PRINTF("Error: recv returns %d\n", recv_len);
         }
         else {
-            DBG_PRINTF("Connection closed by peer.\n");
+            DBG_PRINTF("%s", "Connection closed by peer.\n");
         }
         /* close the socket, and remove it from the list. */
         picoquic_packet_loop_tcp_close(sqmux_ctx,
