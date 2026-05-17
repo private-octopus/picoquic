@@ -587,10 +587,15 @@ void picoqmux_auto_ack(picoquic_cnx_t* cnx, uint8_t * packet, size_t length, uin
 
 static void picoqmux_drop_misc_frames(picoquic_cnx_t* cnx)
 {
-    picoquic_misc_frame_header_t* misc_frame;
+    picoquic_misc_frame_header_t* misc_frame = cnx->first_misc_frame;
 
-    while ((misc_frame = picoquic_find_first_misc_frame(cnx, picoquic_packet_context_application)) != NULL) {
-        picoquic_delete_misc_or_dg(&cnx->first_misc_frame, &cnx->last_misc_frame, misc_frame);
+    while (misc_frame != NULL) {
+        picoquic_misc_frame_header_t* next_frame = misc_frame->next_misc_frame;
+
+        if (misc_frame->pc == picoquic_packet_context_application) {
+            picoquic_delete_misc_or_dg(&cnx->first_misc_frame, &cnx->last_misc_frame, misc_frame);
+        }
+        misc_frame = next_frame;
     }
 }
 
