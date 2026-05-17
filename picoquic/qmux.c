@@ -1097,12 +1097,22 @@ static int picoqmux_incoming_pending_record(picoquic_cnx_t* cnx, uint64_t curren
     int ret = 0;
 
     while (ret == 0 && cnx->qmux_incoming_buffer_length > 0 && *receive_length > 0) {
-        size_t required_size = 0;
+        size_t required_size = cnx->qmux_incoming_record_size;
         size_t copy_length = 0;
 
-        if ((ret = picoqmux_record_total_size(cnx, cnx->qmux_incoming_buffer,
-            cnx->qmux_incoming_buffer_length, &required_size)) != 0) {
-            break;
+        if (required_size == 0) {
+            size_t prefix_length = picoqmux_record_prefix_length(cnx->qmux_incoming_buffer);
+
+            if (cnx->qmux_incoming_buffer_length < prefix_length) {
+                required_size = prefix_length;
+            }
+            else if ((ret = picoqmux_record_total_size(cnx, cnx->qmux_incoming_buffer,
+                cnx->qmux_incoming_buffer_length, &required_size)) != 0) {
+                break;
+            }
+            else {
+                cnx->qmux_incoming_record_size = required_size;
+            }
         }
 
         copy_length = required_size - cnx->qmux_incoming_buffer_length;
@@ -1118,6 +1128,9 @@ static int picoqmux_incoming_pending_record(picoquic_cnx_t* cnx, uint64_t curren
         if (cnx->qmux_incoming_buffer_length < required_size) {
             break;
         }
+        else if (cnx->qmux_incoming_record_size == 0) {
+            continue;
+        }
         else {
             size_t consumed = 0;
             int record_received = 0;
@@ -1130,6 +1143,7 @@ static int picoqmux_incoming_pending_record(picoquic_cnx_t* cnx, uint64_t curren
             }
             if (ret == 0) {
                 cnx->qmux_incoming_buffer_length = 0;
+                cnx->qmux_incoming_record_size = 0;
             }
         }
     }
@@ -1153,17 +1167,22 @@ static int picoqmux_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t current_tim
     if (ret == 0 && receive_length > 0) {
         size_t consumed = 0;
         size_t reserve_size = 0;
+        size_t pending_length = 0;
         int record_received = 0;
 
         ret = picoqmux_decode_record_bytes(cnx, current_time, receive_buffer, receive_length,
             1, &consumed, &record_received);
         if (ret == 0 && consumed < receive_length) {
             reserve_size = receive_length - consumed;
+            pending_length = reserve_size;
             ret = picoqmux_record_total_size(cnx, receive_buffer + consumed, reserve_size, &reserve_size);
         }
         if (ret == 0 && consumed < receive_length) {
             ret = picoqmux_append_incoming_tail(cnx, receive_buffer + consumed,
                 receive_length - consumed, reserve_size);
+            if (ret == 0 && pending_length >= picoqmux_record_prefix_length(cnx->qmux_incoming_buffer)) {
+                cnx->qmux_incoming_record_size = reserve_size;
+            }
         }
     }
 

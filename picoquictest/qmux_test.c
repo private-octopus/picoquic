@@ -995,12 +995,11 @@ int qmux_receive_empty_record_test(void)
         PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
 }
 
-int qmux_receive_split_record_test(void)
+static int qmux_receive_split_record_test_one(size_t split)
 {
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     qmux_sim_ctx_t qtc = { 0 };
-    size_t split = 2;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     cnx->client_mode = 0;
@@ -1026,6 +1025,16 @@ int qmux_receive_split_record_test(void)
     }
 
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+int qmux_receive_split_record_test(void)
+{
+    int ret = qmux_receive_split_record_test_one(1);
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(2);
+    }
     return ret;
 }
 
