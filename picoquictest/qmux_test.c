@@ -591,6 +591,36 @@ int qmux_receive_errors_test(void)
     return ret;
 }
 
+int qmux_receive_prohibited_frames_test(void)
+{
+    uint8_t packet[16];
+    uint64_t prohibited_frames[] = {
+        picoquic_frame_type_ping,
+        picoquic_frame_type_ack,
+        picoquic_frame_type_ack_ecn,
+        picoquic_frame_type_crypto_hs,
+        picoquic_frame_type_new_token,
+        picoquic_frame_type_new_connection_id,
+        picoquic_frame_type_retire_connection_id,
+        picoquic_frame_type_path_challenge,
+        picoquic_frame_type_path_response,
+        picoquic_frame_type_handshake_done,
+        picoquic_frame_type_reset_stream_at
+    };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(prohibited_frames) / sizeof(prohibited_frames[0]); i++) {
+        uint8_t frame[8];
+        uint8_t* bytes = picoquic_frames_varint_encode(frame, frame + sizeof(frame), prohibited_frames[i]);
+        size_t packet_length = (bytes == NULL) ? 0 :
+            qmux_format_frame_record(packet, sizeof(packet), frame, (size_t)(bytes - frame));
+
+        ret = (packet_length == 0) ? -1 : qmux_receive_error_one(1, 1, packet,
+            packet_length, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+    }
+    return ret;
+}
+
 int qmux_receive_extension_tp_ignore_test_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
 {
     return cnx->remote_parameters.is_reset_stream_at_enabled ? -1 : 0;
