@@ -716,6 +716,38 @@ int qmux_receive_stream_order_test(void)
         sizeof(qmux_stream_gap_packet), PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
 }
 
+int qmux_receive_stream_order_edges_test(void)
+{
+    uint8_t qmux_stream_interleave_packet[] = {
+        0x0d,
+        picoquic_frame_type_stream_range_min | 2, 0, 1, 0xaa,
+        picoquic_frame_type_stream_range_min | 2, 4, 1, 0xbb,
+        picoquic_frame_type_stream_range_min | 6, 0, 1, 1, 0xcc
+    };
+    uint8_t qmux_stream_duplicate_packet[] = {
+        0x08,
+        picoquic_frame_type_stream_range_min | 2, 0, 1, 0xaa,
+        picoquic_frame_type_stream_range_min | 2, 0, 1, 0xbb
+    };
+    uint8_t qmux_stream_late_gap_packet[] = {
+        0x09,
+        picoquic_frame_type_stream_range_min | 2, 0, 1, 0xaa,
+        picoquic_frame_type_stream_range_min | 6, 0, 2, 1, 0xbb
+    };
+    int ret = qmux_receive_test_one(0, 1, 1, qmux_stream_interleave_packet,
+        sizeof(qmux_stream_interleave_packet), 0, NULL);
+
+    if (ret == 0) {
+        ret = qmux_receive_error_one(1, 1, qmux_stream_duplicate_packet,
+            sizeof(qmux_stream_duplicate_packet), PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+    if (ret == 0) {
+        ret = qmux_receive_error_one(1, 1, qmux_stream_late_gap_packet,
+            sizeof(qmux_stream_late_gap_packet), PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+    return ret;
+}
+
 int qmux_receive_record_errors_test(void)
 {
     uint8_t qmux_truncated_record[] = { 0x12, 0x0b, 0, 0x0f };

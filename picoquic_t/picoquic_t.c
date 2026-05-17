@@ -329,6 +329,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive_extension_frame_error", qmux_receive_extension_frame_error_test },
     { "qmux_send_misc_frame_filter", qmux_send_misc_frame_filter_test },
     { "qmux_receive_stream_order", qmux_receive_stream_order_test },
+    { "qmux_receive_stream_order_edges", qmux_receive_stream_order_edges_test },
     { "qmux_receive_record_errors", qmux_receive_record_errors_test },
     { "qmux_receive_empty_record", qmux_receive_empty_record_test },
     { "qmux_receive_split_record", qmux_receive_split_record_test },
