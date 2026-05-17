@@ -28,6 +28,7 @@
 #include "wincompat.h"
 #endif
 #include <picotls.h>
+#include "picoquic_crypto_provider_api.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -4377,6 +4378,7 @@ int session_resume_test(void)
  * Use multipath_init_params procedure to set up parameters for the multipath test.
  */
 void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx);
 
 int zero_rtt_test_one(zero_rtt_test_t * zrt)
 {
@@ -4427,6 +4429,13 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
 
             if (ret == 0 && zrt->propose_ech) {
                 ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
+            }
+
+            if (ret == 0 && zrt->cipher_suite_id != 0 &&
+                (picoquic_set_cipher_suite(test_ctx->qclient, zrt->cipher_suite_id) != 0 ||
+                    picoquic_set_cipher_suite(test_ctx->qserver, zrt->cipher_suite_id) != 0)) {
+                DBG_PRINTF("Zero RTT test could not set cipher suite 0x%04x.", zrt->cipher_suite_id);
+                ret = -1;
             }
 
             if (ret == 0) {
@@ -4500,6 +4509,16 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
                 /* run a receive loop until no outstanding data */
                 ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 0);
             }
+        }
+
+        if (ret == 0 && zrt->cipher_suite_id != 0 &&
+            (tls_api_selected_cipher_suite_id(test_ctx->cnx_client) != zrt->cipher_suite_id ||
+                tls_api_selected_cipher_suite_id(test_ctx->cnx_server) != zrt->cipher_suite_id)) {
+            DBG_PRINTF("Zero RTT test selected unexpected cipher, client=0x%04x, server=0x%04x, expected=0x%04x.",
+                tls_api_selected_cipher_suite_id(test_ctx->cnx_client),
+                tls_api_selected_cipher_suite_id(test_ctx->cnx_server),
+                zrt->cipher_suite_id);
+            ret = -1;
         }
 
         if (ret == 0 && i == 1 && zrt->do_multipath) {
@@ -10856,6 +10875,424 @@ int initial_race_test(void)
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/*
+ * Test connection establishment with AEGIS
+ */
+
+static int tls_api_cipher_list_contains(ptls_cipher_suite_t** suites, uint16_t cipher_suite_id)
+{
+    int ret = 0;
+
+    if (suites != NULL) {
+        for (size_t i = 0; suites[i] != NULL; i++) {
+            if (suites[i]->id == cipher_suite_id) {
+                ret = 1;
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx)
+{
+    uint16_t cipher_suite_id = 0;
+
+    if (cnx != NULL && cnx->tls_ctx != NULL) {
+        picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+        ptls_cipher_suite_t* cipher = (tls_ctx->tls == NULL) ? NULL : ptls_get_cipher(tls_ctx->tls);
+
+        if (cipher != NULL) {
+            cipher_suite_id = cipher->id;
+        }
+    }
+
+    return cipher_suite_id;
+}
+
+static int aegis_is_available(void)
+{
+    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256, 0) != NULL &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512, 0) != NULL;
+}
+
+int aegis_cipher_suite_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+#ifdef PICOQUIC_WITH_AEGIS
+    if (ret == 0 && !aegis_is_available()) {
+        DBG_PRINTF("%s", "AEGIS cipher suites are not registered.");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ptls_context_t* client_ctx = (ptls_context_t*)test_ctx->qclient->tls_master_ctx;
+        ptls_context_t* server_ctx = (ptls_context_t*)test_ctx->qserver->tls_master_ctx;
+
+        if (!tls_api_cipher_list_contains(client_ctx->cipher_suites, PICOQUIC_AEGIS_128L_SHA256) ||
+            !tls_api_cipher_list_contains(client_ctx->cipher_suites, PICOQUIC_AEGIS_256_SHA512) ||
+            !tls_api_cipher_list_contains(server_ctx->cipher_suites, PICOQUIC_AEGIS_128L_SHA256) ||
+            !tls_api_cipher_list_contains(server_ctx->cipher_suites, PICOQUIC_AEGIS_256_SHA512)) {
+            DBG_PRINTF("%s", "AEGIS cipher suites are missing from default client or server list.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AEGIS_256_SHA512) != 0) {
+        DBG_PRINTF("%s", "Could not configure AEGIS-256 cipher suite.");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qserver, PICOQUIC_AEGIS_128L_SHA256) != 0) {
+        DBG_PRINTF("%s", "Could not configure AEGIS-128L cipher suite.");
+        ret = -1;
+    }
+#else
+    if (ret == 0 && aegis_is_available()) {
+        DBG_PRINTF("%s", "AEGIS cipher suites are registered without PICOQUIC_WITH_AEGIS.");
+        ret = -1;
+    }
+
+    if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AEGIS_256_SHA512) == 0) {
+        DBG_PRINTF("%s", "AEGIS-256 suite unexpectedly configured without PICOQUIC_WITH_AEGIS.");
+        ret = -1;
+    }
+#endif
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+static int aegis_hp_vector_one(int cipher_suite_id, const uint8_t* key,
+    const uint8_t* sample, const uint8_t* expected_mask)
+{
+    int ret = 0;
+    uint8_t clear_mask[5] = { 0, 0, 0, 0, 0 };
+    uint8_t mask[5] = { 0, 0, 0, 0, 0 };
+    void* hp_ctx = picoquic_hp_enc_create_for_test(cipher_suite_id, key);
+
+    if (hp_ctx == NULL) {
+        DBG_PRINTF("Could not create AEGIS HP context for suite 0x%04x", cipher_suite_id);
+        ret = -1;
+    }
+    else {
+        if (picoquic_pn_iv_size(hp_ctx) != 16) {
+            DBG_PRINTF("AEGIS HP sample size is %zu, expected 16.", picoquic_pn_iv_size(hp_ctx));
+            ret = -1;
+        }
+        else {
+            picoquic_pn_encrypt(hp_ctx, sample, mask, clear_mask, sizeof(mask));
+            if (memcmp(mask, expected_mask, sizeof(mask)) != 0) {
+                DBG_PRINTF("Unexpected AEGIS HP mask for suite 0x%04x", cipher_suite_id);
+                ret = -1;
+            }
+        }
+        picoquic_cipher_free(hp_ctx);
+    }
+
+    return ret;
+}
+
+int aegis_hp_vector_test(void)
+{
+    int ret = 0;
+
+#ifdef PICOQUIC_WITH_AEGIS
+    const uint8_t key128[16] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+    };
+    const uint8_t key256[32] = {
+        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+        0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+        0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f
+    };
+    const uint8_t sample128[16] = {
+        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+        0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f
+    };
+    const uint8_t sample256[16] = {
+        0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+        0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f
+    };
+    const uint8_t expected128[5] = { 0x3b, 0xe4, 0x56, 0xe2, 0x1e };
+    const uint8_t expected256[5] = { 0x87, 0x9b, 0xdc, 0x27, 0x90 };
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS HP vectors, not supported on this platform.");
+    }
+    else if ((ret = aegis_hp_vector_one(PICOQUIC_AEGIS_128L_SHA256, key128, sample128, expected128)) == 0) {
+        ret = aegis_hp_vector_one(PICOQUIC_AEGIS_256_SHA512, key256, sample256, expected256);
+    }
+#else
+    uint8_t key[32] = { 0 };
+    void* hp_ctx = picoquic_hp_enc_create_for_test(PICOQUIC_AEGIS_256_SHA512, key);
+
+    if (hp_ctx != NULL) {
+        picoquic_cipher_free(hp_ctx);
+        DBG_PRINTF("%s", "AEGIS HP context unexpectedly created without PICOQUIC_WITH_AEGIS.");
+        ret = -1;
+    }
+#endif
+
+    return ret;
+}
+
+static int aegis_negotiation_test_one(int client_cipher_suite_id, int server_cipher_suite_id,
+    uint16_t expected_cipher_suite_id)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0 && client_cipher_suite_id != 0 &&
+        picoquic_set_cipher_suite(test_ctx->qclient, client_cipher_suite_id) != 0) {
+        DBG_PRINTF("Could not set client cipher suite 0x%04x", client_cipher_suite_id);
+        ret = -1;
+    }
+
+    if (ret == 0 && server_cipher_suite_id != 0 &&
+        picoquic_set_cipher_suite(test_ctx->qserver, server_cipher_suite_id) != 0) {
+        DBG_PRINTF("Could not set server cipher suite 0x%04x", server_cipher_suite_id);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
+    }
+
+    if (ret == 0) {
+        uint16_t client_selected = tls_api_selected_cipher_suite_id(test_ctx->cnx_client);
+        uint16_t server_selected = tls_api_selected_cipher_suite_id(test_ctx->cnx_server);
+
+        if (client_selected != expected_cipher_suite_id || server_selected != expected_cipher_suite_id) {
+            DBG_PRINTF("Selected cipher mismatch, client=0x%04x, server=0x%04x, expected=0x%04x",
+                client_selected, server_selected, expected_cipher_suite_id);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && (expected_cipher_suite_id == PICOQUIC_AEGIS_128L_SHA256 ||
+        expected_cipher_suite_id == PICOQUIC_AEGIS_256_SHA512)) {
+        if (test_ctx->cnx_client->crypto_epoch_length_max > (1ull << 48) ||
+            test_ctx->cnx_server->crypto_epoch_length_max > (1ull << 48)) {
+            DBG_PRINTF("%s", "AEGIS crypto epoch length exceeds draft usage limit.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+    }
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &test_ctx->loss_mask_default, &simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 250000);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int aegis128l_test(void)
+{
+    int ret = 0;
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS-128L, not supported on this platform.");
+    }
+    else {
+        ret = aegis_negotiation_test_one(PICOQUIC_AEGIS_128L_SHA256, PICOQUIC_AEGIS_128L_SHA256,
+            PICOQUIC_AEGIS_128L_SHA256);
+    }
+
+    return ret;
+}
+
+int aegis256_test(void)
+{
+    int ret = 0;
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS-256, not supported on this platform.");
+    }
+    else {
+        ret = aegis_negotiation_test_one(PICOQUIC_AEGIS_256_SHA512, PICOQUIC_AEGIS_256_SHA512,
+            PICOQUIC_AEGIS_256_SHA512);
+    }
+
+    return ret;
+}
+
+int aegis_fallback_test(void)
+{
+    int ret = 0;
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS fallback, not supported on this platform.");
+    }
+    else {
+        ret = aegis_negotiation_test_one(0, PICOQUIC_AES_128_GCM_SHA256, PICOQUIC_AES_128_GCM_SHA256);
+    }
+
+    return ret;
+}
+
+int aegis_0rtt_test(void)
+{
+    int ret = 0;
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS 0-RTT, not supported on this platform.");
+    }
+    else {
+        zero_rtt_test_t zrt = { 0 };
+        zrt.cipher_suite_id = PICOQUIC_AEGIS_128L_SHA256;
+        ret = zero_rtt_test_one(&zrt);
+
+        if (ret == 0) {
+            memset(&zrt, 0, sizeof(zrt));
+            zrt.cipher_suite_id = PICOQUIC_AEGIS_256_SHA512;
+            ret = zero_rtt_test_one(&zrt);
+        }
+    }
+
+    return ret;
+}
+
+static int aegis_retry_test_one(int cipher_suite_id)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        (picoquic_set_cipher_suite(test_ctx->qclient, cipher_suite_id) != 0 ||
+            picoquic_set_cipher_suite(test_ctx->qserver, cipher_suite_id) != 0)) {
+        DBG_PRINTF("Could not set AEGIS Retry cipher suite 0x%04x.", cipher_suite_id);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        picoquic_set_cookie_mode(test_ctx->qserver, 1);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 &&
+        (tls_api_selected_cipher_suite_id(test_ctx->cnx_client) != cipher_suite_id ||
+            tls_api_selected_cipher_suite_id(test_ctx->cnx_server) != cipher_suite_id)) {
+        DBG_PRINTF("AEGIS Retry selected unexpected cipher, client=0x%04x, server=0x%04x, expected=0x%04x.",
+            tls_api_selected_cipher_suite_id(test_ctx->cnx_client),
+            tls_api_selected_cipher_suite_id(test_ctx->cnx_server),
+            cipher_suite_id);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int aegis_retry_test(void)
+{
+    int ret = 0;
+
+    if (!aegis_is_available()) {
+        DBG_PRINTF("%s", "Could not test AEGIS Retry, not supported on this platform.");
+    }
+    else if ((ret = aegis_retry_test_one(PICOQUIC_AEGIS_128L_SHA256)) == 0) {
+        ret = aegis_retry_test_one(PICOQUIC_AEGIS_256_SHA512);
+    }
+
+    return ret;
+}
+
+int aegis_initial_aes_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t icid = { { 0xa3, 0x91, 0x65, 0x17, 0, 0, 0, 0 }, 8 };
+    void* aead_ctx = NULL;
+    void* pn_enc_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0 && aegis_is_available() &&
+        picoquic_set_cipher_suite(test_ctx->qclient, PICOQUIC_AEGIS_256_SHA512) != 0) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_initial_aead_context(test_ctx->qclient, 0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
+    }
+
+    if (ret == 0) {
+        if (picoquic_aead_get_checksum_length(aead_ctx) != 16 || picoquic_pn_iv_size(pn_enc_ctx) != 16) {
+            DBG_PRINTF("Initial protection changed, checksum=%zu, sample=%zu",
+                picoquic_aead_get_checksum_length(aead_ctx), picoquic_pn_iv_size(pn_enc_ctx));
+            ret = -1;
+        }
+    }
+
+    if (aead_ctx != NULL) {
+        picoquic_aead_free(aead_ctx);
+    }
+
+    if (pn_enc_ctx != NULL) {
+        picoquic_cipher_free(pn_enc_ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
     }
 
     return ret;
