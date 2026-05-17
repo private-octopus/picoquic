@@ -258,6 +258,7 @@ int qmux_receive_tp_test(void);
 int qmux_receive_app_close_test(void);
 int qmux_receive_cnx_close_test(void);
 int qmux_receive_errors_test(void);
+int qmux_receive_record_errors_test(void);
 int qmux_receive_qx_ping_test(void);
 int qmux_send_qx_ping_r_test(void);
 int qmux_send_cnx_close_test(void);
