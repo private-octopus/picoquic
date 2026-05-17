@@ -585,6 +585,15 @@ void picoqmux_auto_ack(picoquic_cnx_t* cnx, uint8_t * packet, size_t length, uin
     }
 }
 
+static void picoqmux_drop_misc_frames(picoquic_cnx_t* cnx)
+{
+    picoquic_misc_frame_header_t* misc_frame;
+
+    while ((misc_frame = picoquic_find_first_misc_frame(cnx, picoquic_packet_context_application)) != NULL) {
+        picoquic_delete_misc_or_dg(&cnx->first_misc_frame, &cnx->last_misc_frame, misc_frame);
+    }
+}
+
 /*  Prepare the next packet to send when in the ready state */
 int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length)
 {
@@ -650,9 +659,7 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
         bytes_next = picoquic_format_required_max_stream_data_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
     }
 
-    /* If present, send misc frame */
-    bytes_next = picoquic_format_misc_frames_in_context(cnx, bytes_next, bytes_max,
-        &more_data, &is_pure_ack, picoquic_packet_context_application);
+    picoqmux_drop_misc_frames(cnx);
 
     /* Compute the length before entering the CC block */
     length = bytes_next - bytes;
@@ -663,13 +670,6 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
         * three values: not needed at all, optional, or required.
         * If required, PMTU discovery takes priority over sending stream data.
         */
-
-    if (cnx->is_address_discovery_provider) {
-        /* If a new address was learned, prepare an observed address frame */
-        /* TODO: tie this code to processing of paths */
-        bytes_next = picoquic_prepare_observed_address_frame(bytes_next, bytes_max,
-            path_x, path_x->first_tuple, current_time, &cnx->next_wake_time, &more_data, &is_pure_ack);
-    }
 
     if (ret == 0) {
         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
@@ -772,9 +772,6 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
     size_t bytes_maxsize, int64_t current_time)
 {
     const uint8_t* bytes_max = bytes + bytes_maxsize;
-    picoquic_packet_data_t packet_data;
-
-    memset(&packet_data, 0, sizeof(packet_data));
 
     if (!picoqmux_has_received_tp(cnx)) {
         /* the first frame must be the transport parameters */
@@ -895,13 +892,6 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
                     case FRAME_TYPE_QX_TRANSPORT_PARAMETERS:
                         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0);
                         bytes = NULL;
-                        break;
-                    case picoquic_frame_type_time_stamp:
-                        bytes = picoquic_decode_time_stamp_frame(bytes, bytes_max, cnx, &packet_data);
-                        break;
-                    case picoquic_frame_type_observed_address_v4:
-                    case picoquic_frame_type_observed_address_v6:
-                        bytes = picoquic_decode_observed_address_frame(cnx, bytes, bytes_max, path_x, frame_id64);
                         break;
                     case FRAME_TYPE_QX_PING:
                     case FRAME_TYPE_QX_PING_R:

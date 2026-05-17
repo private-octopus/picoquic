@@ -275,6 +275,18 @@ static size_t qmux_format_tp_test_packet(uint8_t* buffer, size_t buffer_size,
     return (size_t)(bytes - buffer);
 }
 
+static size_t qmux_format_frame_record(uint8_t* buffer, size_t buffer_size,
+    const uint8_t* frame, size_t frame_length)
+{
+    uint8_t* bytes = picoquic_frames_varint_encode(buffer, buffer + buffer_size, frame_length);
+
+    if (bytes == NULL || bytes + frame_length > buffer + buffer_size) {
+        return 0;
+    }
+    memcpy(bytes, frame, frame_length);
+    return (size_t)(bytes + frame_length - buffer);
+}
+
 int qmux_send_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -561,6 +573,72 @@ int qmux_receive_extension_tp_ignore_test(void)
         ret = qmux_receive_test_one(0, 0, 0, packet, packet_length,
             0, qmux_receive_extension_tp_ignore_test_check);
     }
+    return ret;
+}
+
+int qmux_receive_extension_frame_error_test(void)
+{
+    uint8_t frame[32];
+    uint8_t packet[64];
+    uint8_t* bytes = frame;
+    size_t packet_length = 0;
+    int ret = 0;
+
+    bytes = picoquic_frames_varint_encode(bytes, frame + sizeof(frame), picoquic_frame_type_time_stamp);
+    bytes = picoquic_frames_varint_encode(bytes, frame + sizeof(frame), 0);
+    packet_length = (bytes == NULL) ? 0 :
+        qmux_format_frame_record(packet, sizeof(packet), frame, (size_t)(bytes - frame));
+    if (packet_length == 0) {
+        ret = -1;
+    }
+    else {
+        ret = qmux_receive_error_one(1, 1, packet, packet_length,
+            PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+
+    if (ret == 0) {
+        bytes = frame;
+        bytes = picoquic_frames_varint_encode(bytes, frame + sizeof(frame), picoquic_frame_type_observed_address_v4);
+        packet_length = (bytes == NULL) ? 0 :
+            qmux_format_frame_record(packet, sizeof(packet), frame, (size_t)(bytes - frame));
+        ret = (packet_length == 0) ? -1 : qmux_receive_error_one(1, 1, packet,
+            packet_length, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+
+    return ret;
+}
+
+int qmux_send_misc_frame_filter_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t frame[16];
+    uint8_t buffer[2048];
+    uint8_t* bytes = frame;
+    size_t send_length = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+    picoqmux_init(cnx, 1);
+
+    if (ret == 0) {
+        picoqmux_update_state_on_tp_sent(cnx);
+        picoqmux_update_state_on_tp_received(cnx);
+        bytes = picoquic_frames_varint_encode(bytes, frame + sizeof(frame), picoquic_frame_type_time_stamp);
+        bytes = picoquic_frames_varint_encode(bytes, frame + sizeof(frame), 0);
+        if (bytes == NULL ||
+            picoquic_queue_misc_frame(cnx, frame, (size_t)(bytes - frame), 0,
+                picoquic_packet_context_application) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
+        if (send_length != 0 || cnx->first_misc_frame != NULL) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
     return ret;
 }
 
