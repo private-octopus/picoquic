@@ -702,6 +702,31 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
     return ret;
 }
 
+static size_t picoqmux_record_size_max(uint64_t remote_max, size_t max_length, size_t* prefix_length)
+{
+    static const uint64_t varint_max[] = { 63, 16383, 1073741823, 4611686018427387903ull };
+    static const size_t varint_length[] = { 1, 2, 4, 8 };
+    size_t record_size_max = 0;
+
+    *prefix_length = 0;
+    for (size_t i = 0; i < sizeof(varint_length) / sizeof(varint_length[0]); i++) {
+        if (max_length > varint_length[i]) {
+            uint64_t candidate = max_length - varint_length[i];
+            if (candidate > varint_max[i]) {
+                candidate = varint_max[i];
+            }
+            if (candidate > remote_max) {
+                candidate = remote_max;
+            }
+            if (candidate > record_size_max) {
+                record_size_max = (size_t)candidate;
+                *prefix_length = varint_length[i];
+            }
+        }
+    }
+    return record_size_max;
+}
+
 /* Prepare the next packets to send in the current buffer 
 * This called directly by the socket loop when the connection
 * is marked "active". If there is nothing to send, return
@@ -725,20 +750,21 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
     else {
         picoqmux_check_idle_timer(cnx, current_time, &next_wake_time);
         for (;;) {
-            uint8_t record_buffer[PICOQMUX_MAX_RECORD_SIZE_DEFAULT];
             uint8_t* bytes = send_buffer + *send_length;
             uint8_t* bytes_next = bytes;
             size_t max_length = send_buffer_max - *send_length;
             size_t record_length = 0;
-            size_t record_size_max = (cnx->qmux_remote_max_record_size < PICOQMUX_MAX_RECORD_SIZE_DEFAULT) ?
-                (size_t)cnx->qmux_remote_max_record_size : (size_t)PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
+            size_t prefix_length = 0;
+            size_t record_size_max = picoqmux_record_size_max(
+                cnx->qmux_remote_max_record_size, max_length, &prefix_length);
             size_t length = 0;
             if (record_size_max == 0 || max_length < 255) {
                 next_wake_time = current_time;
                 break;
             }
             else {
-                ret = picoqmux_prepare_cnx_packet(cnx, current_time, record_buffer,
+                uint8_t* record_start = bytes + prefix_length;
+                ret = picoqmux_prepare_cnx_packet(cnx, current_time, record_start,
                     record_size_max, &record_length);
                 if (ret < 0) {
                     break;
@@ -747,13 +773,16 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
                     /* Nothing more to send. */
                     break;
                 }
-                else if ((bytes_next = picoquic_frames_varint_encode(bytes, send_buffer + send_buffer_max, record_length)) == NULL ||
+                prefix_length = picoquic_frames_varint_encode_length(record_length);
+                if (record_start > bytes + prefix_length) {
+                    memmove(bytes + prefix_length, record_start, record_length);
+                }
+                if ((bytes_next = picoquic_frames_varint_encode(bytes, send_buffer + send_buffer_max, record_length)) == NULL ||
                     bytes_next + record_length > send_buffer + send_buffer_max) {
                     next_wake_time = current_time;
                     break;
                 }
                 else {
-                    memcpy(bytes_next, record_buffer, record_length);
                     length = (bytes_next - bytes) + record_length;
                     *send_length += length;
                 }
