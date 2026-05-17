@@ -150,10 +150,6 @@ int qmux_send_test(void)
 
 /* ALPN list function -- need to set one? */
 
-/* Check that frames can be received properly */
-/* TODO: run a test with all frames in skip frame test, to check
-* that allowed frames pass, and that not allowed frames are rejected. */ 
-
 int qmux_test_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
@@ -426,6 +422,13 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
     return ret;
 }
 
+int qmux_receive_no_error_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
+{
+    return (cnx->local_error == 0 &&
+        cnx->cnx_state != picoquic_state_disconnecting &&
+        cnx->cnx_state != picoquic_state_handshake_failure) ? 0 : -1;
+}
+
 int qmux_receive_tp_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
 {
     int ret = 0;
@@ -630,6 +633,52 @@ int qmux_receive_prohibited_frames_test(void)
 
         ret = (packet_length == 0) ? -1 : qmux_receive_error_one(1, 1, packet,
             packet_length, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+    }
+    return ret;
+}
+
+static int qmux_receive_allowed_frame_one(const uint8_t* frame, size_t frame_length)
+{
+    uint8_t packet[64];
+    size_t packet_length = qmux_format_frame_record(packet, sizeof(packet), frame, frame_length);
+
+    return (packet_length == 0) ? -1 :
+        qmux_receive_test_one(0, 1, 1, packet, packet_length, 0, qmux_receive_no_error_check);
+}
+
+int qmux_receive_allowed_frames_test(void)
+{
+    uint8_t padding[] = { picoquic_frame_type_padding };
+    uint8_t reset_stream[] = { picoquic_frame_type_reset_stream, 0, 0, 0 };
+    uint8_t stop_sending[] = { picoquic_frame_type_stop_sending, 0, 0 };
+    uint8_t max_data[] = { picoquic_frame_type_max_data, 1 };
+    uint8_t max_stream_data[] = { picoquic_frame_type_max_stream_data, 0, 1 };
+    uint8_t max_streams_bidi[] = { picoquic_frame_type_max_streams_bidir, 1 };
+    uint8_t max_streams_uni[] = { picoquic_frame_type_max_streams_unidir, 1 };
+    uint8_t data_blocked[] = { picoquic_frame_type_data_blocked, 1 };
+    uint8_t stream_data_blocked[] = { picoquic_frame_type_stream_data_blocked, 0, 1 };
+    uint8_t streams_blocked_bidi[] = { picoquic_frame_type_streams_blocked_bidir, 1 };
+    uint8_t streams_blocked_uni[] = { picoquic_frame_type_streams_blocked_unidir, 1 };
+    struct st_qmux_allowed_frame_t {
+        uint8_t* frame;
+        size_t frame_length;
+    } frames[] = {
+        { padding, sizeof(padding) },
+        { reset_stream, sizeof(reset_stream) },
+        { stop_sending, sizeof(stop_sending) },
+        { max_data, sizeof(max_data) },
+        { max_stream_data, sizeof(max_stream_data) },
+        { max_streams_bidi, sizeof(max_streams_bidi) },
+        { max_streams_uni, sizeof(max_streams_uni) },
+        { data_blocked, sizeof(data_blocked) },
+        { stream_data_blocked, sizeof(stream_data_blocked) },
+        { streams_blocked_bidi, sizeof(streams_blocked_bidi) },
+        { streams_blocked_uni, sizeof(streams_blocked_uni) }
+    };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(frames) / sizeof(frames[0]); i++) {
+        ret = qmux_receive_allowed_frame_one(frames[i].frame, frames[i].frame_length);
     }
     return ret;
 }
