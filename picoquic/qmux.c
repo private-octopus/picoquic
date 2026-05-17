@@ -937,6 +937,7 @@ static int picoqmux_record_total_size(picoquic_cnx_t* cnx,
         *total_size = prefix_length;
     }
     else if (picoquic_frames_varint_decode(bytes, bytes + available, &record_length) == NULL ||
+        record_length == 0 ||
         record_length > cnx->qmux_local_max_record_size ||
         record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
@@ -976,6 +977,7 @@ static int picoqmux_decode_record_bytes(picoquic_cnx_t* cnx, uint64_t current_ti
         }
 
         if ((bytes_next = picoquic_frames_varint_decode(bytes, bytes_max, &record_length)) == NULL ||
+            record_length == 0 ||
             record_length > cnx->qmux_local_max_record_size ||
             record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);

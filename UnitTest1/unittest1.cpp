@@ -1967,6 +1967,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_empty_record)
+        {
+            int ret = qmux_receive_empty_record_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_split_record)
         {
             int ret = qmux_receive_split_record_test();
