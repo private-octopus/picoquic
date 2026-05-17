@@ -41,6 +41,8 @@
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic_qlog.h"
+#include "picoquic_packet_loop.h"
+#include "picosocks.h"
 #include "picoqmux.h"
 
 /*
@@ -650,6 +652,73 @@ void qmux_test_release(qmux_sim_ctx_t* sim_ctx)
             sim_ctx->quic[i] = NULL;
         }
     }
+}
+
+int qmux_socket_accept_test(void)
+{
+#ifdef _WINDOWS
+    return 0;
+#else
+    qmux_sim_ctx_t sim_ctx;
+    qmux_sim_spec_t spec;
+    picoqmux_socket_ctx_t* sqmux_ctx[2] = { 0 };
+    SOCKET_TYPE client_socket = INVALID_SOCKET;
+    struct sockaddr_in server_addr;
+    int nb_qmux_sockets = 0;
+    int ret = 0;
+
+    memset(&spec, 0, sizeof(qmux_sim_spec_t));
+    spec.is_cleartext = 1;
+    spec.idle_timeout = 1000000;
+    ret = qmux_test_init(&sim_ctx, &spec);
+
+    if (ret == 0) {
+        sqmux_ctx[0] = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 1, 1);
+        if (sqmux_ctx[0] == NULL || sqmux_ctx[0]->af != AF_INET || sqmux_ctx[0]->port == 0) {
+            ret = -1;
+        }
+        else {
+            nb_qmux_sockets = 1;
+        }
+    }
+
+    if (ret == 0) {
+        client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        memset(&server_addr, 0, sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_addr.s_addr = htonl(0x7f000001);
+        server_addr.sin_port = htons(sqmux_ctx[0]->port);
+        if (client_socket == INVALID_SOCKET ||
+            connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_packet_loop_do_tcp_accept(sim_ctx.quic[1], sqmux_ctx,
+            &nb_qmux_sockets, 2, 0, sim_ctx.simulated_time);
+    }
+
+    if (ret == 0 && (nb_qmux_sockets != 2 ||
+        sqmux_ctx[1] == NULL ||
+        sqmux_ctx[1]->fd == INVALID_SOCKET ||
+        sqmux_ctx[1]->cnx == NULL ||
+        sqmux_ctx[1]->af != AF_INET ||
+        sqmux_ctx[1]->port != sqmux_ctx[0]->port ||
+        sqmux_ctx[1]->local_addr.ss_family != AF_INET ||
+        sqmux_ctx[1]->remote_addr.ss_family != AF_INET)) {
+        ret = -1;
+    }
+
+    if (client_socket != INVALID_SOCKET) {
+        SOCKET_CLOSE(client_socket);
+    }
+    for (int i = 0; i < nb_qmux_sockets && i < 2; i++) {
+        picoquic_packet_loop_free_qmux_socket(sqmux_ctx[i]);
+    }
+    qmux_test_release(&sim_ctx);
+    return ret;
+#endif
 }
 
 int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)

@@ -1997,6 +1997,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_socket_accept)
+        {
+            int ret = qmux_socket_accept_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_loop_tls)
         {
             int ret = qmux_loop_tls_test();
