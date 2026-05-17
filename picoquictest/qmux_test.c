@@ -77,7 +77,7 @@ typedef struct st_qmux_sim_ctx_t {
     int test_idle;
     int test_close;
     int should_close_tcp;
-    uint64_t delay;
+    uint64_t idle_timeout;
     picoquic_quic_t* quic[2];
     picoquic_cnx_t* cnx[2];
     qmux_msg_t* msg_queue;
@@ -93,7 +93,7 @@ typedef struct st_qmux_sim_spec_t {
     int test_idle;
     int is_cleartext;
     int test_close;
-    uint64_t delay;
+    uint64_t idle_timeout;
     uint64_t expected_time;
 } qmux_sim_spec_t;
 
@@ -568,9 +568,13 @@ int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
             ret = -1;
         }
         else {
+            for (int i = 0; i < 2; i++) {
+                /* set the default idle timeout to the specified value */
+                picoquic_set_default_idle_timeout(sim_ctx->quic[i], spec->idle_timeout);
+            }
             sim_ctx->test_idle = spec->test_idle;
             sim_ctx->test_close = spec->test_close;
-            sim_ctx->delay = spec->delay;
+            sim_ctx->idle_timeout = spec->idle_timeout;
         }
     }
     return ret;
@@ -653,7 +657,7 @@ int qmux_loop_poll_connection(qmux_sim_ctx_t* sim_ctx, int cnx_index)
 
         if (msg->length > 0) {
             msg->target_index = 1 - cnx_index;
-            msg->delivery_time = sim_ctx->simulated_time + sim_ctx->delay;
+            msg->delivery_time = sim_ctx->simulated_time + sim_ctx->idle_timeout;
             if (sim_ctx->msg_last == NULL) {
                 sim_ctx->msg_last = msg;
                 sim_ctx->msg_queue = msg;
@@ -775,7 +779,7 @@ int qmux_loop_delay_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
     spec.is_cleartext = 1;
-    spec.delay = 15000;
+    spec.idle_timeout = 15000;
     spec.expected_time = 60000;
 
     return qmux_loop_one(&spec);
@@ -785,7 +789,7 @@ int qmux_loop_idle_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
     spec.is_cleartext = 1;
-    spec.delay = 15000;
+    spec.idle_timeout = 15000;
     spec.test_idle = 1;
     spec.expected_time = 30030000;
 
@@ -796,7 +800,7 @@ int qmux_loop_tls_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
     spec.is_cleartext = 0;
-    spec.delay = 15000;
+    spec.idle_timeout = 15000;
     spec.expected_time = 90000;
 
     return qmux_loop_one(&spec);
@@ -807,7 +811,7 @@ int qmux_loop_tls_close_test(void)
     qmux_sim_spec_t spec = { 0 };
     spec.is_cleartext = 0;
     spec.test_close = 1;
-    spec.delay = 15000;
+    spec.idle_timeout = 15000;
     spec.expected_time = 90000;
 
     return qmux_loop_one(&spec);

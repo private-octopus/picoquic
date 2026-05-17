@@ -756,6 +756,7 @@ typedef struct st_sockloop_qmux_test_t {
     int test_close;
     int test_idle;
     /* variables used to monitor execution */
+    picoquic_packet_loop_param_t* param;
     int received_stream_0;
     uint64_t stream_0_length_received;
     int stream_0_data_matches;
@@ -868,8 +869,12 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
             ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
         }
         else switch (cb_mode) {
-        case picoquic_packet_loop_ready:
+        case picoquic_packet_loop_ready: {
+            picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
+            options->do_time_check = 1;
+            fprintf(stdout, "Waiting for packets.\n");
             break;
+        }
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
             if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
@@ -888,14 +893,21 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
             /* TODO: consider adding the delay computation callback! */
         case picoquic_packet_loop_time_check: {
             packet_loop_time_check_arg_t* time_check_arg = (packet_loop_time_check_arg_t*)callback_arg;
-            if (time_check_arg->delta_t > 5000) {
-                time_check_arg->delta_t = 5000;
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("%s", "The connection is closed!\n");
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+                break;
+            }
+            else if (time_check_arg->delta_t > 10000000) {
+                time_check_arg->delta_t = 10000000;
             }
             break;
         }
         case picoquic_packet_loop_wake_up:
             break;
         case picoquic_packet_loop_alt_port:
+            break;
+        case picoquic_packet_loop_system_call_duration:
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -912,7 +924,6 @@ int sockloop_qmux_one(
     picoquic_quic_t* qserver = NULL;
     picoquic_quic_t* qmux = NULL;
     picoquic_cnx_t* cnx_qmux = NULL;
-    sockloop_test_cb_t loop_cb = { 0 };
     picoquic_packet_loop_param_t param = { 0 };
     struct sockaddr_storage dest = { 0 };
     char test_server_cert_file[512];
@@ -960,7 +971,7 @@ int sockloop_qmux_one(
                 ret = -1;
             }
             else {
-                loop_cb.qmux_cnx = cnx_qmux;
+                spec->qmux_cnx = cnx_qmux;
             }
         }
     }
@@ -970,7 +981,7 @@ int sockloop_qmux_one(
         param.qmux_port = spec->port;
         param.local_af = 0;
         param.socket_buffer_size = spec->socket_buffer_size;
-        loop_cb.param = &param;
+        spec->param = &param;
 
         if (spec->use_background_thread) {
             picoquic_network_thread_ctx_t* thread_ctx = NULL;

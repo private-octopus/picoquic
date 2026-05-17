@@ -1125,6 +1125,7 @@ picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
 
             picoquic_set_log_level(qmux, config->use_long_log);
 
+
             /* TODO: ECH. Is this different from setting ECH for QUIC? */
         }
     }

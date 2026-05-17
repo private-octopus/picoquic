@@ -83,7 +83,7 @@ void picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext)
     cnx->qx_sent_last = UINT64_MAX;
     cnx->qx_query_ack = UINT64_MAX;
     cnx->qx_query_last = UINT64_MAX;
-    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout;
+    cnx->idle_timeout = cnx->local_parameters.max_idle_timeout*1000;
 }
 
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx)
@@ -933,6 +933,9 @@ int picoqmux_send_handshake(picoquic_cnx_t* cnx, uint8_t* send_buffer,
             tls_ctx->tls_wbuf.off = 0;
         }
     }
+    else {
+        *send_length = 0;
+    }
     cnx->is_qmux_tls_ready = ptls_handshake_is_complete(tls_ctx->tls);
     return ret;
 }
@@ -1126,7 +1129,7 @@ int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t
             cnx->next_wake_time = current_time;
         }
         else if (cnx->idle_timeout > 0) {
-            cnx->next_wake_time = cnx->latest_progress_time + cnx->idle_timeout;
+            picoqmux_check_idle_timer(cnx, current_time, &cnx->next_wake_time);
         }
         else {
             cnx->next_wake_time = UINT64_MAX;
@@ -1170,7 +1173,7 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
         }
     }
 
-    if (is_tcp_closed) {
+    if (is_tcp_closed || ret != 0) {
         /* Signal that the qmux connection is now closed */
         picoquic_connection_disconnect(cnx);
     }

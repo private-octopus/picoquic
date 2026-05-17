@@ -147,6 +147,7 @@ typedef enum {
     picoquic_packet_loop_action_tcp_accept_ready,
     picoquic_packet_loop_action_tcp_recv_ready,
     picoquic_packet_loop_action_tcp_send_ready,
+    picoquic_packet_loop_action_tcp_disconnected,
     picoquic_packet_loop_action_max
 } picoquic_packet_loop_action_enum;
 
