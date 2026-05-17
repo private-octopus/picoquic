@@ -1269,23 +1269,31 @@ int picoqmux_start_client_cnx(picoquic_cnx_t* cnx)
         }
     }
 
-    picoquic_log_new_connection(cnx);
+    if (ret == 0 && !cnx->is_qmux_cleartext &&
+        tls_ctx->handshake_properties.client.negotiated_protocols.count == 0) {
+        ret = PICOQUIC_ERROR_NO_ALPN_PROVIDED;
+        DBG_PRINTF("No ALPN provided, error 0x%x", ret);
+    }
 
-    /* A remote session ticket may have been loaded as part of initializing TLS,
-     * and remote parameters may have been initialized to the initial value
-     * of the previous session. Apply these new parameters. */
-    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_stream_id_bidir_remote =
-        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
-    cnx->max_stream_id_unidir_remote =
-        STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
-    cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
-    cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
+    if (ret == 0) {
+        picoquic_log_new_connection(cnx);
 
-    ptls_buffer_init(&tls_ctx->tls_wbuf, "", 0);
-    ptls_buffer_init(&tls_ctx->tls_rbuf, "", 0);
+        /* A remote session ticket may have been loaded as part of initializing TLS,
+         * and remote parameters may have been initialized to the initial value
+         * of the previous session. Apply these new parameters. */
+        cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+        cnx->max_stream_id_bidir_remote =
+            STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
+        cnx->max_stream_id_unidir_remote =
+            STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+        cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
+        cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
 
-    ret = picoqmux_incoming_handshake(cnx, NULL, 0, &consumed);
+        ptls_buffer_init(&tls_ctx->tls_wbuf, "", 0);
+        ptls_buffer_init(&tls_ctx->tls_rbuf, "", 0);
+
+        ret = picoqmux_incoming_handshake(cnx, NULL, 0, &consumed);
+    }
 
     return ret;
 }

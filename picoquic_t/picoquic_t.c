@@ -343,6 +343,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_loop_idle", qmux_loop_idle_test },
     { "qmux_socket_accept", qmux_socket_accept_test },
     { "qmux_loop_tls", qmux_loop_tls_test },
+    { "qmux_tls_client_alpn_required", qmux_tls_client_alpn_required_test },
     { "qmux_loop_tls_close", qmux_loop_tls_close_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
