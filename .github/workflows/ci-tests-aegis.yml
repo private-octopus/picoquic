@@ -67,7 +67,9 @@ jobs:
             -DPICOQUIC_FETCH_AEGIS=ON `
             -DWITH_OPENSSL=ON `
             -DWITH_FUSION=OFF `
-            -DPTLS_WITH_FUSION=OFF
+            -DPTLS_WITH_FUSION=OFF `
+            -DCMAKE_C_FLAGS="/I${{ github.workspace }}/picoquic" `
+            -DCMAKE_CXX_FLAGS="/I${{ github.workspace }}/picoquic"
 
       - name: Build picoquic_ct
         run: cmake --build build-aegis --config Release --parallel --target picoquic_ct
