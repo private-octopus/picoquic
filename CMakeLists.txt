@@ -637,6 +637,27 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     set_picoquic_compile_settings(picoquic_ct)
 
+    add_executable(aegisperf picoquictest/aegis_perf.c)
+
+    target_link_libraries(aegisperf
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-test
+            picoquic-log
+            picohttp-core
+            picoquic-core)
+
+    target_include_directories(aegisperf
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+            picoquic
+            picohttp
+            picoquictest)
+
+    set_picoquic_compile_settings(aegisperf)
+
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c
         ${PICOHTTP_TEST_LIBRARY_FILES})
