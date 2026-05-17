@@ -1,0 +1,43 @@
+---
+name: "CITestsAEGIS"
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  linux-aegis:
+    name: CI-Tests-AEGIS-Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
+
+      - name: Build picoquic with AEGIS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+          cmake -S . -B build-aegis \
+            -DWITH_AEGIS=ON \
+            -DPICOQUIC_FETCH_PTLS=ON \
+            -DPICOQUIC_FETCH_AEGIS=ON
+          cmake --build build-aegis --parallel $(nproc) --target picoquic_ct aegisperf
+
+      - name: Run AEGIS unit tests
+        run: |
+          ./build-aegis/picoquic_ct -S . \
+            aegis_cipher_suite \
+            aegis_hp_vector \
+            aegis128l \
+            aegis256 \
+            aegis_fallback \
+            aegis_0rtt \
+            aegis_retry \
+            aegis_initial_aes

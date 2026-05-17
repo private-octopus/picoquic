@@ -408,6 +408,7 @@ typedef struct st_zero_rtt_test_t {
     int do_multipath;
     int propose_ech;
     int change_params;
+    int cipher_suite_id;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);
