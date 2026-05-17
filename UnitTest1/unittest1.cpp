@@ -2618,6 +2618,54 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(aegis_cipher_suite) {
+            int ret = aegis_cipher_suite_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis_hp_vector) {
+            int ret = aegis_hp_vector_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis128l) {
+            int ret = aegis128l_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis256) {
+            int ret = aegis256_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis_fallback) {
+            int ret = aegis_fallback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis_0rtt) {
+            int ret = aegis_0rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis_retry) {
+            int ret = aegis_retry_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(aegis_initial_aes) {
+            int ret = aegis_initial_aes_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cnx_limit) {
             int ret = cnx_limit_test();
 
