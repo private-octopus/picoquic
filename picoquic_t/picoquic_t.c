@@ -319,6 +319,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive", qmux_receive_test },
     { "qmux_send_tp", qmux_send_tp_test },
     { "qmux_send_extension_tp_filter", qmux_send_extension_tp_filter_test },
+    { "qmux_send_before_tp_gate", qmux_send_before_tp_gate_test },
     { "qmux_receive_tp", qmux_receive_tp_test },
     { "qmux_receive_app_close", qmux_receive_app_close_test },
     { "qmux_receive_cnx_close", qmux_receive_cnx_close_test },

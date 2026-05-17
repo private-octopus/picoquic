@@ -1931,6 +1931,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_send_before_tp_gate)
+        {
+            int ret = qmux_send_before_tp_gate_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_tp)
         {
             int ret = qmux_receive_tp_test();

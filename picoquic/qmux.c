@@ -625,22 +625,20 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
         }
     }
 
-    /* if necessary, prepare the QX_PING_R frame */
-    if (ret == 0 && cnx->qx_query_last != cnx->qx_query_ack) {
-        uint8_t* bytes_before = bytes_next;
-        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes_next, bytes_max, 1, &more_data);
-        if (bytes_next > bytes_before) {
-            cnx->qx_query_ack = cnx->qx_query_last;
+    if (ret == 0 && picoqmux_has_received_tp(cnx)) {
+        /* if necessary, prepare the QX_PING_R frame */
+        if (cnx->qx_query_last != cnx->qx_query_ack) {
+            uint8_t* bytes_before = bytes_next;
+            bytes_next = picoquic_format_qx_ping_frame(cnx, bytes_next, bytes_max, 1, &more_data);
+            if (bytes_next > bytes_before) {
+                cnx->qx_query_ack = cnx->qx_query_last;
+            }
         }
-    }
                 
-    /* if necessary, prepare the MAX STREAM frames */
-    if (ret == 0) {
+        /* if necessary, prepare the MAX STREAM frames */
         bytes_next = picoquic_format_max_streams_frame_if_needed(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-    }
 
-    /* If necessary, encode the max data frame */
-    if (ret == 0) {
+        /* If necessary, encode the max data frame */
         if (cnx->quic->max_data_limit != 0) {
             if (cnx->data_received + ((3 * cnx->quic->max_data_limit) / 4) > cnx->maxdata_local) {
                 uint64_t max_data_increase = cnx->data_received + cnx->quic->max_data_limit - cnx->maxdata_local;
@@ -652,41 +650,42 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
             bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
                 picoquic_cc_increased_window(cnx, cnx->maxdata_local));
         }
-    }
 
-    /* If necessary, encode the max stream data frames */
-    if (ret == 0 && cnx->max_stream_data_needed) {
-        bytes_next = picoquic_format_required_max_stream_data_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
-    }
+        /* If necessary, encode the max stream data frames */
+        if (cnx->max_stream_data_needed) {
+            bytes_next = picoquic_format_required_max_stream_data_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+        }
 
-    picoqmux_drop_misc_frames(cnx);
+        picoqmux_drop_misc_frames(cnx);
 
-    /* Compute the length before entering the CC block */
-    length = bytes_next - bytes;
+        /* Compute the length before entering the CC block */
+        length = bytes_next - bytes;
 
-    /* Send here the frames that are subject to both congestion and pacing control.
-        * this includes the PMTU probes.
-        * Check whether PMTU discovery is required. The call will return
-        * three values: not needed at all, optional, or required.
-        * If required, PMTU discovery takes priority over sending stream data.
-        */
+        /* Send here the frames that are subject to both congestion and pacing control.
+            * this includes the PMTU probes.
+            * Check whether PMTU discovery is required. The call will return
+            * three values: not needed at all, optional, or required.
+            * If required, PMTU discovery takes priority over sending stream data.
+            */
 
-    if (ret == 0) {
         bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
             (size_t)(bytes_next - bytes) == 0, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
-    }
 
-    length = bytes_next - bytes;
-
-    if (length == 0 || is_pure_ack) {
-        /* Mark the bandwidth estimation as application limited */
-        path_x->delivered_limited_index = path_x->delivered;
-        /* Notify the peer if something is blocked */
-        bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
         length = bytes_next - bytes;
+
+        if (length == 0 || is_pure_ack) {
+            /* Mark the bandwidth estimation as application limited */
+            path_x->delivered_limited_index = path_x->delivered;
+            /* Notify the peer if something is blocked */
+            bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
+            length = bytes_next - bytes;
+        }
+        if (no_data_to_send) {
+            path_x->last_sender_limited_time = current_time;
+        }
     }
-    if (no_data_to_send) {
-        path_x->last_sender_limited_time = current_time;
+    else {
+        length = bytes_next - bytes;
     }
 
     if (more_data) {
