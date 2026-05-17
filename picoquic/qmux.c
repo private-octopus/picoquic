@@ -913,34 +913,232 @@ int picoqmux_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const u
     return bytes != NULL ? 0 : PICOQUIC_ERROR_DETECTED;
 }
 
-int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, 
-    const uint8_t* receive_buffer, size_t receive_length)
+static size_t picoqmux_record_prefix_length(const uint8_t* bytes)
+{
+    return ((size_t)1) << (bytes[0] >> 6);
+}
+
+static int picoqmux_record_total_size(picoquic_cnx_t* cnx,
+    const uint8_t* bytes, size_t available, size_t* total_size)
+{
+    int ret = 0;
+    size_t prefix_length = picoqmux_record_prefix_length(bytes);
+    uint64_t record_length = 0;
+
+    if (available < prefix_length) {
+        *total_size = prefix_length;
+    }
+    else if (picoquic_frames_varint_decode(bytes, bytes + available, &record_length) == NULL ||
+        record_length > cnx->qmux_local_max_record_size ||
+        record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+        ret = PICOQUIC_ERROR_DETECTED;
+    }
+    else {
+        *total_size = prefix_length + (size_t)record_length;
+    }
+
+    return ret;
+}
+
+static int picoqmux_decode_record_bytes(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length, int allow_incomplete,
+    size_t* consumed, int* record_received)
 {
     int ret = 0;
     picoquic_path_t* path_x = cnx->path[0];
     const uint8_t* bytes = receive_buffer;
     const uint8_t* bytes_max = receive_buffer + receive_length;
 
+    *consumed = 0;
+    *record_received = 0;
+
     while (ret == 0 && bytes < bytes_max) {
+        const uint8_t* bytes_next = NULL;
+        size_t available = (size_t)(bytes_max - bytes);
+        size_t prefix_length = picoqmux_record_prefix_length(bytes);
         uint64_t record_length = 0;
 
-        if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &record_length)) == NULL ||
+        if (available < prefix_length) {
+            if (!allow_incomplete) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+                ret = PICOQUIC_ERROR_DETECTED;
+            }
+            break;
+        }
+
+        if ((bytes_next = picoquic_frames_varint_decode(bytes, bytes_max, &record_length)) == NULL ||
             record_length > cnx->qmux_local_max_record_size ||
-            bytes + record_length > bytes_max) {
+            record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
             ret = PICOQUIC_ERROR_DETECTED;
         }
+        else if (available - prefix_length < (size_t)record_length) {
+            if (!allow_incomplete) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+                ret = PICOQUIC_ERROR_DETECTED;
+            }
+            break;
+        }
         else {
-            ret = picoqmux_decode_frames(cnx, path_x, bytes, (size_t)record_length, current_time);
-            bytes += record_length;
+            ret = picoqmux_decode_frames(cnx, path_x, bytes_next, (size_t)record_length, current_time);
+            if (ret == 0) {
+                bytes = bytes_next + (size_t)record_length;
+                *record_received = 1;
+            }
         }
     }
 
-    if (ret == 0) {
+    *consumed = (size_t)(bytes - receive_buffer);
+    if (ret == 0 && *record_received) {
         cnx->latest_progress_time = current_time;
         cnx->next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
     }
+
+    return ret;
+}
+
+int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length)
+{
+    size_t consumed = 0;
+    int record_received = 0;
+    int ret = picoqmux_decode_record_bytes(cnx, current_time, receive_buffer, receive_length,
+        0, &consumed, &record_received);
+
+    if (ret == 0 && consumed != receive_length) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+        ret = PICOQUIC_ERROR_DETECTED;
+    }
+
+    return ret;
+}
+
+static int picoqmux_resize_incoming_buffer(picoquic_cnx_t* cnx, size_t required_size)
+{
+    int ret = 0;
+
+    if (required_size > cnx->qmux_incoming_buffer_size) {
+        uint8_t* new_buffer = (uint8_t*)realloc(cnx->qmux_incoming_buffer, required_size);
+        if (new_buffer == NULL) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            cnx->qmux_incoming_buffer = new_buffer;
+            cnx->qmux_incoming_buffer_size = required_size;
+        }
+    }
+
+    return ret;
+}
+
+static int picoqmux_append_incoming_tail(picoquic_cnx_t* cnx,
+    const uint8_t* receive_buffer, size_t receive_length, size_t reserve_size)
+{
+    int ret = 0;
+    size_t required_size = cnx->qmux_incoming_buffer_length + receive_length;
+
+    if (receive_length == 0) {
+        return 0;
+    }
+    else if (required_size < cnx->qmux_incoming_buffer_length) {
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        if (reserve_size < required_size) {
+            reserve_size = required_size;
+        }
+        ret = picoqmux_resize_incoming_buffer(cnx, reserve_size);
+    }
+
+    if (ret == 0) {
+        memcpy(cnx->qmux_incoming_buffer + cnx->qmux_incoming_buffer_length,
+            receive_buffer, receive_length);
+        cnx->qmux_incoming_buffer_length = required_size;
+    }
+
+    return ret;
+}
+
+static int picoqmux_incoming_pending_record(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t** receive_buffer, size_t* receive_length)
+{
+    int ret = 0;
+
+    while (ret == 0 && cnx->qmux_incoming_buffer_length > 0 && *receive_length > 0) {
+        size_t required_size = 0;
+        size_t copy_length = 0;
+
+        if ((ret = picoqmux_record_total_size(cnx, cnx->qmux_incoming_buffer,
+            cnx->qmux_incoming_buffer_length, &required_size)) != 0) {
+            break;
+        }
+
+        copy_length = required_size - cnx->qmux_incoming_buffer_length;
+        if (copy_length > *receive_length) {
+            copy_length = *receive_length;
+        }
+        if ((ret = picoqmux_append_incoming_tail(cnx, *receive_buffer, copy_length, required_size)) != 0) {
+            break;
+        }
+        *receive_buffer += copy_length;
+        *receive_length -= copy_length;
+
+        if (cnx->qmux_incoming_buffer_length < required_size) {
+            break;
+        }
+        else {
+            size_t consumed = 0;
+            int record_received = 0;
+            size_t buffered_length = cnx->qmux_incoming_buffer_length;
+            ret = picoqmux_decode_record_bytes(cnx, current_time, cnx->qmux_incoming_buffer,
+                cnx->qmux_incoming_buffer_length, 0, &consumed, &record_received);
+            if (ret == 0 && consumed != buffered_length) {
+                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+                ret = PICOQUIC_ERROR_DETECTED;
+            }
+            if (ret == 0) {
+                cnx->qmux_incoming_buffer_length = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+static int picoqmux_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t current_time,
+    const uint8_t* receive_buffer, size_t receive_length)
+{
+    int ret = 0;
+
+    if (receive_length == 0) {
+        return 0;
+    }
+
+    if (cnx->qmux_incoming_buffer_length > 0) {
+        ret = picoqmux_incoming_pending_record(cnx, current_time, &receive_buffer, &receive_length);
+    }
+
+    if (ret == 0 && receive_length > 0) {
+        size_t consumed = 0;
+        size_t reserve_size = 0;
+        int record_received = 0;
+
+        ret = picoqmux_decode_record_bytes(cnx, current_time, receive_buffer, receive_length,
+            1, &consumed, &record_received);
+        if (ret == 0 && consumed < receive_length) {
+            reserve_size = receive_length - consumed;
+            ret = picoqmux_record_total_size(cnx, receive_buffer + consumed, reserve_size, &reserve_size);
+        }
+        if (ret == 0 && consumed < receive_length) {
+            ret = picoqmux_append_incoming_tail(cnx, receive_buffer + consumed,
+                receive_length - consumed, reserve_size);
+        }
+    }
+
     return ret;
 }
 
@@ -1004,7 +1202,7 @@ int picoqmux_incoming_data(picoquic_cnx_t* cnx, uint64_t current_time,
     if (ret == 0) {
         *consumed = in_len;
         if (tls_ctx->tls_rbuf.off > 0) {
-            ret = picoqmux_incoming_cnx_packet(cnx, current_time,
+            ret = picoqmux_incoming_cnx_bytes(cnx, current_time,
                 tls_ctx->tls_rbuf.base, tls_ctx->tls_rbuf.off);
             tls_ctx->tls_rbuf.off = 0;
         }
@@ -1175,7 +1373,7 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
     int ret = 0;
 
     if (cnx->is_qmux_cleartext) {
-        picoqmux_incoming_cnx_packet(cnx, current_time, receive_buffer, receive_length);
+        ret = picoqmux_incoming_cnx_bytes(cnx, current_time, receive_buffer, receive_length);
     }
     else
     {

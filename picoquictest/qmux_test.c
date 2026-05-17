@@ -481,6 +481,40 @@ int qmux_receive_record_errors_test(void)
     return ret;
 }
 
+int qmux_receive_split_record_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    qmux_sim_ctx_t qtc = { 0 };
+    size_t split = 2;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    cnx->client_mode = 0;
+    picoqmux_init(cnx, 1);
+    picoqmux_update_state_on_tp_received(cnx);
+    picoquic_set_callback(cnx, qmux_test_callback, &qtc);
+
+    if (ret == 0) {
+        ret = picoqmux_incoming_packets(cnx, 12345, qmux_test_packet, split, 0);
+    }
+
+    if (ret == 0 && qtc.received_stream_0) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoqmux_incoming_packets(cnx, 12346, qmux_test_packet + split,
+            sizeof(qmux_test_packet) - split, 0);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_tp_check(cnx, 0);
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 int qmux_send_qx_ping_r_test(void)
 {
     picoquic_quic_t* quic = NULL;
