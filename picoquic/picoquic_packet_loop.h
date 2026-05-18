@@ -489,7 +489,12 @@ int picoquic_start_server_threads(
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
     int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
-
+picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
+    int af, uint16_t public_port, int is_port_shared, int is_listening);
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t** sqmux_ctx, int* nb_qmux_sockets,
+    int max_qmux_sockets, int socket_rank, uint64_t current_time);
 #ifdef __cplusplus
 }
 #endif
