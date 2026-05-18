@@ -170,6 +170,7 @@ typedef enum {
 #define FRAME_TYPE_QX_TRANSPORT_PARAMETERS 0x3f5153300d0a0d0aull /* Per qmux draft 01 */
 #define FRAME_TYPE_QX_PING   0x348c67529ef8c7bdull /* Per qmux draft 01 */
 #define FRAME_TYPE_QX_PING_R 0x348c67529ef8c7beull /* Per qmux draft 01 */
+#define PICOQMUX_MAX_RECORD_SIZE_DEFAULT 16382ull /* Per draft-ietf-quic-qmux-01 */
 
 /* PMTU discovery requirement status */
 
@@ -1423,6 +1424,12 @@ typedef struct st_picoquic_cnx_t {
     uint64_t qx_query_last; /* sequence of last qx_ping query from the peer */
     uint64_t qx_sent_last; /* last local qx_ping query sent to the peer */
     uint64_t qx_query_ack; /* last local qx_ping query acked by the peer */
+    uint64_t qmux_local_max_record_size; /* largest QMUX record payload accepted locally */
+    uint64_t qmux_remote_max_record_size; /* largest QMUX record payload accepted by peer */
+    uint8_t* qmux_incoming_buffer; /* incomplete QMUX record bytes across TCP reads */
+    size_t qmux_incoming_buffer_size;
+    size_t qmux_incoming_buffer_length;
+    size_t qmux_incoming_record_size;
    
     /* Statistics */
     uint64_t nb_bytes_queued;

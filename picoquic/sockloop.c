@@ -33,6 +33,8 @@
  * TODO: support the QuicDoq scenario, manage extra socket.
  */
 
+#include <limits.h>
+
 #ifdef _WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #include <WinSock2.h>
@@ -530,6 +532,13 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_
 * set large enough to contain the planned number of connections.
 */
 
+#ifndef _WINDOWS
+static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+}
+#endif
 
 #ifdef _WINDOWS
 static int picoquic_sockloop_set_win_buf(picoquic_sockloop_win_buf_t * win_buf)
@@ -537,6 +546,7 @@ static int picoquic_sockloop_set_win_buf(picoquic_sockloop_win_buf_t * win_buf)
     int ret = 0;
     win_buf->buf_size = 0x4000;
     win_buf->buf_len = 0;
+    win_buf->buf_offset = 0;
     if ((win_buf->buf = (uint8_t*)malloc(win_buf->buf_size)) == NULL) {
         ret = -1;
     }
@@ -570,6 +580,10 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
             SOCKET_CLOSE(sqmux_sock_ctx->fd);
             sqmux_sock_ctx->fd = INVALID_SOCKET;
         }
+        if (sqmux_sock_ctx->send_buffer != NULL) {
+            free(sqmux_sock_ctx->send_buffer);
+            sqmux_sock_ctx->send_buffer = NULL;
+        }
 #ifdef _WINDOWS
         picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
         picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
@@ -591,6 +605,23 @@ static int picoquic_packet_loop_set_qmux_windows_socket(picoqmux_socket_ctx_t* s
 }
 #endif
 
+#ifndef _WINDOWS
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx)
+{
+    if (sqmux_sock_ctx != NULL) {
+        if (sqmux_sock_ctx->fd != INVALID_SOCKET) {
+            SOCKET_CLOSE(sqmux_sock_ctx->fd);
+            sqmux_sock_ctx->fd = INVALID_SOCKET;
+        }
+        if (sqmux_sock_ctx->send_buffer != NULL) {
+            free(sqmux_sock_ctx->send_buffer);
+            sqmux_sock_ctx->send_buffer = NULL;
+        }
+        free(sqmux_sock_ctx);
+    }
+}
+#endif
+
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
     int af, uint16_t public_port,
     int is_port_shared, int is_listening)
@@ -603,19 +634,25 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
         return NULL;
     }
     memset(sqmux_sock_ctx, 0, sizeof(picoqmux_socket_ctx_t));
+    sqmux_sock_ctx->af = af;
+    sqmux_sock_ctx->port = public_port;
+    sqmux_sock_ctx->fd = INVALID_SOCKET;
 
 #ifdef _WINDOWS
     sqmux_sock_ctx->fd = WSASocket(af, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 #else
-    sqmux_sock_ctx->fd = socket(sqmux_sock_ctx->af, SOCK_STREAM, IPPROTO_TCP);
+    sqmux_sock_ctx->fd = socket(af, SOCK_STREAM, IPPROTO_TCP);
 #endif
 
     if (sqmux_sock_ctx->fd == INVALID_SOCKET ||
 #ifdef _WINDOWS
         picoquic_packet_loop_set_qmux_windows_socket(sqmux_sock_ctx) != 0 ||
+#else
+        picoquic_packet_loop_set_qmux_nonblocking(sqmux_sock_ctx->fd) != 0 ||
+        (af == AF_INET6 && setsockopt(sqmux_sock_ctx->fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
 #endif
         (is_port_shared && setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
-        (public_port != 0 && picoquic_bind_to_port(sqmux_sock_ctx->fd, af, public_port) != 0)) {
+        ((is_listening || public_port != 0) && picoquic_bind_to_port(sqmux_sock_ctx->fd, af, public_port) != 0)) {
         DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", af, public_port);
         picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
         return NULL;
@@ -631,6 +668,21 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
         sqmux_sock_ctx->is_listening = 1;
     }
 
+    if (is_listening || public_port != 0) {
+        struct sockaddr_storage local_addr;
+        if (picoquic_get_local_address(sqmux_sock_ctx->fd, &local_addr) != 0) {
+            DBG_PRINTF("Cannot get local socket address (af=%d, port = %d)\n", af, public_port);
+            picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
+            return NULL;
+        }
+        picoquic_store_addr(&sqmux_sock_ctx->local_addr, (struct sockaddr*)&local_addr);
+        if (local_addr.ss_family == AF_INET6) {
+            sqmux_sock_ctx->port = ntohs(((struct sockaddr_in6*)&local_addr)->sin6_port);
+        }
+        else if (local_addr.ss_family == AF_INET) {
+            sqmux_sock_ctx->port = ntohs(((struct sockaddr_in*)&local_addr)->sin_port);
+        }
+    }
 
     return sqmux_sock_ctx;
 }
@@ -696,12 +748,17 @@ int picoquic_sockloop_start_windows_send(
     int ret = 0;
 
     if (sqmux_sock_ctx->cnx->next_wake_time <= current_time && !sqmux_sock_ctx->is_sending) {
-        /* The send is not ready yet, wait for the next wakeup */
-        ret = picoqmux_prepare_packets(sqmux_sock_ctx->cnx, current_time, sqmux_sock_ctx->winbuf_w.buf,
-            sqmux_sock_ctx->winbuf_w.buf_size, &sqmux_sock_ctx->winbuf_w.buf_len);
-        if (sqmux_sock_ctx->winbuf_w.buf_len > 0) {
-            sqmux_sock_ctx->winbuf_w.wsaBuf.buf = (char*)sqmux_sock_ctx->winbuf_w.buf;
-            sqmux_sock_ctx->winbuf_w.wsaBuf.len = (ULONG)sqmux_sock_ctx->winbuf_w.buf_len;
+        if (sqmux_sock_ctx->winbuf_w.buf_offset >= sqmux_sock_ctx->winbuf_w.buf_len) {
+            sqmux_sock_ctx->winbuf_w.buf_offset = 0;
+            sqmux_sock_ctx->winbuf_w.buf_len = 0;
+            ret = picoqmux_prepare_packets(sqmux_sock_ctx->cnx, current_time, sqmux_sock_ctx->winbuf_w.buf,
+                sqmux_sock_ctx->winbuf_w.buf_size, &sqmux_sock_ctx->winbuf_w.buf_len);
+        }
+        if (ret == 0 && sqmux_sock_ctx->winbuf_w.buf_len > sqmux_sock_ctx->winbuf_w.buf_offset) {
+            sqmux_sock_ctx->winbuf_w.wsaBuf.buf = (char*)sqmux_sock_ctx->winbuf_w.buf +
+                sqmux_sock_ctx->winbuf_w.buf_offset;
+            sqmux_sock_ctx->winbuf_w.wsaBuf.len = (ULONG)(sqmux_sock_ctx->winbuf_w.buf_len -
+                sqmux_sock_ctx->winbuf_w.buf_offset);
             sqmux_sock_ctx->is_sending = 1;
             if (WSASend(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_w.wsaBuf, 1,
                 NULL, 0, &sqmux_sock_ctx->winbuf_w.overlap, NULL) == SOCKET_ERROR) {
@@ -733,8 +790,21 @@ int picoquic_sockloop_finish_windows_send(
         ret = -1;
     }
     else {
+        if (cbTransferred == 0 &&
+            sqmux_sock_ctx->winbuf_w.buf_offset < sqmux_sock_ctx->winbuf_w.buf_len) {
+            ret = -1;
+        }
+        else if (cbTransferred > 0) {
+            sqmux_sock_ctx->winbuf_w.buf_offset += cbTransferred;
+            if (sqmux_sock_ctx->winbuf_w.buf_offset >= sqmux_sock_ctx->winbuf_w.buf_len) {
+                sqmux_sock_ctx->winbuf_w.buf_offset = 0;
+                sqmux_sock_ctx->winbuf_w.buf_len = 0;
+            }
+            else {
+                sqmux_sock_ctx->cnx->next_wake_time = picoquic_get_quic_time(sqmux_sock_ctx->cnx->quic);
+            }
+        }
         sqmux_sock_ctx->is_sending = 0;
-        ret = 0;
     }
     return ret;
 }
@@ -981,8 +1051,9 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
 {
     picoqmux_socket_ctx_t* sqmux_sock_ctx = picoquic_packet_loop_open_qmux_socket(
         dest->sa_family, 0, 0, 0);
-    sqmux_sock_ctx->is_connecting = 1;
     if (sqmux_sock_ctx != NULL) {
+        picoquic_store_addr(&sqmux_sock_ctx->remote_addr, dest);
+        sqmux_sock_ctx->is_connecting = 1;
 #ifdef _WINDOWS
         if (picoquic_packet_loop_start_windows_connect(
             sqmux_sock_ctx, dest) != 0) {
@@ -991,20 +1062,15 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
             return NULL;
         }
 #else
-        int fncntl_ret = fcntl(sqmux_sock_ctx->fd, F_SETFL, O_NONBLOCK);
-        if (fncntl_ret != 0) {
-            DBG_PRINTF("Cannot set non-blocking mode on socket (af=%d)\n", dest->sa_family);
-            picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
-            return NULL;
-        }
         int sock_ret = connect(sqmux_sock_ctx->fd, dest,
             (socklen_t)((dest->sa_family == AF_INET) ?
                 sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)));
-        if (sock_ret != 0  && sock_ret != EINPROGRESS) {
+        if (sock_ret != 0 && errno != EINPROGRESS) {
             DBG_PRINTF("Cannot connect to destination (af=%d)\n", dest->sa_family);
             picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
             return NULL;
         }
+        sqmux_sock_ctx->is_connecting = (sock_ret != 0);
 #endif
         sqmux_sock_ctx->cnx = cnx;
     }
@@ -1059,8 +1125,10 @@ int picoquic_packet_loop_open_qmux_sockets(
                 }
             }
             if (ret == 0) {
+#ifdef _WINDOWS
                 ret = picoquic_packet_loop_start_windows_accept_sockets(
                     *sqmux_ctx, nb_qmux_sockets, *max_qmux_socket);
+#endif
             }
         }
         if (ret != 0) {
@@ -1942,26 +2010,54 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         sqmux_ctx[socket_rank]->cnx = cnx;
     }
 #else
-    SOCKET_TYPE new_socket;
+    SOCKET_TYPE new_socket = INVALID_SOCKET;
     struct sockaddr_storage addr_from;
     socklen_t addr_from_len = sizeof(addr_from);
+    picoqmux_socket_ctx_t* new_ctx = NULL;
 
-    new_socket = sqmux_ctx[socket_rank]->fd;
-    if (new_socket == INVALID_SOCKET ||
+    memset(&addr_from, 0, sizeof(addr_from));
+    if (*nb_qmux_sockets >= max_qmux_sockets) {
+        ret = -1;
+    }
+    else if ((new_socket = accept(sqmux_ctx[socket_rank]->fd, (struct sockaddr*)&addr_from, &addr_from_len)) == INVALID_SOCKET) {
+        ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
+    }
+    else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
         (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL ||
-        (sqmux_ctx[*nb_qmux_sockets] = picoquic_packet_loop_open_qmux_socket(
-            addr_from.ss_family, 0, 0, 0)) == NULL) {
-        if (new_socket != INVALID_SOCKET) {
-            SOCKET_CLOSE(new_socket);
-        }
-        if (cnx != NULL) {
-            picoquic_delete_cnx(cnx);
-        }
+        (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
     }
     else {
-        sqmux_ctx[*nb_qmux_sockets]->cnx = cnx;
-        (*nb_qmux_sockets) += 1;
+        memset(new_ctx, 0, sizeof(picoqmux_socket_ctx_t));
+        new_ctx->fd = new_socket;
+        new_socket = INVALID_SOCKET;
+        new_ctx->af = addr_from.ss_family;
+        new_ctx->cnx = cnx;
+        cnx = NULL;
+        picoquic_store_addr(&new_ctx->remote_addr, (struct sockaddr*)&addr_from);
+        if (picoquic_get_local_address(new_ctx->fd, &new_ctx->local_addr) != 0) {
+            ret = -1;
+        }
+        else {
+            if (new_ctx->local_addr.ss_family == AF_INET6) {
+                new_ctx->port = ntohs(((struct sockaddr_in6*)&new_ctx->local_addr)->sin6_port);
+            }
+            else if (new_ctx->local_addr.ss_family == AF_INET) {
+                new_ctx->port = ntohs(((struct sockaddr_in*)&new_ctx->local_addr)->sin_port);
+            }
+            sqmux_ctx[*nb_qmux_sockets] = new_ctx;
+            new_ctx = NULL;
+            (*nb_qmux_sockets) += 1;
+        }
+    }
+    if (ret != 0) {
+        if (new_socket != INVALID_SOCKET) {
+            SOCKET_CLOSE(new_socket);
+        }
+        picoquic_packet_loop_free_qmux_socket(new_ctx);
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
     }
 #endif
     return ret;
@@ -2015,7 +2111,7 @@ int picoquic_packet_loop_do_tcp_read(
             DBG_PRINTF("Error: recv returns %d\n", recv_len);
         }
         else {
-            DBG_PRINTF("Connection closed by peer.\n");
+            DBG_PRINTF("%s", "Connection closed by peer.\n");
         }
         /* close the socket, and remove it from the list. */
         picoquic_packet_loop_tcp_close(sqmux_ctx,
@@ -2027,6 +2123,15 @@ int picoquic_packet_loop_do_tcp_read(
     else {
         /* Submit the data to the quic connection. */
         picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, buf, (size_t)recv_len, 0);
+        if (sqmux_ctx[socket_rank]->cnx != NULL &&
+            (sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_disconnected ||
+                sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received)) {
+            picoquic_packet_loop_tcp_close(sqmux_ctx,
+                nb_qmux_sockets,
+                max_qmux_sockets,
+                socket_rank,
+                current_time);
+        }
     }
     return ret;
 }
@@ -2041,15 +2146,69 @@ int picoquic_packet_loop_do_tcp_send(
     uint8_t* qmux_buffer,
     size_t qmux_buffer_size)
 {
-    size_t send_length = 0;
-    int ret = picoqmux_prepare_packets(sqmux_ctx[socket_rank]->cnx, current_time,
-        qmux_buffer, qmux_buffer_size, &send_length);
+    picoqmux_socket_ctx_t* sqmux_sock_ctx = sqmux_ctx[socket_rank];
+    int ret = 0;
+    (void)qmux_buffer;
 
-    if (ret == 0 && send_length > 0) {
-        int sent_length = send(sqmux_ctx[socket_rank]->fd, (const char*)qmux_buffer, (int)send_length, 0);
+    if (sqmux_sock_ctx->send_buffer_offset >= sqmux_sock_ctx->send_buffer_length) {
+        sqmux_sock_ctx->send_buffer_offset = 0;
+        sqmux_sock_ctx->send_buffer_length = 0;
 
-        if (sent_length <= 0) {
+        if (sqmux_sock_ctx->send_buffer_size < qmux_buffer_size) {
+            uint8_t* new_buffer = (uint8_t*)realloc(sqmux_sock_ctx->send_buffer, qmux_buffer_size);
+            if (new_buffer == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                sqmux_sock_ctx->send_buffer = new_buffer;
+                sqmux_sock_ctx->send_buffer_size = qmux_buffer_size;
+            }
+        }
+
+        if (ret == 0) {
+            ret = picoqmux_prepare_packets(sqmux_sock_ctx->cnx, current_time,
+                sqmux_sock_ctx->send_buffer, sqmux_sock_ctx->send_buffer_size,
+                &sqmux_sock_ctx->send_buffer_length);
+        }
+    }
+
+    if (ret == 0 && sqmux_sock_ctx->send_buffer_offset < sqmux_sock_ctx->send_buffer_length) {
+        size_t available = sqmux_sock_ctx->send_buffer_length - sqmux_sock_ctx->send_buffer_offset;
+        int send_length = (available > (size_t)INT_MAX) ? INT_MAX : (int)available;
+        int sent_length = send(sqmux_sock_ctx->fd,
+            (const char*)sqmux_sock_ctx->send_buffer + sqmux_sock_ctx->send_buffer_offset,
+            send_length, 0);
+
+        if (sent_length < 0) {
+#ifdef _WINDOWS
+            int last_error = WSAGetLastError();
+            if (last_error == WSAEWOULDBLOCK || last_error == WSAEINPROGRESS) {
+                sqmux_sock_ctx->cnx->next_wake_time = current_time;
+            }
+            else {
+                ret = -1;
+            }
+#else
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                sqmux_sock_ctx->cnx->next_wake_time = current_time;
+            }
+            else {
+                ret = -1;
+            }
+#endif
+        }
+        else if (sent_length == 0) {
             ret = -1;
+        }
+        else {
+            sqmux_sock_ctx->send_buffer_offset += (size_t)sent_length;
+            if (sqmux_sock_ctx->send_buffer_offset >= sqmux_sock_ctx->send_buffer_length) {
+                sqmux_sock_ctx->send_buffer_offset = 0;
+                sqmux_sock_ctx->send_buffer_length = 0;
+            }
+            else {
+                sqmux_sock_ctx->cnx->next_wake_time = current_time;
+            }
         }
     }
     if (ret != 0) {

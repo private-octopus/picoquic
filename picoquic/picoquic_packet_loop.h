@@ -86,6 +86,7 @@ typedef struct st_picoquic_sockloop_win_buf_t {
     uint8_t* buf;
     size_t buf_size;
     size_t buf_len;
+    size_t buf_offset;
     WSABUF wsaBuf;
     WSAOVERLAPPED overlap;
 } picoquic_sockloop_win_buf_t;
@@ -104,21 +105,10 @@ typedef struct st_picoqmux_socket_ctx_t {
     picoquic_cnx_t* cnx;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
-#if 0
-    /* Receive data buffer -- size ought to be 0x40000!
-    * no buffer allocated if accepting.
-     */
-    size_t recv_buffer_size;
-    uint8_t* recv_buffer;
-    /* address specifications. Discuss: useful for statistics. */
-    socklen_t from_length;
-    socklen_t dest_length;
-    int dest_if;
-    int bytes_recv;
-    /* send buffer  -- buffer size ought to be 0x40000! */
     size_t send_buffer_size;
+    size_t send_buffer_length;
+    size_t send_buffer_offset;
     uint8_t* send_buffer;
-#endif
 #if defined(_WINDOWS)
     /* Windows specific */
     picoquic_sockloop_win_buf_t winbuf_r;
@@ -489,9 +479,17 @@ int picoquic_start_server_threads(
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
     int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
+picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
+    int af, uint16_t public_port, int is_port_shared, int is_listening);
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t** sqmux_ctx, int* nb_qmux_sockets,
+    int max_qmux_sockets, int socket_rank, uint64_t current_time);
+int picoquic_packet_loop_do_tcp_read(picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets, int max_qmux_sockets, int socket_rank,
+    uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
 
 #ifdef __cplusplus
 }
 #endif
 #endif /* PICOQUIC_PACKET_LOOP_H */
-

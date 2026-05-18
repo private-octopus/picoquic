@@ -410,7 +410,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
             cnx->local_parameters.max_datagram_frame_size);
     }
 
-    if (cnx->grease_transport_parameters) {
+    if (extension_mode <= 1 && cnx->grease_transport_parameters) {
         /* Do not use a purely random value, so we can repetitive tests */
         int n = 31 * (cnx->initial_cnxid.id[0] + cnx->client_mode) + 27;
         uint64_t v = cnx->initial_cnxid.id[1];
@@ -421,7 +421,7 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, n, v);
     }
 
-    if (cnx->test_large_chello && bytes != NULL &&
+    if (extension_mode <= 1 && cnx->test_large_chello && bytes != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_tp_test_large_chello)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1200)) != NULL){
         if (bytes + 1200 > bytes_max) {
@@ -476,8 +476,13 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
         }
     }
 
-    if (cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
+    if (extension_mode <= 1 && cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
         bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at);
+    }
+
+    if (extension_mode > 1 && cnx->qmux_local_max_record_size > PICOQMUX_MAX_RECORD_SIZE_DEFAULT && bytes != NULL) {
+        bytes = picoquic_transport_param_type_varint_encode(bytes, bytes_max, picoquic_tp_qmux_max_record_size,
+            cnx->qmux_local_max_record_size);
     }
 
     /* This test extension must be the last one in the encoding,
@@ -916,11 +921,30 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_reset_stream_at:
-                    if (extension_length != 0) {
+                    if (extension_mode > 1) {
+                        /* Ignore extension transport parameters not mapped to QMUX. */
+                    }
+                    else if (extension_length != 0) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Reset Stream At TP");
                     }
                     else {
                         cnx->remote_parameters.is_reset_stream_at_enabled = 1;
+                    }
+                    break;
+                case picoquic_tp_qmux_max_record_size:
+                    if (extension_mode <= 1) {
+                        /* Ignore QMUX-only transport parameters on QUIC connections. */
+                    }
+                    else {
+                        uint64_t max_record_size = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                        if (ret == 0) {
+                            if (max_record_size < PICOQMUX_MAX_RECORD_SIZE_DEFAULT) {
+                                ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "QMUX max record size");
+                            }
+                            else {
+                                cnx->qmux_remote_max_record_size = max_record_size;
+                            }
+                        }
                     }
                     break;
                 default:

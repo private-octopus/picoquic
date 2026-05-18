@@ -240,6 +240,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_initial_max_path_id 0x3e /* per draft quic multipath 20 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
+#define picoquic_tp_qmux_max_record_size 0x0571c59429cd0845ull /* per draft-ietf-quic-qmux-01 */
 
 /* Packet contexts */
 typedef enum {

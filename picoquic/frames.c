@@ -1397,6 +1397,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             ret = 1;  // Error already signaled
         }
     }
+    else if (cnx->is_qmux && offset != stream->consumed_offset) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_stream_range_min);
+    }
     else if (stream->fin_received) {
         if (fin != 0 ? stream->fin_offset != new_fin_offset : new_fin_offset > stream->fin_offset) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);

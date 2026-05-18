@@ -1925,6 +1925,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_send_extension_tp_filter)
+        {
+            int ret = qmux_send_extension_tp_filter_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_before_tp_gate)
+        {
+            int ret = qmux_send_before_tp_gate_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_max_record_size)
+        {
+            int ret = qmux_send_max_record_size_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_tp)
         {
             int ret = qmux_receive_tp_test();
@@ -1949,15 +1967,93 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_prohibited_frames)
+        {
+            int ret = qmux_receive_prohibited_frames_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_allowed_frames)
+        {
+            int ret = qmux_receive_allowed_frames_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_extension_tp_ignore)
+        {
+            int ret = qmux_receive_extension_tp_ignore_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_extension_frame_error)
+        {
+            int ret = qmux_receive_extension_frame_error_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_misc_frame_filter)
+        {
+            int ret = qmux_send_misc_frame_filter_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_datagram)
+        {
+            int ret = qmux_datagram_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_stream_order)
+        {
+            int ret = qmux_receive_stream_order_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_stream_order_edges)
+        {
+            int ret = qmux_receive_stream_order_edges_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_record_errors)
+        {
+            int ret = qmux_receive_record_errors_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_empty_record)
+        {
+            int ret = qmux_receive_empty_record_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_receive_split_record)
+        {
+            int ret = qmux_receive_split_record_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_qx_ping)
         {
             int ret = qmux_receive_qx_ping_test();
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_qx_ping_order)
+        {
+            int ret = qmux_receive_qx_ping_order_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_send_qx_ping_r)
         {
             int ret = qmux_send_qx_ping_r_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_send_qx_ping_r_append)
+        {
+            int ret = qmux_send_qx_ping_r_append_test();
             Assert::AreEqual(ret, 0);
         }
 
@@ -1985,9 +2081,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_socket_accept)
+        {
+            int ret = qmux_socket_accept_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_socket_close_on_receive)
+        {
+            int ret = qmux_socket_close_on_receive_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_loop_tls)
         {
             int ret = qmux_loop_tls_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_tls_client_alpn_required)
+        {
+            int ret = qmux_tls_client_alpn_required_test();
             Assert::AreEqual(ret, 0);
         }
 
