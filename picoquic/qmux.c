@@ -723,8 +723,6 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
     else {
         picoqmux_check_idle_timer(cnx, current_time, &next_wake_time);
         for (;;) {
-            /*TODO: allocating 16KB on the stack is not a good idea. */
-            uint8_t record_buffer[PICOQMUX_MAX_RECORD_SIZE_DEFAULT];
             uint8_t* bytes = send_buffer + *send_length;
             uint8_t* bytes_next = bytes;
             size_t max_length = send_buffer_max - *send_length;
@@ -737,17 +735,8 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
                 break;
             }
             else {
-                /* TODO: zero copy. It is possible to just allocate 2 bytes to
-                 * hold the record type at the bytes_next location, add the bytes
-                 * after that, then go pack and update the length to that actual value,
-                 * maybe doing an mmove if the length is below 64 bytes.
-                 * First attempt at doing that caused the "TLS" loop to fail,
-                 * possibly because TLS can send at most 16KB per record, and
-                 * needs to account for the AEAD overhead.
-                 */
-
-                ret = picoqmux_prepare_cnx_packet(cnx, current_time, record_buffer,
-                    record_size_max, &record_length);
+                ret = picoqmux_prepare_cnx_packet(cnx, current_time, bytes_next + 2,
+                    record_size_max - 2, &record_length);
                 if (ret < 0) {
                     break;
                 }
@@ -755,15 +744,17 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
                     /* Nothing more to send. */
                     break;
                 }
-                else if ((bytes_next = picoquic_frames_varint_encode(bytes, send_buffer + send_buffer_max,
-                    record_length)) == NULL ||
-                    bytes_next + record_length > send_buffer + send_buffer_max) {
-                    next_wake_time = current_time;
-                    break;
-                }
                 else {
-                    memcpy(bytes_next, record_buffer, record_length);
-                    length = (bytes_next - bytes) + record_length;
+                    if (record_length < 64) {
+                        bytes_next[0] = ((uint8_t)(record_length&0xff));
+                        memmove(bytes_next + 1, bytes_next + 2, record_length);
+                        length = record_length + 1;
+                    }
+                    else {
+                        bytes_next[0] = ((uint8_t)(record_length >> 8)) | 0x40;
+                        bytes_next[1] = (uint8_t)(record_length & 0xff);
+                        length = record_length + 2;
+                    }
                     *send_length += length;
                 }
             }
