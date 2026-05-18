@@ -90,6 +90,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/config.c
     picoquic/cubic.c
     picoquic/c4.c
+    picoquic/dualq_aqm.c
     picoquic/ech.c
     picoquic/error_names.c
     picoquic/fastcc.c
@@ -115,12 +116,12 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picosplay.c
     picoquic/port_blocking.c
     picoquic/prague.c
+    picoquic/qmux.c
     picoquic/quicctx.c
     picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
-    picoquic/dualq_aqm.c
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
@@ -224,6 +225,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
+    picoquictest/qmux_test.c
     picoquictest/quic_tester.c
     picoquictest/red_aqm.c
     picoquictest/rctl_aqm.c

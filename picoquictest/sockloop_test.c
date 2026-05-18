@@ -29,6 +29,7 @@
 #include "autoqlog.h"
 #include "picoquic_packet_loop.h"
 #include "picosocks.h"
+#include "picoqmux.h"
 
 
 #ifndef SLEEP
@@ -83,6 +84,7 @@ typedef struct st_sockloop_test_cb_t {
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
     picoquic_packet_loop_param_t* param;
+    picoquic_cnx_t* qmux_cnx;
 } sockloop_test_cb_t;
 
 int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
@@ -136,7 +138,13 @@ int sockloop_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum
     }
     else {
         picoquic_cnx_t* cnx_client = (cb_ctx->test_ctx == NULL)?NULL:cb_ctx->test_ctx->cnx_client;
-        switch (cb_mode) {
+        if (cnx_client == NULL){
+            if (cb_ctx->qmux_cnx == NULL ||
+                cb_ctx->qmux_cnx->cnx_state == picoquic_state_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+        }
+        else switch (cb_mode) {
         case picoquic_packet_loop_ready: {
             picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
             if (cb_ctx->test_id > 1) {
@@ -730,4 +738,350 @@ int sockloop_thread_name_test(void)
     spec.thread_name = "picoquic loop";
 
     return(sockloop_test_one(&spec));
+}
+
+/* Add tests of a QMUX loop. */
+uint8_t sockloop_qmux_test_data[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,14, 15, 16
+};
+
+typedef struct st_sockloop_qmux_test_t {
+    uint8_t test_id;
+    int af;
+    uint16_t port;
+    int socket_buffer_size;
+    char const* thread_name;
+    int use_background_thread;
+    int test_bad_port;
+    int test_close;
+    int test_idle;
+    /* variables used to monitor execution */
+    picoquic_packet_loop_param_t* param;
+    int received_stream_0;
+    uint64_t stream_0_length_received;
+    int stream_0_data_matches;
+    int stream_0_fin_received;
+    int should_close_tcp;
+    /* Tracking the client connection to terminate gracefully */
+    picoquic_cnx_t* qmux_cnx;
+} sockloop_qmux_test_t;
+
+/* Check that frames can be received properly */
+/* TODO: run a test with all frames in skip frame test, to check
+* that allowed frames pass, and that not allowed frames are rejected. */
+
+int sockloop_qmux_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+
+    int ret = 0;
+    sockloop_qmux_test_t* sim_ctx = (sockloop_qmux_test_t*)callback_ctx;
+
+    if (ret == 0) {
+        switch (fin_or_event) {
+        case picoquic_callback_stream_data:
+        case picoquic_callback_stream_fin:
+            if (stream_id == 0) {
+                sim_ctx->received_stream_0 = 1;
+                sim_ctx->stream_0_length_received = length;
+                if (length == sizeof(sockloop_qmux_test_data) &&
+                    memcmp(bytes, sockloop_qmux_test_data, length) == 0) {
+                    sim_ctx->stream_0_data_matches = 1;
+                }
+                if (fin_or_event == picoquic_callback_stream_fin) {
+                    sim_ctx->stream_0_fin_received = 1;
+                    if (sim_ctx->test_close) {
+                        sim_ctx->should_close_tcp = 1;
+                        picoquic_connection_disconnect(cnx);
+                    }
+                    else if (!sim_ctx->test_idle) {
+                        picoquic_close_ex(cnx, 0, "data received.");
+                    }
+                }
+            }
+            break;
+        case picoquic_callback_prepare_to_send:
+        case picoquic_callback_datagram:
+        case picoquic_callback_prepare_datagram:
+            /* not expected */
+            ret = -1;
+            break;
+        case picoquic_callback_stream_reset: /* Client reset stream #x */
+        case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
+            /* TODO: react to abandon stream, etc. */
+            break;
+        case picoquic_callback_stateless_reset: /* Received an error message */
+        case picoquic_callback_close: /* Received connection close */
+        case picoquic_callback_application_close: /* Received application close */
+            /* Remove the connection from the context, and then delete it */
+            picoquic_set_callback(cnx, NULL, NULL);
+            break;
+        case picoquic_callback_version_negotiation:
+            /* The server should never receive a version negotiation response */
+            break;
+        case picoquic_callback_stream_gap:
+            /* This callback is never used. */
+            break;
+        case picoquic_callback_almost_ready:
+            break;
+        case picoquic_callback_ready:
+            /* should mark the first stream as ready, create it if necessary */
+            if (cnx->client_mode) {
+                picoquic_add_to_stream(cnx, 0, sockloop_qmux_test_data, sizeof(sockloop_qmux_test_data), 1);
+            }
+            break;
+        case picoquic_callback_request_alpn_list:
+            /* qmux_test_set_alpn_list((void*)bytes); */
+            break;
+        case picoquic_callback_set_alpn:
+            break;
+        case picoquic_callback_datagram_acked:
+            /* Ack for packet carrying datagram-object received from peer */
+        case picoquic_callback_datagram_lost:
+            /* Packet carrying datagram-object probably lost */
+        case picoquic_callback_datagram_spurious:
+            /* Packet carrying datagram-object was not really lost */
+            break;
+        case picoquic_callback_pacing_changed:
+            /* Notification of rate change from congestion controller */
+            break;
+        default:
+            /* unexpected */
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* callback_arg)
+{
+    int ret = 0;
+    sockloop_qmux_test_t* sim_ctx = (sockloop_qmux_test_t*)callback_ctx;
+
+    if (sim_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        if (sim_ctx->qmux_cnx == NULL) {
+            ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+        }
+        else switch (cb_mode) {
+        case picoquic_packet_loop_ready: {
+            picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
+            options->do_time_check = 1;
+            fprintf(stdout, "Waiting for packets.\n");
+            break;
+        }
+        case picoquic_packet_loop_after_receive:
+            /* Post receive callback */
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("%s", "The connection is closed!\n");
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+                break;
+            }
+            break;
+        case picoquic_packet_loop_after_send:
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            break;
+        case picoquic_packet_loop_port_update:
+            break;
+            /* TODO: consider adding the delay computation callback! */
+        case picoquic_packet_loop_time_check: {
+            packet_loop_time_check_arg_t* time_check_arg = (packet_loop_time_check_arg_t*)callback_arg;
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("%s", "The connection is closed!\n");
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+                break;
+            }
+            else if (time_check_arg->delta_t > 10000000) {
+                time_check_arg->delta_t = 10000000;
+            }
+            break;
+        }
+        case picoquic_packet_loop_wake_up:
+            break;
+        case picoquic_packet_loop_alt_port:
+            break;
+        case picoquic_packet_loop_system_call_duration:
+            break;
+        default:
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+
+int sockloop_qmux_one(
+    sockloop_qmux_test_t* spec)
+{
+    int ret = 0;
+    picoquic_quic_t* qserver = NULL;
+    picoquic_quic_t* qmux = NULL;
+    picoquic_cnx_t* cnx_qmux = NULL;
+    picoquic_packet_loop_param_t param = { 0 };
+    struct sockaddr_storage dest = { 0 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    const uint8_t test_ticket_encrypt_key[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        /* Create a pro-forma QUIc server */
+        qserver = picoquic_create(8,
+            NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, NULL, NULL,
+            0, NULL, NULL, NULL, 0);
+        /* Create a QMux context */
+        qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, sockloop_qmux_callback, spec, NULL, 0, NULL,
+            0, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+        if (qserver == NULL || qmux == NULL) {
+            ret = -1;
+        }
+        else {
+            /* set the destination address to selected port and loopback */
+            picoquic_set_test_address((struct sockaddr_in*)&dest, htonl(0x7f000001), 
+                (spec->test_bad_port)?spec->port:htons(spec->port));
+            /* start a client connection */
+            cnx_qmux = picoqmux_create_qmux_cnx(qmux, picoquic_current_time(), 1, 0,
+                PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, (struct sockaddr*)&dest);
+            if (cnx_qmux == NULL) {
+                ret = -1;
+            }
+            else {
+                spec->qmux_cnx = cnx_qmux;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        param.local_port = spec->port;
+        param.qmux_port = spec->port;
+        param.local_af = 0;
+        param.socket_buffer_size = spec->socket_buffer_size;
+        spec->param = &param;
+
+        if (spec->use_background_thread) {
+            picoquic_network_thread_ctx_t* thread_ctx = NULL;
+
+            if (spec->thread_name != NULL) {
+                thread_ctx = picoquic_start_custom_network_thread_qmux(qserver, qmux, &param,
+                    picoquic_internal_thread_create, picoquic_internal_thread_delete,
+                    picoquic_internal_thread_setname, spec->thread_name, sockloop_qmux_test_cb, spec, &ret);
+            }
+            else {
+                thread_ctx = picoquic_start_network_thread(qserver, &param, sockloop_qmux_test_cb, spec, &ret);
+            }
+            if (thread_ctx == NULL) {
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                for (int i = 0; i < 2000; i++) {
+                    if (thread_ctx->thread_is_ready) {
+                        DBG_PRINTF("Thread is ready after %dms", i);
+                        break;
+                    }
+                    else {
+                        SLEEP(1);
+                    }
+                }
+                if (!thread_ctx->thread_is_ready) {
+                    DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                    ret = -1;
+                }
+                else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                    DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                    ret = -1;
+                }
+                else {
+                    if (spec->test_bad_port) {
+                        /* we merely check that the connection was properly terminated */
+                        ret = 0;
+                    }
+                    else {
+                        if (!spec->received_stream_0 ||
+                            !spec->stream_0_fin_received ||
+                            !spec->stream_0_data_matches) {
+                            ret = -1;
+                        }
+                    }
+                }
+                picoquic_delete_network_thread(thread_ctx);
+            }
+        }
+        else {
+            /* TODO -- proper initialization */
+            picoquic_network_thread_ctx_t t_ctx = { 0 };
+            t_ctx.quic = qserver;
+            t_ctx.qmux = qmux;
+            t_ctx.param = &param;
+            t_ctx.loop_callback = sockloop_qmux_test_cb;
+            t_ctx.loop_callback_ctx = spec;
+
+            (void)picoquic_packet_loop_v3((void*)&t_ctx);
+
+            if (spec->test_bad_port) {
+                /* we merely check that the connection was properly terminated */
+                ret = 0;
+            }
+            else {
+                if (!spec->received_stream_0 ||
+                    !spec->stream_0_fin_received ||
+                    !spec->stream_0_data_matches) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+void sockloop_test_set_qmux_spec(sockloop_qmux_test_t* spec, uint8_t test_id)
+{
+    memset(spec, 0, sizeof(sockloop_qmux_test_t));
+    spec->test_id = test_id;
+    spec->af = AF_INET6;
+    spec->port = 3456;
+    spec->socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+}
+
+int sockloop_qmux_test(void)
+{
+    sockloop_qmux_test_t spec;
+    sockloop_test_set_qmux_spec(&spec, 1);
+
+    return(sockloop_qmux_one(&spec));
+}
+
+int sockloop_qmux_badp_test(void)
+{
+    sockloop_qmux_test_t spec;
+    sockloop_test_set_qmux_spec(&spec, 1);
+    spec.test_bad_port = 1;
+
+    return(sockloop_qmux_one(&spec));
 }
