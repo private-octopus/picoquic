@@ -1949,6 +1949,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_record_errors)
+        {
+            int ret = qmux_receive_record_errors_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_qx_ping)
         {
             int ret = qmux_receive_qx_ping_test();

@@ -84,6 +84,8 @@ void picoqmux_init(picoquic_cnx_t* cnx, int is_cleartext)
     cnx->qx_query_ack = UINT64_MAX;
     cnx->qx_query_last = UINT64_MAX;
     cnx->idle_timeout = cnx->local_parameters.max_idle_timeout*1000;
+    cnx->qmux_local_max_record_size = PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
+    cnx->qmux_remote_max_record_size = PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
 }
 
 int picoqmux_has_sent_tp(picoquic_cnx_t* cnx)
@@ -721,23 +723,47 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
     else {
         picoqmux_check_idle_timer(cnx, current_time, &next_wake_time);
         for (;;) {
+            /*TODO: allocating 16KB on the stack is not a good idea. */
+            uint8_t record_buffer[PICOQMUX_MAX_RECORD_SIZE_DEFAULT];
             uint8_t* bytes = send_buffer + *send_length;
+            uint8_t* bytes_next = bytes;
             size_t max_length = send_buffer_max - *send_length;
+            size_t record_length = 0;
+            size_t record_size_max = (cnx->qmux_remote_max_record_size < PICOQMUX_MAX_RECORD_SIZE_DEFAULT) ?
+                (size_t)cnx->qmux_remote_max_record_size : (size_t)PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
             size_t length = 0;
-            if (max_length < 255) {
+            if (record_size_max == 0 || max_length < 255) {
                 next_wake_time = current_time;
                 break;
             }
             else {
-                ret = picoqmux_prepare_cnx_packet(cnx, current_time, bytes, max_length, &length);
+                /* TODO: zero copy. It is possible to just allocate 2 bytes to
+                 * hold the record type at the bytes_next location, add the bytes
+                 * after that, then go pack and update the length to that actual value,
+                 * maybe doing an mmove if the length is below 64 bytes.
+                 * First attempt at doing that caused the "TLS" loop to fail,
+                 * possibly because TLS can send at most 16KB per record, and
+                 * needs to account for the AEAD overhead.
+                 */
+
+                ret = picoqmux_prepare_cnx_packet(cnx, current_time, record_buffer,
+                    record_size_max, &record_length);
                 if (ret < 0) {
                     break;
                 }
-                else if (length == 0) {
+                else if (record_length == 0) {
                     /* Nothing more to send. */
                     break;
                 }
+                else if ((bytes_next = picoquic_frames_varint_encode(bytes, send_buffer + send_buffer_max,
+                    record_length)) == NULL ||
+                    bytes_next + record_length > send_buffer + send_buffer_max) {
+                    next_wake_time = current_time;
+                    break;
+                }
                 else {
+                    memcpy(bytes_next, record_buffer, record_length);
+                    length = (bytes_next - bytes) + record_length;
                     *send_length += length;
                 }
             }
@@ -903,9 +929,23 @@ int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
 {
     int ret = 0;
     picoquic_path_t* path_x = cnx->path[0];
+    const uint8_t* bytes = receive_buffer;
+    const uint8_t* bytes_max = receive_buffer + receive_length;
 
-    ret = picoqmux_decode_frames(cnx, path_x, receive_buffer, receive_length, current_time);
+    while (ret == 0 && bytes < bytes_max) {
+        uint64_t record_length = 0;
 
+        if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &record_length)) == NULL ||
+            record_length > cnx->qmux_local_max_record_size ||
+            bytes + record_length > bytes_max) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+            ret = PICOQUIC_ERROR_DETECTED;
+        }
+        else {
+            ret = picoqmux_decode_frames(cnx, path_x, bytes, (size_t)record_length, current_time);
+            bytes += record_length;
+        }
+    }
     if (ret == 0) {
         cnx->latest_progress_time = current_time;
         cnx->next_wake_time = current_time;

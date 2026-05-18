@@ -99,7 +99,7 @@ typedef struct st_qmux_sim_spec_t {
 
 #define QMUX_FIRST_DATA 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 uint8_t qmux_test_data[] = { QMUX_FIRST_DATA };
-uint8_t qmux_test_packet[] = { 0x0b, 0x0, 0x0f, QMUX_FIRST_DATA };
+uint8_t qmux_test_packet[] = { 0x12, 0x0b, 0x0, 0x0f, QMUX_FIRST_DATA };
 
 void qmux_test_simulate_remote(picoquic_cnx_t* cnx) {
     cnx->remote_parameters.initial_max_data = 0x10000;
@@ -234,7 +234,7 @@ int qmux_test_callback(picoquic_cnx_t* cnx,
 }
 
 uint8_t qmux_test_tp_packet[] = {
-    0xff, 0x51, 0x53, 0x30, 0x0d, 0x0a, 0x0d, 0x0a,
+    0x30, 0xff, 0x51, 0x53, 0x30, 0x0d, 0x0a, 0x0d, 0x0a,
     0x40, 0x26, 0x05, 0x04, 0x80, 0x20, 0x00, 0x00,
     0x04, 0x04, 0x80, 0x10, 0x00, 0x00, 0x08, 0x02,
     0x42, 0x00, 0x01, 0x04, 0x80, 0x00, 0x75, 0x30,
@@ -351,11 +351,11 @@ int qmux_receive_tp_test(void)
 }
 
 uint8_t qmux_qx_ping_packet[] = {
-    0xF4, 0x8c, 0x67, 0x52, 0x9e, 0xf8, 0xc7, 0xbd, 0
+    0x09, 0xF4, 0x8c, 0x67, 0x52, 0x9e, 0xf8, 0xc7, 0xbd, 0
 };
 
 uint8_t qmux_qx_ping_r_packet[] = {
-    0xF4, 0x8c, 0x67, 0x52, 0x9e, 0xf8, 0xc7, 0xbe, 0
+    0x09, 0xF4, 0x8c, 0x67, 0x52, 0x9e, 0xf8, 0xc7, 0xbe, 0
 };
 
 int qmux_receive_qx_ping_test_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
@@ -380,6 +380,7 @@ int qmux_receive_qx_ping_test(void)
 /* tests of closing frame */
 
 uint8_t qmux_cnx_close_packet[] = {
+    0x10,
     picoquic_frame_type_connection_close,
     0x80, 0x00, 0xCF, 0xFF, 0,
     9,
@@ -387,6 +388,7 @@ uint8_t qmux_cnx_close_packet[] = {
 };
 
 uint8_t qmux_app_close_packet[] = {
+    0x03,
     picoquic_frame_type_application_close,
     0,
     0
@@ -461,6 +463,20 @@ int qmux_receive_errors_test(void)
         /* Receive qx_ping response when no qx_ping query has been sent */;
         ret = qmux_receive_error_one(1, 1, qmux_qx_ping_r_packet, sizeof(qmux_qx_ping_r_packet),
             PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+    return ret;
+}
+
+int qmux_receive_record_errors_test(void)
+{
+    uint8_t qmux_truncated_record[] = { 0x12, 0x0b, 0, 0x0f };
+    uint8_t qmux_oversized_record[] = { 0x7f, 0xff };
+    int ret = qmux_receive_error_one(1, 1, qmux_truncated_record, sizeof(qmux_truncated_record),
+        PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+
+    if (ret == 0) {
+        ret = qmux_receive_error_one(1, 1, qmux_oversized_record, sizeof(qmux_oversized_record),
+            PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
     }
     return ret;
 }
