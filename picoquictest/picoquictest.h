@@ -262,6 +262,7 @@ int qmux_receive_prohibited_frames_test(void);
 int qmux_receive_record_errors_test(void);
 int qmux_receive_extension_tp_ignore_test(void);
 int qmux_receive_stream_order_test(void);
+int qmux_receive_stream_order_edges_test(void);
 int qmux_receive_empty_record_test(void);
 int qmux_receive_split_record_test(void);
 int qmux_receive_qx_ping_test(void);
