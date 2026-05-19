@@ -275,6 +275,7 @@ int qmux_loop_delay_test(void);
 int qmux_loop_idle_test(void);
 int qmux_socket_accept_test(void);
 int qmux_loop_tls_test(void);
+int qmux_tls_client_alpn_required_test(void);
 int qmux_loop_tls_close_test(void);
 int perflog_test(void);
 int rebinding_stress_test(void);

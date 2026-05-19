@@ -1229,6 +1229,28 @@ int qmux_loop_idle_test(void)
     return qmux_loop_one(&spec);
 }
 
+int qmux_tls_client_alpn_required_test(void)
+{
+    qmux_sim_ctx_t sim_ctx;
+    qmux_sim_spec_t spec = { 0 };
+    int ret;
+
+    spec.is_cleartext = 0;
+    spec.idle_timeout = 15000;
+    ret = qmux_test_init(&sim_ctx, &spec);
+
+    if (ret == 0) {
+        sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1, 0, PICOQUIC_TEST_SNI, NULL, NULL);
+        if (sim_ctx.cnx[0] != NULL) {
+            ret = -1;
+        }
+    }
+
+    qmux_test_release(&sim_ctx);
+    return ret;
+}
+
 int qmux_loop_tls_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
