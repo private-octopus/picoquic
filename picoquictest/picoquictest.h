@@ -264,6 +264,7 @@ int qmux_receive_stream_order_test(void);
 int qmux_receive_split_record_test(void);
 int qmux_receive_qx_ping_test(void);
 int qmux_send_qx_ping_r_test(void);
+int qmux_send_qx_ping_r_append_test(void);
 int qmux_send_cnx_close_test(void);
 int qmux_loop_test(void);
 int qmux_loop_delay_test(void);

@@ -328,6 +328,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive_split_record", qmux_receive_split_record_test },
     { "qmux_receive_qx_ping", qmux_receive_qx_ping_test },
     { "qmux_send_qx_ping_r", qmux_send_qx_ping_r_test },
+    { "qmux_send_qx_ping_r_append", qmux_send_qx_ping_r_append_test },
     { "qmux_send_cnx_close", qmux_send_cnx_close_test },
     { "qmux_loop", qmux_loop_test },
     { "qmux_loop_delay", qmux_loop_delay_test },

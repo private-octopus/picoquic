@@ -617,9 +617,12 @@ int picoqmux_prepare_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time, uint
     }
 
     /* if necessary, prepare the QX_PING_R frame */
-    if (ret == 0 && cnx->qx_query_last != cnx->qx_query_ack && bytes + 16 < bytes_max) {
-        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes, bytes_max, 1, &more_data);
-        cnx->qx_query_ack = cnx->qx_query_last;
+    if (ret == 0 && cnx->qx_query_last != cnx->qx_query_ack) {
+        uint8_t* bytes_before = bytes_next;
+        bytes_next = picoquic_format_qx_ping_frame(cnx, bytes_next, bytes_max, 1, &more_data);
+        if (bytes_next > bytes_before) {
+            cnx->qx_query_ack = cnx->qx_query_last;
+        }
     }
                 
     /* if necessary, prepare the MAX STREAM frames */
