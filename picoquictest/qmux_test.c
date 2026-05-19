@@ -245,6 +245,39 @@ uint8_t qmux_test_tp_packet[] = {
     0x09, 0x02, 0x42, 0x00, 0x06, 0x04, 0x80, 0x01,
     0x00, 0x63, 0x07, 0x04, 0x80, 0x00, 0xff, 0xff };
 
+static size_t qmux_format_tp_test_packet(uint8_t* buffer, size_t buffer_size,
+    uint64_t tp_type, const uint8_t* tp_value, size_t tp_value_length)
+{
+    uint8_t* bytes = buffer + 1;
+    uint8_t* tp_length = NULL;
+    uint8_t* tp_start = NULL;
+
+    if (buffer_size < 2 ||
+        (bytes = picoquic_frames_varint_encode(bytes, buffer + buffer_size, FRAME_TYPE_QX_TRANSPORT_PARAMETERS)) == NULL ||
+        bytes >= buffer + buffer_size) {
+        return 0;
+    }
+
+    tp_length = bytes++;
+    tp_start = bytes;
+    if ((bytes = picoquic_frames_varint_encode(bytes, buffer + buffer_size, tp_type)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, buffer + buffer_size, tp_value_length)) == NULL ||
+        bytes + tp_value_length > buffer + buffer_size ||
+        bytes - tp_start >= 64 ||
+        bytes + tp_value_length - buffer - 1 >= 64) {
+        return 0;
+    }
+
+    if (tp_value_length > 0) {
+        memcpy(bytes, tp_value, tp_value_length);
+    }
+    bytes += tp_value_length;
+    buffer[0] = (uint8_t)(bytes - buffer - 1);
+    *tp_length = (uint8_t)(bytes - tp_start);
+    return (size_t)(bytes - buffer);
+}
+
+
 int qmux_send_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -452,24 +485,64 @@ int qmux_receive_error_one(int set_tp_received, int set_tp_sent,
 
 int qmux_receive_errors_test(void)
 {
+    uint8_t qmux_retire_cid_packet[] = { 0x02, picoquic_frame_type_retire_connection_id, 0 };
+    uint8_t qmux_bad_tp_packet[64];
+    uint8_t ack_delay_exponent[] = { 3 };
+    size_t qmux_bad_tp_packet_length = qmux_format_tp_test_packet(qmux_bad_tp_packet,
+        sizeof(qmux_bad_tp_packet), picoquic_tp_ack_delay_exponent,
+        ack_delay_exponent, sizeof(ack_delay_exponent));
     int ret = 0;
+
+    if (qmux_bad_tp_packet_length == 0) {
+        ret = -1;
+    }
     if (ret == 0) {
         /* TP not received, but message is not TP */
         ret = qmux_receive_error_one(0, 0, qmux_test_data, sizeof(qmux_test_data),
+            PICOQUIC_TRANSPORT_PARAMETER_ERROR);
+    }
+    if (ret == 0) {
+        /* TP received, but message is a duplicate TP */;
+        ret = qmux_receive_error_one(1, 1, qmux_test_tp_packet, sizeof(qmux_test_tp_packet),
+            PICOQUIC_TRANSPORT_PARAMETER_ERROR);
+    }
+    if (ret == 0) {
+        /* Prohibited QUIC v1 transport parameter in QMUX. */
+        ret = qmux_receive_error_one(0, 0, qmux_bad_tp_packet, qmux_bad_tp_packet_length,
+            PICOQUIC_TRANSPORT_PARAMETER_ERROR);
+    }
+    if (ret == 0) {
+        /* Prohibited QUIC v1 frame in QMUX. */
+        ret = qmux_receive_error_one(1, 1, qmux_retire_cid_packet, sizeof(qmux_retire_cid_packet),
             PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
     }
     if (ret == 0) {
-        /* TP received, but message is not duplicate TP */;
-        ret = qmux_receive_error_one(1, 1, qmux_test_tp_packet, sizeof(qmux_test_tp_packet),
-            PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-    }
-    if (ret == 0) {
-        /* Receive qx_ping response when no qx_ping query has been sent */;
+        /* Receive qx_ping response when no qx_ping query has been sent */
         ret = qmux_receive_error_one(1, 1, qmux_qx_ping_r_packet, sizeof(qmux_qx_ping_r_packet),
             PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
     }
     return ret;
 }
+
+int qmux_receive_extension_tp_ignore_test_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
+{
+    return cnx->remote_parameters.enable_loss_bit ? -1 : 0;
+}
+
+int qmux_receive_extension_tp_ignore_test(void)
+{
+    uint8_t packet[64];
+    size_t packet_length = qmux_format_tp_test_packet(packet, sizeof(packet),
+        picoquic_tp_enable_loss_bit, NULL, 0);
+    int ret = (packet_length == 0) ? -1 : 0;
+
+    if (ret == 0) {
+        ret = qmux_receive_test_one(0, 0, 0, packet, packet_length,
+            0, qmux_receive_extension_tp_ignore_test_check);
+    }
+    return ret;
+}
+
 
 int qmux_receive_record_errors_test(void)
 {

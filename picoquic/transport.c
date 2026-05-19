@@ -921,6 +921,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_reset_stream_at:
+                    /* This TP is valid for both QUIC and QMUX, just like the Reset frame. */
                     if (extension_length != 0) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Reset Stream At TP");
                     }
