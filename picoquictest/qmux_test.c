@@ -277,6 +277,19 @@ static size_t qmux_format_tp_test_packet(uint8_t* buffer, size_t buffer_size,
     return (size_t)(bytes - buffer);
 }
 
+static size_t qmux_format_frame_record(uint8_t* buffer, size_t buffer_size,
+    const uint8_t* frame, size_t frame_length)
+{
+    uint8_t* bytes = picoquic_frames_varint_encode(buffer, buffer + buffer_size, frame_length);
+
+    if (bytes == NULL || bytes + frame_length > buffer + buffer_size) {
+        return 0;
+    }
+    memcpy(bytes, frame, frame_length);
+    return (size_t)(bytes + frame_length - buffer);
+}
+
+
 
 int qmux_send_tp_test(void)
 {
@@ -520,6 +533,35 @@ int qmux_receive_errors_test(void)
         /* Receive qx_ping response when no qx_ping query has been sent */
         ret = qmux_receive_error_one(1, 1, qmux_qx_ping_r_packet, sizeof(qmux_qx_ping_r_packet),
             PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+    return ret;
+}
+
+int qmux_receive_prohibited_frames_test(void)
+{
+    uint8_t packet[16];
+    uint64_t prohibited_frames[] = {
+        picoquic_frame_type_ping,
+        picoquic_frame_type_ack,
+        picoquic_frame_type_ack_ecn,
+        picoquic_frame_type_crypto_hs,
+        picoquic_frame_type_new_token,
+        picoquic_frame_type_new_connection_id,
+        picoquic_frame_type_retire_connection_id,
+        picoquic_frame_type_path_challenge,
+        picoquic_frame_type_path_response,
+        picoquic_frame_type_handshake_done
+    };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(prohibited_frames) / sizeof(prohibited_frames[0]); i++) {
+        uint8_t frame[8];
+        uint8_t* bytes = picoquic_frames_varint_encode(frame, frame + sizeof(frame), prohibited_frames[i]);
+        size_t packet_length = (bytes == NULL) ? 0 :
+            qmux_format_frame_record(packet, sizeof(packet), frame, (size_t)(bytes - frame));
+
+        ret = (packet_length == 0) ? -1 : qmux_receive_error_one(1, 1, packet,
+            packet_length, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
     }
     return ret;
 }

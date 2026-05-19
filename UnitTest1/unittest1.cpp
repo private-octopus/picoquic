@@ -1949,6 +1949,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_prohibited_frames)
+        {
+            int ret = qmux_receive_prohibited_frames_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_extension_tp_ignore)
         {
             int ret = qmux_receive_extension_tp_ignore_test();
