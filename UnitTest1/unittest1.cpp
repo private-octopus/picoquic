@@ -1961,6 +1961,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_datagram)
+        {
+            int ret = qmux_datagram_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_receive_stream_order)
         {
             int ret = qmux_receive_stream_order_test();
