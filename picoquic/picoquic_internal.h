@@ -1426,7 +1426,10 @@ typedef struct st_picoquic_cnx_t {
     uint64_t qx_query_ack; /* last local qx_ping query acked by the peer */
     uint64_t qmux_local_max_record_size; /* largest QMUX record payload accepted locally */
     uint64_t qmux_remote_max_record_size; /* largest QMUX record payload accepted by peer */
-   
+    uint8_t* qmux_incoming_buffer; /* incomplete QMUX record bytes across TCP reads */
+    size_t qmux_incoming_buffer_size; 
+    size_t qmux_incoming_buffer_length; /* number of bytes stored */
+
     /* Statistics */
     uint64_t nb_bytes_queued;
     uint32_t nb_zero_rtt_sent;

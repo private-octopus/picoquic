@@ -5204,6 +5204,13 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->retry_token = NULL;
         }
 
+        if (cnx->qmux_incoming_buffer != NULL) {
+            free(cnx->qmux_incoming_buffer);
+            cnx->qmux_incoming_buffer = NULL;
+            cnx->qmux_incoming_buffer_size = 0;
+            cnx->qmux_incoming_buffer_length = 0;
+        }
+
         picoquic_delete_sooner_packets(cnx);
 
         picoquic_remove_cnx_from_list(cnx);

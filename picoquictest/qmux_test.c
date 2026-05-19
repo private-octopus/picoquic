@@ -100,6 +100,8 @@ typedef struct st_qmux_sim_spec_t {
 #define QMUX_FIRST_DATA 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 uint8_t qmux_test_data[] = { QMUX_FIRST_DATA };
 uint8_t qmux_test_packet[] = { 0x12, 0x0b, 0x0, 0x0f, QMUX_FIRST_DATA };
+uint8_t qmux_test_packet_l2[] = { 0x40, 0x12, 0x0b, 0x0, 0x0f, QMUX_FIRST_DATA };
+uint8_t qmux_test_packet_x2[] = { 0x03, 0, 0, 0, 0x12, 0x0b, 0x0, 0x0f, QMUX_FIRST_DATA };
 
 void qmux_test_simulate_remote(picoquic_cnx_t* cnx) {
     cnx->remote_parameters.initial_max_data = 0x10000;
@@ -477,6 +479,85 @@ int qmux_receive_record_errors_test(void)
     if (ret == 0) {
         ret = qmux_receive_error_one(1, 1, qmux_oversized_record, sizeof(qmux_oversized_record),
             PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+    }
+    return ret;
+}
+
+
+int qmux_receive_split_record_test_one(uint8_t * test_packet, size_t length, size_t split)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    qmux_sim_ctx_t qtc = { 0 };
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    cnx->client_mode = 0;
+    picoqmux_init(cnx, 1);
+    picoqmux_update_state_on_tp_received(cnx);
+    picoquic_set_callback(cnx, qmux_test_callback, &qtc);
+
+    if (ret == 0) {
+        ret = picoqmux_incoming_packets(cnx, 12345, test_packet, split, 0);
+    }
+
+    if (ret == 0 && qtc.received_stream_0) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoqmux_incoming_packets(cnx, 12346, test_packet + split,
+            length - split, 0);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_tp_check(cnx, 0);
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+int qmux_receive_split_record_test(void)
+{
+    /* Test interesting split values:
+    * - Just one byte, splitting the length
+    * - 2 bytes, splitting length from content
+    * - L-1 bytes, leaving just one byte for the next packet
+    * 
+    * Do that with two test packets:
+    * - first one has length encoded on 1 byte
+    * - second one has length encoded on 2 bytes
+    */
+    int ret = qmux_receive_split_record_test_one(qmux_test_packet, sizeof(qmux_test_packet), 1);
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet, sizeof(qmux_test_packet), 2);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_l2, sizeof(qmux_test_packet_l2), 1);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_l2, sizeof(qmux_test_packet_l2), 2);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_l2, sizeof(qmux_test_packet_l2), 3);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_l2, sizeof(qmux_test_packet_l2),
+            sizeof(qmux_test_packet_l2) - 1);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_x2, sizeof(qmux_test_packet_x2), 3);
+    }
+
+    if (ret == 0) {
+        ret = qmux_receive_split_record_test_one(qmux_test_packet_x2, sizeof(qmux_test_packet_x2),
+            sizeof(qmux_test_packet_l2) - 1);
     }
     return ret;
 }
