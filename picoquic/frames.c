@@ -6746,7 +6746,7 @@ uint8_t* picoquic_format_fc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, i
         (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, flow->flow_id.id_len)) != NULL &&
         (bytes = picoquic_frames_fc_flow_id_encode(bytes, bytes_max, &flow->flow_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, flow->remote_sequence_number)) != NULL &&
-        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, flow->group_addr.sa_family)) != NULL &&
+        (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, flow->group_addr.sa_family == AF_INET ? 4 : 6)) != NULL &&
         (bytes = picoquic_frames_addr_encode(bytes, bytes_max, &flow->source_addr)) != NULL &&
         (bytes = picoquic_frames_addr_encode(bytes, bytes_max, &flow->group_addr)) != NULL &&
         (bytes = picoquic_frames_uint16_encode(bytes, bytes_max, flow->udp_port)) != NULL &&
