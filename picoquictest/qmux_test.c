@@ -543,6 +543,15 @@ int qmux_receive_extension_tp_ignore_test(void)
     return ret;
 }
 
+int qmux_receive_stream_order_test(void)
+{
+    uint8_t qmux_stream_gap_packet[] = {
+        0x05, picoquic_frame_type_stream_range_min | 6, 0, 1, 1, 0xaa
+    };
+
+    return qmux_receive_error_one(1, 1, qmux_stream_gap_packet,
+        sizeof(qmux_stream_gap_packet), PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+}
 
 int qmux_receive_record_errors_test(void)
 {
