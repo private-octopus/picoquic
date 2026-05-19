@@ -323,6 +323,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_receive_cnx_close", qmux_receive_cnx_close_test },
     { "qmux_receive_errors", qmux_receive_errors_test },
     { "qmux_receive_prohibited_frames", qmux_receive_prohibited_frames_test },
+    { "qmux_receive_allowed_frames", qmux_receive_allowed_frames_test },
     { "qmux_receive_extension_tp_ignore", qmux_receive_extension_tp_ignore_test },
     { "qmux_receive_record_errors", qmux_receive_record_errors_test },
     { "qmux_datagram", qmux_datagram_test },
