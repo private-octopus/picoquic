@@ -122,6 +122,7 @@ int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
 
 int picoquic_is_flexicast_address(struct sockaddr* addr);
 int picoquic_find_flow_by_cid(picoquic_cnx_t *cnx, picoquic_connection_id_t *connection_id);
+int picoquic_find_flow_by_fid(picoquic_cnx_t *cnx, picoquic_fc_flow_id_t *flow_id);
 
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);
@@ -129,6 +130,10 @@ int picoquic_get_input_path(char * target_file_path, size_t file_path_max, const
 
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 #ifdef _WINDOWS

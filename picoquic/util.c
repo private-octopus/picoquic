@@ -1108,11 +1108,13 @@ uint8_t* picoquic_frames_fc_flow_id_encode(uint8_t * bytes, const uint8_t* bytes
 
 uint8_t* picoquic_frames_addr_encode(uint8_t* bytes, const uint8_t* bytes_max, struct sockaddr* addr)
 {
-    if (addr->sa_family == AF_INET && bytes + sizeof(in_addr_t) <= bytes_max) {
+    if (addr->sa_family == 4 && bytes + sizeof(in_addr_t) <= bytes_max) {
+        addr->sa_family = AF_INET;
         memcpy(bytes, (void*)&((struct sockaddr_in*) addr)->sin_addr, sizeof(in_addr_t));
         bytes += sizeof(in_addr_t);
     }
-    else if (addr->sa_family == AF_INET6 && bytes + sizeof(struct in6_addr) <= bytes_max) {
+    else if (addr->sa_family == 6 && bytes + sizeof(struct in6_addr) <= bytes_max) {
+        addr->sa_family = AF_INET6;
         memcpy(bytes, (void*)&((struct sockaddr_in6*) addr)->sin6_addr, sizeof(struct in6_addr));
         bytes += sizeof(struct in6_addr);
     }

@@ -2547,6 +2547,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         /* add a final ack so receiver gets clean state */
         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
 
+        bytes_next = picoquic_format_fc_leave_state_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+
         /* Send the disconnect frame */
         if (cnx->local_error == 0) {
             bytes_next = picoquic_format_application_close_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);

@@ -526,7 +526,7 @@ int picoquic_join_multicast_tree(picoquic_fc_flow_t *flow, picoquic_socket_ctx_t
     if (flow->group_addr.sa_family == AF_INET) {
         struct ip_mreq group;
         group.imr_multiaddr.s_addr = ((struct sockaddr_in*) &flow->group_addr)->sin_addr.s_addr;
-        group.imr_interface.s_addr = ((struct sockaddr_in*) &flow->unicast_addr)->sin_addr.s_addr;
+        group.imr_interface.s_addr = INADDR_ANY;//((struct sockaddr_in*) &flow->unicast_addr)->sin_addr.s_addr;
         return setsockopt(s_ctx->fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&group, sizeof(struct ip_mreq)) < 0;
     }
     else {
@@ -570,16 +570,22 @@ int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can
     return 1;
 }
 
-void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_loop_param_t *param, picoquic_socket_ctx_t* s_ctx, int *nb_sockets, uint8_t ecn_value)
+void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_loop_param_t *param, picoquic_socket_ctx_t* s_ctx, int *nb_sockets, uint8_t ecn_value, uint64_t current_time)
 {
     if (quic->current_number_connections > 0) {
         for (int i = 0; i < quic->current_number_connections; i++) {
-            picoquic_cnx_t cnx = quic->cnx_list[i];
-            if (cnx.is_flexicast_enabled && cnx.need_flow_update &&
-                cnx.nb_flows > 0) {
-                for (int j = 0; j < cnx.nb_flows; j++) {
-                    picoquic_fc_flow_t *flow = cnx.flows[j];
-                    if (flow->tree_joined == 0 &&
+            picoquic_cnx_t *cnx = &quic->cnx_list[i];
+            if (cnx->is_flexicast_enabled && cnx->need_flow_update &&
+                cnx->nb_flows > 0) {
+                for (int j = 0; j < cnx->nb_flows; j++) {
+                    picoquic_fc_flow_t *flow = cnx->flows[j];
+                    if (flow->path == NULL && cnx->nb_paths < cnx->nb_local_cnxid_lists) {
+                        int path_index = picoquic_create_path(cnx, current_time, &flow->group_addr,
+                                              &flow->source_addr, 0, UINT64_MAX);
+                        cnx->path[path_index]->receive_only_fc_flow_path = 1;
+                        flow->path = cnx->path[path_index];
+                    }
+                    if (flow->path && flow->tree_joined == 0 &&
                         !picoquic_packet_loop_open_flexicast_socket(
                             flow,
                             flow->udp_port ==
@@ -1331,7 +1337,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         uint8_t* received_buffer;
         uint64_t previous_time;
 
-        packet_loop_open_flexicast_sockets(quic, param, s_ctx, &nb_sockets, ecn_value);
+        packet_loop_open_flexicast_sockets(quic, param, s_ctx, &nb_sockets, ecn_value, current_time);
+
+        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
+
+        nb_sockets_available = nb_sockets;
 
         if_index_to = 0;
         /* The "loop immediate" condition is set when a packet has been

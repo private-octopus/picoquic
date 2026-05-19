@@ -2054,6 +2054,17 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     cnx->path[cnx->nb_paths] = NULL;
 }
 
+void picoquic_delete_flows(picoquic_cnx_t *cnx)
+{
+    if (cnx->flows) {
+        for (int i = 0; i < cnx->nb_flows; i++) {
+            free(cnx->flows[i]->key);
+            free(cnx->flows[i]);
+        }
+    }
+    free(cnx->flows);
+}
+
 /*
  * Path challenges may be abandoned if they are tried too many times without success. 
  */
@@ -5255,6 +5266,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             free(cnx->path);
             cnx->path = NULL;
         }
+
+        picoquic_delete_flows(cnx);
 
         picoquic_delete_local_cnxid_lists(cnx);
         picoquic_delete_remote_cnxid_stashes(cnx);

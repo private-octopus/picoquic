@@ -393,6 +393,46 @@ int picoquic_parse_long_packet_header(
     return ret;
 }
 
+int picoquic_parse_short_fc_packet_header(
+    picoquic_quic_t* quic,
+    const uint8_t* bytes,
+    size_t length,
+    const struct sockaddr* addr_from,
+    picoquic_packet_header* ph,
+    picoquic_cnx_t** pcnx)
+{
+    size_t offset;
+    picoquic_connection_id_t connection_id;
+    /* If this is a short header, it should be possible to retrieve the connection
+     * context. This depends on whether the quic context requires cnx_id or not.
+     */
+    for (uint8_t cnxid_length = 1; cnxid_length <= PICOQUIC_CONNECTION_ID_MAX_SIZE; cnxid_length++) {
+
+        if ((int)length >= 1 + cnxid_length) {
+            /* We can identify the connection by its ID */
+            offset = (size_t)1 + picoquic_parse_connection_id(bytes + 1, cnxid_length, &connection_id);
+            if (*pcnx == NULL)
+            {
+                if (quic->local_cnxid_length > 0) {
+                    *pcnx = picoquic_cnx_by_id(quic, connection_id, &ph->l_cid);
+                }
+                else {
+                    *pcnx = picoquic_cnx_by_net(quic, addr_from);
+                }
+            }
+            if (*pcnx != NULL) {
+                ph->dest_cnx_id = connection_id;
+                ph->offset = offset;
+                return 0;
+            }
+        }
+        else {
+            return 1;
+        }
+    }
+    return 1;
+}
+
 int picoquic_parse_short_packet_header(
     picoquic_quic_t* quic,
     const uint8_t* bytes,
@@ -423,8 +463,12 @@ int picoquic_parse_short_packet_header(
                 *pcnx = picoquic_cnx_by_net(quic, addr_from);
             }
         }
+        if (*pcnx == NULL) {
+            picoquic_parse_short_fc_packet_header(quic, bytes, length, addr_from, ph, pcnx);
+        }
+        
     }
-    else {
+    else if (picoquic_parse_short_fc_packet_header(quic, bytes, length, addr_from, ph, pcnx)) {
         ph->ptype = picoquic_packet_error;
         ph->offset = length;
         ph->payload_length = 0;
@@ -623,6 +667,11 @@ int picoquic_remove_header_protection(picoquic_cnx_t* cnx,
     size_t length = ph->offset + ph->payload_length; /* this may change after decrypting the PN */
     void * pn_enc = cnx->crypto_context[ph->epoch].pn_dec;
 
+    int i = -1 ;
+    if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id)) >= 0) {
+        pn_enc = cnx->flows[i]->crypto_context.pn_dec;
+    }
+
     picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, ph->pc, ph->l_cid);
     ret = picoquic_remove_header_protection_inner(bytes, length, decrypted_bytes, ph,
         pn_enc, cnx->is_loss_bit_enabled_incoming, picoquic_sack_list_last(sack_list));
@@ -657,10 +706,10 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         int need_integrity_check = 1;
         picoquic_ack_context_t* ack_ctx = picoquic_ack_ctx_from_cnx_context(cnx, picoquic_packet_context_application, ph->l_cid);
 
-        int i;
-        if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id))>0) {
-            decoded = picoquic_aead_decrypt_generic(decoded_bytes+ph->offset,
-                bytes + ph->offset, ph->pn_offset, ph->pn64, decoded_bytes, ph->offset,
+        int i = -1;
+        if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id)) >= 0) {
+            decoded = picoquic_aead_decrypt_mp(decoded_bytes+ph->offset,
+                bytes + ph->offset, ph->payload_length, 1, ph->pn64, decoded_bytes, ph->offset,
                 cnx->flows[i]->crypto_context.aead_decrypt);
         }
 

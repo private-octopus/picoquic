@@ -1254,6 +1254,7 @@ typedef struct st_picoquic_fc_flow_t {
     unsigned int crypto_received : 1;
     unsigned int listen_sent : 1;
     unsigned int leave_required : 1;
+    unsigned int left : 1;
 
     picoquic_crypto_context_t crypto_context;
 } picoquic_fc_flow_t;
@@ -2102,8 +2103,9 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
     uint64_t path_id, uint64_t reason);
 uint8_t * picoquic_format_fc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow);
 uint8_t * picoquic_format_fc_state_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow, uint64_t action);
+uint8_t* picoquic_format_fc_leave_state_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t * picoquic_format_fc_key_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow);
-void picoquic_update_flow(picoquic_fc_flow_t *flow, picoquic_fc_flow_t *new_flow, picoquic_cnx_t *cnx, uint64_t current_time);
+int picoquic_update_flow(picoquic_fc_flow_t *flow, picoquic_fc_flow_t *new_flow, picoquic_cnx_t *cnx, uint64_t current_time);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, uint64_t reason);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
