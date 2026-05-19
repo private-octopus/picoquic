@@ -567,6 +567,13 @@ int qmux_receive_record_errors_test(void)
     return ret;
 }
 
+int qmux_receive_empty_record_test(void)
+{
+    uint8_t qmux_empty_record[] = { 0 };
+
+    return qmux_receive_error_one(1, 1, qmux_empty_record, sizeof(qmux_empty_record),
+        PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);
+}
 
 int qmux_receive_split_record_test_one(uint8_t * test_packet, size_t length, size_t split)
 {
