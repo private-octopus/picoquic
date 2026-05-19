@@ -532,6 +532,13 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_
 * set large enough to contain the planned number of connections.
 */
 
+#ifndef _WINDOWS
+static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+}
+#endif
 
 #ifdef _WINDOWS
 static int picoquic_sockloop_set_win_buf(picoquic_sockloop_win_buf_t * win_buf)
@@ -610,19 +617,24 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
         return NULL;
     }
     memset(sqmux_sock_ctx, 0, sizeof(picoqmux_socket_ctx_t));
-
+    sqmux_sock_ctx->af = af;
+    sqmux_sock_ctx->port = public_port;
+    sqmux_sock_ctx->fd = INVALID_SOCKET;
 #ifdef _WINDOWS
     sqmux_sock_ctx->fd = WSASocket(af, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 #else
-    sqmux_sock_ctx->fd = socket(sqmux_sock_ctx->af, SOCK_STREAM, IPPROTO_TCP);
+    sqmux_sock_ctx->fd = socket(af, SOCK_STREAM, IPPROTO_TCP);
 #endif
 
     if (sqmux_sock_ctx->fd == INVALID_SOCKET ||
 #ifdef _WINDOWS
         picoquic_packet_loop_set_qmux_windows_socket(sqmux_sock_ctx) != 0 ||
+#else
+        picoquic_packet_loop_set_qmux_nonblocking(sqmux_sock_ctx->fd) != 0 ||
+        (af == AF_INET6 && setsockopt(sqmux_sock_ctx->fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
 #endif
         (is_port_shared && setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
-        (public_port != 0 && picoquic_bind_to_port(sqmux_sock_ctx->fd, af, public_port) != 0)) {
+        ((is_listening || public_port != 0) && picoquic_bind_to_port(sqmux_sock_ctx->fd, af, public_port) != 0)) {
         DBG_PRINTF("Cannot set socket (af=%d, port = %d)\n", af, public_port);
         picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
         return NULL;
@@ -636,6 +648,22 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
             return NULL;
         } 
         sqmux_sock_ctx->is_listening = 1;
+    }
+
+    if (is_listening || public_port != 0) {
+        struct sockaddr_storage local_addr;
+        if (picoquic_get_local_address(sqmux_sock_ctx->fd, &local_addr) != 0) {
+            DBG_PRINTF("Cannot get local socket address (af=%d, port = %d)\n", af, public_port);
+            picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
+            return NULL;
+        }
+        picoquic_store_addr(&sqmux_sock_ctx->local_addr, (struct sockaddr*)&local_addr);
+        if (local_addr.ss_family == AF_INET6) {
+            sqmux_sock_ctx->port = ntohs(((struct sockaddr_in6*)&local_addr)->sin6_port);
+        }
+        else if (local_addr.ss_family == AF_INET) {
+            sqmux_sock_ctx->port = ntohs(((struct sockaddr_in*)&local_addr)->sin_port);
+        }
     }
 
 
@@ -1006,8 +1034,9 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
 {
     picoqmux_socket_ctx_t* sqmux_sock_ctx = picoquic_packet_loop_open_qmux_socket(
         dest->sa_family, 0, 0, 0);
-    sqmux_sock_ctx->is_connecting = 1;
     if (sqmux_sock_ctx != NULL) {
+        picoquic_store_addr(&sqmux_sock_ctx->remote_addr, dest);
+        sqmux_sock_ctx->is_connecting = 1;
 #ifdef _WINDOWS
         if (picoquic_packet_loop_start_windows_connect(
             sqmux_sock_ctx, dest) != 0) {
@@ -1016,20 +1045,15 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
             return NULL;
         }
 #else
-        int fncntl_ret = fcntl(sqmux_sock_ctx->fd, F_SETFL, O_NONBLOCK);
-        if (fncntl_ret != 0) {
-            DBG_PRINTF("Cannot set non-blocking mode on socket (af=%d)\n", dest->sa_family);
-            picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
-            return NULL;
-        }
         int sock_ret = connect(sqmux_sock_ctx->fd, dest,
             (socklen_t)((dest->sa_family == AF_INET) ?
                 sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6)));
-        if (sock_ret != 0  && sock_ret != EINPROGRESS) {
+        if (sock_ret != 0  && errno != EINPROGRESS) {
             DBG_PRINTF("Cannot connect to destination (af=%d)\n", dest->sa_family);
             picoquic_packet_loop_free_qmux_socket(sqmux_sock_ctx);
             return NULL;
         }
+        sqmux_sock_ctx->is_connecting = (sock_ret != 0);
 #endif
         sqmux_sock_ctx->cnx = cnx;
     }
@@ -1967,26 +1991,54 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         sqmux_ctx[socket_rank]->cnx = cnx;
     }
 #else
-    SOCKET_TYPE new_socket;
+    SOCKET_TYPE new_socket = INVALID_SOCKET;
     struct sockaddr_storage addr_from;
     socklen_t addr_from_len = sizeof(addr_from);
+    picoqmux_socket_ctx_t* new_ctx = NULL;
 
-    new_socket = sqmux_ctx[socket_rank]->fd;
-    if (new_socket == INVALID_SOCKET ||
+    memset(&addr_from, 0, sizeof(addr_from));
+    if (*nb_qmux_sockets >= max_qmux_sockets) {
+        ret = -1;
+    }
+    else if ((new_socket = accept(sqmux_ctx[socket_rank]->fd, (struct sockaddr*)&addr_from, &addr_from_len)) == INVALID_SOCKET) {
+        ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
+    }
+    else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
         (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL ||
-        (sqmux_ctx[*nb_qmux_sockets] = picoquic_packet_loop_open_qmux_socket(
-            addr_from.ss_family, 0, 0, 0)) == NULL) {
-        if (new_socket != INVALID_SOCKET) {
-            SOCKET_CLOSE(new_socket);
-        }
-        if (cnx != NULL) {
-            picoquic_delete_cnx(cnx);
-        }
+        (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
     }
     else {
-        sqmux_ctx[*nb_qmux_sockets]->cnx = cnx;
-        (*nb_qmux_sockets) += 1;
+        memset(new_ctx, 0, sizeof(picoqmux_socket_ctx_t));
+        new_ctx->fd = new_socket;
+        new_socket = INVALID_SOCKET;
+        new_ctx->af = addr_from.ss_family;
+        new_ctx->cnx = cnx;
+        cnx = NULL;
+        picoquic_store_addr(&new_ctx->remote_addr, (struct sockaddr*)&addr_from);
+        if (picoquic_get_local_address(new_ctx->fd, &new_ctx->local_addr) != 0) {
+            ret = -1;
+        }
+        else {
+            if (new_ctx->local_addr.ss_family == AF_INET6) {
+                new_ctx->port = ntohs(((struct sockaddr_in6*)&new_ctx->local_addr)->sin6_port);
+            }
+            else if (new_ctx->local_addr.ss_family == AF_INET) {
+                new_ctx->port = ntohs(((struct sockaddr_in*)&new_ctx->local_addr)->sin_port);
+            }
+            sqmux_ctx[*nb_qmux_sockets] = new_ctx;
+            new_ctx = NULL;
+            (*nb_qmux_sockets) += 1;
+        }
+    }
+    if (ret != 0) {
+        if (new_socket != INVALID_SOCKET) {
+            SOCKET_CLOSE(new_socket);
+        }
+        picoquic_packet_loop_free_qmux_socket(new_ctx);
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
     }
 #endif
     return ret;
