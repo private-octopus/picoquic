@@ -928,105 +928,6 @@ static size_t picoqmux_record_prefix_length(const uint8_t* bytes)
     return ((size_t)1) << (bytes[0] >> 6);
 }
 
-static int picoqmux_record_total_size(picoquic_cnx_t* cnx,
-    const uint8_t* bytes, size_t available, size_t* total_size)
-{
-    int ret = 0;
-    size_t prefix_length = picoqmux_record_prefix_length(bytes);
-    uint64_t record_length = 0;
-
-    if (available < prefix_length) {
-        *total_size = prefix_length;
-    }
-    else if (picoquic_frames_varint_decode(bytes, bytes + available, &record_length) == NULL ||
-        record_length == 0 ||
-        record_length > cnx->qmux_local_max_record_size ||
-        record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
-        ret = PICOQUIC_ERROR_DETECTED;
-    }
-    else {
-        *total_size = prefix_length + (size_t)record_length;
-    }
-
-    return ret;
-}
-
-static int picoqmux_decode_record_bytes(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length, int allow_incomplete,
-    size_t* consumed, int* record_received)
-{
-    int ret = 0;
-    picoquic_path_t* path_x = cnx->path[0];
-    const uint8_t* bytes = receive_buffer;
-    const uint8_t* bytes_max = receive_buffer + receive_length;
-
-    *consumed = 0;
-    *record_received = 0;
-
-    while (ret == 0 && bytes < bytes_max) {
-        const uint8_t* bytes_next = NULL;
-        size_t available = (size_t)(bytes_max - bytes);
-        size_t prefix_length = picoqmux_record_prefix_length(bytes);
-        uint64_t record_length = 0;
-
-        if (available < prefix_length) {
-            if (!allow_incomplete) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
-                ret = PICOQUIC_ERROR_DETECTED;
-            }
-            break;
-        }
-
-        if ((bytes_next = picoquic_frames_varint_decode(bytes, bytes_max, &record_length)) == NULL ||
-            record_length == 0 ||
-            record_length > cnx->qmux_local_max_record_size ||
-            record_length > (uint64_t)(((size_t)-1) - prefix_length)) {
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
-            ret = PICOQUIC_ERROR_DETECTED;
-        }
-        else if (available - prefix_length < (size_t)record_length) {
-            if (!allow_incomplete) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
-                ret = PICOQUIC_ERROR_DETECTED;
-            }
-            break;
-        }
-        else {
-            ret = picoqmux_decode_frames(cnx, path_x, bytes_next, (size_t)record_length, current_time);
-            if (ret == 0) {
-                bytes = bytes_next + (size_t)record_length;
-                *record_received = 1;
-            }
-        }
-    }
-    *consumed = (size_t)(bytes - receive_buffer);
-    if (ret == 0 && *record_received) {
-        cnx->latest_progress_time = current_time;
-        cnx->next_wake_time = current_time;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
-    }
-
-    return ret;
-}
-
-
-int picoqmux_incoming_cnx_packet(picoquic_cnx_t* cnx, uint64_t current_time,
-    const uint8_t* receive_buffer, size_t receive_length)
-{
-    size_t consumed = 0;
-    int record_received = 0;
-    int ret = picoqmux_decode_record_bytes(cnx, current_time, receive_buffer, receive_length,
-        0, &consumed, &record_received);
-
-    if (ret == 0 && consumed != receive_length) {
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
-        ret = PICOQUIC_ERROR_DETECTED;
-    }
-
-    return ret;
-}
-
 static int picoqmux_resize_incoming_buffer(picoquic_cnx_t* cnx, size_t required_size)
 {
     int ret = 0;
@@ -1075,82 +976,103 @@ static int picoqmux_append_incoming_tail(picoquic_cnx_t* cnx,
     return ret;
 }
 
+static int picoqmux_decode_incoming_record_size(picoquic_cnx_t* cnx,
+    const uint8_t* bytes, size_t length, size_t* consumed)
+{
+    int ret = 0;
+    const uint8_t* record_bytes;
+    if ((record_bytes = picoquic_frames_varint_decode(bytes,
+        bytes + length,
+        &cnx->qmux_incoming_record_size)) == 0) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+    }
+    else if (cnx->qmux_incoming_record_size > cnx->qmux_local_max_record_size ||
+        cnx->qmux_incoming_record_size == 0) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, 0);
+    }
+    else {
+        *consumed = record_bytes - bytes;
+    }
+    return ret;
+}
+
 static int picoqmux_consume_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t current_time,
     const uint8_t* receive_buffer, size_t receive_length, size_t * consumed)
 {
     int ret = 0;
-    uint64_t record_length = 0;
-    size_t prefix_length = picoqmux_record_prefix_length(
-        (cnx->qmux_incoming_buffer_length == 0) ? receive_buffer : cnx->qmux_incoming_buffer);
-
-    *consumed = 0;
-    if (cnx->qmux_incoming_buffer_length + receive_length < prefix_length) {
-        /* Have not received enough bytes to compute the record length.
-        * Just store what we have and return.
-        */
-        ret = picoqmux_append_incoming_tail(cnx, receive_buffer, receive_length, 0);
-        *consumed = receive_length;
-    }
-    else {
-        const uint8_t* buffer_bytes = NULL;
-        if (cnx->qmux_incoming_buffer_length < prefix_length) {
-            /* Add bytes from the incoming buffer, update available and received bytes. */
-            size_t required = prefix_length - cnx->qmux_incoming_buffer_length;
-            ret = picoqmux_append_incoming_tail(cnx, receive_buffer, required, 0);
-            *consumed = required;
-        }
-        if (ret == 0) {
-            /* decode the prefix length, update the number of bytes consumed from
-            * the incoming buffer.
+    if (cnx->qmux_incoming_record_size == 0) {
+        size_t prefix_length = picoqmux_record_prefix_length(
+            (cnx->qmux_incoming_buffer_length == 0) ? receive_buffer : cnx->qmux_incoming_buffer);
+        *consumed = 0;
+        if (cnx->qmux_incoming_buffer_length + receive_length < prefix_length) {
+            /* Have not received enough bytes to compute the record length.
+            * Just store what we have and return.
             */
-            if ((buffer_bytes = picoquic_frames_varint_decode(cnx->qmux_incoming_buffer,
-                cnx->qmux_incoming_buffer + cnx->qmux_incoming_buffer_length, &record_length)) == 0) {
-                ret = PICOQUIC_TRANSPORT_INTERNAL_ERROR;
+            ret = picoqmux_append_incoming_tail(cnx, receive_buffer, receive_length, 0);
+            *consumed = receive_length;
+        }
+        else {
+            if (cnx->qmux_incoming_buffer_length == 0) {
+                /* enough data in the received buffer to compute the record size. */
+                ret = picoqmux_decode_incoming_record_size(cnx, receive_buffer,
+                    receive_length, consumed);
             }
-            else if (record_length > cnx->qmux_local_max_record_size) {
-                ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+            else {
+                /* we need to decode from the incoming buffer */
+                uint64_t bytes_needed = prefix_length - cnx->qmux_incoming_buffer_length;
+
+                ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
+                    bytes_needed, 0);
+                *consumed += bytes_needed;
+                ret = picoqmux_decode_incoming_record_size(cnx, cnx->qmux_incoming_buffer,
+                    cnx->qmux_incoming_buffer_length, &cnx->qmux_incoming_buffer_offset);
+                cnx->qmux_incoming_buffer_length = 0;
+                cnx->qmux_incoming_buffer_offset = 0;
             }
-            else if (*consumed < receive_length) {
-                size_t buffer_offset = buffer_bytes - cnx->qmux_incoming_buffer;
-                size_t available = ((receive_length - *consumed) +
-                    (cnx->qmux_incoming_buffer_length - buffer_offset));
-                if (available < record_length) {
-                    ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
-                        receive_length - *consumed, record_length);
-                    *consumed = receive_length;
-                }
-                else if (ret == 0) {
-                    const uint8_t* record_start = NULL;
-                    if (cnx->qmux_incoming_buffer_length > buffer_offset) {
-                        /* we need to decode from the incoming buffer */
-                        uint64_t bytes_needed = record_length -
-                            (cnx->qmux_incoming_buffer_length - buffer_offset);
-                        ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
-                            bytes_needed, 0);
-                        *consumed += bytes_needed;
-                        record_start = cnx->qmux_incoming_buffer + buffer_offset;
-                    }
-                    else {
-                        /* we can decode from the received data */
-                        record_start = receive_buffer + *consumed;
-                        *consumed += record_length;
-                    }
-                    if (ret == 0) {
-                        /* Decode the bytes */
-                        ret = picoqmux_decode_frames(cnx, cnx->path[0],
-                            record_start, (size_t)record_length, current_time);
-                        /* reset the buffer length, it is not needed any more. */
-                        cnx->qmux_incoming_buffer_length = 0;
-                    }
-                }
+        }
+    }
+    /* if we have not consumed all the bytes, either decode the
+     * frames now or consume the bytes.
+     */
+    if (ret == 0 && *consumed < receive_length) {
+        size_t available = ((receive_length - *consumed) + cnx->qmux_incoming_buffer_length);
+        if (available < cnx->qmux_incoming_record_size) {
+            ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
+                receive_length - *consumed, cnx->qmux_incoming_record_size);
+            *consumed = receive_length;
+        }
+        else if (ret == 0) {
+            const uint8_t* record_start = NULL;
+            if (cnx->qmux_incoming_buffer_length > cnx->qmux_incoming_buffer_offset) {
+                /* we need to decode from the incoming buffer */
+                uint64_t bytes_needed = cnx->qmux_incoming_record_size - cnx->qmux_incoming_buffer_length;
+                ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
+                    bytes_needed, 0);
+                *consumed += bytes_needed;
+                record_start = cnx->qmux_incoming_buffer;
             }
+            else {
+                /* we can decode from the received data */
+                record_start = receive_buffer + *consumed;
+                *consumed += cnx->qmux_incoming_record_size;
+            }
+            if (ret == 0) {
+                /* Decode the bytes */
+                ret = picoqmux_decode_frames(cnx, cnx->path[0],
+                    record_start, (size_t)cnx->qmux_incoming_record_size, current_time);
+                /* reset the buffer length, it is not needed any more. */
+                cnx->qmux_incoming_buffer_length = 0;
+                cnx->qmux_incoming_buffer_offset = 0;
+                cnx->qmux_incoming_record_size = 0;
+            }
+
         }
     }
     return ret;
 }
 
 
-static int picoqmux_incoming_cnx_bytes(picoquic_cnx_t * cnx, uint64_t current_time,
+int picoqmux_incoming_cnx_packet(picoquic_cnx_t * cnx, uint64_t current_time,
         const uint8_t * receive_buffer, size_t receive_length)
 {
     int ret = 0;
@@ -1230,7 +1152,7 @@ int picoqmux_incoming_data(picoquic_cnx_t* cnx, uint64_t current_time,
     if (ret == 0) {
         *consumed = in_len;
         if (tls_ctx->tls_rbuf.off > 0) {
-            ret = picoqmux_incoming_cnx_bytes(cnx, current_time,
+            ret = picoqmux_incoming_cnx_packet(cnx, current_time,
                 tls_ctx->tls_rbuf.base, tls_ctx->tls_rbuf.off);
             tls_ctx->tls_rbuf.off = 0;
         }
@@ -1412,7 +1334,7 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
     int ret = 0;
 
     if (cnx->is_qmux_cleartext) {
-        picoqmux_incoming_cnx_bytes(cnx, current_time, receive_buffer, receive_length);
+        picoqmux_incoming_cnx_packet(cnx, current_time, receive_buffer, receive_length);
     }
     else
     {

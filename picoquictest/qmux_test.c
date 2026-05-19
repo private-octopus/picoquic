@@ -349,8 +349,12 @@ int qmux_receive_test_one(int client_mode, int is_tp_received, int is_tp_sent,
 
     picoquic_set_callback(cnx, qmux_test_callback, &qtc);
     if (ret == 0) {
-        /* prepare a packet */
+        /* process a packet */
+#if 0
+        int ret = picoqmux_incoming_cnx_bytes(cnx, 12345, msg, length);
+#else
         int r_ret = picoqmux_incoming_cnx_packet(cnx, 12345, msg, length);
+#endif
 
         if (r_ret == 0) {
             if (expected != 0) {
@@ -561,7 +565,6 @@ int qmux_receive_error_test_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected)
 int qmux_receive_error_one(int set_tp_received, int set_tp_sent,
     uint8_t * message, size_t length, uint64_t expected)
 {
-
     int ret = qmux_receive_test_one(0, set_tp_received, set_tp_sent, message, length,
         expected, qmux_receive_error_test_check);
     return ret;
@@ -803,7 +806,7 @@ int qmux_receive_stream_order_edges_test(void)
 
 int qmux_receive_record_errors_test(void)
 {
-    uint8_t qmux_truncated_record[] = { 0x12, 0x0b, 0, 0x0f };
+    uint8_t qmux_truncated_record[] = { 0x06, 0x0b, 0x0, 0x0f, 01, 02, 03 }; 
     uint8_t qmux_oversized_record[] = { 0x7f, 0xff };
     int ret = qmux_receive_error_one(1, 1, qmux_truncated_record, sizeof(qmux_truncated_record),
         PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR);

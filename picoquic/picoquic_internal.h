@@ -1429,6 +1429,9 @@ typedef struct st_picoquic_cnx_t {
     uint8_t* qmux_incoming_buffer; /* incomplete QMUX record bytes across TCP reads */
     size_t qmux_incoming_buffer_size; 
     size_t qmux_incoming_buffer_length; /* number of bytes stored */
+    uint64_t qmux_incoming_record_size;
+    size_t qmux_incoming_buffer_offset;
+
 
     /* Statistics */
     uint64_t nb_bytes_queued;
