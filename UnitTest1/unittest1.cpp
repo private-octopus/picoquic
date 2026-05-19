@@ -2009,6 +2009,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_receive_qx_ping_order)
+        {
+            int ret = qmux_receive_qx_ping_order_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_send_qx_ping_r)
         {
             int ret = qmux_send_qx_ping_r_test();

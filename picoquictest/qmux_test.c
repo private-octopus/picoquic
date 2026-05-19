@@ -425,6 +425,9 @@ uint8_t qmux_qx_ping_r_packet[] = {
     0x09, 0xF4, 0x8c, 0x67, 0x52, 0x9e, 0xf8, 0xc7, 0xbe, 0
 };
 
+int qmux_receive_error_one(int set_tp_received, int set_tp_sent,
+    uint8_t* message, size_t length, uint64_t expected);
+
 int qmux_receive_qx_ping_test_check(picoquic_cnx_t* cnx, uint64_t UNUSED(expected))
 {
     int ret = 0;
@@ -443,6 +446,57 @@ int qmux_receive_qx_ping_test(void)
 
     return ret;
 }
+
+static void qmux_format_double_qx_ping(uint8_t* packet, uint8_t second_sequence)
+{
+    size_t frame_length = sizeof(qmux_qx_ping_packet) - 1;
+
+    packet[0] = (uint8_t)(2 * frame_length);
+    memcpy(packet + 1, qmux_qx_ping_packet + 1, frame_length);
+    memcpy(packet + 1 + frame_length, qmux_qx_ping_packet + 1, frame_length);
+    packet[2 * frame_length] = second_sequence;
+}
+
+int qmux_receive_qx_ping_order_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t packet[32];
+    uint8_t expected_response[sizeof(qmux_qx_ping_r_packet)];
+    uint8_t buffer[2048];
+    size_t send_length = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    picoqmux_init(cnx, 1);
+    picoqmux_update_state_on_tp_sent(cnx);
+    picoqmux_update_state_on_tp_received(cnx);
+    qmux_format_double_qx_ping(packet, 1);
+
+    if (ret == 0) {
+        ret = picoqmux_incoming_cnx_packet(cnx, 12345, packet, 1 + 2 * (sizeof(qmux_qx_ping_packet) - 1));
+    }
+    if (ret == 0) {
+        memcpy(expected_response, qmux_qx_ping_r_packet, sizeof(expected_response));
+        expected_response[sizeof(expected_response) - 1] = 1;
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, sizeof(buffer), &send_length);
+        if (send_length != sizeof(expected_response) ||
+            memcmp(buffer, expected_response, send_length) != 0 ||
+            cnx->qx_query_last != 1 ||
+            cnx->qx_query_ack != 1) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    if (ret == 0) {
+        qmux_format_double_qx_ping(packet, 0);
+        ret = qmux_receive_error_one(1, 1, packet, 1 + 2 * (sizeof(qmux_qx_ping_packet) - 1),
+            PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
+    }
+    return ret;
+}
+
 
 /* tests of closing frame */
 
