@@ -1034,6 +1034,63 @@ int qmux_socket_accept_test(void)
 #endif
 }
 
+int qmux_socket_close_on_receive_test(void)
+{
+#ifdef _WINDOWS
+    return 0;
+#else
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoqmux_socket_ctx_t* sqmux_ctx[1] = { 0 };
+    int sockets[2] = { INVALID_SOCKET, INVALID_SOCKET };
+    uint8_t buffer[128];
+    int nb_qmux_sockets = 1;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    if (ret == 0 && socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        sqmux_ctx[0] = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t));
+        if (sqmux_ctx[0] == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(sqmux_ctx[0], 0, sizeof(picoqmux_socket_ctx_t));
+            sqmux_ctx[0]->fd = sockets[1];
+            sqmux_ctx[0]->cnx = cnx;
+            picoqmux_init(cnx, 1);
+            picoqmux_update_state_on_tp_sent(cnx);
+            picoqmux_update_state_on_tp_received(cnx);
+        }
+    }
+    if (ret == 0 && send(sockets[0], (const char*)qmux_app_close_packet,
+        (int)sizeof(qmux_app_close_packet), 0) != sizeof(qmux_app_close_packet)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = picoquic_packet_loop_do_tcp_read(sqmux_ctx, &nb_qmux_sockets,
+            1, 0, 12345, buffer, sizeof(buffer));
+        if (ret != 0 || sqmux_ctx[0]->fd != INVALID_SOCKET || sqmux_ctx[0]->cnx != NULL ||
+            cnx->cnx_state != picoquic_state_disconnected) {
+            ret = -1;
+        }
+    }
+
+    if (sockets[0] != INVALID_SOCKET) {
+        SOCKET_CLOSE(sockets[0]);
+    }
+    if (sqmux_ctx[0] != NULL) {
+        picoquic_packet_loop_free_qmux_socket(sqmux_ctx[0]);
+    }
+    else if (sockets[1] != INVALID_SOCKET) {
+        SOCKET_CLOSE(sockets[1]);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+#endif
+}
+
 
 int qmux_loop_deliver_message(qmux_sim_ctx_t* sim_ctx)
 {
