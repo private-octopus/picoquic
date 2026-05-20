@@ -2538,6 +2538,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
          */
         if (qmux_socket_was_closed >= 0) {
             if (qmux_socket_was_closed < nb_qmux_sockets - 1) {
+                picoquic_packet_loop_free_qmux_socket(sqmux_ctx[qmux_socket_was_closed]);
+                sqmux_ctx[qmux_socket_was_closed] = 0;
                 memmove(&sqmux_ctx[qmux_socket_was_closed], &sqmux_ctx[qmux_socket_was_closed + 1],
                     sizeof(picoqmux_socket_ctx_t*) * (size_t)(nb_qmux_sockets - qmux_socket_was_closed - 1));
             }
