@@ -488,6 +488,72 @@ int ecf1_final_loss_test(void)
     return ret;
 }
 
+
+/* Simulate double close. The application sould not do that, but if it
+* does, there should not be a crash.
+ */
+
+int ecdc_double_close_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint8_t test_case_id = 0xdc;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, 0, 20);
+    uint64_t zero_loss_mask = 0;
+    int was_active = 0;
+
+    /* Finish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &zero_loss_mask, 0, &simulated_time);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect loop returns %d\n", ret);
+        }
+    }
+    /* Finish sending data */
+    test_ctx->immediate_exit = 1;
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &zero_loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+    /* Do first closing */
+    if (ret == 0) {
+        if (picoquic_close_ex(test_ctx->cnx_server, 0, "First close") != 0) {
+            DBG_PRINTF("First close returns %d\n", ret);
+            ret = -1;
+        }
+        for (int i = 0; ret == 0 && i < 128; i++) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (ret == 0 && test_ctx->cnx_client->cnx_state > picoquic_state_ready &&
+                test_ctx->cnx_client->is_wake_ready == 0) {
+                break;
+            }
+        }
+    }
+    /* Close again and run a few iterations */
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        if (picoquic_close_ex(test_ctx->cnx_client, 0, "Double close") == 0) {
+            DBG_PRINTF("Double close returns %d\n", ret);
+            ret = -1;
+        }
+        for (int i = 0; i < 128; i++) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /* Some traces show the CID packet from the server being dropped,
  * then repeated a couple time, with one success but a drop
  * of the clien't ack, and the server then sending a bogus repeat.

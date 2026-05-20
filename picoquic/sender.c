@@ -4243,9 +4243,12 @@ int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, cha
     } else {
         ret = -1;
     }
-    cnx->local_error_reason = error_reason;
-    cnx->offending_frame_type = 0;
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
+
+    if (ret == 0) {
+        cnx->local_error_reason = error_reason;
+        cnx->offending_frame_type = 0;
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
+    }
 
     return ret;
 }

@@ -259,6 +259,7 @@ void eccf_corrupted_file_fuzz(int nb_trials, uint64_t seed, FILE* seed_report);
 int eccf_corrupted_file_fuzz_test(void);
 int eca1_amplification_loss_test(void);
 int ecf1_final_loss_test(void);
+int ecdc_double_close_test(void);
 int ec5c_silly_cid_test(void);
 int ec9a_preemptive_amok_test(void);
 int error_reason_test(void);

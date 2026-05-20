@@ -322,6 +322,7 @@ static const picoquic_test_def_t test_table[] = {
     { "eccf_corrupted_fuzz", eccf_corrupted_file_fuzz_test },
     { "eca1_amplification_loss", eca1_amplification_loss_test },
     { "ecf1_final_loss", ecf1_final_loss_test },
+    { "ecdc_double_close", ecdc_double_close_test },
     { "ec5c_silly_cid", ec5c_silly_cid_test },
     { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
     { "error_reason", error_reason_test },
