@@ -2086,8 +2086,6 @@ void picoquic_packet_loop_tcp_close(
 /* Process incoming data on a TCP socket */
 int picoquic_packet_loop_do_tcp_read(
     picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int max_qmux_sockets,
     int socket_rank,
     uint64_t current_time,
     uint8_t* qmux_buffer,
@@ -2130,8 +2128,6 @@ int picoquic_packet_loop_do_tcp_read(
 /* Process sending opportunity on a TCP socket */
 int picoquic_packet_loop_do_tcp_send(
     picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int max_qmux_sockets,
     int socket_rank,
     uint64_t current_time,
     uint8_t* qmux_buffer,
@@ -2237,7 +2233,7 @@ int picoquic_packet_loop_check_qmux_timers(
             sqmux_ctx[i]->fd != INVALID_SOCKET &&
             sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
             ret = picoquic_packet_loop_do_tcp_send(
-                sqmux_ctx, nb_qmux_sockets, max_qmux_sockets, i, current_time,
+                sqmux_ctx, i, current_time,
                 qmux_buffer, qmux_buffer_size);
             if (ret != 0 || sqmux_ctx[i]->cnx->cnx_state == picoquic_state_disconnected){
                 /* That connection cannot continue. */
@@ -2695,13 +2691,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     &nb_qmux_sockets, max_qmux_sockets, socket_rank, current_time);
                 break;
             case picoquic_packet_loop_action_tcp_recv_ready:
-                ret = picoquic_packet_loop_do_tcp_read( sqmux_ctx,
-                    &nb_qmux_sockets, max_qmux_sockets, socket_rank,
+                ret = picoquic_packet_loop_do_tcp_read( sqmux_ctx, socket_rank,
                     current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_tcp_send_ready:
-                ret = picoquic_packet_loop_do_tcp_send(sqmux_ctx,
-                    &nb_qmux_sockets, max_qmux_sockets, socket_rank,
+                ret = picoquic_packet_loop_do_tcp_send(sqmux_ctx, socket_rank,
                     current_time, qmux_buffer, qmux_buffer_size);
                 break;
             default:
