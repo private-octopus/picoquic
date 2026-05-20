@@ -115,10 +115,6 @@ typedef struct st_picoqmux_socket_ctx_t {
     picoquic_sockloop_win_buf_t winbuf_w;
     LPFN_ACCEPTEX lpfnAcceptEx;
     SOCKET_TYPE accepting_socket;
-#if 0
-    int so_sndbuf;
-    int so_rcvbuf;
-#endif
 #elif defined(PICOQUIC_WITH_IO_URING)
     /* Declare the buffers required for io_uring */
     struct msghdr msg;
