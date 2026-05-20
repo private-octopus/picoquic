@@ -783,6 +783,8 @@ int sockloop_qmux_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             if (stream_id == 0) {
+                DBG_PRINTF("Receive data on stream 0, client_mode: %d, len: %d, fin: %d",
+                    cnx->client_mode, (int)length, (fin_or_event == picoquic_callback_stream_fin));
                 sim_ctx->received_stream_0 = 1;
                 sim_ctx->stream_0_length_received = length;
                 if (length == sizeof(sockloop_qmux_test_data) &&
@@ -824,9 +826,11 @@ int sockloop_qmux_callback(picoquic_cnx_t* cnx,
             /* This callback is never used. */
             break;
         case picoquic_callback_almost_ready:
+            DBG_PRINTF("Almost ready, client_mode: %d", cnx->client_mode);
             break;
         case picoquic_callback_ready:
             /* should mark the first stream as ready, create it if necessary */
+            DBG_PRINTF("Ready, client_mode: %d", cnx->client_mode);
             if (cnx->client_mode) {
                 picoquic_add_to_stream(cnx, 0, sockloop_qmux_test_data, sizeof(sockloop_qmux_test_data), 1);
             }
@@ -866,6 +870,7 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
     }
     else {
         if (sim_ctx->qmux_cnx == NULL) {
+            DBG_PRINTF("%s", "QMUX_CNX context is NULL.");
             ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
         }
         else switch (cb_mode) {
@@ -878,13 +883,14 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
             if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
-                DBG_PRINTF("%s", "The connection is closed!\n");
+                DBG_PRINTF("The connection is closed after receive! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
                 break;
             }
             break;
         case picoquic_packet_loop_after_send:
             if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("The connection is closed after send! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
             }
             break;
@@ -894,7 +900,7 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
         case picoquic_packet_loop_time_check: {
             packet_loop_time_check_arg_t* time_check_arg = (packet_loop_time_check_arg_t*)callback_arg;
             if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
-                DBG_PRINTF("%s", "The connection is closed!\n");
+                DBG_PRINTF("The connection is closed on time check! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
                 ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
                 break;
             }
@@ -910,6 +916,7 @@ int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb
         case picoquic_packet_loop_system_call_duration:
             break;
         default:
+            DBG_PRINTF("Unexpected socket loop callback: %d.\n", cb_mode);
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
             break;
         }
