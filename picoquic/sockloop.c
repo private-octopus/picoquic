@@ -1861,7 +1861,7 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             sockmax = (int)sqmux_ctx[i]->fd;
         }
         FD_SET(sqmux_ctx[i]->fd, &readfds);
-        if (sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
+        if (sqmux_ctx[i]->cnx != NULL && sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
             FD_SET(sqmux_ctx[i]->fd, &writefds);
         }
     }
