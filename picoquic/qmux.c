@@ -1019,7 +1019,7 @@ static int picoqmux_consume_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t cur
             }
             else {
                 /* we need to decode from the incoming buffer */
-                uint64_t bytes_needed = prefix_length - cnx->qmux_incoming_buffer_length;
+                size_t bytes_needed = prefix_length - cnx->qmux_incoming_buffer_length;
 
                 ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
                     bytes_needed, 0);
@@ -1038,14 +1038,14 @@ static int picoqmux_consume_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t cur
         size_t available = ((receive_length - *consumed) + cnx->qmux_incoming_buffer_length);
         if (available < cnx->qmux_incoming_record_size) {
             ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
-                receive_length - *consumed, cnx->qmux_incoming_record_size);
+                receive_length - *consumed, (size_t)cnx->qmux_incoming_record_size);
             *consumed = receive_length;
         }
         else if (ret == 0) {
             const uint8_t* record_start = NULL;
             if (cnx->qmux_incoming_buffer_length > cnx->qmux_incoming_buffer_offset) {
                 /* we need to decode from the incoming buffer */
-                uint64_t bytes_needed = cnx->qmux_incoming_record_size - cnx->qmux_incoming_buffer_length;
+                size_t bytes_needed = (size_t)(cnx->qmux_incoming_record_size - cnx->qmux_incoming_buffer_length);
                 ret = picoqmux_append_incoming_tail(cnx, receive_buffer + *consumed,
                     bytes_needed, 0);
                 *consumed += bytes_needed;
@@ -1054,7 +1054,7 @@ static int picoqmux_consume_incoming_cnx_bytes(picoquic_cnx_t* cnx, uint64_t cur
             else {
                 /* we can decode from the received data */
                 record_start = receive_buffer + *consumed;
-                *consumed += cnx->qmux_incoming_record_size;
+                *consumed += (size_t)cnx->qmux_incoming_record_size;
             }
             if (ret == 0) {
                 /* Decode the bytes */
