@@ -615,6 +615,10 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
             SOCKET_CLOSE(sqmux_sock_ctx->fd);
             sqmux_sock_ctx->fd = INVALID_SOCKET;
         }
+        if (sqmux_sock_ctx->send_buffer != NULL) {
+            free(sqmux_sock_ctx->send_buffer);
+            sqmux_sock_ctx->send_buffer = NULL;
+        }
 #ifdef _WINDOWS
         picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
         picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
