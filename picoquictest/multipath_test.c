@@ -30,6 +30,7 @@
 #include "qlog.h"
 #include "picoquic_bbr.h"
 #include "picoquic_qlog.h"
+#include "picoquic_unified_log.h"
 
 /* Add the additional links for multipath scenario */
 static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
@@ -1936,10 +1937,32 @@ int multipath_trace_test_one(int use_qlog_streaming)
         }
     }
 
+    /* Abandon path 1 so we can check the log of abandon path */
+    if (ret == 0) {
+        ret = picoquic_abandon_path(test_ctx->cnx_server, 1, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", 1, ret);
+        }
+        else {
+            /* fake a packet loss just after demoting the path */
+            picoquic_log_packet_lost(test_ctx->cnx_server,
+                test_ctx->cnx_server->path[1], picoquic_packet_1rtt_protected,
+                12345, "test", NULL,
+                1234, simulated_time);
+
+            /* wait about 250ms for the abandon to be noticed at both ends. */
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 250000);
+            if (ret != 0) {
+                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = %d", 1, ret);
+            }
+        }
+    }
+
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 2000000);
     }
+
 
     /* Add a gratuitous bad packet to test "packet dropped" log */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
