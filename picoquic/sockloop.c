@@ -1688,7 +1688,8 @@ void picoquic_packet_loop_set_fds(
     for (int i = 0; i < nb_qmux_sockets; i++) {
         poll_list[i + i_poll_qmux].fd = (int)sqmux_ctx[i]->fd;
         poll_list[i + i_poll_qmux].events =
-            (sqmux_ctx[i]->cnx->next_wake_time <= current_time)?(POLLIN|POLLOUT):POLLIN;
+            (sqmux_ctx[i]->cnx != NULL &&
+                sqmux_ctx[i]->cnx->next_wake_time <= current_time)?(POLLIN|POLLOUT):POLLIN;
     }
     for (int i = i_poll_qmux + nb_qmux_sockets; i < (int)poll_list_size; i++) {
         poll_list[i].fd = -1;
