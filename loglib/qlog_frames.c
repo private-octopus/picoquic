@@ -493,6 +493,42 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
     return bytes;
 }
 
+const uint8_t* qlog_frame_fc_announce(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    picoquic_fc_flow_id_t flow_id;
+
+    if ((bytes = picoquic_parse_fc_announce_frame(bytes, bytes_max, &flow_id)) != NULL) {
+        fprintf(f, ", \"flow_id\": ");
+        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
+    }
+    return bytes;
+}
+
+const uint8_t* qlog_frame_fc_state(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    picoquic_fc_flow_id_t flow_id;
+    uint64_t action;
+
+    if ((bytes = picoquic_parse_fc_state_frame(bytes, bytes_max, &flow_id, &action)) != NULL) {
+        fprintf(f, ", \"flow_id\": ");
+        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
+        fprintf(f, ", ");
+        qlog_json_uint(f, "action", action);
+    }
+    return bytes;
+}
+
+const uint8_t* qlog_frame_fc_key(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    picoquic_fc_flow_id_t flow_id;
+
+    if ((bytes = picoquic_parse_fc_key_frame(bytes, bytes_max, &flow_id)) != NULL) {
+        fprintf(f, ", \"flow_id\": ");
+        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
+    }
+    return bytes;
+}
+
 void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding)
 {
     int ret = 0;
@@ -642,6 +678,15 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int sk
             case picoquic_frame_type_observed_address_v4:
             case picoquic_frame_type_observed_address_v6:
                 bytes = qlog_frame_observed_address(f, bytes, bytes_max, frame_id);
+                break;
+            case picoquic_frame_type_fc_announce:
+                bytes = qlog_frame_fc_announce(f, bytes, bytes_max);
+                break;
+            case picoquic_frame_type_fc_state:
+                bytes = qlog_frame_fc_state(f, bytes, bytes_max);
+                break;
+            case picoquic_frame_type_fc_key:
+                bytes = qlog_frame_fc_key(f, bytes, bytes_max);
                 break;
             default:
                 fprintf(f, ", ");
