@@ -543,14 +543,6 @@ static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
 }
 #endif
 
-#ifndef _WINDOWS
-static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
-{
-    int flags = fcntl(fd, F_GETFL, 0);
-    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
-}
-#endif
-
 #ifdef _WINDOWS
 static int picoquic_sockloop_set_win_buf(picoquic_sockloop_win_buf_t * win_buf)
 {
