@@ -6913,10 +6913,10 @@ const uint8_t* picoquic_skip_fc_key_frame(const uint8_t* bytes, const uint8_t* b
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &key_len)) != NULL &&
-        bytes + key_len <= bytes_max
-    )
-        bytes = picoquic_frames_fixed_skip(bytes + key_len, bytes_max, sizeof(uint64_t));
-
+        (bytes = picoquic_frames_fixed_skip(bytes, bytes_max, key_len)) != NULL
+    ) {
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, sizeof(uint64_t));
+    }
     return bytes;
 }
 
@@ -7515,12 +7515,15 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
                     break;
                 case picoquic_frame_type_fc_announce:
                     bytes = picoquic_skip_fc_announce_frame(bytes, bytes_max);
+                    *pure_ack = 0;
                     break;
                 case picoquic_frame_type_fc_state:
                     bytes = picoquic_skip_fc_state_frame(bytes, bytes_max);
+                    *pure_ack = 0;
                     break;
                 case picoquic_frame_type_fc_key:
                     bytes = picoquic_skip_fc_key_frame(bytes, bytes_max);
+                    *pure_ack = 0;
                     break;
                 default:
                     /* Not implemented yet! */
