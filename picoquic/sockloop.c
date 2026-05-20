@@ -2224,15 +2224,14 @@ void picoquic_packet_loop_abandon_socket(
 
 int picoquic_packet_loop_check_qmux_timers(
     picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int max_qmux_sockets,
+    int nb_qmux_sockets,
     int * qmux_socket_was_closed,
     uint64_t current_time,
     uint8_t* qmux_buffer,
     size_t qmux_buffer_size)
 {
     int ret = 0;
-    for (int i = 0; i < *nb_qmux_sockets; i++) {
+    for (int i = 0; i < nb_qmux_sockets; i++) {
         if (sqmux_ctx[i]->cnx != NULL &&
             sqmux_ctx[i]->fd != INVALID_SOCKET &&
             sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
@@ -2668,9 +2667,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 break;
             case picoquic_packet_loop_action_timeout:
                 /* perform a qmux check */
-                ret = picoquic_packet_loop_check_qmux_timers(sqmux_ctx,
-                    &nb_qmux_sockets, max_qmux_sockets, &qmux_socket_was_closed,
-                    current_time, qmux_buffer, qmux_buffer_size);
+                ret = picoquic_packet_loop_check_qmux_timers(sqmux_ctx, nb_qmux_sockets,
+                    &qmux_socket_was_closed, current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_wake_up:
                 ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
