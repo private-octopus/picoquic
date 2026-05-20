@@ -1165,7 +1165,6 @@ int qmux_socket_close_on_receive_test(void)
     picoqmux_socket_ctx_t* sqmux_ctx[1] = { 0 };
     int sockets[2] = { INVALID_SOCKET, INVALID_SOCKET };
     uint8_t buffer[128];
-    int nb_qmux_sockets = 1;
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
 
     if (ret == 0 && socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
