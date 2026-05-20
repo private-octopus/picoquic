@@ -1166,6 +1166,7 @@ int qmux_socket_close_on_receive_test(void)
     int sockets[2] = { INVALID_SOCKET, INVALID_SOCKET };
     uint8_t buffer[128];
     int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+    int socket_was_closed = -1;
 
     if (ret == 0 && socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
         ret = -1;
@@ -1189,7 +1190,7 @@ int qmux_socket_close_on_receive_test(void)
         ret = -1;
     }
     if (ret == 0) {
-        ret = picoquic_packet_loop_do_tcp_read(sqmux_ctx, 0, 12345, buffer, sizeof(buffer));
+        ret = picoquic_packet_loop_do_tcp_read(sqmux_ctx,  &socket_was_closed, 0, 12345, buffer, sizeof(buffer));
         if (ret != 0 || sqmux_ctx[0]->fd != INVALID_SOCKET || sqmux_ctx[0]->cnx != NULL ||
             cnx->cnx_state != picoquic_state_disconnected) {
             ret = -1;
