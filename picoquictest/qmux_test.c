@@ -1114,6 +1114,8 @@ int qmux_socket_accept_test(void)
     }
 
     if (ret == 0) {
+        /* sleep a short time so the "connect" can arrive before calling accept */
+        usleep(10000);
         ret = picoquic_packet_loop_do_tcp_accept(sim_ctx.quic[1], sqmux_ctx,
             &nb_qmux_sockets, 2, 0, sim_ctx.simulated_time);
     }
@@ -1126,6 +1128,19 @@ int qmux_socket_accept_test(void)
         sqmux_ctx[1]->port != sqmux_ctx[0]->port ||
         sqmux_ctx[1]->local_addr.ss_family != AF_INET ||
         sqmux_ctx[1]->remote_addr.ss_family != AF_INET)) {
+#if 1
+        DBG_PRINTF("error detected, nb_sockets: %d, sqmux_ctx[1]: %x", nb_qmux_sockets, sqmux_ctx[1]);
+        if (nb_qmux_sockets == 2 && sqmux_ctx[1] != NULL) {
+             DBG_PRINTF("fd: %d, cnx: %x, af: %d, port: %d/%d, local_af: %d/%d",
+                 sqmux_ctx[1]->fd,
+                 sqmux_ctx[1]->cnx,
+                 sqmux_ctx[1]->af,
+                 sqmux_ctx[1]->port,
+                 sqmux_ctx[0]->port,
+                 sqmux_ctx[1]->local_addr.ss_family,
+                 sqmux_ctx[1]->remote_addr.ss_family);
+        } 
+#endif
         ret = -1;
     }
 
