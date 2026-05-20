@@ -18,7 +18,7 @@ Picoquic options:
   -O number       Set the default lossbit policy
   -M              Enable QUIC multipath extension
   -e if           Send on interface (default: -1)
-  -C cipher_suite_id specify cipher suite (e.g. -C 20 = chacha20)
+  -C cipher_suite_id specify cipher suite (e.g. -C 20 = chacha20, -C 1306 = AEGIS-256, -C 1307 = AEGIS-128L)
   -i per-text-lb-spec See documentation for LB compatible CID configuration
   -l file         Log file, Log to stdout if file = "-". No text logging if absent.
   -L              Log all packets. If absent, log stops after 100 packets.

@@ -75,6 +75,7 @@ extern "C" {
 /* Additional definitions required for testing and verification */
 
 #define PICOQUIC_CIPHER_SUITES_NB_MAX 8
+#define PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX PICOQUIC_CIPHER_SUITES_NB_MAX
     struct st_picoquic_cipher_suites_t {
         ptls_cipher_suite_t* high_memory_suite;
         ptls_cipher_suite_t* low_memory_suite;

@@ -73,7 +73,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
     { picoquic_option_MULTIPATH, 'M', "multipath", 0, "", "Enable QUIC multipath extension" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
-    { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
+    { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20, -C 1306 = AEGIS-256, -C 1307 = AEGIS-128L)" },
     { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 1, "per-text-lb-spec", "See documentation for LB compatible CID configuration" },
     { picoquic_option_LOG_FILE, 'l', "text_log", 1, "file", "Log file, Log to stdout if file = \"-\". No text logging if absent." },
     { picoquic_option_LONG_LOG, 'L', "long_log", 0, "", "Log all packets. If absent, log stops after 100 packets." },
@@ -992,6 +992,12 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             }
             else if (config->cipher_suite_id == 256) {
                 iana_cipher_suite_code = PICOQUIC_AES_256_GCM_SHA384;
+            }
+            else if (config->cipher_suite_id == 1306) {
+                iana_cipher_suite_code = PICOQUIC_AEGIS_256_SHA512;
+            }
+            else if (config->cipher_suite_id == 1307) {
+                iana_cipher_suite_code = PICOQUIC_AEGIS_128L_SHA256;
             }
             if (picoquic_set_cipher_suite(quic, iana_cipher_suite_code) != 0) {
                 fprintf(stderr, "Could not set cipher suite #%d.\n", config->cipher_suite_id);

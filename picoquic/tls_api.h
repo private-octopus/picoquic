@@ -125,6 +125,7 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
+void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_key);
 
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
