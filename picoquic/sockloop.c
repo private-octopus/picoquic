@@ -1048,7 +1048,7 @@ int picoquic_packet_loop_complete_windows_connect(
 * See https://cr.yp.to/docs/connect.html for more details.
 */
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_client_socket(
-    picoquic_quic_t* qmux, struct sockaddr* dest, picoquic_cnx_t* cnx)
+    struct sockaddr* dest, picoquic_cnx_t* cnx)
 {
     picoqmux_socket_ctx_t* sqmux_sock_ctx = picoquic_packet_loop_open_qmux_socket(
         dest->sa_family, 0, 0, 0);
@@ -1144,8 +1144,7 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
     picoquic_quic_t * qmux,
     picoqmux_socket_ctx_t** sqmux_ctx,
     int* nb_qmux_sockets,
-    int max_qmux_socket,
-    uint64_t current_time) 
+    int max_qmux_socket) 
 {
     int ret = 0;
 
@@ -1156,7 +1155,7 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
                 struct sockaddr* dest =
                     (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr;
                 if ((sqmux_ctx[*nb_qmux_sockets] = 
-                    picoquic_packet_loop_open_qmux_client_socket(qmux, dest, cnx)) == NULL) {
+                    picoquic_packet_loop_open_qmux_client_socket(dest, cnx)) == NULL) {
                     ret = -1;
                     break;
                 }
@@ -2068,8 +2067,6 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
 /* Closing a TCP socket, and notifying the qmux connection */
 void picoquic_packet_loop_tcp_close(
     picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int max_qmux_sockets,
     int socket_rank,
     uint64_t current_time)
 {
@@ -2115,12 +2112,8 @@ int picoquic_packet_loop_do_tcp_read(
         else {
             DBG_PRINTF("%s", "Connection closed by peer.\n");
         }
-        /* close the socket, and remove it from the list. */
-        picoquic_packet_loop_tcp_close(sqmux_ctx,
-            nb_qmux_sockets,
-            max_qmux_sockets,
-            socket_rank,
-            current_time);
+        /* close the socket, and mark it for removal from the list. */
+        picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
     }
     else {
         /* Submit the data to the quic connection. */
@@ -2128,11 +2121,7 @@ int picoquic_packet_loop_do_tcp_read(
         if (sqmux_ctx[socket_rank]->cnx != NULL &&
             (sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_disconnected ||
                 sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received)) {
-            picoquic_packet_loop_tcp_close(sqmux_ctx,
-                nb_qmux_sockets,
-                max_qmux_sockets,
-                socket_rank,
-                current_time);
+            picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
         }
     }
     return ret;
@@ -2215,19 +2204,13 @@ int picoquic_packet_loop_do_tcp_send(
     }
     if (ret != 0) {
         /* Socket error, could not send data, maybe closed. */
-        picoquic_packet_loop_tcp_close(sqmux_ctx,
-            nb_qmux_sockets,
-            max_qmux_sockets,
-            socket_rank,
-            current_time);
+        picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
     }
     return ret;
 }
 
 void picoquic_packet_loop_abandon_socket(
     picoqmux_socket_ctx_t** sqmux_ctx,
-    int* nb_qmux_sockets,
-    int max_qmux_sockets,
     int* qmux_socket_was_closed,
     int socket_rank) {
     /* close the socket, and mark it for removal from the list. */
@@ -2258,8 +2241,7 @@ int picoquic_packet_loop_check_qmux_timers(
                 qmux_buffer, qmux_buffer_size);
             if (ret != 0 || sqmux_ctx[i]->cnx->cnx_state == picoquic_state_disconnected){
                 /* That connection cannot continue. */
-                picoquic_packet_loop_abandon_socket(sqmux_ctx, nb_qmux_sockets, max_qmux_sockets,
-                    qmux_socket_was_closed, i);
+                picoquic_packet_loop_abandon_socket(sqmux_ctx, qmux_socket_was_closed, i);
                 ret = 0;
             }
             break;
@@ -2518,7 +2500,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
              * context, open the corresponding sockets.
              */
             if (ret == 0) {
-                ret = picoquic_packet_loop_open_qmux_cnx_sockets(qmux, sqmux_ctx, &nb_qmux_sockets, max_qmux_sockets, current_time);
+                ret = picoquic_packet_loop_open_qmux_cnx_sockets(qmux, sqmux_ctx, &nb_qmux_sockets, max_qmux_sockets);
             }
         }
     }
