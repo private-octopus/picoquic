@@ -2685,12 +2685,6 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     received_buffer, bytes_recv,
                     (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index_to, received_ecn,
                     loop_callback, loop_callback_ctx, current_time, nb_loop_immediate, &loop_immediate);
-                if (ret == 0) {
-                    if (loop_callback != NULL) {
-                        size_t b_recvd = (size_t)bytes_recv;
-                        ret = loop_callback(quic, picoquic_packet_loop_after_receive, loop_callback_ctx, &b_recvd);
-                    }
-                }
                 break;
             case picoquic_packet_loop_action_tcp_accept_ready:
                 ret = picoquic_packet_loop_do_tcp_accept(qmux, sqmux_ctx, 
