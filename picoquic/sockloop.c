@@ -2205,7 +2205,9 @@ int picoquic_packet_loop_check_qmux_timers(
     for (int i = 0; i < nb_qmux_sockets; i++) {
         if (sqmux_ctx[i]->cnx != NULL &&
             sqmux_ctx[i]->fd != INVALID_SOCKET &&
-            sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
+            sqmux_ctx[i]->cnx->next_wake_time <= current_time &&
+            !sqmux_ctx[i]->is_connecting &&
+            !sqmux_ctx[i]->is_accepting) {
             ret = picoquic_packet_loop_do_tcp_send(
                 sqmux_ctx, qmux_socket_was_closed, i, current_time,
                 qmux_buffer, qmux_buffer_size);
