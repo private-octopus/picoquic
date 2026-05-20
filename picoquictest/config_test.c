@@ -30,11 +30,12 @@
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
+#include "picoqmux.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:h";
 #endif
 int config_option_letters_test(void)
 {
@@ -133,6 +134,7 @@ static picoquic_quic_config_t param1 = {
     1000001, /* flow_control_max */
     "192.0.2.1", /* Preferred Address V4 */
     "2001:db8::1", /* Preferred Address V6 */
+    "443:17" /* QMux port and number of connections */
 };
 
 static char const* config_argv1[] = {
@@ -168,6 +170,7 @@ static char const* config_argv1[] = {
     "-Z", "1000001",
     "-4", "192.0.2.1",
     "-6", "2001:db8::1",
+    "-Y", "443",
     NULL
 };
 
@@ -237,6 +240,7 @@ static picoquic_quic_config_t param2 = {
     0, /* flow control max */
     NULL,
     NULL,
+    NULL
 };
 
 static const char* config_argv2[] = {
@@ -776,6 +780,137 @@ int config_quic_test(void)
 
     if (config_quic_test_one(&param1) != 0 ||
         config_quic_test_one(&param2) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
+/*
+* Testing that the QMux instance is properly created from
+* the configuration data */
+
+int config_qmux_parse_test(char const* qmux_string, int expected_port, int expected_nb_connections)
+{
+    int ret = 0;
+    int port = 0xffff;
+    int nb_connection = 0xdeadbeef;
+    picoqmux_parse_option_string(qmux_string, &port, &nb_connection);
+
+    if (port != expected_port) {
+        DBG_PRINTF("Expected QMux port %d, got %d", expected_port, port);
+        ret = -1;
+    }
+    else if (port != -1 && nb_connection != expected_nb_connections) {
+        DBG_PRINTF("Expected QMux nb_connections %d, got %d", expected_nb_connections, nb_connection);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int config_qmux_test_one(picoquic_quic_config_t* config, int qmux_port, int nb_connections)
+{
+    int ret = 0;
+    picoquic_quic_t* qmux;
+    uint64_t current_time = 0;
+    int qmux_port_used = 0;
+    int nb_connections_used = 0;
+
+    char const* server_cert_file = NULL;
+    char test_server_cert_file[512];
+    char const* server_key_file = NULL;
+    char test_server_key_file[512];
+    char const* root_trust_file = NULL;
+    char test_root_trust_file[512];
+
+    if (ret == 0 && config->server_cert_file != NULL) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_CERT);
+        if (ret == 0) {
+            server_cert_file = config->server_cert_file;
+            config->server_cert_file = test_server_cert_file;
+        }
+    }
+
+    if (ret == 0 && config->server_key_file) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+        if (ret == 0) {
+            server_key_file = config->server_key_file;
+            config->server_key_file = test_server_key_file;
+        }
+    }
+
+    if (ret == 0 && config->root_trust_file) {
+        ret = picoquic_get_input_path(test_root_trust_file, sizeof(test_root_trust_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+        if (ret == 0) {
+            root_trust_file = config->root_trust_file;
+            config->root_trust_file = test_root_trust_file;
+        }
+    }
+
+    qmux = picoqmux_create_and_configure(config, NULL, NULL, current_time, NULL,
+        &qmux_port_used, &nb_connections_used);
+
+    if (qmux_port == -1) {
+        if (qmux != NULL) {
+            ret = -1;
+        }
+    }
+    else if (qmux == NULL) {
+        ret = 1;
+    }
+    else {
+        /* Check that at least some parameters are what we expect */
+        if (qmux_port_used != qmux_port) {
+            ret = -1;
+        }
+        if (nb_connections!= nb_connections_used) {
+            ret = -1;
+        }
+        if (nb_connections > 0 && nb_connections != (int)qmux->max_number_connections) {
+            ret = -1;
+        }
+        if (config->alpn != NULL &&
+            (qmux->default_alpn == NULL || strcmp(qmux->default_alpn, config->alpn) != 0)) {
+            ret = -1;
+        }
+        picoquic_free(qmux);
+    }
+
+    if (server_key_file != NULL) {
+        config->server_key_file = server_key_file;
+    }
+    if (server_cert_file != NULL) {
+        config->server_cert_file = server_cert_file;
+    }
+    if (root_trust_file != NULL) {
+        config->root_trust_file = root_trust_file;
+    }
+
+    return(ret);
+}
+
+int config_qmux_test(void)
+{
+    int ret = 0;
+
+    if (config_qmux_parse_test("443:17", 443, 17) != 0 ||
+        config_qmux_parse_test("443", 443, 0) != 0 ||
+        config_qmux_parse_test("443:", 443, 0) != 0 ||
+        config_qmux_parse_test("443:0", 443, 0) != 0 ||
+        config_qmux_parse_test(":17", 0, 17) != 0 ||
+        config_qmux_parse_test("0:17", 0, 17) != 0 ||
+        config_qmux_parse_test(":", 0, 0) != 0 ||
+        config_qmux_parse_test("xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0:xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0:0xyz", -1, 0) != 0) {
+        ret = -1;
+    }
+    else if (config_qmux_test_one(&param1, 443, 17) != 0 ||
+        config_qmux_test_one(&param2, -1, 0) != 0) {
         ret = -1;
     }
     return ret;

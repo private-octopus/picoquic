@@ -36,6 +36,7 @@
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
+#include "picoqmux.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -108,6 +109,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
     { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
     { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
+    { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -541,6 +543,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_Preferred_V6:
         ret = config_set_string_param(&config->preferred_address_v6, params, nb_params, 0);
+        break;
+    case picoquic_option_QMUX:
+        ret = config_set_string_param(&config->qmux_string, params, nb_params, 0);
         break;
     case picoquic_option_HELP:
         ret = -1;
@@ -1032,6 +1037,101 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     return quic;
 }
 
+/*
+* Configure a "QMux" context, i.e., a QUIC context specially configured 
+* for managing QMux connections.
+*/
+
+void picoqmux_parse_option_string(char const* option_string, int* qmux_port,
+    int* nb_connections)
+{
+    *qmux_port = -1;
+    *nb_connections = 0;
+
+    if (option_string == NULL) {
+        /* Something went wrong */
+        DBG_PRINTF("%s", "Cannot configure QMUX, no QMux option string present.");
+    }
+    else {
+        int p = 0;
+        int n = 0;
+        char const* x = option_string;
+
+        while (*x != 0 && *x >= '0' && *x <= '9') {
+            p = p * 10 + (*x - '0');
+            x++;
+        }
+        if (*x == ':') {
+            x++;
+            while (*x != 0 && *x >= '0' && *x <= '9') {
+                n = n * 10 + (*x - '0');
+                x++;
+            }
+        }
+        if (*x != 0) {
+            /* Something went wrong */
+            DBG_PRINTF("Invalid QMux string: %s", option_string);
+        }
+        else {
+            *qmux_port = p;
+            *nb_connections = n;
+        }
+    }
+}
+
+picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    uint64_t current_time,
+    uint64_t* p_simulated_time,
+    int *qmux_port,
+    int *nb_connections)
+{
+    picoquic_quic_t* qmux = NULL;
+
+    picoqmux_parse_option_string(config->qmux_string, qmux_port, nb_connections);
+
+    if (*qmux_port >= 0) {
+        qmux = picoqmux_create(
+            *nb_connections,
+            config->server_cert_file,
+            config->server_key_file,
+            config->root_trust_file,
+            config->alpn,
+            default_callback_fn,
+            default_callback_ctx,
+            (config->has_reset_seed) ? (uint8_t*)config->reset_seed : NULL,
+            current_time,
+            p_simulated_time,
+            config->ticket_file_name,
+            config->ticket_encryption_key,
+            config->ticket_encryption_key_length);
+
+        if (qmux == NULL) {
+            DBG_PRINTF("%s", "Could not create QMUX context.");
+        }
+        else {
+            if (config->bin_dir != NULL) {
+                picoquic_set_binlog(qmux, config->bin_dir);
+            }
+
+            if (config->qlog_dir != NULL) {
+                picoquic_set_qlog(qmux, config->qlog_dir);
+            }
+
+            if (config->log_file != NULL) {
+                picoquic_set_textlog(qmux, config->log_file);
+            }
+
+            picoquic_set_log_level(qmux, config->use_long_log);
+
+
+            /* TODO: ECH. Is this different from setting ECH for QUIC? */
+        }
+    }
+    return qmux;
+}
+
 void picoquic_config_init(picoquic_quic_config_t* config)
 {
     memset(config, 0, sizeof(picoquic_quic_config_t));
@@ -1116,6 +1216,9 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     }
     if (config->preferred_address_v6 != NULL) {
         free((void*)config->preferred_address_v6);
+    }
+    if (config->qmux_string != NULL) {
+        free((void*)config->qmux_string);
     }
     picoquic_config_init(config);
 }

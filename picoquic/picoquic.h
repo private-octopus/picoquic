@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.48.0"
+#define PICOQUIC_VERSION "1.1.49.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -202,6 +202,7 @@ typedef enum {
     picoquic_state_disconnected
 } picoquic_state_enum;
 
+
 /*
  * Transport parameters, as defined by the QUIC transport specification.
  * The initial code defined the type as an enum, but the binary representation
@@ -239,6 +240,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_initial_max_path_id 0x3e /* per draft quic multipath 20 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
+#define picoquic_tp_qmux_max_record_size 0x0571c59429cd0845ull /* per draft-ietf-quic-qmux-01 */
 
 /* Packet contexts */
 typedef enum {
@@ -1144,6 +1146,31 @@ int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t 
     uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta);
+
+/* The socket creation API is used to set the socket creation function
+* in the picoquic context. That function needs to be set by the
+* packet loop when it starts. It has three parameters:
+*
+* - a calling context, specified by the socket loop.
+* - the socket address family, type and protocol.
+* - the local address, in which the socket type MUST be specified. If
+*   the IP address and port numbers are specified, the socket will
+*   be bound to these addresses.
+* - an optional remote address. If it is specified, the socket will
+*   be connected to that address, using an asynchronous version of
+*   the connect call.
+*
+* The function returns a (void *) version of the handle of the socket
+* that was created.
+*/
+
+typedef void* (*picoquic_create_socket_fn)(void* create_socket_ctx,
+    int af, int type, int protocol,
+    struct sockaddr* addr_local, struct sockaddr* addr_remote, int interface_index);
+
+int picoquic_set_socket_fn(picoquic_quic_t* quic, picoquic_create_socket_fn socket_fn,
+    void* create_socket_ctx);
+
 
 /* Connection management API.
  * TODO: many of these API should be deprecated. They were created when we

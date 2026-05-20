@@ -124,6 +124,8 @@ extern "C" {
         size_t ext_data_size;
         uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
         uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
+        ptls_buffer_t tls_wbuf;
+        ptls_buffer_t tls_rbuf;
     } picoquic_tls_ctx_t;
 
 #ifdef __cplusplus

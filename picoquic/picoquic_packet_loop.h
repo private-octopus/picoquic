@@ -79,6 +79,65 @@ typedef struct st_picoquic_socket_ctx_t {
 #endif
 } picoquic_socket_ctx_t;
 
+/* variation of the socket descriptor for TCP sockets used by QMux
+*/
+#ifdef _WINDOWS
+typedef struct st_picoquic_sockloop_win_buf_t {
+    uint8_t* buf;
+    size_t buf_size;
+    size_t buf_len;
+    size_t buf_offset;
+    WSABUF wsaBuf;
+    WSAOVERLAPPED overlap;
+} picoquic_sockloop_win_buf_t;
+#endif
+
+typedef struct st_picoqmux_socket_ctx_t {
+    SOCKET_TYPE fd;
+    int af;
+    uint16_t port; /* Port number to which the socket is bound */
+    unsigned int is_listening : 1; /* this is a listening socket, do not expect to send / recv data */
+    unsigned int is_accepting : 1; /* if waiting for completion of "accept call" on new socket */
+    unsigned int is_connecting : 1; /* if waiting for completion of "connect call" on new socket */
+    unsigned int is_sending : 1; /* if waiting for completion of a send() call */
+    unsigned int is_receiving : 1; /* if waiting for completion of a recv() call */
+    /* Connection context: initiated when initiating the socket, used for interactions. */
+    picoquic_cnx_t* cnx;
+    struct sockaddr_storage local_addr;
+    struct sockaddr_storage remote_addr;
+    size_t send_buffer_size;
+    size_t send_buffer_length;
+    size_t send_buffer_offset;
+    uint8_t* send_buffer;
+#if defined(_WINDOWS)
+    /* Windows specific */
+    picoquic_sockloop_win_buf_t winbuf_r;
+    picoquic_sockloop_win_buf_t winbuf_w;
+    LPFN_ACCEPTEX lpfnAcceptEx;
+    SOCKET_TYPE accepting_socket;
+#elif defined(PICOQUIC_WITH_IO_URING)
+    /* Declare the buffers required for io_uring */
+    struct msghdr msg;
+    uint8_t* ctrl_buffer;
+    struct iovec data_iovec;
+    int is_io_uring_started;
+#endif
+} picoqmux_socket_ctx_t;
+
+/* Loop action gets more complex if we have qmux options */
+typedef enum {
+    picoquic_packet_loop_action_none = 0,
+    picoquic_packet_loop_action_timeout,
+    picoquic_packet_loop_action_wake_up,
+    picoquic_packet_loop_action_udp_received,
+    picoquic_packet_loop_action_tcp_accept_ready,
+    picoquic_packet_loop_action_tcp_recv_ready,
+    picoquic_packet_loop_action_tcp_send_ready,
+    picoquic_packet_loop_action_tcp_disconnected,
+    picoquic_packet_loop_action_max
+} picoquic_packet_loop_action_enum;
+
+
 /* The packet loop will call the application back after specific events.
  */
 typedef enum {
@@ -137,6 +196,8 @@ typedef struct st_picoquic_packet_loop_param_t {
     int dest_if;
     uint16_t public_port;
     int is_port_shared; /* public port is shared with other threads, e.g., port 443 between several H3 threads */
+    uint16_t qmux_port;
+    int qmux_is_port_shared; /* public qmux port is shared with other threads, e.g., port 443 between several H3 threads */
     int socket_buffer_size;
     int do_not_use_gso;
     int extra_socket_required;
@@ -190,6 +251,7 @@ typedef void (*picoquic_custom_thread_delete_fn)(void** thread_id);
 
 typedef struct st_picoquic_network_thread_ctx_t {
     picoquic_quic_t* quic;
+    picoquic_quic_t* qmux;
     picoquic_packet_loop_param_t* param;
     picoquic_packet_loop_cb_fn loop_callback;
     picoquic_custom_thread_delete_fn thread_delete_fn;
@@ -221,6 +283,14 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx,
     int * ret);
+
+picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(
+    picoquic_quic_t* quic,
+    picoquic_quic_t* qmux,
+    picoquic_packet_loop_param_t* param,
+    picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx,
+    int* ret);
 
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
@@ -287,6 +357,9 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx);
 * different concepts, and there may be good reasons to change a thread priority
 * after creation. Developers can use the system or framework APIs after the
 * thread is created, using the thread handle in thread_ctx->pthread.
+* 
+* The "_qmux" variant adds an additional parameter "picoquic_quic_t qmux", which is
+* used when the thread needs to manage QMux sockets.
 */
 
 picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(
@@ -299,6 +372,15 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread(
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx,
     int * ret);
+
+
+picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread_qmux(
+    picoquic_quic_t* quic, picoquic_quic_t* qmux, picoquic_packet_loop_param_t* param,
+    picoquic_custom_thread_create_fn thread_create_fn,
+    picoquic_custom_thread_delete_fn thread_delete_fn,
+    picoquic_custom_thread_setname_fn thread_setname_fn,
+    char const* thread_name,
+    picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret);
 
 /* Implementations of picoquic_custom_thread_create_fn and 
 * picoquic_custom_thread_delete_fn for the native thread types.
@@ -393,7 +475,19 @@ int picoquic_start_server_threads(
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
 int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
     int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
-
+picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
+    int af, uint16_t public_port, int is_port_shared, int is_listening);
+void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t** sqmux_ctx, int* nb_qmux_sockets,
+    int max_qmux_sockets, int socket_rank, uint64_t current_time);
+int picoquic_packet_loop_do_tcp_read(picoqmux_socket_ctx_t** sqmux_ctx,
+    int* qmux_socket_was_closed, int socket_rank,
+    uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
+void picoquic_packet_loop_abandon_socket(
+    picoqmux_socket_ctx_t** sqmux_ctx,
+    int* qmux_socket_was_closed,
+    int socket_rank);
 #ifdef __cplusplus
 }
 #endif
