@@ -1183,7 +1183,7 @@ int picoquic_packet_loop_wait(
     int* socket_rank)
 {
     int bytes_recv = 0;
-    HANDLE events[256];
+    HANDLE events[WSA_MAXIMUM_WAIT_EVENTS];
     int w_event_ptr[128];
     DWORD ret_event;
     DWORD nb_events = 0;
@@ -1207,7 +1207,7 @@ int picoquic_packet_loop_wait(
     }
     /* TODO: set limit to number of TCP sockets. */
     qmux_recv_events = nb_events;
-    for (int i = 0; i < nb_qmux_sockets && qmux_recv_events < 256; i++) {
+    for (int i = 0; i < nb_qmux_sockets && qmux_recv_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
         if (sqmux_ctx[i]->cnx != NULL &&
             !sqmux_ctx[i]->is_receiving &&
             !sqmux_ctx[i]->is_listening &&
@@ -1238,7 +1238,7 @@ int picoquic_packet_loop_wait(
     }
     else {
         /* wait for the next send event. */
-        for (int i = 0; i < nb_qmux_sockets && qmux_send_events < 256; i++) {
+        for (int i = 0; i < nb_qmux_sockets && qmux_send_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
             if (sqmux_ctx[i]->cnx != NULL && sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
                 if (!sqmux_ctx[i]->is_sending &&
                     !sqmux_ctx[i]->is_accepting &&
@@ -2539,9 +2539,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         * pack the list of qmux sockets to only keep the valid ones.
          */
         if (qmux_socket_was_closed >= 0) {
+            picoquic_packet_loop_free_qmux_socket(sqmux_ctx[qmux_socket_was_closed]);
+            sqmux_ctx[qmux_socket_was_closed] = 0;
             if (qmux_socket_was_closed < nb_qmux_sockets - 1) {
-                picoquic_packet_loop_free_qmux_socket(sqmux_ctx[qmux_socket_was_closed]);
-                sqmux_ctx[qmux_socket_was_closed] = 0;
                 memmove(&sqmux_ctx[qmux_socket_was_closed], &sqmux_ctx[qmux_socket_was_closed + 1],
                     sizeof(picoqmux_socket_ctx_t*) * (size_t)(nb_qmux_sockets - qmux_socket_was_closed - 1));
             }
