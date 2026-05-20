@@ -1057,6 +1057,12 @@ int sockloop_qmux_one(
             }
         }
     }
+    if (qmux != NULL) {
+        picoquic_free(qmux);
+    }
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
     return ret;
 }
 
