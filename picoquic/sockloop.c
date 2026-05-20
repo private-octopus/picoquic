@@ -2071,13 +2071,13 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
 /* Closing a TCP socket, and notifying the qmux connection */
 void picoquic_packet_loop_tcp_close(
     picoqmux_socket_ctx_t** sqmux_ctx,
+    int * qmux_socket_was_closed,
     int socket_rank,
     uint64_t current_time)
 {
     /* close the socket, and remove it from the list. */
     if (sqmux_ctx[socket_rank]->fd != INVALID_SOCKET) {
-        SOCKET_CLOSE(sqmux_ctx[socket_rank]->fd);
-        sqmux_ctx[socket_rank]->fd = INVALID_SOCKET;
+        picoquic_packet_loop_abandon_socket(sqmux_ctx, qmux_socket_was_closed, socket_rank);
     }
     /* signal the connection loss to the quic connection, so
      * that it can close itself. */
@@ -2090,6 +2090,7 @@ void picoquic_packet_loop_tcp_close(
 /* Process incoming data on a TCP socket */
 int picoquic_packet_loop_do_tcp_read(
     picoqmux_socket_ctx_t** sqmux_ctx,
+    int * qmux_socket_was_closed,
     int socket_rank,
     uint64_t current_time,
     uint8_t* qmux_buffer,
@@ -2115,7 +2116,7 @@ int picoquic_packet_loop_do_tcp_read(
             DBG_PRINTF("%s", "Connection closed by peer.\n");
         }
         /* close the socket, and mark it for removal from the list. */
-        picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
+        picoquic_packet_loop_tcp_close(sqmux_ctx, qmux_socket_was_closed, socket_rank, current_time);
     }
     else {
         /* Submit the data to the quic connection. */
@@ -2123,7 +2124,7 @@ int picoquic_packet_loop_do_tcp_read(
             (sqmux_ctx[socket_rank]->cnx != NULL &&
             (sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_disconnected ||
                 sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received))) {
-            picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
+            picoquic_packet_loop_tcp_close(sqmux_ctx, qmux_socket_was_closed, socket_rank, current_time);
         }
     }
     return ret;
@@ -2132,6 +2133,7 @@ int picoquic_packet_loop_do_tcp_read(
 /* Process sending opportunity on a TCP socket */
 int picoquic_packet_loop_do_tcp_send(
     picoqmux_socket_ctx_t** sqmux_ctx,
+    int* qmux_socket_was_closed,
     int socket_rank,
     uint64_t current_time,
     uint8_t* qmux_buffer,
@@ -2204,7 +2206,7 @@ int picoquic_packet_loop_do_tcp_send(
     }
     if (ret != 0) {
         /* Socket error, could not send data, maybe closed. */
-        picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
+        picoquic_packet_loop_tcp_close(sqmux_ctx, qmux_socket_was_closed, socket_rank, current_time);
     }
     return ret;
 }
@@ -2236,13 +2238,15 @@ int picoquic_packet_loop_check_qmux_timers(
             sqmux_ctx[i]->fd != INVALID_SOCKET &&
             sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
             ret = picoquic_packet_loop_do_tcp_send(
-                sqmux_ctx, i, current_time,
+                sqmux_ctx, qmux_socket_was_closed, i, current_time,
                 qmux_buffer, qmux_buffer_size);
+#if 0
             if (ret != 0 || sqmux_ctx[i]->cnx->cnx_state == picoquic_state_disconnected){
                 /* That connection cannot continue. */
                 picoquic_packet_loop_abandon_socket(sqmux_ctx, qmux_socket_was_closed, i);
                 ret = 0;
             }
+#endif
             break;
         }
     }
@@ -2693,11 +2697,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     &nb_qmux_sockets, max_qmux_sockets, socket_rank, current_time);
                 break;
             case picoquic_packet_loop_action_tcp_recv_ready:
-                ret = picoquic_packet_loop_do_tcp_read( sqmux_ctx, socket_rank,
+                ret = picoquic_packet_loop_do_tcp_read( sqmux_ctx, &qmux_socket_was_closed, socket_rank,
                     current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_tcp_send_ready:
-                ret = picoquic_packet_loop_do_tcp_send(sqmux_ctx, socket_rank,
+                ret = picoquic_packet_loop_do_tcp_send(sqmux_ctx, &qmux_socket_was_closed, socket_rank,
                     current_time, qmux_buffer, qmux_buffer_size);
                 break;
             default:
