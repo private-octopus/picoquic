@@ -1334,7 +1334,7 @@ int picoqmux_incoming_packets(picoquic_cnx_t* cnx, uint64_t current_time,
     int ret = 0;
 
     if (cnx->is_qmux_cleartext) {
-        picoqmux_incoming_cnx_packet(cnx, current_time, receive_buffer, receive_length);
+        ret = picoqmux_incoming_cnx_packet(cnx, current_time, receive_buffer, receive_length);
     }
     else
     {
