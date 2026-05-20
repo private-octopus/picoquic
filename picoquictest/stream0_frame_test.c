@@ -472,6 +472,47 @@ int stream_state_local_reuse_test(void)
 }
 
 /*
+ * Zero length fin add should wake cnx.
+ */
+int add_to_stream_fin_only_wakes_cnx_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = 0;
+    const uint64_t future_wake_time = 60ull * 1000000ull;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx->client_mode = 1;
+        uint64_t stream_id = picoquic_get_next_local_stream_id(cnx, 0);
+
+        /* Park the connection in the future wake tree */
+        picoquic_reinsert_by_wake_time(quic, cnx, future_wake_time);
+        if (cnx->is_wake_ready || !cnx->is_wake_tree) {
+            ret = -1;
+        }
+        else if (picoquic_add_to_stream(cnx, stream_id, NULL, 0, 1) != 0) {
+            ret = -1;
+        }
+        else {
+            picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
+            if (stream == NULL || !stream->fin_requested) {
+                ret = -1;
+            }
+            else if (!cnx->is_wake_ready || cnx->is_wake_tree) {
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/*
  * Test creation and deletion of streams.
  */
 int check_stream_splay_node_sanity(picosplay_node_t *x, void *floor, void *ceil, picosplay_comparator comp) {

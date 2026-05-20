@@ -2888,7 +2888,8 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 path_x->delivered_sent_last = send_time;
                 path_x->delivered_last_packet = delivered_prior;
                 path_x->last_bw_estimate_path_limited = rs_is_path_limited;
-                if (path_x->delivered_last_packet > path_x->delivered_limited_index) {
+                if (path_x->delivered_limited_index != 0 &&
+                    path_x->delivered >= path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
                 /* Statistics */
@@ -3111,11 +3112,27 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 /* In a multipath environment, a packet can carry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
+static int picoquic_is_ack_path_limited(picoquic_path_t* old_path, picoquic_packet_t* acked_packet)
+{
+    int is_path_limited = acked_packet->delivered_app_limited;
+
+    if (!is_path_limited && old_path->delivered_limited_index != 0 &&
+        old_path->delivered >= acked_packet->length) {
+        uint64_t delivered_before_ack = old_path->delivered - acked_packet->length;
+
+        is_path_limited = (delivered_before_ack < old_path->delivered_limited_index);
+    }
+
+    return is_path_limited;
+}
+
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet)
 {
     picoquic_path_t* old_path = acked_packet->send_path;
 
     if (old_path != NULL) {
+        int is_path_limited = picoquic_is_ack_path_limited(old_path, acked_packet);
+
         /* Find the path index in the packet data structure */
         int path_i = 0;
         while (path_i < packet_data->nb_path_ack &&
@@ -3138,9 +3155,12 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
             packet_data->path_ack[path_i].lost_prior = acked_packet->lost_prior;
             packet_data->path_ack[path_i].inflight_prior = acked_packet->inflight_prior;
-            packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
+            packet_data->path_ack[path_i].rs_is_path_limited = is_path_limited;
             packet_data->path_ack[path_i].rs_is_cwnd_limited = acked_packet->sent_cwin_limited;
             packet_data->path_ack[path_i].is_set = 1;
+        }
+        else if (is_path_limited) {
+            packet_data->path_ack[path_i].rs_is_path_limited = 1;
         }
         packet_data->path_ack[path_i].data_acked += acked_packet->length;
     }
@@ -3155,6 +3175,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 {
     for (int i = 0; i < packet_data->nb_path_ack; i++) {
         uint64_t lost_before_ack = path_x->total_bytes_lost;
+        uint64_t loss_ranges_before_ack = packet_data->path_ack[i].acked_path->nb_loss_ranges_found;
         uint64_t nb_bytes_newly_lost = 0;
 
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, epoch,
@@ -3181,6 +3202,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
             ack_state.nb_bytes_acknowledged = packet_data->path_ack[i].data_acked;
             ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
+            ack_state.nb_loss_ranges_newly_lost = packet_data->path_ack[i].acked_path->nb_loss_ranges_found - loss_ranges_before_ack;
             if (cnx->cnx_state == picoquic_state_ready) {
                 ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
             }
@@ -3912,6 +3934,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
     uint64_t largest_in_path = 0;
     picoquic_path_t * ack_path = cnx->path[0];
+    picoquic_path_t* ecn_ack_path = NULL;
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3954,6 +3977,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             if (top_packet != NULL && is_new_ack) {
                 largest_in_path = top_packet->sequence_number;
                 ack_path = top_packet->send_path;
+                ecn_ack_path = ack_path;
 
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = top_packet->send_time;
@@ -4029,17 +4053,31 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     }
 
     if (bytes != 0 && is_ecn) {
+        uint64_t delta_ect0 = 0;
+        uint64_t delta_ect1 = 0;
+        uint64_t delta_ce = 0;
+
         if (ecnx3[0] > pkt_ctx->ecn_ect0_total_remote) {
+            delta_ect0 = ecnx3[0] - pkt_ctx->ecn_ect0_total_remote;
             pkt_ctx->ecn_ect0_total_remote = ecnx3[0];
         }
         if (ecnx3[1] > pkt_ctx->ecn_ect1_total_remote) {
+            delta_ect1 = ecnx3[1] - pkt_ctx->ecn_ect1_total_remote;
             pkt_ctx->ecn_ect1_total_remote = ecnx3[1];
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
+            delta_ce = ecnx3[2] - pkt_ctx->ecn_ce_total_remote;
+            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
+        }
+        if (pc == picoquic_packet_context_application && ecn_ack_path != NULL) {
+            ecn_ack_path->ecn_ect0_total_remote += delta_ect0;
+            ecn_ack_path->ecn_ect1_total_remote += delta_ect1;
+            ecn_ack_path->ecn_ce_total_remote += delta_ce;
+        }
+        if (delta_ce > 0) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = pc;
             ack_state.lost_packet_number = largest_in_path;
-            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
                 &ack_state, current_time);

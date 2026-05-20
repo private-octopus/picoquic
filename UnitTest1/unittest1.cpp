@@ -2138,6 +2138,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ecdc_double_close)
+        {
+            int ret = ecdc_double_close_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ec5c_silly_cid)
         {
             int ret = ec5c_silly_cid_test();

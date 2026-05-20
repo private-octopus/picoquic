@@ -296,10 +296,12 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
             }
         }
 
-        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
     }
 
     if (ret == 0) {
+        if (length > 0 || set_fin) {
+            picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+        }
         cnx->nb_bytes_queued += length;
         stream->is_active = 0;
         stream->app_stream_ctx = app_stream_ctx;
@@ -1172,11 +1174,22 @@ void picoquic_insert_hole_in_send_sequence_if_needed(picoquic_cnx_t* cnx, picoqu
  * Final steps of encoding and protecting the packet before sending
  */
 
+static void picoquic_mark_path_app_limited(picoquic_path_t* path_x)
+{
+    uint64_t limited_index = path_x->delivered + path_x->bytes_in_transit;
+
+    if (limited_index == 0) {
+        limited_index = 1;
+    }
+
+    path_x->delivered_limited_index = limited_index;
+}
+
 void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t* cnx, 
     picoquic_packet_t* packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
-    picoquic_path_t* path_x, uint64_t current_time, picoquic_tuple_t* tuple)
+    picoquic_path_t* path_x, uint64_t current_time, picoquic_tuple_t* tuple, int is_ack_eliciting)
 {
     if (length != 0 && length < header_length) {
         length = 0;
@@ -1247,6 +1260,22 @@ void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t* cnx,
 
         if (length > 0) {
             packet->checksum_overhead = checksum_overhead;
+            uint64_t idle_restart_interval = path_x->retransmit_timer;
+            if (idle_restart_interval < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER) {
+                idle_restart_interval = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
+            }
+            if (is_ack_eliciting && !packet->is_ack_trap && cnx->congestion_alg != NULL &&
+                packet->inflight_prior == 0 && packet->delivered_app_limited &&
+                path_x->last_sent_time != 0 &&
+                current_time > path_x->last_sent_time + idle_restart_interval) {
+                picoquic_per_ack_state_t ack_state = { 0 };
+                ack_state.pc = packet->pc;
+                ack_state.inflight_prior = packet->inflight_prior;
+                ack_state.is_app_limited = packet->delivered_app_limited;
+                cnx->congestion_alg->alg_notify(cnx, path_x,
+                    picoquic_congestion_notification_restart_from_idle,
+                    &ack_state, current_time);
+            }
             picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
             path_x->last_sent_time = current_time;
             path_x->bytes_sent += length;
@@ -1263,12 +1292,12 @@ void picoquic_finalize_and_protect_packet(picoquic_cnx_t* cnx,
     picoquic_packet_t* packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
-    picoquic_path_t* path_x, uint64_t current_time)
+    picoquic_path_t* path_x, uint64_t current_time, int is_ack_eliciting)
 {
     picoquic_finalize_and_protect_packet_tuple(cnx, packet, ret,
         length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time, path_x->first_tuple);
+        path_x, current_time, path_x->first_tuple, is_ack_eliciting);
 }
 
 /*
@@ -1730,7 +1759,7 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time);
+        path_x, current_time, !is_pure_ack);
 
     if (length > 0) {
         /* Accounting of zero rtt packets sent */
@@ -2206,7 +2235,7 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         picoquic_finalize_and_protect_packet(cnx, packet,
             ret, length, header_length, checksum_overhead,
             send_length, send_buffer, send_buffer_max,
-            path_x, current_time);
+            path_x, current_time, !is_pure_ack);
     }
 
     return ret;
@@ -2338,7 +2367,7 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time);
+        path_x, current_time, !is_pure_ack);
 
     /* Account for data sent during handshake */
     if (!cnx->initial_validated) {
@@ -2588,7 +2617,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time);
+        path_x, current_time, !is_pure_ack);
 
     return ret;
 }
@@ -3177,7 +3206,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
                             length = bytes_next - bytes;
                             if (length <= header_length) {
                                 /* Mark the bandwidth estimation as application limited */
-                                path_x->delivered_limited_index = path_x->delivered;
+                                picoquic_mark_path_app_limited(path_x);
                                 /* Notify the peer if something is blocked */
                                 bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
                                 length = bytes_next - bytes;
@@ -3265,7 +3294,7 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time);
+        path_x, current_time, !is_pure_ack);
 
     if (*send_length > 0) {
         /* Account for data sent during handshake */
@@ -3528,7 +3557,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
 
                         if (length <= header_length || is_pure_ack) {
                             /* Mark the bandwidth estimation as application limited */
-                            path_x->delivered_limited_index = path_x->delivered;
+                            picoquic_mark_path_app_limited(path_x);
                             /* Notify the peer if something is blocked */
                             bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
                             length = bytes_next - bytes;
@@ -3703,7 +3732,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     picoquic_finalize_and_protect_packet(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time);
+        path_x, current_time, !is_pure_ack);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;
@@ -4214,9 +4243,12 @@ int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, cha
     } else {
         ret = -1;
     }
-    cnx->local_error_reason = error_reason;
-    cnx->offending_frame_type = 0;
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
+
+    if (ret == 0) {
+        cnx->local_error_reason = error_reason;
+        cnx->offending_frame_type = 0;
+        picoquic_reinsert_by_wake_time(cnx->quic, cnx, current_time);
+    }
 
     return ret;
 }
