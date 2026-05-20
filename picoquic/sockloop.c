@@ -2082,7 +2082,7 @@ void picoquic_packet_loop_tcp_close(
     /* signal the connection loss to the quic connection, so
      * that it can close itself. */
     if (sqmux_ctx[socket_rank]->cnx != NULL) {
-        picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, NULL, 0, 1);
+        (void)picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, NULL, 0, 1);
         sqmux_ctx[socket_rank]->cnx = NULL;
     }
 }
@@ -2119,10 +2119,10 @@ int picoquic_packet_loop_do_tcp_read(
     }
     else {
         /* Submit the data to the quic connection. */
-        picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, buf, (size_t)recv_len, 0);
-        if (sqmux_ctx[socket_rank]->cnx != NULL &&
+        if (picoqmux_incoming_packets(sqmux_ctx[socket_rank]->cnx, current_time, buf, (size_t)recv_len, 0) != 0 ||
+            (sqmux_ctx[socket_rank]->cnx != NULL &&
             (sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_disconnected ||
-                sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received)) {
+                sqmux_ctx[socket_rank]->cnx->cnx_state == picoquic_state_closing_received))) {
             picoquic_packet_loop_tcp_close(sqmux_ctx, socket_rank, current_time);
         }
     }
