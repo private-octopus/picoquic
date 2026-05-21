@@ -10,7 +10,7 @@
 
 #define PICOQUIC_FC_ACTION_JOIN 0x01
 #define PICOQUIC_FC_ACTION_LEAVE 0x02
-#define PICOQUIC_FC_ACTION_LISTEN 0x04
+#define PICOQUIC_FC_ACTION_READY 0x03
 
 int picoquic_compare_flow_id(picoquic_fc_flow_id_t *flow_id_1,
                              picoquic_fc_flow_id_t *flow_id_2)
