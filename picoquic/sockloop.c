@@ -1489,7 +1489,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 }
                 ret = 0;
             }
-            /* We limit the number of packets sent in a loop, no make sure that
+            /* We limit the number of packets sent in a loop, to make sure that
             * the code will not spend a lot of time sending packets while
             * packets may be adding in the receive queue.
              */

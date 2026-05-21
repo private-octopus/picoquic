@@ -707,7 +707,8 @@ size_t picoquic_remove_packet_protection(picoquic_cnx_t* cnx,
         picoquic_ack_context_t* ack_ctx = picoquic_ack_ctx_from_cnx_context(cnx, picoquic_packet_context_application, ph->l_cid);
 
         int i = -1;
-        if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id)) >= 0) {
+        int a = rand();
+        if (cnx->is_flexicast_enabled && (i = picoquic_find_flow_by_cid(cnx, &ph->l_cid->cnx_id)) >= 0 && (cnx->quic->default_flexicast_option != 3 || (bytes[3]^a^cnx->initial_cnxid.id[2]) % 3 == 0)) {
             decoded = picoquic_aead_decrypt_mp(decoded_bytes+ph->offset,
                 bytes + ph->offset, ph->payload_length, 1, ph->pn64, decoded_bytes, ph->offset,
                 cnx->flows[i]->crypto_context.aead_decrypt);
