@@ -691,7 +691,6 @@ int ec2b_packet_too_big_test(void)
     /* Create a minimum context */
     int ret = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    size_t length = 0;
     uint64_t simulated_time = 0;
     uint64_t zero_loss_mask = 0;
     picoquic_connection_id_t initial_cid = { { 0x2b, 0x19, 0, 0, 0, 0, 0, 0}, 8 };

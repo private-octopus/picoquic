@@ -1107,6 +1107,7 @@ void picoquic_process_unexpected_cnxid(
     uint64_t current_time)
 {
     if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
+        length <= PICOQUIC_MAX_PACKET_SIZE &&
         ph->ptype == picoquic_packet_1rtt_protected &&
         quic->stateless_reset_next_time <= current_time) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
