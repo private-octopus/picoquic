@@ -350,25 +350,74 @@ static uint8_t test_frame_reset_stream_at[] = {
     13
 };
 
+static uint8_t test_frame_fc_announce_v4[] = {
+    0x40, picoquic_frame_type_fc_announce,
+    16,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0,
+    4,
+    10, 0, 0, 1,
+    239, 239, 239, 35,
+    0x15, 0xb3,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static uint8_t test_frame_fc_announce_v6[] = {
+    0x40, picoquic_frame_type_fc_announce,
+    16,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x40, 0xff,
+    6,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    0x15, 0xb3,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static uint8_t test_frame_fc_state[] = {
+    0x40, picoquic_frame_type_fc_state,
+    16,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x40, 0xff,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+};
+
+static uint8_t test_frame_fc_key[] = {
+    0x40, picoquic_frame_type_fc_key,
+    16,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x42, 0xef,
+    0x11,
+    0x20,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 #define TEST_SKIP_ITEM_OLD(n, x, a, l, e, err, skip_err)    \
     {                                                       \
-        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0       \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0, 0       \
     }
 
 #define TEST_SKIP_ITEM_OLD_MPATH(n, x, a, l, e, err, skip_err, mpath) \
     {                                                             \
-        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0         \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0, 0         \
     }
 
 
 #define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err, varints) \
     {                                                         \
-        n, x, sizeof(x), a, l, e, err, skip_err, 0, varints   \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0, varints   \
     }
 
 #define TEST_SKIP_ITEM_MPATH(n, x, a, l, e, err, skip_err, mpath, varints) \
     {                                                                      \
-        n, x, sizeof(x), a, l, e, err, skip_err, mpath, varints         \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0, varints         \
+    }
+
+#define TEST_SKIP_ITEM_FC(n, x, a, l, e, err, skip_err, mpath, fc, varints) \
+    {                                                                      \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, fc, varints         \
     }
 
 test_skip_frames_t test_skip_list[] = {
@@ -426,7 +475,12 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1),
     TEST_SKIP_ITEM_MPATH("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0, 1, 9),
     TEST_SKIP_ITEM_MPATH("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0, 1, 12),
-    TEST_SKIP_ITEM("reset_stream_at", test_frame_reset_stream_at, 0, 0, 3, 0, 0, 3)
+    TEST_SKIP_ITEM("reset_stream_at", test_frame_reset_stream_at, 0, 0, 3, 0, 0, 3),
+
+    TEST_SKIP_ITEM_FC("fc_announce_v4", test_frame_fc_announce_v4, 0, 0, 3, 0, 0, 1, 1, 1),
+    TEST_SKIP_ITEM_FC("fc_announce_v6", test_frame_fc_announce_v6, 0, 0, 3, 0, 0, 1, 1, 1),
+    TEST_SKIP_ITEM_FC("fc_state", test_frame_fc_state, 0, 0, 3, 0, 0, 1, 1, 1),
+    TEST_SKIP_ITEM_FC("fc_key", test_frame_fc_key, 0, 0, 3, 0, 0, 1, 2, 1),
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);

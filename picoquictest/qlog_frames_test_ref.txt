@@ -92,5 +92,13 @@
 { "test": "path_ack_ecn", "frame": { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351]], "ect0": 3, "ect1": 0, "ce": 1}},
 { "test": "reset_stream_at", "frame": { 
-    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}}
+    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}},
+{ "test": "fc_announce_v4", "frame": { 
+    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f"}},
+{ "test": "fc_announce_v6", "frame": { 
+    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f"}},
+{ "test": "fc_state", "frame": { 
+    "frame_type": "fc_state", "flow_id": "000102030405060708090a0b0c0d0e0f", "action": 1}},
+{ "test": "fc_key", "frame": { 
+    "frame_type": "fc_key", "flow_id": "000102030405060708090a0b0c0d0e0f"}}
 ]

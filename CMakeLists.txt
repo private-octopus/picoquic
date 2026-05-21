@@ -581,6 +581,13 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_baton)
 
+    add_executable(
+        picoquic_fc
+        sample/sample_fc_client.c)
+    target_link_libraries(picoquic_fc PRIVATE picoquic-log picoquic-core)
+    target_include_directories(picoquic_fc PRIVATE loglib picoquic)
+    set_picoquic_compile_settings(picoquic_fc)
+
     add_executable(picoquic_sample
         sample/sample.c
         sample/sample_background.c
