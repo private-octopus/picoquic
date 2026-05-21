@@ -94,11 +94,11 @@
 { "test": "reset_stream_at", "frame": { 
     "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}},
 { "test": "fc_announce_v4", "frame": { 
-    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f"}},
+    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f", "sequence_number": 0, "source_address": "10.0.0.1", "group_address": "239.239.239.35", "port": 5555, "ack_delay_timer": 0}},
 { "test": "fc_announce_v6", "frame": { 
-    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f"}},
+    "frame_type": "fc_announce", "flow_id": "000102030405060708090a0b0c0d0e0f", "sequence_number": 255, "source_address": "1:203:405:607:809:a0b:c0d:e0f", "group_address": "1:203:405:607:809:a0b:c0d:e0f", "port": 5555, "ack_delay_timer": 0}},
 { "test": "fc_state", "frame": { 
-    "frame_type": "fc_state", "flow_id": "000102030405060708090a0b0c0d0e0f", "action": 1}},
+    "frame_type": "fc_state", "flow_id": "000102030405060708090a0b0c0d0e0f", "sequence_number": 255, "action_number": 1}},
 { "test": "fc_key", "frame": { 
-    "frame_type": "fc_key", "flow_id": "000102030405060708090a0b0c0d0e0f"}}
+    "frame_type": "fc_key", "flow_id": "000102030405060708090a0b0c0d0e0f", "sequence_number": 751, "packet_number": 17, "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "algorithm": 0}}
 ]

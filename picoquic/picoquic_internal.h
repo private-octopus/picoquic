@@ -2113,9 +2113,6 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
 const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port);
-const uint8_t* picoquic_parse_fc_announce_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t* flow_id);
-const uint8_t* picoquic_parse_fc_state_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t* flow_id, uint64_t* action);
-const uint8_t* picoquic_parse_fc_key_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t* flow_id);
 uint8_t* picoquic_format_observed_address_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t ftype,
     uint64_t sequence_number, uint8_t* addr, uint16_t port, int * more_data);

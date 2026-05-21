@@ -495,36 +495,67 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
 
 const uint8_t* qlog_frame_fc_announce(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    picoquic_fc_flow_id_t flow_id;
+    uint64_t seq, ack_delay;
+    uint16_t port;
+    uint8_t ip_version, flow_id_len;
+    struct sockaddr addr;
 
-    if ((bytes = picoquic_parse_fc_announce_frame(bytes, bytes_max, &flow_id)) != NULL) {
-        fprintf(f, ", \"flow_id\": ");
-        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id_len)) != NULL &&
+        fprintf(f, ", \"flow_id\": ") >= 0 &&
+        (bytes = qlog_frame_hex_string(f, bytes, bytes_max, flow_id_len)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &seq)) != NULL &&
+        fprintf(f, ", \"sequence_number\": %"PRIu64", \"source_address\": ", seq) >= 0 &&
+        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &ip_version)) != NULL &&
+        (bytes = picoquic_frames_addr_decode(bytes, bytes_max, ip_version, &addr))
+    ) {
+        qlog_frame_ip_address(f, ip_version == 4 ? (uint8_t *)&((struct sockaddr_in *) &addr)->sin_addr : (uint8_t *)&((struct sockaddr_in6 *) &addr)->sin6_addr,
+                                ip_version == 4 ? 4 : 16);
+        fprintf(f, ", \"group_address\": ");
+
+        if ((bytes = picoquic_frames_addr_decode(bytes, bytes_max, ip_version, &addr)) &&
+            (bytes = picoquic_frames_uint16_decode(bytes, bytes_max, &port)) &&
+            (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &ack_delay))
+        ) {
+            qlog_frame_ip_address(f, ip_version == 4 ? (uint8_t *)&((struct sockaddr_in *) &addr)->sin_addr : (uint8_t *)&((struct sockaddr_in6 *) &addr)->sin6_addr,
+                                ip_version == 4 ? 4 : 16);
+            fprintf(f, ", \"port\": %u, \"ack_delay_timer\": %"PRIu64, port, ack_delay);
+        }
     }
     return bytes;
 }
 
 const uint8_t* qlog_frame_fc_state(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    picoquic_fc_flow_id_t flow_id;
-    uint64_t action;
+    uint64_t seq, action;
+    uint8_t flow_id_len;
 
-    if ((bytes = picoquic_parse_fc_state_frame(bytes, bytes_max, &flow_id, &action)) != NULL) {
-        fprintf(f, ", \"flow_id\": ");
-        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
-        fprintf(f, ", ");
-        qlog_json_uint(f, "action", action);
+    fprintf(f, ", \"flow_id\": ");
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id_len)) != NULL &&
+        (bytes = qlog_frame_hex_string(f, bytes, bytes_max, flow_id_len)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &seq)) != NULL &&
+        (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &action)) != NULL
+    ) {
+        fprintf(f, ", \"sequence_number\": %"PRIu64", \"action_number\": %"PRIu64, seq, action);
     }
     return bytes;
 }
 
 const uint8_t* qlog_frame_fc_key(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    picoquic_fc_flow_id_t flow_id;
+    uint64_t seq, pn, k_len, algo;
+    uint8_t flow_id_len;
 
-    if ((bytes = picoquic_parse_fc_key_frame(bytes, bytes_max, &flow_id)) != NULL) {
-        fprintf(f, ", \"flow_id\": ");
-        qlog_frame_hex_string(f, flow_id.id, flow_id.id + flow_id.id_len, flow_id.id_len);
+    fprintf(f, ", \"flow_id\": ");
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id_len)) != NULL &&
+        (bytes = qlog_frame_hex_string(f, bytes, bytes_max, flow_id_len)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &seq)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &pn)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &k_len)) != NULL &&
+        fprintf(f, ", \"sequence_number\": %"PRIu64", \"packet_number\": %"PRIu64", \"key\": ", seq, pn) >= 0 &&
+        (bytes = qlog_frame_hex_string(f, bytes, bytes_max, k_len)) != NULL &&
+        (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &algo)) != NULL
+    ) {
+        fprintf(f, ", \"algorithm\": %"PRIu64, algo);
     }
     return bytes;
 }

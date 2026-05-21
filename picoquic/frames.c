@@ -6818,19 +6818,6 @@ const uint8_t* picoquic_decode_fc_state_frame(picoquic_cnx_t* cnx, picoquic_path
     return bytes;
 }
 
-const uint8_t* picoquic_parse_fc_state_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t* flow_id, uint64_t* action)
-{
-    if (
-        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id->id_len)) != NULL &&
-        (bytes = picoquic_frames_fc_flow_id_decode(bytes, bytes_max, flow_id->id_len, flow_id)) != NULL &&
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, action)) != NULL// &&
-        //(bytes = picoquic_frames_varint_skip(bytes, bytes_max))
-    ) {
-    }
-    return bytes;
-}
-
 uint8_t * picoquic_format_fc_state_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
     picoquic_fc_flow_t* flow, uint64_t action)
 {
