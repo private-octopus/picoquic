@@ -793,7 +793,11 @@ int picoquic_parse_header_and_decrypt(
             length = ph->offset + ph->payload_length;
             *consumed = length;
 
-            if (*pcnx != NULL) {
+            if (length > PICOQUIC_MAX_PACKET_SIZE) {
+                /* Attempting to decrypt messages that long could create a buffer overflow */
+                ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+            }
+            else if (*pcnx != NULL) {
                 if (!(*pcnx)->client_mode && ph->ptype == picoquic_packet_initial && packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
                     /* Unexpected packet. Reject, drop and log. */
                     ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
@@ -891,13 +895,16 @@ int picoquic_parse_header_and_decrypt(
                 }
             }
         }
+        else if (length > PICOQUIC_MAX_PACKET_SIZE) {
+            /* Attempting to decrypt messages that long could create a buffer overflow */
+            ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+        }
         else {
             /* Clear text packet. Copy content to decrypted data */
             memmove(decrypted_data->data, bytes, length);
             *consumed = length;
         }
     }
-    
     return ret;
 }
 

@@ -293,6 +293,7 @@ int ecf1_final_loss_test(void);
 int ecdc_double_close_test(void);
 int ec5c_silly_cid_test(void);
 int ec9a_preemptive_amok_test(void);
+int ec2b_packet_too_big_test(void);
 int error_reason_test(void);
 int idle_server_test(void);
 int idle_timeout_test(void);
