@@ -50,6 +50,18 @@ static const uint8_t* picoquic_log_varint(const uint8_t* bytes, const uint8_t* b
     return len == 0 ? NULL : bytes + len;
 }
 
+static const uint8_t* picoquic_log_uint8(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t* n)
+{
+    if (bytes == NULL) {
+        return NULL;
+    }
+    else if (bytes < bytes_max){
+        *n = *bytes;
+        return bytes + 1;
+    }
+    return NULL;
+}
+
 static const uint8_t* picoquic_log_length(const uint8_t* bytes, const uint8_t* bytes_max, size_t* nsz)
 {
     uint64_t n64 = 0;
@@ -547,6 +559,55 @@ static const uint8_t* picoquic_log_observed_address_frame(FILE* f, const uint8_t
     return bytes;
 }
 
+static const uint8_t* picoquic_log_fc_announce_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max) {
+    const uint8_t* bytes_begin = bytes;
+    uint8_t flow_id_len, ip_family;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_uint8(bytes, bytes_max, &flow_id_len); /* flow id len */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, flow_id_len); /* flow id */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* sequence number */
+    bytes = picoquic_log_uint8(bytes, bytes_max, &ip_family); /* IP family */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, ip_family == 4 ? 18 : 42); /* source and group address, port and ack delay timer */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_fc_state_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max) {
+    const uint8_t* bytes_begin = bytes;
+    uint8_t flow_id_len;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_uint8(bytes, bytes_max, &flow_id_len); /* flow id len */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, flow_id_len); /* flow id */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* sequence number */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, sizeof(uint64_t)); /* action number */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
+static const uint8_t* picoquic_log_fc_key_frame(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max) {
+    const uint8_t* bytes_begin = bytes;
+    uint8_t flow_id_len;
+    uint64_t k_len;
+
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* Frame type */
+    bytes = picoquic_log_uint8(bytes, bytes_max, &flow_id_len); /* flow id len */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, flow_id_len); /* flow id */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* sequence number */
+    bytes = picoquic_log_varint_skip(bytes, bytes_max); /* packet number */
+    bytes = picoquic_log_varint(bytes, bytes_max, &k_len); /* key length */
+    bytes = picoquic_log_fixed_skip(bytes, bytes_max, k_len + 8); /* key and algorithm */
+
+    picoquic_binlog_frame(f, bytes_begin, bytes);
+
+    return bytes;
+}
+
 void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 {
     const uint8_t* bytes_max = bytes + length;
@@ -668,6 +729,15 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
         case picoquic_frame_type_observed_address_v4:
         case picoquic_frame_type_observed_address_v6:
             bytes = picoquic_log_observed_address_frame(f, bytes, bytes_max, ftype);
+            break;
+        case picoquic_frame_type_fc_announce:
+            bytes = picoquic_log_fc_announce_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_fc_state:
+            bytes = picoquic_log_fc_state_frame(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_fc_key:
+            bytes = picoquic_log_fc_key_frame(f, bytes, bytes_max);
             break;
         default:
             bytes = picoquic_log_erroring_frame(f, bytes, bytes_max);

@@ -1202,6 +1202,109 @@ void qlog_observed_address_frame(uint64_t ftype, FILE* f, bytestream* s)
     fprintf(f, "\", \"port\": %u", port);
 }
 
+void qlog_fc_announce_frame(FILE* f, bytestream* s)
+{
+    uint64_t seq, ack_delay;
+    uint16_t port;
+    uint8_t ip_version, flow_id_len;
+    
+    fprintf(f, ", \"flow_id\": ");
+    byteread_int8(s, &flow_id_len);
+    qlog_string(f, s, (uint64_t)flow_id_len);
+
+    byteread_vint(s, &seq);
+    fprintf(f, ", \"sequence_number\": %"PRIu64", \"source_address\": \"", seq);
+
+    byteread_int8(s, &ip_version);
+    if (ip_version == 4) {
+        /* IPv4 address */
+        for (int x = 0; x < 4 && s->ptr < s->size; x++) {
+            if (x != 0) {
+                fprintf(f, ".");
+            }
+            fprintf(f, "%d", s->data[s->ptr++]);
+        }
+    }
+    else {
+        /* IPv6 address */
+        for (int x = 0; x < 8 && s->ptr < s->size; x++) {
+            uint16_t w = 0;
+            for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+                w <<= 8;
+                w += s->data[s->ptr++];
+            }
+            if (x != 0) {
+                fprintf(f, ":");
+            }
+            fprintf(f, "%x", w);
+        }
+    }
+    
+    fprintf(f, "\", \"group_address\": \"");
+
+    if (ip_version == 4) {
+        /* IPv4 address */
+        for (int x = 0; x < 4 && s->ptr < s->size; x++) {
+            if (x != 0) {
+                fprintf(f, ".");
+            }
+            fprintf(f, "%d", s->data[s->ptr++]);
+        }
+    }
+    else {
+        /* IPv6 address */
+        for (int x = 0; x < 8 && s->ptr < s->size; x++) {
+            uint16_t w = 0;
+            for (int y = 0; y < 2 && s->ptr < s->size; y++) {
+                w <<= 8;
+                w += s->data[s->ptr++];
+            }
+            if (x != 0) {
+                fprintf(f, ":");
+            }
+            fprintf(f, "%x", w);
+        }
+    }
+
+    byteread_int16(s, &port);
+    byteread_int64(s, &ack_delay);
+    fprintf(f, "\", \"port\": %u, \"ack_delay_timer\": %"PRIu64, port, ack_delay);
+}
+
+void qlog_fc_state_frame(FILE* f, bytestream* s)
+{
+    uint64_t seq, action;
+    uint8_t flow_id_len;
+
+    fprintf(f, ", \"flow_id\": ");
+    byteread_int8(s, &flow_id_len);
+    qlog_string(f, s, flow_id_len);
+
+    byteread_vint(s, &seq);
+    byteread_int64(s, &action);
+    fprintf(f, ", \"sequence_number\": %"PRIu64", \"action_number\": %"PRIu64, seq, action);
+}
+
+void qlog_fc_key_frame(FILE* f, bytestream* s)
+{
+    uint64_t seq, pn, k_len, algo;
+    uint8_t flow_id_len;
+    
+    fprintf(f, ", \"flow_id\": ");
+    byteread_int8(s, &flow_id_len);
+    qlog_string(f, s, flow_id_len);
+
+    byteread_vint(s, &seq);
+    byteread_vint(s, &pn);
+    fprintf(f, ", \"sequence_number\": %"PRIu64", \"packet_number\": %"PRIu64", \"key\": ", seq, pn);
+
+    byteread_vint(s, &k_len);
+    qlog_string(f, s, k_len);
+
+    byteread_int64(s, &algo);
+    fprintf(f, ", \"algorithm\": %"PRIu64, algo);
+}
+
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
@@ -1347,6 +1450,15 @@ int qlog_packet_frame(bytestream * s, void * ptr)
     case picoquic_frame_type_observed_address_v4:
     case picoquic_frame_type_observed_address_v6:
         qlog_observed_address_frame(ftype, f, s);
+        break;
+    case picoquic_frame_type_fc_announce:
+        qlog_fc_announce_frame(f, s);
+        break;
+    case picoquic_frame_type_fc_state:
+        qlog_fc_state_frame(f, s);
+        break;
+    case picoquic_frame_type_fc_key:
+        qlog_fc_key_frame(f, s);
         break;
     default:
         s->ptr = ptr_before_type;
