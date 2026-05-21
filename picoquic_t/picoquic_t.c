@@ -356,6 +356,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ecdc_double_close", ecdc_double_close_test },
     { "ec5c_silly_cid", ec5c_silly_cid_test },
     { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
+    { "ec2b_packet_too_big", ec2b_packet_too_big_test },
     { "error_reason", error_reason_test },
     { "idle_server", idle_server_test },
     { "idle_timeout", idle_timeout_test },

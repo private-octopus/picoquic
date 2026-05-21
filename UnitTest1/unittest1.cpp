@@ -2159,6 +2159,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ecb1_packet_too_big)
+        {
+            int ret = ec2b_packet_too_big_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(error_reason)
         {
             int ret = error_reason_test();

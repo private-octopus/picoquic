@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.49.0"
+#define PICOQUIC_VERSION "1.1.49.1"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -112,7 +112,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
 #define PICOQUIC_ERROR_REDIRECTED (PICOQUIC_ERROR_CLASS + 69) /* Not an error: the packet was captured by a proxy, no further processing needed */
 #define PICOQUIC_ERROR_PADDING_PACKET (PICOQUIC_ERROR_CLASS + 70)
-
+#define PICOQUIC_ERROR_PACKET_TOO_BIG (PICOQUIC_ERROR_CLASS + 71)
 /*
  * Protocol errors defined in the QUIC spec
  */

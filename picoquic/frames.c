@@ -1289,8 +1289,10 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
     picoquic_stream_data_node_t* node = received_data;
     
     if (received_data == NULL || received_data->bytes != NULL || !is_last_frame) {
-        node = picoquic_stream_data_node_alloc(quic);
-        if (node == NULL) {
+        if (length > PICOQUIC_MAX_PACKET_SIZE) {
+            ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+        }
+        else if ((node = picoquic_stream_data_node_alloc(quic)) == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
         else {

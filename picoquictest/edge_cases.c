@@ -685,6 +685,75 @@ int ec9a_preemptive_amok_test(void)
     return ret;
 }
 
+/* packet too big test */
+int ec2b_packet_too_big_test(void)
+{
+    /* Create a minimum context */
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t zero_loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { { 0x2b, 0x19, 0, 0, 0, 0, 0, 0}, 8 };
+    uint8_t big_packet[2048];
+    picoquic_cnx_t* previous_cnx;
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+
+    /* Finish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &zero_loss_mask, 0, &simulated_time);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect loop returns %d\n", ret);
+        }
+    }
+    /* send a series of packets too big with different characteristics:
+     * - malformed packet that is treated as an error.
+     * - valid 1rtt encrypted packet with stream frame at offset > 0,
+     *   too large to be used as a chunk.
+     * - 1RTT packet with "unknown" DCID, trigger a stateless reset.
+     */
+    for (int big_packet_type = 0; big_packet_type < 4; big_packet_type++) {
+        if (big_packet_type <= 1) {
+            memset(big_packet, 0xff, sizeof(big_packet));
+            big_packet[1] = 0x0;
+            big_packet[2] = 0x0;
+            big_packet[3] = 0x0;
+            big_packet[4] = 0x01;
+            big_packet[5] = 0x08;
+            big_packet[14] = 0x08;
+            if (big_packet_type == 1) {
+                big_packet[4] = 0x0f;
+            }
+        }
+        else if (big_packet_type == 2) {
+            memset(big_packet, 0x0f, sizeof(big_packet));
+        }
+        else if (big_packet_type == 3) {
+            memset(big_packet, 0xff, sizeof(big_packet));
+        }
+        previous_cnx = NULL;
+        /* send the big packet to the selected interface */
+        (void)picoquic_incoming_packet_ex(test_ctx->qserver, big_packet, sizeof(big_packet),
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr,
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr,
+            0, 0, &previous_cnx, simulated_time);
+    }
+    /* tear down everything, as the deed is now done. */
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /* testing the negotiation of the idle timeout.
 */
 int idle_timeout_test_one(uint8_t test_id, uint64_t client_timeout, uint64_t server_timeout, uint64_t expected_timeout)
