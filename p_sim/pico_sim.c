@@ -39,6 +39,45 @@ void usage(void)
     fprintf(stderr, "  -h       Print this message.\n");
 }
 
+char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
+{
+    int last_dot = -1;
+    int last_slash = -1;
+    int spec_len = 0;
+    int x = 0;
+
+    printf("%s, %d", s, (int)l_buf);
+
+    for (int i = 0; s[i] != 0; i++) {
+        if (s[i] == '/' || s[i] == '\\') {
+            last_slash = i;
+        }
+        else if (s[i] == '.')
+        {
+            last_dot = i;
+        }
+    }
+    printf("Last /: %d, last . : %d\n", last_slash, last_dot);
+    if (last_slash >= 0) {
+        last_slash += 1;
+    }
+    else {
+        last_slash = 0;
+    }
+
+    for (x = 0; (x + 1) < l_buf; x++) {
+        if (s[x + last_slash] == 0 || (x + last_slash) >= last_dot) {
+            break;
+        }
+        else {
+            buffer[x] = s[x + last_slash];
+        }
+    }
+    buffer[x] = 0;
+    printf("x: %d, string: %s\n", x, buffer);
+    return buffer;
+}
+
 int main(int argc, char** argv)
 {
     int ret = 0;
@@ -92,7 +131,9 @@ int main(int argc, char** argv)
             fprintf(stderr, "Error when processing file <%s>\n", spec_file_name);
         }
         else {
-            ret = picoquic_ns_n(&spec, stderr, nb_repeats);
+            char buffer[512];
+            ret = picoquic_ns_n(&spec, stderr, nb_repeats, 
+                get_spec_name(spec_file_name, buffer, sizeof(buffer)));
             fprintf(stderr, "picoquic_ns_n (%s, %d) returns %d\n", spec_file_name, nb_repeats, ret);
         }
         F = picoquic_file_close(F);
