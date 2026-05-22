@@ -46,8 +46,6 @@ char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
     int spec_len = 0;
     int x = 0;
 
-    printf("%s, %d", s, (int)l_buf);
-
     for (int i = 0; s[i] != 0; i++) {
         if (s[i] == '/' || s[i] == '\\') {
             last_slash = i;
@@ -57,7 +55,7 @@ char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
             last_dot = i;
         }
     }
-    printf("Last /: %d, last . : %d\n", last_slash, last_dot);
+
     if (last_slash >= 0) {
         last_slash += 1;
     }
@@ -74,7 +72,7 @@ char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
         }
     }
     buffer[x] = 0;
-    printf("x: %d, string: %s\n", x, buffer);
+
     return buffer;
 }
 
@@ -156,6 +154,7 @@ typedef enum {
     e_data_rate_in_gbps,
     e_latency,
     e_jitter,
+    e_wifi_jitter,
     e_queue_delay_max,
     e_l4s_max,
     e_icid,
@@ -191,6 +190,7 @@ spec_param_t params[] = {
     { e_data_rate_in_gbps, "data_rate_in_gbps", 17 },
     { e_latency, "latency" , 7},
     { e_jitter, "jitter", 6 },
+    { e_wifi_jitter, "wifi_jitter", 11 },
     { e_queue_delay_max, "queue_delay_max", 15 },
     { e_l4s_max, "l4s_max", 7 },
     { e_icid, "icid", 4 },
@@ -316,6 +316,9 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
             break;
         case e_jitter:
             ret = parse_u64(&spec->jitter, line);
+            break;
+        case e_wifi_jitter:
+            ret = parse_int(&spec->is_wifi_jitter, line);
             break;
         case e_queue_delay_max:
             ret = parse_u64(&spec->queue_delay_max, line);
