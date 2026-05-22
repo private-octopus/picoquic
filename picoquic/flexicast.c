@@ -157,6 +157,46 @@ uint8_t *picoquic_prepare_fc_state_frames(
     return bytes_next;
 }
 
+int picoquic_fc_state_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat)
+{
+    int ret = 0;
+    uint64_t action = 0;
+    picoquic_fc_flow_id_t flow_id;
+    int i;
+
+    *no_need_to_repeat = 0;
+
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id.id_len)) == NULL ||
+        (bytes = picoquic_frames_fc_flow_id_decode(bytes, bytes_max, flow_id.id_len, &flow_id)) == NULL ||
+        (i = picoquic_find_flow_by_fid(cnx, &flow_id)) > 0 ||
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &action)) == NULL
+    ) {
+        /* Bad frame, do not retransmit */
+        *no_need_to_repeat = 1;
+    }
+    else {
+        switch (action) {
+        case PICOQUIC_FC_ACTION_JOIN:
+            *no_need_to_repeat = cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent && !cnx->flows[i]->crypto_received &&
+                                !cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            break;
+        case PICOQUIC_FC_ACTION_LEAVE:
+            *no_need_to_repeat = cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            break;
+        case PICOQUIC_FC_ACTION_LISTEN:
+            *no_need_to_repeat = cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent && cnx->flows[i]->crypto_received &&
+                                cnx->flows[i]->listen_sent && !cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            break;
+        default:
+            *no_need_to_repeat = 0;
+            break;
+        }
+    }
+    return ret;
+}
+
 int picoquic_is_flexicast_address(struct sockaddr *addr)
 {
     if (addr->sa_family == AF_INET) {

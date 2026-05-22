@@ -54,6 +54,8 @@ int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const ui
     size_t bytes_max, size_t* consumed);
 int picoquic_process_ack_of_observed_address_frame(picoquic_path_t* path_x, const uint8_t* bytes,
     size_t bytes_max, uint64_t ftype, size_t* consumed);
+int picoquic_fc_state_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
 
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote)
 {
@@ -3661,6 +3663,13 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     /* These frames have a special case processing, tied to path challenge */
                     ret = 0;
                     break;
+                case picoquic_frame_type_fc_state:
+                    (void)picoquic_fc_state_frame_needs_repeat(cnx, type_bytes, p_bytes_max, no_need_to_repeat);
+                    break;
+                case picoquic_frame_type_fc_announce:
+                case picoquic_frame_type_fc_key:
+                    *no_need_to_repeat = 0;
+                    break;
                 default:
                     *no_need_to_repeat = 0;
                     break;
@@ -6805,6 +6814,13 @@ const uint8_t* picoquic_decode_fc_state_frame(picoquic_cnx_t* cnx, picoquic_path
     uint64_t action, sequence_number;
     picoquic_fc_flow_id_t flow_id;
 
+    if (!cnx->is_flexicast_enabled) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_fc_state, "flexicast is not enabled");
+        return bytes;
+    }
+
     if (
         (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id.id_len)) != NULL &&
         (bytes = picoquic_frames_fc_flow_id_decode(bytes, bytes_max, flow_id.id_len, &flow_id)) != NULL &&
@@ -6865,6 +6881,13 @@ const uint8_t* picoquic_decode_fc_key_frame(picoquic_cnx_t* cnx, picoquic_path_t
     int i;
 
     const uint8_t *b = bytes;
+
+    if (!cnx->is_flexicast_enabled) {
+        /* Frame is unexpected */
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_fc_key, "flexicast is not enabled");
+        return bytes;
+    }
 
     if (    // QUICHE
         (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id.id_len)) != NULL &&
