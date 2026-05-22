@@ -47,6 +47,10 @@
     path_ack (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351
     path_ack_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
     reset_stream_at, stream 17, error 0x00000001, offset 0x80, reliable size 0xd.
+    fc_announce, flow id: 000102030405060708090a0b0c0d0e0f, sequence number: 0, source address: 10.0.0.1, group address: 239.239.239.35, port: 5555, ack_delay_timer: 0
+    fc_announce, flow id: 000102030405060708090a0b0c0d0e0f, sequence number: 255, source address: 1:203:405:607:809:a0b:c0d:e0f, group address: 1:203:405:607:809:a0b:c0d:e0f, port: 5555, ack_delay_timer: 0
+    fc_state, flow id: 000102030405060708090a0b0c0d0e0f, sequence number: 255, action number: 1
+    fc_key, flow id: 000102030405060708090a0b0c0d0e0f, sequence number: 751, packet number: 17, key: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f, algorithm: 0
     reset_stream 17, Error 0x00000001, Offset 0x3fffffffffffffff.
     reset_stream 4611686018427387903, Error 0x00000001, Offset 0x1.
     Malformed RESET STREAM, requires 12 bytes out of 7

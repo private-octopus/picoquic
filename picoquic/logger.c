@@ -352,6 +352,15 @@ char const* textlog_frame_names(uint64_t frame_type)
     case picoquic_frame_type_reset_stream_at:
         frame_name = "reset_stream_at";
         break;
+    case picoquic_frame_type_fc_announce:
+        frame_name = "fc_announce";
+        break;
+    case picoquic_frame_type_fc_state:
+        frame_name = "fc_state";
+        break;
+    case picoquic_frame_type_fc_key:
+        frame_name = "fc_key";
+        break;
     default:
         if (PICOQUIC_IN_RANGE(frame_type, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
             frame_name = "stream";
@@ -1550,6 +1559,117 @@ size_t textlog_observed_address_frame(FILE* F, const uint8_t* bytes, size_t byte
     return bytes_index;
 }
 
+size_t textlog_fc_announce_frame(FILE* F, const uint8_t* bytes, size_t byte_size)
+{
+    size_t bytes_index = byte_size;
+    const uint8_t* bytes_max = bytes + byte_size;
+    uint8_t flow_id_len, ip_version;
+    uint16_t port;
+    uint64_t seq, ack_delay;
+    const uint8_t* bytes_next = NULL;
+    const uint8_t* cid, * addr;
+
+    if ((bytes_next = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (cid = bytes_next = picoquic_frames_uint8_decode(bytes_next, bytes_max, &flow_id_len)) == NULL ||
+        (bytes_next = picoquic_frames_varint_decode(bytes_next + flow_id_len, bytes_max, &seq)) == NULL ||
+        (addr = bytes_next = picoquic_frames_uint8_decode(bytes_next, bytes_max, &ip_version)) == NULL ||
+        (bytes_next = picoquic_frames_uint16_decode(bytes_next + (ip_version == 4 ? 8 : 32), bytes_max, &port)) == NULL ||
+        (bytes_next = picoquic_frames_uint64_decode(bytes_next, bytes_max, &ack_delay)) == NULL
+    ) {
+        fprintf(F, "    Malformed %s frame.\n",
+            textlog_frame_names(picoquic_frame_type_fc_announce));
+    }
+    else {
+        bytes_index = bytes_next - bytes;
+        fprintf(F, "    %s, flow id: ", textlog_frame_names(picoquic_frame_type_fc_announce));
+        for (int i = 0; i < flow_id_len; i++) {
+            fprintf(F, "%02x", cid[i]);
+        }
+        fprintf(F, ", sequence number: %"PRIu64", source address: ", seq);
+
+        if (ip_version == 4) {
+            /* IPv4 address */
+            fprintf(F, "%u.%u.%u.%u, group address: %u.%u.%u.%u, ", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7]);
+        }
+        else {
+            /* IPv6 address */
+            fprintf(F, "%x:%x:%x:%x:%x:%x:%x:%x, group address: %x:%x:%x:%x:%x:%x:%x:%x, ",
+                256 * addr[0] + addr[1], 256 * addr[2] + addr[3],
+                256 * addr[4] + addr[5], 256 * addr[6] + addr[7],
+                256 * addr[8] + addr[9], 256 * addr[10] + addr[11],
+                256 * addr[12] + addr[13], 256 * addr[14] + addr[15],
+                256 * addr[16] + addr[17], 256 * addr[18] + addr[19],
+                256 * addr[20] + addr[21], 256 * addr[22] + addr[23],
+                256 * addr[24] + addr[25], 256 * addr[26] + addr[27],
+                256 * addr[28] + addr[29], 256 * addr[30] + addr[31]);
+        }
+        fprintf(F, "port: %u, ack_delay_timer: %"PRIu64"\n", port, ack_delay);
+    }
+    return bytes_index;
+}
+
+size_t textlog_fc_state_frame(FILE* F, const uint8_t* bytes, size_t byte_size)
+{
+    size_t bytes_index = byte_size;
+    const uint8_t* bytes_max = bytes + byte_size;
+    uint8_t flow_id_len;
+    uint64_t seq, action;
+    const uint8_t* bytes_next = NULL;
+    const uint8_t* cid;
+
+    if ((bytes_next = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (cid = bytes_next = picoquic_frames_uint8_decode(bytes_next, bytes_max, &flow_id_len)) == NULL ||
+        (bytes_next = picoquic_frames_varint_decode(bytes_next + flow_id_len, bytes_max, &seq)) == NULL ||
+        (bytes_next = picoquic_frames_uint64_decode(bytes_next, bytes_max, &action)) == NULL
+    ) {
+        fprintf(F, "    Malformed %s frame.\n",
+            textlog_frame_names(picoquic_frame_type_fc_state));
+    }
+    else {
+        bytes_index = bytes_next - bytes;
+        fprintf(F, "    %s, flow id: ", textlog_frame_names(picoquic_frame_type_fc_state));
+        for (int i = 0; i < flow_id_len; i++) {
+            fprintf(F, "%02x", cid[i]);
+        }
+        fprintf(F, ", sequence number: %"PRIu64", action number: %"PRIu64"\n", seq, action);
+    }
+    return bytes_index;
+}
+
+size_t textlog_fc_key_frame(FILE* F, const uint8_t* bytes, size_t byte_size)
+{
+    size_t bytes_index = byte_size;
+    const uint8_t* bytes_max = bytes + byte_size;
+    uint64_t seq, pn, k_len, algo;
+    uint8_t flow_id_len;
+    const uint8_t* bytes_next = NULL;
+    const uint8_t* cid, * key;
+
+    if ((bytes_next = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (cid = bytes_next = picoquic_frames_uint8_decode(bytes_next, bytes_max, &flow_id_len)) == NULL ||
+        (bytes_next = picoquic_frames_varint_decode(bytes_next + flow_id_len, bytes_max, &seq)) == NULL ||
+        (bytes_next = picoquic_frames_varint_decode(bytes_next, bytes_max, &pn)) == NULL ||
+        (key = bytes_next = picoquic_frames_varint_decode(bytes_next, bytes_max, &k_len)) == NULL ||
+        (bytes_next = picoquic_frames_uint64_decode(bytes_next + k_len, bytes_max, &algo)) == NULL
+    ) {
+        fprintf(F, "    Malformed %s frame.\n",
+            textlog_frame_names(picoquic_frame_type_fc_key));
+    }
+    else {
+        bytes_index = bytes_next - bytes;
+        fprintf(F, "    %s, flow id: ", textlog_frame_names(picoquic_frame_type_fc_key));
+        for (int i = 0; i < flow_id_len; i++) {
+            fprintf(F, "%02x", cid[i]);
+        }
+        fprintf(F, ", sequence number: %"PRIu64", packet number: %"PRIu64", key: ", seq, pn);
+        for (int i = 0; i < k_len; i++) {
+            fprintf(F, "%02x", key[i]);
+        }
+        fprintf(F, ", algorithm: %"PRIu64"\n", algo);
+    }
+    return bytes_index;
+}
+
 void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, size_t length)
 {
     size_t byte_index = 0;
@@ -1719,6 +1839,15 @@ void picoquic_textlog_frames(FILE* F, uint64_t cnx_id64, const uint8_t* bytes, s
         case picoquic_frame_type_observed_address_v4:
         case picoquic_frame_type_observed_address_v6:
             byte_index += textlog_observed_address_frame(F, bytes + byte_index, length - byte_index, frame_id);
+            break;
+        case picoquic_frame_type_fc_announce:
+            byte_index += textlog_fc_announce_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_fc_state:
+            byte_index += textlog_fc_state_frame(F, bytes + byte_index, length - byte_index);
+            break;
+        case picoquic_frame_type_fc_key:
+            byte_index += textlog_fc_key_frame(F, bytes + byte_index, length - byte_index);
             break;
         default: {
             /* Not implemented yet! */
