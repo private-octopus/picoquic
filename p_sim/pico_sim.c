@@ -43,36 +43,30 @@ char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
 {
     int last_dot = -1;
     int last_slash = -1;
-    int spec_len = 0;
     int x = 0;
 
     for (int i = 0; s[i] != 0; i++) {
-        if (s[i] == '/' || s[i] == '\\') {
-            last_slash = i;
-        }
-        else if (s[i] == '.')
+        if (s[i] == '.')
         {
-            last_dot = i;
+            last_dot = x;
+        }
+        if ((x + 1) < (int)l_buf) {
+            buffer[x] = s[x + last_slash];
+            x++;
+        }
+        if (s[i] == '/' || s[i] == '\\') {
+            last_slash = i+1;
+            last_dot = -1;
+            x = 0;
         }
     }
-
-    if (last_slash >= 0) {
-        last_slash += 1;
+    if (last_dot > 0 &&
+        last_dot <= x) {
+        buffer[last_dot] = 0;
     }
     else {
-        last_slash = 0;
+        buffer[x] = 0;
     }
-
-    for (x = 0; (x + 1) < l_buf; x++) {
-        if (s[x + last_slash] == 0 || (x + last_slash) >= last_dot) {
-            break;
-        }
-        else {
-            buffer[x] = s[x + last_slash];
-        }
-    }
-    buffer[x] = 0;
-
     return buffer;
 }
 
