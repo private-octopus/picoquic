@@ -1011,6 +1011,13 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
     return ret;
 }
 
+void picoquic_ns_make_random(picoquic_ns_ctx_t* cc_ctx)
+{
+    for (int i = 0; i < PICOQUIC_NS_NB_LINKS; i++) {
+        cc_ctx->link[i]->jitter_seed ^= picoquic_crypto_uniform_random(cc_ctx->q_ctx[0], UINT32_MAX);
+    }
+}
+
 int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id, char const * spec_name)
 {
     int ret = 0;
@@ -1025,6 +1032,10 @@ int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id, char con
             fprintf(err_fd, "Cannot allocate simulation context.\n");
         }
         ret = -1;
+    }
+
+    if (ret == 0 && rep_id > 0) {
+        picoquic_ns_make_random(cc_ctx);
     }
     while (ret == 0) {
         int is_active = 0;
