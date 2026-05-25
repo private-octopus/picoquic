@@ -255,7 +255,7 @@ int cc_ns_media_repeat_test(void)
         ret = -1;
     }
     else {
-        ret = picoquic_ns_n(&spec, err_fd, 5);
+        ret = picoquic_ns_n(&spec, err_fd, 5, "media_test");
         picoquic_file_close(err_fd);
     }
     return ret;

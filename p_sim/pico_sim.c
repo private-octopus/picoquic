@@ -39,6 +39,37 @@ void usage(void)
     fprintf(stderr, "  -h       Print this message.\n");
 }
 
+static char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
+{
+    int last_dot = 0;
+    int after_slash = -1;
+    int x = 0;
+
+    for (int i = 0; s[i] != 0; i++) {
+        if (s[i] == '.')
+        {
+            last_dot = x;
+        }
+        if ((x + 1) < (int)l_buf) {
+            buffer[x] = s[x + after_slash];
+            x++;
+        }
+        if (s[i] == '/' || s[i] == '\\') {
+            after_slash = i+1;
+            last_dot = -1;
+            x = 0;
+        }
+    }
+    if (last_dot > 0 &&
+        last_dot <= x) {
+        buffer[last_dot] = 0;
+    }
+    else {
+        buffer[x] = 0;
+    }
+    return buffer;
+}
+
 int main(int argc, char** argv)
 {
     int ret = 0;
@@ -92,7 +123,9 @@ int main(int argc, char** argv)
             fprintf(stderr, "Error when processing file <%s>\n", spec_file_name);
         }
         else {
-            ret = picoquic_ns_n(&spec, stderr, nb_repeats);
+            char buffer[512];
+            ret = picoquic_ns_n(&spec, stderr, nb_repeats, 
+                get_spec_name(spec_file_name, buffer, sizeof(buffer)));
             fprintf(stderr, "picoquic_ns_n (%s, %d) returns %d\n", spec_file_name, nb_repeats, ret);
         }
         F = picoquic_file_close(F);
@@ -115,6 +148,7 @@ typedef enum {
     e_data_rate_in_gbps,
     e_latency,
     e_jitter,
+    e_wifi_jitter,
     e_queue_delay_max,
     e_l4s_max,
     e_icid,
@@ -150,6 +184,7 @@ spec_param_t params[] = {
     { e_data_rate_in_gbps, "data_rate_in_gbps", 17 },
     { e_latency, "latency" , 7},
     { e_jitter, "jitter", 6 },
+    { e_wifi_jitter, "wifi_jitter", 11 },
     { e_queue_delay_max, "queue_delay_max", 15 },
     { e_l4s_max, "l4s_max", 7 },
     { e_icid, "icid", 4 },
@@ -275,6 +310,9 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
             break;
         case e_jitter:
             ret = parse_u64(&spec->jitter, line);
+            break;
+        case e_wifi_jitter:
+            ret = parse_int(&spec->is_wifi_jitter, line);
             break;
         case e_queue_delay_max:
             ret = parse_u64(&spec->queue_delay_max, line);
