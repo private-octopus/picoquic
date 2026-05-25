@@ -126,6 +126,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
+    picoquic/streams.c
     picoquic/ticket_store.c
     picoquic/timing.c
     picoquic/token_store.c

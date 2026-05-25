@@ -187,6 +187,7 @@
     <ClCompile Include="siphash.c" />
     <ClCompile Include="sockloop.c" />
     <ClCompile Include="spinbit.c" />
+    <ClCompile Include="streams.c" />
     <ClCompile Include="ticket_store.c" />
     <ClCompile Include="timing.c" />
     <ClCompile Include="tls_api.c" />
