@@ -39,10 +39,10 @@ void usage(void)
     fprintf(stderr, "  -h       Print this message.\n");
 }
 
-char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
+static char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
 {
-    int last_dot = -1;
-    int last_slash = -1;
+    int last_dot = 0;
+    int after_slash = -1;
     int x = 0;
 
     for (int i = 0; s[i] != 0; i++) {
@@ -51,11 +51,11 @@ char const* get_spec_name(char const* s, char * buffer, size_t l_buf)
             last_dot = x;
         }
         if ((x + 1) < (int)l_buf) {
-            buffer[x] = s[x + last_slash];
+            buffer[x] = s[x + after_slash];
             x++;
         }
         if (s[i] == '/' || s[i] == '\\') {
-            last_slash = i+1;
+            after_slash = i+1;
             last_dot = -1;
             x = 0;
         }
