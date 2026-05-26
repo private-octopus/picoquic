@@ -1763,10 +1763,6 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         }
     }
 
-    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-        return picoquic_format_stop_sending_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
-    }
-
     if (stream->reset_sent) {
         /* No data will be sent after a reset */
         return bytes;

@@ -439,6 +439,19 @@ uint64_t picoquic_get_next_local_stream_id(picoquic_cnx_t* cnx, int is_unidir)
     return cnx->next_stream_id[stream_type_id];
 }
 
+/*
+* Send the stop sending frame.
+* 
+* In the previous version of this code, "stop_sending" was implemented
+* as part of the "format stream frame". This was not ideal, because
+* stop sending controls sending by the peer, and is not directly
+* related to sending by the local host.
+* 
+* Instead, we consider treating the stop sending frame as a
+* miscellaneous frame, queued upon the decision to sent the
+* frame, and forwarded at the first occasion.
+*/
+
 int picoquic_stop_sending(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error)
 {
@@ -458,9 +471,20 @@ int picoquic_stop_sending(picoquic_cnx_t* cnx,
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->stop_sending_requested) {
+            uint8_t buffer[128];
+            uint8_t* bytes;
+            int more_data = 0;
+            int is_pure_ack = 0;
+
             stream->local_stop_error = local_stream_error;
             stream->stop_sending_requested = 1;
-            picoquic_insert_output_stream(cnx, stream);
+            if ((bytes = picoquic_format_stop_sending_frame(stream, buffer,
+                buffer + sizeof(buffer), &more_data, &is_pure_ack)) == NULL) {
+                ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            }
+            else {
+                ret = picoquic_queue_misc_frame(cnx, buffer, bytes - buffer, is_pure_ack, picoquic_packet_context_application);
+            }
         }
     }
 
@@ -828,7 +852,8 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
              * the current selection is validated */
             break;
         }
-
+#if 1
+#else
         /* The tests for "have data" should excatly replicate the tests in
          * the formating of a stream frame */
         if (stream->stop_sending_requested && !stream->stop_sending_sent) {
@@ -838,7 +863,9 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             has_data = 1;
             break;
         }
-        else if (stream->reset_sent) {
+        else 
+#endif   
+            if (stream->reset_sent) {
             /* No data will be sent after a reset */
             has_data = 0;
         }
