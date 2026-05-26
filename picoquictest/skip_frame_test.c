@@ -1563,8 +1563,6 @@ uint8_t* picoquic_format_retire_connection_id_frame(uint8_t* bytes, uint8_t* byt
     int is_mp, uint64_t unique_path_id, uint64_t sequence);
 uint8_t* picoquic_format_new_token_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack,
     uint8_t* token, size_t token_length);
-uint8_t* picoquic_format_reset_stream_frame(picoquic_stream_head_t* stream,
-    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_data_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_stream_data_blocked_frame(uint8_t* bytes,

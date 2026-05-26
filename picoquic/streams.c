@@ -406,14 +406,35 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->reset_requested) {
-            stream->local_error = local_stream_error;
-            stream->reset_requested = 1;
-            stream->reliable_size = reliable_size;
+            uint8_t buffer[128];
+            uint8_t* bytes = NULL;
+            uint8_t* bytes_max = buffer + sizeof(buffer);
+            int more_data = 0;
+            int is_pure_ack = 0;
+
+            if (reliable_size > stream->sent_offset) {
+                ret = PICOQUIC_ERROR_OFFSET_TOO_BIG;
+            }
+            else {
+                stream->reliable_size = reliable_size;
+                stream->local_error = local_stream_error;
+                stream->reset_requested = 1;
+                bytes = (reliable_size > 0) ? picoquic_format_reset_stream_at_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack) :
+                    picoquic_format_reset_stream_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack);
+                if (bytes == NULL || more_data != 0) {
+                    ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+                    stream->reset_requested = 0;
+                }
+                else {
+                    ret = picoquic_queue_misc_frame(cnx, buffer, bytes - buffer, is_pure_ack, picoquic_packet_context_application);
+                    if (ret == 0) {
+                        stream->reset_sent = 1;
+                        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                    }
+                }
+            }
         }
     }
-
-    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
-
     return ret;
 }
 
@@ -852,30 +873,9 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
              * the current selection is validated */
             break;
         }
-#if 1
-#else
-        /* The tests for "have data" should excatly replicate the tests in
-         * the formating of a stream frame */
-        if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-            /* will send a stop sending frame.
-            * this takes precedence over FIFO vs round-robin processing */
-            found_stream = stream;
-            has_data = 1;
-            break;
-        }
-        else 
-#endif   
-            if (stream->reset_sent) {
+        if (stream->reset_sent) {
             /* No data will be sent after a reset */
             has_data = 0;
-        }
-        else if (stream->reset_requested &&
-            (stream->reliable_size == 0 || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size))) {
-            /* will queue a reset frame --
-            * this takes precedence over FIFO vs round-robin processing */
-            found_stream = stream;
-            has_data = 1;
-            break;
         }
         else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
             (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
