@@ -851,12 +851,42 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return ret;
 }
 
+int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    int has_data = 0;
+    /* TODO: the condition cnx->maxdata_remote > cnx->data_sent
+     * applies to all streams and should be moved to the top of the loop. */
+
+    if (stream->reset_sent) {
+        /* No data will be sent after a reset */
+        has_data = 0;
+    }
+    else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+        (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+        (stream->fin_requested && !stream->fin_sent))) {
+        has_data = 1;
+
+        /* Check that this stream is actually available for sending data */
+        /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
+        if (stream->sent_offset == 0) {
+            if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+                if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                    has_data = 0;
+                }
+            }
+        }
+    }
+    else {
+        has_data = 0;
+    }
+    return has_data;
+}
+
 picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_coalesced)
 {
     picoquic_stream_head_t* first_stream = cnx->first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
     picoquic_stream_head_t* found_stream = NULL;
-
 
     /* Look for a ready stream */
     while (stream != NULL) {
@@ -868,59 +898,43 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             continue;
         }
 
+        /* TODO: remove this once we have rearranged the priority handling. */
         if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
             /* All the streams at that priority level have been examined,
              * the current selection is validated */
             break;
         }
-        if (stream->reset_sent) {
-            /* No data will be sent after a reset */
-            has_data = 0;
-        }
-        else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-            (stream->fin_requested && !stream->fin_sent))) {
-            has_data = 1;
-        }
-        else {
-            has_data = 0;
-        }
-
-        /* implement affinity scheduling */
+        
+        has_data = picoquic_find_ready_stream_has_data(cnx, stream);
+        
+        /* implement affinity scheduling. TODO: get this out of the search loop. */
         if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
             /* Only consider the streams that meet path affinity requirements */
             has_data = 0;
         }
 
         if (has_data) {
-            /* Check that this stream is actually available for sending data */
-            if (stream->sent_offset == 0) {
-                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                    if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-                        has_data = 0;
-                    }
-                }
+            /* TODO: organize this logic by separating queues per priority and
+             * reordering streams after write if needed. */
+            if ((stream->stream_priority & 1) != 0) {
+                /* This priority level requests FIFO processing, so we return the first available stream */
+                found_stream = stream;
+                break;
             }
-            if (has_data) {
-                /* Something can be sent */
-                if ((stream->stream_priority & 1) != 0) {
-                    /* This priority level requests FIFO processing, so we return the first available stream */
-                    found_stream = stream;
-                    break;
-                }
-                else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
-                    /* Select this stream, but need to check if another stream should go before in round robin order */
-                    found_stream = stream;
-                }
+            else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
+                /* Select this stream, but need to check if another stream should go before in round robin order */
+                found_stream = stream;
             }
         }
         else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
+            /* TODO: this should be done per event, not in the loop */
             /* If stream is exhausted, remove from output list */
             picoquic_remove_output_stream(cnx, stream);
 
             picoquic_delete_stream_if_closed(cnx, stream);
         }
         else {
+            /* TODO: the blocked issue should be moved outside of the loop. */
             if (stream->is_active ||
                 (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
                 if (stream->sent_offset >= stream->maxdata_remote) {
@@ -940,4 +954,258 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
 {
     return picoquic_find_ready_stream_path(cnx, NULL, 0);
+}
+
+/* Format all available stream frames that fit in the packet.
+ * Update more_data if more stream data is available
+ * Update is_pure_ack if formated frames require ack
+ * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
+ */
+uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    uint64_t current_priority, int* more_data,
+    int* is_pure_ack, int* stream_tried_and_failed, int* ret)
+{
+    uint8_t* bytes_previous = bytes_next;
+    picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
+        (cnx->is_multipath_enabled) ? path_x : NULL, 0);
+    int more_stream_data = 0;
+
+    while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
+        int is_still_active = 0;
+        bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
+
+        /* TODO: if stream is marked "no_coal", do not add anything */
+        if (*ret == 0 && !stream->is_not_coalesced) {
+            stream = picoquic_find_ready_stream_path(cnx,
+                (cnx->is_multipath_enabled) ? path_x : NULL, 1);
+            if (stream != NULL && bytes_next + 17 >= bytes_max) {
+                more_stream_data = 1;
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
+
+    if (!more_stream_data && current_priority != UINT64_MAX) {
+        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
+    }
+
+    *more_data |= more_stream_data;
+
+    return bytes_next;
+}
+
+/* sending of datagrams */
+static uint8_t* picoquic_prepare_datagram_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    int is_first_in_packet, int* more_data, int* is_pure_ack, int* datagram_tried_and_failed, int* datagram_sent, int* ret)
+{
+    uint8_t* bytes0 = bytes_next;
+
+    if (cnx->first_datagram != NULL) {
+        bytes_next = picoquic_format_first_datagram_frame(cnx, bytes_next, bytes_max, is_first_in_packet, more_data, is_pure_ack);
+        *more_data |= (cnx->first_datagram != NULL);
+    }
+    else {
+        while (cnx->is_datagram_ready || path_x->is_datagram_ready) {
+            uint8_t* dg_start = bytes_next;
+            bytes_next = picoquic_format_ready_datagram_frame(cnx, path_x, bytes_next, bytes_max,
+                more_data, is_pure_ack, ret);
+            if (bytes_next == NULL || bytes_next == dg_start) {
+                break;
+            }
+        }
+    }
+    *datagram_tried_and_failed = (bytes_next == bytes0);
+    *datagram_sent = !*datagram_tried_and_failed;
+
+    return bytes_next;
+}
+
+
+/*
+* Sending Datagrams and Stream Packets per priority.
+*
+* The API allows setting a priority for a stream or for the datagrams.
+* We need to schedule frames according to these priorities. For "new"
+* stream data, this is managed by the stream selection algorithm which
+* selects the highest priority stream available, while also managing
+* whether that priority level implement a FIFO or round robin logic.
+* Retransmitting packets are scheduled according to the priority of
+* the stream to which they belong.
+*
+* The API manages several flags.
+*
+* The "no_data_to_send" is set when there
+* was nothing to send. It is used to decide it is OK to send
+* redundancies, e.g., repeats of old packets.
+*
+* The "more data" flag is set when there is more data queued than
+* could be sent. It should be set if either of these conditions
+* is true:
+*
+* - There are still datagrams waiting to be sent
+* - The repeat packet queue is not empty
+* - There is still data waiting to be sent
+*
+* The "datagram_conflicts_count" counts how many times sending data
+* is skipped because datagrams were sent instead. It is reset to
+* zero each time the application sends data.
+*
+* There is some complexity in managing these flags, because we
+* are going to loop through several priorities. For example, if
+* a datagram is sent with P1 and a P1 data stream cannot be sent,
+* this is a conflict. But if a datagram is sent with P1 and a P2
+* data stream cannot be sent, this is not a conflict. The rule is,
+* detect a conflict only in the first round. "No data to send" means
+* no data at any priority. That too can be assessed at the first
+* round.
+*
+* Yet another level of complexity comes for the possibility for
+* the application to renege on a sending promise -- for example,
+* set the datagram ready flag, but then do not actually send data,
+* maybe because the buffer is too small.
+*/
+
+uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    int is_first_in_packet, uint64_t max_priority_allowed,
+    int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret)
+{
+    int datagram_sent = 0;
+    int datagram_tried_and_failed = 0;
+    int stream_tried_and_failed = 0;
+    int more_data_this_round = 0;
+    int is_first_round = 1;
+
+    while (bytes_next + 8 < bytes_max && *ret == 0) {
+        /* Find the highest priority level for which there is something to send, then
+        * format the frames to send at that level. Repeat in a loop until the
+        * packet is full or there is nothing more to send. */
+        uint64_t datagram_present = cnx->first_datagram != NULL || cnx->is_datagram_ready || path_x->is_datagram_ready;
+        picoquic_stream_head_t* first_stream = picoquic_find_ready_stream_path(cnx,
+            (cnx->is_multipath_enabled) ? path_x : NULL, 0);
+        picoquic_packet_t* first_repeat = picoquic_first_data_repeat_packet(cnx);
+        uint64_t current_priority = UINT64_MAX;
+        uint64_t stream_priority = UINT64_MAX;
+        int something_sent = 0;
+        int conflict_found = 0;
+
+        more_data_this_round = 0;
+
+        int datagram_first = (cnx->datagram_conflicts_max >= cnx->datagram_conflicts_count);
+        if (datagram_present) {
+            current_priority = cnx->datagram_priority;
+        }
+        if (first_stream != NULL) {
+            stream_priority = first_stream->stream_priority;
+        }
+        if (first_repeat != NULL && first_repeat->data_repeat_priority < stream_priority) {
+            stream_priority = first_repeat->data_repeat_priority;
+        }
+        if (stream_priority < current_priority) {
+            current_priority = stream_priority;
+        }
+
+        if (current_priority == UINT64_MAX || current_priority >= max_priority_allowed) {
+            /* Nothing to send! */
+            if (is_first_round) {
+                *no_data_to_send = 1;
+            }
+            break;
+        }
+
+        if (datagram_present &&
+            cnx->datagram_priority == current_priority &&
+            (cnx->datagram_priority < stream_priority || datagram_first)) {
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+                &more_data_this_round, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
+            something_sent = datagram_sent;
+        }
+
+        if (first_repeat != NULL && first_repeat->data_repeat_priority == current_priority) {
+            uint8_t* bytes_first = bytes_next;
+            if (bytes_next + 8 < bytes_max) {
+                bytes_next = picoquic_copy_stream_frames_for_retransmit(cnx, bytes_next, bytes_max,
+                    UINT64_MAX, &more_data_this_round, is_pure_ack);
+                if (bytes_next > bytes_first) {
+                    cnx->datagram_conflicts_count = 0;
+                    something_sent = 1;
+                }
+            }
+            else {
+                more_data_this_round |= 1;
+                conflict_found = 1;
+            }
+        }
+
+        if (first_stream != NULL && first_stream->stream_priority == current_priority &&
+            (!first_stream->is_not_coalesced || !something_sent)) {
+            /* Encode the stream frame, or frames */
+            uint8_t* bytes_first = bytes_next;
+#if 0
+            if (bytes_next + 8 < bytes_max) {
+                int is_still_active = 0;
+                bytes_next = picoquic_format_stream_frame(cnx, first_stream, bytes_next, bytes_max, &more_data_this_round, is_pure_ack, &is_still_active, ret);
+                if (bytes_next > bytes_first) {
+                    cnx->datagram_conflicts_count = 0;
+                    something_sent = 1;
+                    /* TODO: If we encoded data for the first_stream, we need to update the order of that stream in the
+                     * list of output streams.
+                     */
+                }
+            }
+        else {
+            /* The buffer is too short. This is a more data condition. */
+            more_data_this_round |= 1;
+            conflict_found = 1;
+        }
+
+#else
+            if (bytes_next + 8 < bytes_max) {
+                /* TODO: we have already located the "first stream". Do we need to do the
+                * call to picoquic_find_ready_stream_path again inside the call to
+                * picoquic_format_available_stream_frames?
+                 */
+                bytes_next = picoquic_format_available_stream_frames(cnx, path_x, bytes_next, bytes_max, UINT64_MAX,
+                    &more_data_this_round, is_pure_ack, &stream_tried_and_failed, ret);
+                if (bytes_next > bytes_first) {
+                    cnx->datagram_conflicts_count = 0;
+                    something_sent = 1;
+                }
+            }
+            else {
+                more_data_this_round |= 1;
+                conflict_found = 1;
+            }
+#endif
+        }
+
+        if (datagram_sent && conflict_found) {
+            cnx->datagram_conflicts_count += 1;
+        }
+
+        if (datagram_present &&
+            cnx->datagram_priority == current_priority &&
+            cnx->datagram_priority <= stream_priority &&
+            !datagram_first) {
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+                more_data, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
+            something_sent = datagram_sent;
+        }
+
+        if (is_first_round) {
+            *no_data_to_send = ((first_stream == NULL && first_repeat == NULL) || stream_tried_and_failed) &&
+                (!datagram_present || datagram_tried_and_failed);
+        }
+        is_first_round = 0;
+        if (!something_sent) {
+            break;
+        }
+    }
+    *more_data |= more_data_this_round;
+
+    return bytes_next;
 }

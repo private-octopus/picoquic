@@ -1930,49 +1930,6 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
     return bytes;
 }
 
-/* Format all available stream frames that fit in the packet.
- * Update more_data if more stream data is available
- * Update is_pure_ack if formated frames require ack
- * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
- */
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    uint64_t current_priority, int* more_data,
-    int* is_pure_ack, int* stream_tried_and_failed, int* ret)
-{
-    uint8_t* bytes_previous = bytes_next;
-    picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
-        (cnx->is_multipath_enabled)?path_x: NULL, 0);
-    int more_stream_data = 0;
-
-    while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
-        int is_still_active = 0;
-        bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
-
-        /* TODO: if stream is marked "no_coal", do not add anything */
-        if (*ret == 0 && !stream->is_not_coalesced) {
-            stream = picoquic_find_ready_stream_path(cnx,
-                (cnx->is_multipath_enabled)?path_x: NULL, 1);
-            if (stream != NULL && bytes_next + 17 >= bytes_max) {
-                more_stream_data = 1;
-                break;
-            }
-        }
-        else {
-            break;
-        }
-    }
-
-    *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
-
-    if (!more_stream_data && current_priority != UINT64_MAX) {
-        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
-    }
-
-    *more_data |= more_stream_data;
-
-    return bytes_next;
-}
-
 /* Organize the queue of packets containing stream data as a splay.
 * TODO: replace cnx->data_repeat_last and cnx->data_repeat_first by
 * root of splay.
