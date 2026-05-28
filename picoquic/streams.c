@@ -231,6 +231,7 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
                 if (!stream->is_active) {
                     stream->is_active = 1;
                     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                    picoquic_update_output_stream(cnx, stream);
                 }
             }
             else {
@@ -365,6 +366,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
         cnx->nb_bytes_queued += length;
         stream->is_active = 0;
         stream->app_stream_ctx = app_stream_ctx;
+        picoquic_update_output_stream(cnx, stream);
     }
 
     return ret;
@@ -431,6 +433,7 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
                         stream->reset_sent = 1;
                         picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
                     }
+                    picoquic_update_output_stream(cnx, stream);
                 }
             }
         }
@@ -604,19 +607,19 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             }
         }
 
-        if (cnx->last_output_stream == NULL) {
+        if (cnx->output_streams.last_output_stream == NULL) {
             /* insert first stream */
-            cnx->last_output_stream = stream;
-            cnx->first_output_stream = stream;
+            cnx->output_streams.last_output_stream = stream;
+            cnx->output_streams.first_output_stream = stream;
         }
-        else if (picoquic_compare_stream_priority(stream, cnx->last_output_stream) >= 0) {
+        else if (picoquic_compare_stream_priority(stream, cnx->output_streams.last_output_stream) >= 0) {
             /* insert after last stream. Common case for most applications. */
-            stream->previous_output_stream = cnx->last_output_stream;
-            cnx->last_output_stream->next_output_stream = stream;
-            cnx->last_output_stream = stream;
+            stream->previous_output_stream = cnx->output_streams.last_output_stream;
+            cnx->output_streams.last_output_stream->next_output_stream = stream;
+            cnx->output_streams.last_output_stream = stream;
         }
         else {
-            picoquic_stream_head_t* current = cnx->first_output_stream;
+            picoquic_stream_head_t* current = cnx->output_streams.first_output_stream;
 
             while (current != NULL) {
                 int cmp = picoquic_compare_stream_priority(stream, current);
@@ -625,7 +628,7 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
                     /* insert before the current stream, then break */
                     stream->previous_output_stream = current->previous_output_stream;
                     if (stream->previous_output_stream == NULL) {
-                        cnx->first_output_stream = stream;
+                        cnx->output_streams.first_output_stream = stream;
                     }
                     else {
                         stream->previous_output_stream->next_output_stream = stream;
@@ -644,9 +647,9 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             }
             if (current == NULL) {
                 /* insert after last stream */
-                stream->previous_output_stream = cnx->last_output_stream;
-                cnx->last_output_stream->next_output_stream = stream;
-                cnx->last_output_stream = stream;
+                stream->previous_output_stream = cnx->output_streams.last_output_stream;
+                cnx->output_streams.last_output_stream->next_output_stream = stream;
+                cnx->output_streams.last_output_stream = stream;
             }
         }
 
@@ -660,14 +663,14 @@ void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         stream->is_output_stream = 0;
 
         if (stream->previous_output_stream == NULL) {
-            cnx->first_output_stream = stream->next_output_stream;
+            cnx->output_streams.first_output_stream = stream->next_output_stream;
         }
         else {
             stream->previous_output_stream->next_output_stream = stream->next_output_stream;
         }
 
         if (stream->next_output_stream == NULL) {
-            cnx->last_output_stream = stream->previous_output_stream;
+            cnx->output_streams.last_output_stream = stream->previous_output_stream;
         }
         else {
             stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
@@ -707,6 +710,51 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
     target.stream_id = stream_id;
 
     return (picoquic_stream_head_t*)picosplay_find(&cnx->stream_tree, (void*)&target);
+}
+
+int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    int has_data = 0;
+    /* TODO: the condition cnx->maxdata_remote > cnx->data_sent
+     * applies to all streams and should be moved to the top of the loop. */
+
+    if (stream->reset_sent) {
+        /* No data will be sent after a reset */
+        has_data = 0;
+    }
+    else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+        (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+        (stream->fin_requested && !stream->fin_sent))) {
+        has_data = 1;
+
+        /* Check that this stream is actually available for sending data */
+        /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
+        if (stream->sent_offset == 0) {
+            if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+                if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                    has_data = 0;
+                }
+            }
+        }
+    }
+    else {
+        has_data = 0;
+    }
+    return has_data;
+}
+
+void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    if (picoquic_find_ready_stream_has_data(cnx, stream)) {
+        if (!stream->is_output_stream) {
+            picoquic_insert_output_stream(cnx, stream);
+        }
+    }
+    else {
+        if (stream->is_output_stream) {
+            picoquic_remove_output_stream(cnx, stream);
+        }
+    }
 }
 
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
@@ -851,103 +899,74 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
     return ret;
 }
 
-int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
-{
-    int has_data = 0;
-    /* TODO: the condition cnx->maxdata_remote > cnx->data_sent
-     * applies to all streams and should be moved to the top of the loop. */
-
-    if (stream->reset_sent) {
-        /* No data will be sent after a reset */
-        has_data = 0;
-    }
-    else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-        (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-        (stream->fin_requested && !stream->fin_sent))) {
-        has_data = 1;
-
-        /* Check that this stream is actually available for sending data */
-        /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
-        if (stream->sent_offset == 0) {
-            if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-                    has_data = 0;
-                }
-            }
-        }
-    }
-    else {
-        has_data = 0;
-    }
-    return has_data;
-}
-
 picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_coalesced)
 {
-    picoquic_stream_head_t* first_stream = cnx->first_output_stream;
+    picoquic_stream_head_t* first_stream = cnx->output_streams.first_output_stream;
     picoquic_stream_head_t* stream = first_stream;
     picoquic_stream_head_t* found_stream = NULL;
 
     /* Look for a ready stream */
-    while (stream != NULL) {
-        int has_data = 0;
-        picoquic_stream_head_t* next_stream = stream->next_output_stream;
+    if (cnx->maxdata_remote <= cnx->data_sent) {
+        /* No stream can be used if the flow control is blocking sending */
+        cnx->flow_blocked = 1;
+    }
+    else {
+        while (stream != NULL) {
+            int has_data = 0;
+            picoquic_stream_head_t* next_stream = stream->next_output_stream;
 
-        if (next_stream != NULL && is_coalesced && next_stream->is_not_coalesced) {
-            stream = next_stream->next_output_stream;
-            continue;
-        }
+            if (next_stream != NULL && is_coalesced && next_stream->is_not_coalesced) {
+                stream = next_stream->next_output_stream;
+                continue;
+            }
 
-        /* TODO: remove this once we have rearranged the priority handling. */
-        if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
-            /* All the streams at that priority level have been examined,
-             * the current selection is validated */
-            break;
-        }
-        
-        has_data = picoquic_find_ready_stream_has_data(cnx, stream);
-        
-        /* implement affinity scheduling. TODO: get this out of the search loop. */
-        if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
-            /* Only consider the streams that meet path affinity requirements */
-            has_data = 0;
-        }
-
-        if (has_data) {
-            /* TODO: organize this logic by separating queues per priority and
-             * reordering streams after write if needed. */
-            if ((stream->stream_priority & 1) != 0) {
-                /* This priority level requests FIFO processing, so we return the first available stream */
-                found_stream = stream;
+            /* TODO: remove this once we have rearranged the priority handling. */
+            if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
+                /* All the streams at that priority level have been examined,
+                 * the current selection is validated */
                 break;
             }
-            else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
-                /* Select this stream, but need to check if another stream should go before in round robin order */
-                found_stream = stream;
-            }
-        }
-        else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
-            /* TODO: this should be done per event, not in the loop */
-            /* If stream is exhausted, remove from output list */
-            picoquic_remove_output_stream(cnx, stream);
 
-            picoquic_delete_stream_if_closed(cnx, stream);
-        }
-        else {
-            /* TODO: the blocked issue should be moved outside of the loop. */
-            if (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
-                if (stream->sent_offset >= stream->maxdata_remote) {
-                    cnx->stream_blocked = 1;
+            has_data = picoquic_find_ready_stream_has_data(cnx, stream);
+
+            /* implement affinity scheduling. TODO: get this out of the search loop. */
+            if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
+                /* Only consider the streams that meet path affinity requirements */
+                has_data = 0;
+            }
+
+            if (has_data) {
+                /* TODO: organize this logic by separating queues per priority and
+                 * reordering streams after write if needed. */
+                if ((stream->stream_priority & 1) != 0) {
+                    /* This priority level requests FIFO processing, so we return the first available stream */
+                    found_stream = stream;
+                    break;
                 }
-                else if (cnx->maxdata_remote <= cnx->data_sent) {
-                    cnx->flow_blocked = 1;
+                else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
+                    /* Select this stream, but need to check if another stream should go before in round robin order */
+                    found_stream = stream;
                 }
             }
+            else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
+                /* TODO: this should be done per event, not in the loop */
+                /* If stream is exhausted, remove from output list */
+                picoquic_remove_output_stream(cnx, stream);
+
+                picoquic_delete_stream_if_closed(cnx, stream);
+            }
+            else {
+                /* TODO: the blocked issue should be moved outside of the loop. */
+                if (stream->is_active ||
+                    (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
+                    if (stream->sent_offset >= stream->maxdata_remote) {
+                        cnx->stream_blocked = 1;
+                    }
+                }
+            }
+            stream = next_stream;
         }
-        stream = next_stream;
     }
-
     return found_stream;
 }
 

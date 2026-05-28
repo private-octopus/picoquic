@@ -1248,6 +1248,13 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
 
+/* Stream scheduling context
+ */
+typedef struct st_picoquic_output_stream_t {
+    picoquic_stream_head_t* first_output_stream;
+    picoquic_stream_head_t* last_output_stream;
+} picoquic_output_stream_t;
+
 /*
 * Per connection context.
 */
@@ -1507,8 +1514,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
-    picoquic_stream_head_t * first_output_stream;
-    picoquic_stream_head_t * last_output_stream;
+    picoquic_output_stream_t output_streams;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
     uint64_t priority_limit_for_bypass; /* Bypass CC if datagram or stream priority lower than this, 0 means never */
@@ -1949,6 +1955,8 @@ picoquic_stream_head_t * picoquic_stream_from_node(picosplay_node_t * node);
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 picoquic_stream_head_t * picoquic_first_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream);

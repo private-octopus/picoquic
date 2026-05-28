@@ -156,6 +156,7 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
             }
         }
+        picoquic_update_output_stream(cnx, stream);
         stream = picoquic_next_stream(stream);
     };
 }
@@ -4437,11 +4438,11 @@ const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const 
     }
     
     if (stream != NULL && maxdata > stream->maxdata_remote) {
-        /* TODO: call back if the stream was blocked? */
         stream->maxdata_remote = maxdata;
         if (maxdata > cnx->max_stream_data_remote) {
             cnx->max_stream_data_remote = maxdata;
         }
+        picoquic_update_output_stream(cnx, stream);
     }
 
 

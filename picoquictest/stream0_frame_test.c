@@ -716,7 +716,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
     size_t nb_found = 0;
 
     /* test order and value of output list */
-    stream = cnx->first_output_stream;
+    stream = cnx->output_streams.first_output_stream;
     while (ret == 0) {
         if (stream == NULL) {
             if (nb_found < nb_output) {
@@ -782,12 +782,12 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         }
 
         /* Make sure the search will start at this specific stream */
-        if (stream == cnx->first_output_stream && stream->next_output_stream == NULL) {
+        if (stream == cnx->output_streams.first_output_stream && stream->next_output_stream == NULL) {
             previous = NULL;
             is_last = 1;
         }
         else {
-            previous = cnx->first_output_stream;
+            previous = cnx->output_streams.first_output_stream;
             while (previous != NULL) {
                 if (previous->next_output_stream == stream) {
                     break;
@@ -817,7 +817,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         }
 
         /* Verify that the stream is removed from the output list */
-        previous = cnx->first_output_stream;
+        previous = cnx->output_streams.first_output_stream;
         while (ret == 0 && previous != NULL) {
             if (previous->stream_id == stream_id) {
                 DBG_PRINTF("Stream %d not removed from list\n", (int)stream_id);
@@ -909,7 +909,7 @@ int stream_output_test(void)
 
             if (ret == 0) {
                 /* Mark all streams as active */
-                stream = cnx->first_output_stream;
+                stream = cnx->output_streams.first_output_stream;
 
                 while (stream != NULL) {
                     stream->maxdata_remote = 4096;
