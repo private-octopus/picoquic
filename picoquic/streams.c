@@ -986,6 +986,50 @@ picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
     return picoquic_find_ready_stream_path(cnx, NULL, 0);
 }
 
+/*
+* Format all available stream frames that fit in the packet,
+* given an initially selected stream. We will fill the packet with the
+* data on that stream, and if coalescing control permits data from
+* other streams.
+*/
+
+uint8_t* picoquic_format_ready_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_stream_head_t* stream, uint8_t* bytes_next, uint8_t* bytes_max,int* more_data,
+    int* is_pure_ack, int* stream_tried_and_failed, int* ret)
+{
+    uint8_t* bytes_previous = bytes_next;
+    uint8_t current_priority = stream->stream_priority;
+    int more_stream_data = 0;
+
+    while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
+        int is_still_active = 0;
+        bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
+
+        /* TODO: if stream is marked "no_coal", do not add anything */
+        if (*ret == 0 && !stream->is_not_coalesced) {
+            stream = picoquic_find_ready_stream_path(cnx,
+                (cnx->is_multipath_enabled) ? path_x : NULL, 1);
+            if (stream != NULL && bytes_next + 17 >= bytes_max) {
+                more_stream_data = 1;
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
+
+    if (!more_stream_data && current_priority != UINT64_MAX) {
+        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
+    }
+
+    *more_data |= more_stream_data;
+
+    return bytes_next;
+}
+
 /* Format all available stream frames that fit in the packet.
  * Update more_data if more stream data is available
  * Update is_pure_ack if formated frames require ack
@@ -1175,9 +1219,10 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
             (!first_stream->is_not_coalesced || !something_sent)) {
             /* Encode the stream frame, or frames */
             uint8_t* bytes_first = bytes_next;
-#if 0
             if (bytes_next + 8 < bytes_max) {
                 int is_still_active = 0;
+                bytes_next = picoquic_format_ready_stream_frames(cnx, path_x, first_stream, bytes_next, bytes_max,
+                    &more_data_this_round, is_pure_ack, &is_still_active, ret);
                 bytes_next = picoquic_format_stream_frame(cnx, first_stream, bytes_next, bytes_max, &more_data_this_round, is_pure_ack, &is_still_active, ret);
                 if (bytes_next > bytes_first) {
                     cnx->datagram_conflicts_count = 0;
@@ -1187,30 +1232,11 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
                      */
                 }
             }
-        else {
-            /* The buffer is too short. This is a more data condition. */
-            more_data_this_round |= 1;
-            conflict_found = 1;
-        }
-
-#else
-            if (bytes_next + 8 < bytes_max) {
-                /* TODO: we have already located the "first stream". Do we need to do the
-                * call to picoquic_find_ready_stream_path again inside the call to
-                * picoquic_format_available_stream_frames?
-                 */
-                bytes_next = picoquic_format_available_stream_frames(cnx, path_x, bytes_next, bytes_max, UINT64_MAX,
-                    &more_data_this_round, is_pure_ack, &stream_tried_and_failed, ret);
-                if (bytes_next > bytes_first) {
-                    cnx->datagram_conflicts_count = 0;
-                    something_sent = 1;
-                }
-            }
             else {
+                /* The buffer is too short. This is a more data condition. */
                 more_data_this_round |= 1;
                 conflict_found = 1;
             }
-#endif
         }
 
         if (datagram_sent && conflict_found) {
