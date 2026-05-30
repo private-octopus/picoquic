@@ -1021,7 +1021,7 @@ uint8_t* picoquic_format_ready_stream_frames(picoquic_cnx_t* cnx, picoquic_path_
 
     *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
 
-    if (!more_stream_data && current_priority != UINT64_MAX) {
+    if (!more_stream_data && current_priority != UINT8_MAX) {
         more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
     }
 
