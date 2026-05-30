@@ -152,7 +152,11 @@ void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing
         pacing->rate_max = pacing->rate;
     }
 
-    pacing->packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
+    if (packet_time > 1.0) {
+        pacing->packet_time_nanosec = 1000000000;
+    } else {
+        pacing->packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
+    }
 
     if (pacing->packet_time_nanosec <= 0) {
         pacing->packet_time_nanosec = 1;
@@ -164,10 +168,13 @@ void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing
         }
         pacing->packet_time_microsec = (pacing->packet_time_nanosec + 999ull) / 1000;
     }
-
-    pacing->bucket_max = (uint64_t)(quantum_time * 1000000000.0);
-    if (pacing->bucket_max <= 0) {
-        pacing->bucket_max = 16 * pacing->packet_time_nanosec;
+    if (quantum_time > 1.0) {
+        pacing->bucket_max = 1000000000;
+    } else {
+        pacing->bucket_max = (uint64_t)(quantum_time * 1000000000.0);
+        if (pacing->bucket_max <= 0) {
+            pacing->bucket_max = 16 * pacing->packet_time_nanosec;
+        }
     }
 
     if (pacing->bucket_nanosec > pacing->bucket_max) {
