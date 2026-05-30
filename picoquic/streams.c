@@ -821,7 +821,12 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             }
         }
 
-        stream->stream_priority = cnx->quic->default_stream_priority;
+        if (stream_id == cnx->high_priority_stream_id) {
+            stream->stream_priority = 0;
+        }
+        else {
+            stream->stream_priority = cnx->quic->default_stream_priority;
+        }
 
         picosplay_init_tree(&stream->stream_data_tree, picoquic_stream_data_node_compare, picoquic_stream_data_node_create, picoquic_stream_data_node_delete, picoquic_stream_data_node_value);
 

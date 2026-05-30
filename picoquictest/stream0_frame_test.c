@@ -846,8 +846,8 @@ int stream_output_test(void)
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
-    uint64_t output1[] = { 0, 1, 2, 4, 5 };
-    uint64_t output2[] = { 0, 1, 2, 4, 5, 8 };
+    uint64_t output1[] = { 1, 0, 2, 4, 5 };
+    uint64_t output2[] = { 1, 0, 2, 4, 5, 8 };
     uint64_t delete_order[] = { 1, 0, 4, 2, 5, 8 };
     picoquic_stream_head_t * stream = NULL;
 
