@@ -601,10 +601,16 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 {
     if (stream->is_output_stream == 0)
     {
+        /* To not insert if the stream cannot be written to */
         if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
             if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
                 return;
             }
+        }
+
+        /* Do not insert if the stream does not have data */
+        if (!picoquic_find_ready_stream_has_data(cnx, stream)) {
+            return;
         }
 
         if (cnx->output_streams.last_output_stream == NULL) {

@@ -810,7 +810,10 @@ typedef struct st_picoquic_stream_head_t {
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
     picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
-    /* Stream priority -- lowest is most urgent */
+    /* Stream priority -- lowest is most urgent.
+    * The stream priority should only be modified through the `picoquic_set_stream_priority` API.
+    * Uncontrolled manipulation will lead to errors.
+    */
     uint8_t stream_priority;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
