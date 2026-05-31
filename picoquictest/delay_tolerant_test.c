@@ -221,7 +221,7 @@ int dtn_silence_test(void)
     spec.scenario = dtn_scenario_silence;
     spec.sizeof_scenario = sizeof(dtn_scenario_silence);
     spec.max_number_of_packets = 120; /* Check that the number of packets does not increase wildly */
-    spec.max_completion_time = 490000000; /* 8 minutes: 2 for handshake, plus 2 per transaction */
+    spec.max_completion_time = 481000000; /* 8 minutes: 2 for handshake, plus 2 per transaction */
     return dtn_test_one(0x51, &spec);
 }
 
