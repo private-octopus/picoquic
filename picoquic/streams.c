@@ -1007,6 +1007,8 @@ uint8_t* picoquic_format_ready_stream_frames(picoquic_cnx_t* cnx, picoquic_path_
 
         /* TODO: if stream is marked "no_coal", do not add anything */
         if (*ret == 0 && !stream->is_not_coalesced) {
+            /* TODO: we have a pointer to current "stream" path. We should not need to
+             * do the entire search once more, if the list was properly sorted. */
             stream = picoquic_find_ready_stream_path(cnx,
                 (cnx->is_multipath_enabled) ? path_x : NULL, 1);
             if (stream != NULL && bytes_next + 17 >= bytes_max) {
@@ -1223,7 +1225,6 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
                 int is_still_active = 0;
                 bytes_next = picoquic_format_ready_stream_frames(cnx, path_x, first_stream, bytes_next, bytes_max,
                     &more_data_this_round, is_pure_ack, &is_still_active, ret);
-                bytes_next = picoquic_format_stream_frame(cnx, first_stream, bytes_next, bytes_max, &more_data_this_round, is_pure_ack, &is_still_active, ret);
                 if (bytes_next > bytes_first) {
                     cnx->datagram_conflicts_count = 0;
                     something_sent = 1;
