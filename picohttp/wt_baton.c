@@ -348,6 +348,8 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 stream_ctx->ps.stream_state.is_fin_received = 1;
                 baton_ctx->baton_state = wt_baton_state_closed;
                 if (baton_ctx->is_client) {
+                    /* Most baton memory is allocated on the stack, but not the capsule! */
+                    picowt_release_capsule(&baton_ctx->capsule);
                     ret = picoquic_close(cnx, 0);
                 }
                 else {
