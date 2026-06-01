@@ -999,7 +999,31 @@ void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_str
     }
     else if ((stream->stream_priority & 1) == 0 && stream->last_time_data_sent != old_time_sent) {
         /* TODO: should consider update in place */
-        picoquic_update_output_stream(cnx, stream);
+        picoquic_stream_head_t* previous = stream->previous_output_stream;
+        picoquic_stream_head_t* next = stream->previous_output_stream;
+        while (next != NULL && picoquic_compare_stream_priority(stream, next) > 0) {
+            previous = next;
+            next = next->next_output_stream;
+        }
+        if (previous != stream->previous_output_stream) {
+            /* Remove from current position */
+            if (stream->previous_output_stream == NULL) {
+                cnx->output_streams.first_output_stream = stream->next_output_stream;
+            }
+            else {
+                stream->previous_output_stream->next_output_stream = stream->next_output_stream;
+            }
+            if (stream->next_output_stream == NULL) {
+                cnx->output_streams.last_output_stream = stream->previous_output_stream;
+            }
+            else {
+                stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
+            }
+            /* Insert after previous -- by construction, previous cannot be NULL */
+            stream->previous_output_stream = previous;
+            stream->next_output_stream = previous->next_output_stream;
+            previous->next_output_stream = stream;
+        }
     }
 }
 
