@@ -82,7 +82,6 @@
 #include <netinet/in.h>
 
 #if defined(PICOQUIC_WITH_IO_URING)
-#include <linux/io_uring.h>
 #include <liburing.h>
 #else
 #ifndef PICOQUIC_USES_SELECT
