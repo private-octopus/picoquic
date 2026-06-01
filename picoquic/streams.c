@@ -740,17 +740,23 @@ int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_hea
         /* No data will be sent after a reset */
         has_data = 0;
     }
-    else if (stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
+    else if (stream->is_active ||
         (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-        (stream->fin_requested && !stream->fin_sent))) {
-        has_data = 1;
+        (stream->fin_requested && !stream->fin_sent)) {
+        if (stream->sent_offset >= stream->maxdata_remote) {
+            cnx->stream_blocked = 1;
+            has_data = 0;
+        }
+        else {
+            has_data = 1;
 
-        /* Check that this stream is actually available for sending data */
-        /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
-        if (stream->sent_offset == 0) {
-            if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-                    has_data = 0;
+            /* Check that this stream is actually available for sending data */
+            /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
+            if (stream->sent_offset == 0) {
+                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
+                    if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                        has_data = 0;
+                    }
                 }
             }
         }
