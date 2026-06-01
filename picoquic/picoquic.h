@@ -355,7 +355,10 @@ typedef enum {
     picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
     picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
     picoquic_callback_app_wakeup, /* wakeup timer set by application has expired */
-    picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_next_path_allowed, /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_stream_released /* Stream fully retired: bytes=NULL, len=0,
+                                       * stream_ctx = the app_stream_ctx the app set;
+                                       * picoquic will not call back with this stream_ctx again. */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_preferred_address_t {
