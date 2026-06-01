@@ -602,8 +602,12 @@ void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_l
                             ecn_value
                         )
                     ) {
+                        flow->s_ctx_i = *nb_sockets;
                         (*nb_sockets)++;
                         flow->tree_joined = 1;
+                    }
+                    if (flow->left) {
+                        picoquic_packet_loop_close_socket(&s_ctx[flow->s_ctx_i]);
                     }
                 }
             }

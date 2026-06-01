@@ -1248,6 +1248,7 @@ typedef struct st_picoquic_fc_flow_t {
     uint64_t crypto_algo;
     uint64_t key_len;
     uint8_t* key;
+    int s_ctx_i;
 
     unsigned int tree_joined : 1;
     unsigned int join_sent : 1;

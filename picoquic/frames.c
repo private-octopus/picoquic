@@ -6813,6 +6813,7 @@ const uint8_t* picoquic_decode_fc_state_frame(picoquic_cnx_t* cnx, picoquic_path
 {
     uint64_t action, sequence_number;
     picoquic_fc_flow_id_t flow_id;
+    int i;
 
     if (!cnx->is_flexicast_enabled) {
         /* Frame is unexpected */
@@ -6824,9 +6825,18 @@ const uint8_t* picoquic_decode_fc_state_frame(picoquic_cnx_t* cnx, picoquic_path
     if (
         (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &flow_id.id_len)) != NULL &&
         (bytes = picoquic_frames_fc_flow_id_decode(bytes, bytes_max, flow_id.id_len, &flow_id)) != NULL &&
+        (i = picoquic_find_flow_by_fid(cnx, &flow_id)) >= 0 &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &sequence_number)) != NULL &&
         (bytes = picoquic_frames_uint64_decode(bytes, bytes_max, &action)) != NULL
     ) {
+        switch (action) {
+            case 2:
+                cnx->flows[i]->leave_required = 1;
+                cnx->need_flow_update = 1;
+            break;
+            default:
+            break;
+        }
     }
     else {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR, picoquic_frame_type_fc_announce);
