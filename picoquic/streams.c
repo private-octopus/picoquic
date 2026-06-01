@@ -949,13 +949,6 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
                 continue;
             }
 
-            /* TODO: remove this once we have rearranged the priority handling. */
-            if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
-                /* All the streams at that priority level have been examined,
-                 * the current selection is validated */
-                break;
-            }
-
             has_data = picoquic_find_ready_stream_has_data(cnx, stream);
 
             /* implement affinity scheduling. TODO: get this out of the search loop. */
@@ -965,17 +958,11 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             }
 
             if (has_data) {
-                /* TODO: organize this logic by separating queues per priority and
-                 * reordering streams after write if needed. */
-                if ((stream->stream_priority & 1) != 0) {
-                    /* This priority level requests FIFO processing, so we return the first available stream */
-                    found_stream = stream;
-                    break;
-                }
-                else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
-                    /* Select this stream, but need to check if another stream should go before in round robin order */
-                    found_stream = stream;
-                }
+                /* Since the output streams are sorted by priority[/last_time_sent]/stream_id,
+                 * we can safely return the first stream that has data, without looking having
+                 * to visit all streams at that priority level. */
+                found_stream = stream;
+                break;
             }
             else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
                 /* TODO: this should be done per event, not in the loop */
