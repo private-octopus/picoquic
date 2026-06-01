@@ -848,6 +848,8 @@ int stream_output_test(void)
     uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
     uint64_t output1[] = { 1, 0, 2, 4, 5 };
     uint64_t output2[] = { 1, 0, 2, 4, 5, 8 };
+    uint64_t output3[] = { 5, 8, 2, 4, 3, 0 };
+    uint64_t output4[] = { 8, 2, 4, 3, 0, 5 };
     uint64_t delete_order[] = { 1, 0, 4, 2, 5, 8 };
     picoquic_stream_head_t * stream = NULL;
 
@@ -918,7 +920,8 @@ int stream_output_test(void)
                 /* Mark all streams as active */
                 stream = cnx->output_streams.first_output_stream;
 
-                while (stream != NULL) {
+                for (int i = 0; i < 7; i++) {
+                    stream = picoquic_find_stream(cnx, values[i]);
                     stream->maxdata_remote = 4096;
                     picoquic_mark_active_stream(cnx, stream->stream_id, 1, NULL);
                     stream = stream->next_output_stream;
@@ -936,7 +939,51 @@ int stream_output_test(void)
                 }
             }
 
+
+
+            /* Reset the priorities to an odd number, and set the last time sent. */
             if (ret == 0) {
+                simulated_time = 1000;
+                for (int i = 0; i < 7; i++) {
+                    if (values[i] != 1) {
+                        stream = picoquic_find_stream(cnx, values[i]);
+                        stream->last_time_data_sent = simulated_time - i;
+                        picoquic_set_stream_priority(cnx, values[i], 8);
+                    }
+                    else {
+                        /* remove the high priority stream from contention */
+                        picoquic_mark_active_stream(cnx, values[i], 0, NULL);
+                    }
+                }
+                ret = stream_output_test_list(cnx, sizeof(output3) / sizeof(uint64_t), output3);
+            }
+
+
+            if (ret == 0) {
+                /* Check that find ready stream returns NULL when no stream is ready */
+                stream = picoquic_find_ready_stream_path(cnx, NULL, 0);
+                if (stream == NULL || stream->stream_id != output3[0]) {
+                    /* Not the expected stream! */
+                    if (stream == NULL || stream->stream_id != output3[0]) {
+                        DBG_PRINTF("Expected stream[%d],got %d\n", (int)output3[0],
+                            (stream == NULL)?-1:(int)stream->stream_id);
+                        ret = -1;
+                    }
+                    else {
+                        /* Simulate transmission and test reordering. */
+                        uint64_t old_time_sent = stream->last_time_data_sent;
+                        simulated_time += 100;
+                        stream->last_time_data_sent = simulated_time;
+
+                        picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
+                        ret = stream_output_test_list(cnx, sizeof(output4) / sizeof(uint64_t), output4);
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* mark stream 1 as active again, to match test hypothesis that all streams are active */
+                picoquic_mark_active_stream(cnx, 1, 1, NULL);
                 /* Check automated stream deletion */
                 for (size_t i = 0; ret == 0 && i < (sizeof(delete_order) / sizeof(uint64_t)); i++) {
                     ret = stream_output_test_delete(cnx, delete_order[i], i & 1);

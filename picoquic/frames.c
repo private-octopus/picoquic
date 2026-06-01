@@ -1751,10 +1751,12 @@ uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t* bytes, uint8_t* bytes_max, int * more_data, int * is_pure_ack, int* is_still_active, int * ret)
+    uint8_t* bytes, uint8_t* bytes_max, int * more_data, int * is_pure_ack, int* is_still_active,
+    int* is_closed, int * ret)
 {
     int may_close = 0;
     *ret = 0;
+    *is_closed = 0;
 
     /* Check parity */
     if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
@@ -1920,7 +1922,11 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         if (*ret == 0) {
             *is_pure_ack &= (bytes == bytes0);
 
-            if (!may_close || !picoquic_delete_stream_if_closed(cnx, stream)) {
+            if (may_close) {
+                *is_closed = picoquic_delete_stream_if_closed(cnx, stream);
+            }
+
+            if (!(*is_closed)) {
                 /* mark the stream as unblocked since we sent something */
                 stream->stream_data_blocked_sent = 0;
                 cnx->sent_blocked_frame = 0;
