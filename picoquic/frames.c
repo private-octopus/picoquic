@@ -124,6 +124,15 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
     if (stream->is_closed && (
         (!IS_BIDIR_STREAM_ID(stream->stream_id) && !IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode)) ||
         picoquic_is_stream_acked(stream))) {
+        /* Notify application that the stream is fully retired and any
+         * per-stream app context tied to this stream_id can be freed.
+         * Fired only if the app took ownership (non-NULL ctx). Return
+         * value ignored: stream is about to be deleted regardless. */
+        if (stream->app_stream_ctx != NULL && cnx->callback_fn != NULL) {
+            (void)cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
+                picoquic_callback_stream_released,
+                cnx->callback_ctx, stream->app_stream_ctx);
+        }
         picoquic_delete_stream(cnx, stream);
     }
 

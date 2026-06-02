@@ -1967,6 +1967,25 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			* after the limits for unidir streams are known */
 			ret = h3zero_protocol_init_safe(cnx, ctx);
 			break;
+		case picoquic_callback_stream_released:
+			/* picoquic patch 0003 fires this per-stream when fully
+			 * retired. Forward to the registered path callback as
+			 * picohttp_callback_free so the app can release per-
+			 * stream context mid-session, then delete h3zero's own
+			 * stream_ctx. Without this, apps can only clean at
+			 * session close (picosplay_empty_tree). */
+			if (stream_ctx == NULL) {
+				stream_ctx = h3zero_find_stream(ctx, stream_id);
+			}
+			if (stream_ctx != NULL) {
+				if (stream_ctx->path_callback != NULL) {
+					(void)stream_ctx->path_callback(cnx, NULL, 0,
+						picohttp_callback_free,
+						stream_ctx, stream_ctx->path_callback_ctx);
+				}
+				h3zero_delete_stream(cnx, ctx, stream_ctx);
+			}
+			break;
 		default:
 			/* unexpected -- just ignore. */
 			break;
