@@ -1409,6 +1409,16 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
 
+/* Mark stream as active without touching app_stream_ctx. Use when the
+ * caller has no opinion on the ctx (e.g. a layered stack where a lower
+ * layer like h3zero already set app_stream_ctx, and a higher layer
+ * uses prepare_to_send for byte transfer and only needs to wake the
+ * worker). picoquic_set_app_stream_ctx / picoquic_unlink_app_stream_ctx
+ * remain the explicit set / clear APIs.
+ */
+int picoquic_mark_active_stream_v2(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_active);
+
 /* Handling of stream packetisation and head-of-line blocking:
 * 
 * When preparing a packet, if a stream is available, picoquic will fill the
