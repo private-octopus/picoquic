@@ -355,7 +355,10 @@ typedef enum {
     picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
     picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
     picoquic_callback_app_wakeup, /* wakeup timer set by application has expired */
-    picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_next_path_allowed, /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_stream_released /* Stream fully retired: bytes=NULL, len=0,
+                                       * stream_ctx = the app_stream_ctx the app set;
+                                       * picoquic will not call back with this stream_ctx again. */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_preferred_address_t {
@@ -1405,6 +1408,16 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
+
+/* Mark stream as active without touching app_stream_ctx. Use when the
+ * caller has no opinion on the ctx (e.g. a layered stack where a lower
+ * layer like h3zero already set app_stream_ctx, and a higher layer
+ * uses prepare_to_send for byte transfer and only needs to wake the
+ * worker). picoquic_set_app_stream_ctx / picoquic_unlink_app_stream_ctx
+ * remain the explicit set / clear APIs.
+ */
+int picoquic_mark_active_stream_v2(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_active);
 
 /* Handling of stream packetisation and head-of-line blocking:
 * 

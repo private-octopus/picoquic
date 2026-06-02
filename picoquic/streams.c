@@ -246,6 +246,36 @@ int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     return ret;
 }
 
+int picoquic_mark_active_stream_v2(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_active)
+{
+    int ret = 0;
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
+    stream = picoquic_find_stream_for_writing(cnx, stream_id, &ret);
+    if (ret == 0) {
+        if (is_active) {
+            if (!stream->fin_requested &&
+                (!stream->reset_requested || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size) == 0) &&
+                cnx->callback_fn != NULL) {
+                if (!stream->is_active) {
+                    stream->is_active = 1;
+                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
+                }
+            }
+            else {
+                ret = PICOQUIC_ERROR_CANNOT_SET_ACTIVE_STREAM;
+            }
+        }
+        else {
+            stream->is_active = 0;
+        }
+    }
+
+    return ret;
+}
+
 int picoquic_set_stream_not_coalesced(picoquic_cnx_t* cnx, uint64_t stream_id, int is_not_coalesced)
 {
     int ret = 0;
