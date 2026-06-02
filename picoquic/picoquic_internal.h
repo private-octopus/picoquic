@@ -810,7 +810,10 @@ typedef struct st_picoquic_stream_head_t {
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
     picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
-    /* Stream priority -- lowest is most urgent */
+    /* Stream priority -- lowest is most urgent.
+    * The stream priority should only be modified through the `picoquic_set_stream_priority` API.
+    * Uncontrolled manipulation will lead to errors.
+    */
     uint8_t stream_priority;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
@@ -1248,6 +1251,13 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
 
+/* Stream scheduling context
+ */
+typedef struct st_picoquic_output_stream_t {
+    picoquic_stream_head_t* first_output_stream;
+    picoquic_stream_head_t* last_output_stream;
+} picoquic_output_stream_t;
+
 /*
 * Per connection context.
 */
@@ -1507,8 +1517,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
-    picoquic_stream_head_t * first_output_stream;
-    picoquic_stream_head_t * last_output_stream;
+    picoquic_output_stream_t output_streams;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
     uint64_t priority_limit_for_bypass; /* Bypass CC if datagram or stream priority lower than this, 0 means never */
@@ -1949,6 +1958,8 @@ picoquic_stream_head_t * picoquic_stream_from_node(picosplay_node_t * node);
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 picoquic_stream_head_t * picoquic_first_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream);
@@ -1956,13 +1967,20 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_coalesced);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
+void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint64_t old_time_sent);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, picoquic_stream_data_node_t* received_data, uint64_t current_time);
 
 uint8_t* picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, 
-    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active, int* ret);
-
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active,
+    int* is_closed, int* ret);
+uint8_t* picoquic_format_stop_sending_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_reset_stream_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_reset_stream_at_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 
 /* Handling of retransmission of frames.
@@ -1979,6 +1997,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
+uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    int is_first_in_packet, uint64_t max_priority_allowed,
+    int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret);
 
 /* Handling of stream_data_frames that need repeating.
  */

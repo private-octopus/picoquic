@@ -716,7 +716,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
     size_t nb_found = 0;
 
     /* test order and value of output list */
-    stream = cnx->first_output_stream;
+    stream = cnx->output_streams.first_output_stream;
     while (ret == 0) {
         if (stream == NULL) {
             if (nb_found < nb_output) {
@@ -782,12 +782,12 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         }
 
         /* Make sure the search will start at this specific stream */
-        if (stream == cnx->first_output_stream && stream->next_output_stream == NULL) {
+        if (stream == cnx->output_streams.first_output_stream && stream->next_output_stream == NULL) {
             previous = NULL;
             is_last = 1;
         }
         else {
-            previous = cnx->first_output_stream;
+            previous = cnx->output_streams.first_output_stream;
             while (previous != NULL) {
                 if (previous->next_output_stream == stream) {
                     break;
@@ -817,7 +817,7 @@ int stream_output_test_delete(picoquic_cnx_t * cnx, uint64_t stream_id, int R_or
         }
 
         /* Verify that the stream is removed from the output list */
-        previous = cnx->first_output_stream;
+        previous = cnx->output_streams.first_output_stream;
         while (ret == 0 && previous != NULL) {
             if (previous->stream_id == stream_id) {
                 DBG_PRINTF("Stream %d not removed from list\n", (int)stream_id);
@@ -846,8 +846,10 @@ int stream_output_test(void)
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
     uint64_t values[] = { 0, 3, 4, 1, 2, 8, 5, 7 };
-    uint64_t output1[] = { 0, 1, 2, 4, 5 };
-    uint64_t output2[] = { 0, 1, 2, 4, 5, 8 };
+    uint64_t output1[] = { 1, 0, 2, 4, 5 };
+    uint64_t output2[] = { 1, 0, 2, 4, 5, 8 };
+    uint64_t output3[] = { 5, 8, 2, 4, 3, 0 };
+    uint64_t output4[] = { 8, 2, 4, 3, 0, 5 };
     uint64_t delete_order[] = { 1, 0, 4, 2, 5, 8 };
     picoquic_stream_head_t * stream = NULL;
 
@@ -878,6 +880,7 @@ int stream_output_test(void)
             cnx->maxdata_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
+            cnx->remote_parameters.initial_max_stream_data_bidi_local = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
             cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
 
@@ -886,6 +889,7 @@ int stream_output_test(void)
             /* Create the list of streams */
             for (int i = 0; i < 7; i++) {
                 picoquic_create_stream(cnx, values[i]);
+                picoquic_mark_active_stream(cnx, values[i], 1, NULL);
             }
 
             ret = stream_output_test_list(cnx, sizeof(output1) / sizeof(uint64_t), output1);
@@ -896,6 +900,11 @@ int stream_output_test(void)
                 cnx->max_stream_id_bidir_remote = 8;
                 picoquic_add_output_streams(cnx, old_limit, 8, 1);
                 ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
+            }
+
+            /* Make all stream not ready to test next condition */
+            for (int i = 0; i < 7; i++) {
+                picoquic_mark_active_stream(cnx, values[i], 0, NULL);
             }
 
             if (ret == 0) {
@@ -909,9 +918,10 @@ int stream_output_test(void)
 
             if (ret == 0) {
                 /* Mark all streams as active */
-                stream = cnx->first_output_stream;
+                stream = cnx->output_streams.first_output_stream;
 
-                while (stream != NULL) {
+                for (int i = 0; i < 7; i++) {
+                    stream = picoquic_find_stream(cnx, values[i]);
                     stream->maxdata_remote = 4096;
                     picoquic_mark_active_stream(cnx, stream->stream_id, 1, NULL);
                     stream = stream->next_output_stream;
@@ -929,7 +939,51 @@ int stream_output_test(void)
                 }
             }
 
+
+
+            /* Reset the priorities to an odd number, and set the last time sent. */
             if (ret == 0) {
+                simulated_time = 1000;
+                for (int i = 0; i < 7; i++) {
+                    if (values[i] != 1) {
+                        stream = picoquic_find_stream(cnx, values[i]);
+                        stream->last_time_data_sent = simulated_time - i;
+                        picoquic_set_stream_priority(cnx, values[i], 8);
+                    }
+                    else {
+                        /* remove the high priority stream from contention */
+                        picoquic_mark_active_stream(cnx, values[i], 0, NULL);
+                    }
+                }
+                ret = stream_output_test_list(cnx, sizeof(output3) / sizeof(uint64_t), output3);
+            }
+
+
+            if (ret == 0) {
+                /* Check that find ready stream returns NULL when no stream is ready */
+                stream = picoquic_find_ready_stream_path(cnx, NULL, 0);
+                if (stream == NULL || stream->stream_id != output3[0]) {
+                    /* Not the expected stream! */
+                    if (stream == NULL || stream->stream_id != output3[0]) {
+                        DBG_PRINTF("Expected stream[%d],got %d\n", (int)output3[0],
+                            (stream == NULL)?-1:(int)stream->stream_id);
+                        ret = -1;
+                    }
+                    else {
+                        /* Simulate transmission and test reordering. */
+                        uint64_t old_time_sent = stream->last_time_data_sent;
+                        simulated_time += 100;
+                        stream->last_time_data_sent = simulated_time;
+
+                        picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
+                        ret = stream_output_test_list(cnx, sizeof(output4) / sizeof(uint64_t), output4);
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* mark stream 1 as active again, to match test hypothesis that all streams are active */
+                picoquic_mark_active_stream(cnx, 1, 1, NULL);
                 /* Check automated stream deletion */
                 for (size_t i = 0; ret == 0 && i < (sizeof(delete_order) / sizeof(uint64_t)); i++) {
                     ret = stream_output_test_delete(cnx, delete_order[i], i & 1);
