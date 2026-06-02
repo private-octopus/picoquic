@@ -733,8 +733,6 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
 {
     int has_data = 0;
-    /* TODO: the condition cnx->maxdata_remote > cnx->data_sent
-     * applies to all streams and should be moved to the top of the loop. */
 
     if (stream->reset_sent) {
         /* No data will be sent after a reset */
@@ -751,7 +749,11 @@ int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_hea
             has_data = 1;
 
             /* Check that this stream is actually available for sending data */
-            /* TODO: check whether we really need to do this. Can we add a stream to "output" if it cannot be written? */
+            /* TODO: it should be possible to remove this test in the future, if we can
+            * guarantee that streams can only be added to the output list when they
+            * are ready to send something. But this not true in the current build,
+            * and would require some debugging.
+            */
             if (stream->sent_offset == 0) {
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
                     if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
