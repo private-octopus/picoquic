@@ -98,7 +98,7 @@ typedef struct st_picoquic_ns_spec_t {
 } picoquic_ns_spec_t;
 
 int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd);
-int picoquic_ns_n(picoquic_ns_spec_t* spec, FILE* err_fd, int nb_repeats);
+int picoquic_ns_n(picoquic_ns_spec_t* spec, FILE* err_fd, int nb_repeats, char const * spec_name);
 
 #ifdef __cplusplus
 }

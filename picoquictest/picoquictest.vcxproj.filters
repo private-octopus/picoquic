@@ -198,9 +198,6 @@
     <ClCompile Include="cc_compete_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picoquic_ns.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ech_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -220,6 +217,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="qlog_frame_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="qmux_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

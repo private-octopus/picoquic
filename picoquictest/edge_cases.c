@@ -488,6 +488,72 @@ int ecf1_final_loss_test(void)
     return ret;
 }
 
+
+/* Simulate double close. The application sould not do that, but if it
+* does, there should not be a crash.
+ */
+
+int ecdc_double_close_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint8_t test_case_id = 0xdc;
+    int ret = edge_case_prepare(&test_ctx, test_case_id, 0, &simulated_time, 0, 20);
+    uint64_t zero_loss_mask = 0;
+    int was_active = 0;
+
+    /* Finish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &zero_loss_mask, 0, &simulated_time);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect loop returns %d\n", ret);
+        }
+    }
+    /* Finish sending data */
+    test_ctx->immediate_exit = 1;
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &zero_loss_mask, &simulated_time, 0);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Data sending loop returns %d\n", ret);
+        }
+    }
+    /* Do first closing */
+    if (ret == 0) {
+        if (picoquic_close_ex(test_ctx->cnx_server, 0, "First close") != 0) {
+            DBG_PRINTF("First close returns %d\n", ret);
+            ret = -1;
+        }
+        for (int i = 0; ret == 0 && i < 128; i++) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            if (ret == 0 && test_ctx->cnx_client->cnx_state > picoquic_state_ready &&
+                test_ctx->cnx_client->is_wake_ready == 0) {
+                break;
+            }
+        }
+    }
+    /* Close again and run a few iterations */
+    if (ret == 0 && test_ctx->cnx_server != NULL) {
+        if (picoquic_close_ex(test_ctx->cnx_client, 0, "Double close") == 0) {
+            DBG_PRINTF("Double close returns %d\n", ret);
+            ret = -1;
+        }
+        for (int i = 0; i < 128; i++) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /* Some traces show the CID packet from the server being dropped,
  * then repeated a couple time, with one success but a drop
  * of the clien't ack, and the server then sending a bogus repeat.
@@ -610,6 +676,75 @@ int ec9a_preemptive_amok_test(void)
             }
         }
     }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* packet too big test */
+int ec2b_packet_too_big_test(void)
+{
+    /* Create a minimum context */
+    int ret = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t zero_loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { { 0x2b, 0x19, 0, 0, 0, 0, 0, 0}, 8 };
+    uint8_t big_packet[2048];
+    picoquic_cnx_t* previous_cnx;
+
+    /* Create a client. */
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot initialize context, ret = 0x%x", ret);
+    }
+
+    /* Finish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &zero_loss_mask, 0, &simulated_time);
+        if (ret != 0)
+        {
+            DBG_PRINTF("Connect loop returns %d\n", ret);
+        }
+    }
+    /* send a series of packets too big with different characteristics:
+     * - malformed packet that is treated as an error.
+     * - valid 1rtt encrypted packet with stream frame at offset > 0,
+     *   too large to be used as a chunk.
+     * - 1RTT packet with "unknown" DCID, trigger a stateless reset.
+     */
+    for (int big_packet_type = 0; big_packet_type < 4; big_packet_type++) {
+        if (big_packet_type <= 1) {
+            memset(big_packet, 0xff, sizeof(big_packet));
+            big_packet[1] = 0x0;
+            big_packet[2] = 0x0;
+            big_packet[3] = 0x0;
+            big_packet[4] = 0x01;
+            big_packet[5] = 0x08;
+            big_packet[14] = 0x08;
+            if (big_packet_type == 1) {
+                big_packet[4] = 0x0f;
+            }
+        }
+        else if (big_packet_type == 2) {
+            memset(big_packet, 0x0f, sizeof(big_packet));
+        }
+        else if (big_packet_type == 3) {
+            memset(big_packet, 0xff, sizeof(big_packet));
+        }
+        previous_cnx = NULL;
+        /* send the big packet to the selected interface */
+        (void)picoquic_incoming_packet_ex(test_ctx->qserver, big_packet, sizeof(big_packet),
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr,
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->peer_addr,
+            0, 0, &previous_cnx, simulated_time);
+    }
+    /* tear down everything, as the deed is now done. */
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);

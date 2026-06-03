@@ -65,6 +65,9 @@
 #endif
 #include "tls_api.h"
 #include "picoquic_crypto_provider_api.h"
+#ifdef PTLS_HAVE_AEGIS
+#include <aegis.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include "picoquic_unified_log.h"
@@ -364,12 +367,158 @@ void picoquic_register_keyex_from_key_file_fn(picoquic_keyex_from_key_file_t key
     picoquic_keyex_dispose_fn = keyex_dispose_fn;
 }
 
+#ifdef PTLS_HAVE_AEGIS
+#define PICOQUIC_AEGIS_HP_SAMPLE_SIZE 16
+#define PICOQUIC_AEGIS_HP_STREAM_SIZE 40
+
+typedef struct st_picoquic_aegis_hp_context_t {
+    ptls_cipher_context_t super;
+    uint8_t key[PTLS_AEGIS256_KEY_SIZE];
+    uint8_t nonce[PTLS_AEGIS256_IV_SIZE];
+    size_t key_size;
+    size_t nonce_size;
+} picoquic_aegis_hp_context_t;
+
+static void picoquic_aegis_hp_dispose(ptls_cipher_context_t* ctx)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+    ptls_clear_memory(hp_ctx->key, sizeof(hp_ctx->key));
+    ptls_clear_memory(hp_ctx->nonce, sizeof(hp_ctx->nonce));
+}
+
+static void picoquic_aegis_hp_init(ptls_cipher_context_t* ctx, const void* iv)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+
+    memset(hp_ctx->nonce, 0, hp_ctx->nonce_size);
+    memcpy(hp_ctx->nonce, iv, PICOQUIC_AEGIS_HP_SAMPLE_SIZE);
+}
+
+static void picoquic_aegis128l_hp_transform(ptls_cipher_context_t* ctx, void* output, const void* input, size_t len)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+    uint8_t stream_stack[64];
+    uint8_t* stream = stream_stack;
+    size_t stream_len = (len < PICOQUIC_AEGIS_HP_STREAM_SIZE) ? PICOQUIC_AEGIS_HP_STREAM_SIZE : len;
+
+    if (stream_len > sizeof(stream_stack)) {
+        stream = (uint8_t*)malloc(stream_len);
+    }
+
+    if (stream != NULL) {
+        aegis128l_stream(stream, stream_len, hp_ctx->nonce, hp_ctx->key);
+        for (size_t i = 0; i < len; i++) {
+            ((uint8_t*)output)[i] = ((const uint8_t*)input)[i] ^ stream[i];
+        }
+        if (stream != stream_stack) {
+            ptls_clear_memory(stream, stream_len);
+            free(stream);
+        }
+    }
+}
+
+static void picoquic_aegis256_hp_transform(ptls_cipher_context_t* ctx, void* output, const void* input, size_t len)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+    uint8_t stream_stack[64];
+    uint8_t* stream = stream_stack;
+    size_t stream_len = (len < PICOQUIC_AEGIS_HP_STREAM_SIZE) ? PICOQUIC_AEGIS_HP_STREAM_SIZE : len;
+
+    if (stream_len > sizeof(stream_stack)) {
+        stream = (uint8_t*)malloc(stream_len);
+    }
+
+    if (stream != NULL) {
+        aegis256_stream(stream, stream_len, hp_ctx->nonce, hp_ctx->key);
+        for (size_t i = 0; i < len; i++) {
+            ((uint8_t*)output)[i] = ((const uint8_t*)input)[i] ^ stream[i];
+        }
+        if (stream != stream_stack) {
+            ptls_clear_memory(stream, stream_len);
+            free(stream);
+        }
+    }
+}
+
+static int picoquic_aegis128l_hp_setup_crypto(ptls_cipher_context_t* ctx, int is_enc, const void* key)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+    UNREFERENCED_PARAMETER(is_enc);
+
+    hp_ctx->super.do_dispose = picoquic_aegis_hp_dispose;
+    hp_ctx->super.do_init = picoquic_aegis_hp_init;
+    hp_ctx->super.do_transform = picoquic_aegis128l_hp_transform;
+    hp_ctx->key_size = PTLS_AEGIS128L_KEY_SIZE;
+    hp_ctx->nonce_size = PTLS_AEGIS128L_IV_SIZE;
+    memset(hp_ctx->key, 0, sizeof(hp_ctx->key));
+    memset(hp_ctx->nonce, 0, sizeof(hp_ctx->nonce));
+    memcpy(hp_ctx->key, key, hp_ctx->key_size);
+    return 0;
+}
+
+static int picoquic_aegis256_hp_setup_crypto(ptls_cipher_context_t* ctx, int is_enc, const void* key)
+{
+    picoquic_aegis_hp_context_t* hp_ctx = (picoquic_aegis_hp_context_t*)ctx;
+    UNREFERENCED_PARAMETER(is_enc);
+
+    hp_ctx->super.do_dispose = picoquic_aegis_hp_dispose;
+    hp_ctx->super.do_init = picoquic_aegis_hp_init;
+    hp_ctx->super.do_transform = picoquic_aegis256_hp_transform;
+    hp_ctx->key_size = PTLS_AEGIS256_KEY_SIZE;
+    hp_ctx->nonce_size = PTLS_AEGIS256_IV_SIZE;
+    memset(hp_ctx->key, 0, sizeof(hp_ctx->key));
+    memset(hp_ctx->nonce, 0, sizeof(hp_ctx->nonce));
+    memcpy(hp_ctx->key, key, hp_ctx->key_size);
+    return 0;
+}
+
+static ptls_cipher_algorithm_t picoquic_aegis128l_hp = {
+    "AEGIS-128L-HP",
+    PTLS_AEGIS128L_KEY_SIZE,
+    1,
+    PICOQUIC_AEGIS_HP_SAMPLE_SIZE,
+    sizeof(picoquic_aegis_hp_context_t),
+    picoquic_aegis128l_hp_setup_crypto
+};
+
+static ptls_cipher_algorithm_t picoquic_aegis256_hp = {
+    "AEGIS-256-HP",
+    PTLS_AEGIS256_KEY_SIZE,
+    1,
+    PICOQUIC_AEGIS_HP_SAMPLE_SIZE,
+    sizeof(picoquic_aegis_hp_context_t),
+    picoquic_aegis256_hp_setup_crypto
+};
+#endif
+
+static ptls_cipher_algorithm_t* picoquic_get_header_protection_cipher(ptls_cipher_suite_t* cipher)
+{
+    ptls_cipher_algorithm_t* hp_cipher = NULL;
+
+    if (cipher != NULL && cipher->aead != NULL) {
+#ifdef PTLS_HAVE_AEGIS
+        if (cipher->id == PICOQUIC_AEGIS_128L_SHA256) {
+            hp_cipher = &picoquic_aegis128l_hp;
+        }
+        else if (cipher->id == PICOQUIC_AEGIS_256_SHA512) {
+            hp_cipher = &picoquic_aegis256_hp;
+        }
+        else
+#endif
+        {
+            hp_cipher = cipher->aead->ctr_cipher;
+        }
+    }
+
+    return hp_cipher;
+}
+
 /* List of cipher suites that are suitable for this context */
 static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites, int cipher_suite_id, int use_low_memory)
 {
     int nb_suites = 0;
 
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && nb_suites < 4; i++) {
+    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && nb_suites < PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX; i++) {
         if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
             break;
         }
@@ -391,19 +540,19 @@ static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites,
 /* Set the cipher suites */
 static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suite_id, int use_low_memory)
 {
-    ptls_cipher_suite_t** selected_suites = (ptls_cipher_suite_t**)malloc(sizeof(ptls_cipher_suite_t*) * 4);
+    ptls_cipher_suite_t** selected_suites = (ptls_cipher_suite_t**)malloc(sizeof(ptls_cipher_suite_t*) * (PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX + 1));
     int nb_suites = 0;
     int ret = 0;
-
-    /* Remove previous suites (if any) */
-    if (ctx->cipher_suites != NULL) {
-        free((void*)ctx->cipher_suites);
-    }
 
     if (ctx == NULL || selected_suites == NULL) {
         ret = -1;
     }
     else {
+        /* Remove previous suites (if any) */
+        if (ctx->cipher_suites != NULL) {
+            free((void*)ctx->cipher_suites);
+        }
+
         nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id, use_low_memory);
 
         if (nb_suites == 0) {
@@ -411,9 +560,7 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
             ret = -1;
         }
         else {
-            while (nb_suites < 4) {
-                selected_suites[nb_suites++] = NULL;
-            }
+            selected_suites[nb_suites] = NULL;
             ctx->cipher_suites = selected_suites;
         }
     }
@@ -435,7 +582,7 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
 /* Obtain AES128GCM SHA256, AES256GCM_SHA384 or CHACHA20 suite according to current provider */
 ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
 {
-    ptls_cipher_suite_t* selected_suites[4];
+    ptls_cipher_suite_t* selected_suites[PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX + 1];
     ptls_cipher_suite_t* cipher;
     int nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id, use_low_memory);
     if (nb_suites <= 0) {
@@ -1311,17 +1458,21 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
 static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t * cipher, int is_enc, const void *secret, const char *prefix_label)
 {
     uint8_t pnekey[PTLS_MAX_SECRET_SIZE];
-    int ret;
+    ptls_cipher_algorithm_t* hp_cipher = picoquic_get_header_protection_cipher(cipher);
+    int ret = 0;
 
     if (*v_pn_enc != NULL) {
         ptls_cipher_free((ptls_cipher_context_t *)*v_pn_enc);
         *v_pn_enc = NULL;
     }
 
-    if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey, 
-        cipher->aead->ctr_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size), 
+    if (hp_cipher == NULL || hp_cipher->key_size > sizeof(pnekey)) {
+        ret = PTLS_ERROR_NO_MEMORY;
+    }
+    else if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey,
+        hp_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size),
         PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), prefix_label)) == 0) {
-        if ((*v_pn_enc = ptls_cipher_new(cipher->aead->ctr_cipher, is_enc, pnekey)) == NULL) {
+        if ((*v_pn_enc = ptls_cipher_new(hp_cipher, is_enc, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
     }
@@ -2111,10 +2262,15 @@ void picoquic_tlscontext_free(void* vctx, unsigned int client_mode)
         free(ctx->retry_configs.base);
     }
     ctx->retry_configs.len = 0;
+
+    ptls_buffer_dispose(&ctx->tls_wbuf);
+    ptls_buffer_dispose(&ctx->tls_rbuf);
+
     if (ctx->tls != NULL) {
         ptls_free((ptls_t*)ctx->tls);
         ctx->tls = NULL;
     }
+
     free(ctx);
 }
 
@@ -2368,6 +2524,14 @@ void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefi
     (void)picoquic_set_pn_enc_from_secret(&v_pn_enc, cipher, 1, secret, prefix_label);
 
     return v_pn_enc;
+}
+
+void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_key)
+{
+    ptls_cipher_suite_t* cipher = picoquic_get_cipher_suite_by_id(cipher_suite_id, 0);
+    ptls_cipher_algorithm_t* hp_cipher = picoquic_get_header_protection_cipher(cipher);
+
+    return (hp_cipher == NULL) ? NULL : ptls_cipher_new(hp_cipher, 1, hp_key);
 }
 
 size_t picoquic_pn_iv_size(void *pn_enc)

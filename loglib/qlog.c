@@ -54,6 +54,8 @@ typedef struct qlog_context_st {
     uint64_t RTT_min;
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
+    uint64_t cc_state;
+    uint64_t cc_param;
 
     unsigned int trace_flow_id : 1;
     unsigned int key_phase_sent_last : 1;
@@ -1554,6 +1556,27 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     ret |= byteread_vint(s, &bytes_in_transit);
     /* Not checking the app limited return, because it is not present in old bin logs */
     (void) byteread_vint(s, &app_limited);
+
+    if (ret == 0 && cc_state != ctx->cc_state) {
+        int64_t delta_time = time - ctx->start_time;
+
+        if (ctx->event_count != 0) {
+            fprintf(f, ",\n");
+        }
+        else {
+            fprintf(f, "\n");
+        }
+
+        qlog_event_header(f, ctx, delta_time, path_id, "recovery", "congestion_state_updated");
+        fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
+            ctx->cc_state, cc_state, cc_param);
+        ctx->cc_state = cc_state;
+        ctx->cc_param = cc_param;
+        ctx->event_count++;
+    }
+    else if (ret == 0) {
+        ctx->cc_param = cc_param;
+    }
 
     if (ret == 0 &&
         (cwin != ctx->cwin || rtt_sample != ctx->rtt_sample || SRTT != ctx->SRTT ||

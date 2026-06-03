@@ -168,6 +168,12 @@
     <ClCompile Include="dualq_aqm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="qmux.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="streams.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="picoquic.h">

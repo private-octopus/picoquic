@@ -152,6 +152,15 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
     if (stream->is_closed && (
         (!IS_BIDIR_STREAM_ID(stream->stream_id) && !IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode)) ||
         picoquic_is_stream_acked(stream))) {
+        /* Notify application that the stream is fully retired and any
+         * per-stream app context tied to this stream_id can be freed.
+         * Fired only if the app took ownership (non-NULL ctx). Return
+         * value ignored: stream is about to be deleted regardless. */
+        if (stream->app_stream_ctx != NULL && cnx->callback_fn != NULL) {
+            (void)cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
+                picoquic_callback_stream_released,
+                cnx->callback_ctx, stream->app_stream_ctx);
+        }
         picoquic_delete_stream(cnx, stream);
     }
 
@@ -184,6 +193,7 @@ void picoquic_update_stream_initial_remote(picoquic_cnx_t* cnx)
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_local;
             }
         }
+        picoquic_update_output_stream(cnx, stream);
         stream = picoquic_next_stream(stream);
     };
 }
@@ -326,7 +336,6 @@ void picoquic_signal_stream_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
             }
         }
         stream->reset_signalled = 1;
-        (void)picoquic_delete_stream_if_closed(cnx, stream);
     }
 }
 
@@ -368,6 +377,7 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
 
         if (stream->consumed_offset >= stream->reset_offset) {
             picoquic_signal_stream_reset(cnx, stream);
+            (void)picoquic_delete_stream_if_closed(cnx, stream);
         }
     }
     return bytes;
@@ -1317,8 +1327,10 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
     picoquic_stream_data_node_t* node = received_data;
     
     if (received_data == NULL || received_data->bytes != NULL || !is_last_frame) {
-        node = picoquic_stream_data_node_alloc(quic);
-        if (node == NULL) {
+        if (length > PICOQUIC_MAX_PACKET_SIZE) {
+            ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+        }
+        else if ((node = picoquic_stream_data_node_alloc(quic)) == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
         else {
@@ -1425,6 +1437,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             ret = 1;  // Error already signaled
         }
     }
+    else if (cnx->is_qmux && offset != stream->consumed_offset) {
+        ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
+            picoquic_frame_type_stream_range_min);
+    }
     else if (stream->fin_received) {
         if (fin != 0 ? stream->fin_offset != new_fin_offset : new_fin_offset > stream->fin_offset) {
             ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR, 0);
@@ -1499,7 +1515,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
     if (ret == 0) {
         int is_deleted = 0;
 
-        if (stream->fin_signalled) {
+        if (stream->fin_signalled || stream->reset_signalled) {
             is_deleted = picoquic_delete_stream_if_closed(cnx, stream);
         }
 
@@ -1509,7 +1525,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                     cnx->max_stream_data_needed = 1;
                 }
             }
-            if (stream->fin_received || stream->reset_received) {
+            if (stream->fin_received || (stream->reset_received && stream->consumed_offset >= stream->reset_offset)) {
                 cnx->ack_ctx[picoquic_packet_context_application].act[0].ack_after_fin = 1;
                 cnx->ack_ctx[picoquic_packet_context_application].act[1].ack_after_fin = 1;
             }
@@ -1560,115 +1576,6 @@ const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* 
     }
 
     return bytes;
-}
-
-picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int is_coalesced)
-{
-    picoquic_stream_head_t* first_stream = cnx->first_output_stream;
-    picoquic_stream_head_t* stream = first_stream;
-    picoquic_stream_head_t* found_stream = NULL;
-
-
-    /* Look for a ready stream */
-    while (stream != NULL) {
-        int has_data = 0;
-        picoquic_stream_head_t* next_stream = stream->next_output_stream;
-
-        if (next_stream != NULL && is_coalesced && next_stream->is_not_coalesced) {
-            stream = next_stream->next_output_stream;
-            continue;
-        }
-
-        if (found_stream != NULL && stream->stream_priority > found_stream->stream_priority) {
-            /* All the streams at that priority level have been examined,
-             * the current selection is validated */
-            break;
-        }
-
-        /* The tests for "have data" should excatly replicate the tests in
-         * the formating of a stream frame */
-        if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-            /* will send a stop sending frame.
-            * this takes precedence over FIFO vs round-robin processing */
-            found_stream = stream;
-            has_data = 1;
-            break;
-        }
-        else if (stream->reset_sent) {
-            /* No data will be sent after a reset */
-            has_data = 0;
-        }
-        else if (stream->reset_requested && 
-            (stream->reliable_size == 0 || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size))) {
-            /* will queue a reset frame --
-            * this takes precedence over FIFO vs round-robin processing */
-            found_stream = stream;
-            has_data = 1;
-            break;
-        }
-        else if (cnx->maxdata_remote > cnx->data_sent && stream->sent_offset < stream->maxdata_remote && (stream->is_active ||
-            (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
-            (stream->fin_requested && !stream->fin_sent))) {
-            has_data = 1;
-        }
-        else {
-            has_data = 0;
-        }
-
-        /* implement affinity scheduling */
-        if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
-            /* Only consider the streams that meet path affinity requirements */
-            has_data = 0;
-        }
-        
-        if (has_data) {
-            /* Check that this stream is actually available for sending data */
-            if (stream->sent_offset == 0) {
-                if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                    if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
-                        has_data = 0;
-                    }
-                }
-            }
-            if (has_data) {
-                /* Something can be sent */
-                if ((stream->stream_priority & 1) != 0) {
-                    /* This priority level requests FIFO processing, so we return the first available stream */
-                    found_stream = stream;
-                    break;
-                }
-                else if (found_stream == NULL || stream->last_time_data_sent < found_stream->last_time_data_sent) {
-                    /* Select this stream, but need to check if another stream should go before in round robin order */
-                    found_stream = stream;
-                }
-            }
-        }
-        else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
-            /* If stream is exhausted, remove from output list */
-            picoquic_remove_output_stream(cnx, stream);
-
-            picoquic_delete_stream_if_closed(cnx, stream);
-        }
-        else {
-            if (stream->is_active ||
-                (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
-                if (stream->sent_offset >= stream->maxdata_remote) {
-                    cnx->stream_blocked = 1;
-                }
-                else if (cnx->maxdata_remote <= cnx->data_sent) {
-                    cnx->flow_blocked = 1;
-                }
-            }
-        }
-        stream = next_stream;
-    }
-
-    return found_stream;
-}
-
-picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx)
-{
-    return picoquic_find_ready_stream_path(cnx, NULL, 0);
 }
 
 /* Management of BLOCKED signals
@@ -1881,10 +1788,12 @@ uint8_t* picoquic_format_stream_frame_header(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
-    uint8_t* bytes, uint8_t* bytes_max, int * more_data, int * is_pure_ack, int* is_still_active, int * ret)
+    uint8_t* bytes, uint8_t* bytes_max, int * more_data, int * is_pure_ack, int* is_still_active,
+    int* is_closed, int * ret)
 {
     int may_close = 0;
     *ret = 0;
+    *is_closed = 0;
 
     /* Check parity */
     if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
@@ -1894,24 +1803,6 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         }
     }
 
-    if (stream->stop_sending_requested && !stream->stop_sending_sent) {
-        return picoquic_format_stop_sending_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
-    }
-
-    if (stream->reset_sent) {
-        /* No data will be sent after a reset */
-        return bytes;
-    }
-    else if (stream->reset_requested) {
-        if (stream->reliable_size > 0) {
-            if (picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size)) {
-                return picoquic_format_reset_stream_at_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
-            }
-        }
-        else {
-            return picoquic_format_reset_stream_frame(stream, bytes, bytes_max, more_data, is_pure_ack);
-        }
-    }
 
     if (!stream->is_active &&
         (stream->send_queue == NULL || stream->send_queue->length <= stream->send_queue->offset) &&
@@ -2068,7 +1959,11 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
         if (*ret == 0) {
             *is_pure_ack &= (bytes == bytes0);
 
-            if (!may_close || !picoquic_delete_stream_if_closed(cnx, stream)) {
+            if (may_close) {
+                *is_closed = picoquic_delete_stream_if_closed(cnx, stream);
+            }
+
+            if (!(*is_closed)) {
                 /* mark the stream as unblocked since we sent something */
                 stream->stream_data_blocked_sent = 0;
                 cnx->sent_blocked_frame = 0;
@@ -2077,49 +1972,6 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
     }
 
     return bytes;
-}
-
-/* Format all available stream frames that fit in the packet.
- * Update more_data if more stream data is available
- * Update is_pure_ack if formated frames require ack
- * Set stream_tried_and_failed if there was nothing to send, indicating the app limited condition.
- */
-uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint8_t* bytes_next, uint8_t* bytes_max,
-    uint64_t current_priority, int* more_data,
-    int* is_pure_ack, int* stream_tried_and_failed, int* ret)
-{
-    uint8_t* bytes_previous = bytes_next;
-    picoquic_stream_head_t* stream = picoquic_find_ready_stream_path(cnx,
-        (cnx->is_multipath_enabled)?path_x: NULL, 0);
-    int more_stream_data = 0;
-
-    while (*ret == 0 && stream != NULL && stream->stream_priority <= current_priority && bytes_next < bytes_max) {
-        int is_still_active = 0;
-        bytes_next = picoquic_format_stream_frame(cnx, stream, bytes_next, bytes_max, &more_stream_data, is_pure_ack, &is_still_active, ret);
-
-        /* TODO: if stream is marked "no_coal", do not add anything */
-        if (*ret == 0 && !stream->is_not_coalesced) {
-            stream = picoquic_find_ready_stream_path(cnx,
-                (cnx->is_multipath_enabled)?path_x: NULL, 1);
-            if (stream != NULL && bytes_next + 17 >= bytes_max) {
-                more_stream_data = 1;
-                break;
-            }
-        }
-        else {
-            break;
-        }
-    }
-
-    *stream_tried_and_failed = (!more_stream_data && bytes_next == bytes_previous);
-
-    if (!more_stream_data && current_priority != UINT64_MAX) {
-        more_stream_data |= (picoquic_find_ready_stream_path(cnx, NULL, 0) != NULL);
-    }
-
-    *more_data |= more_stream_data;
-
-    return bytes_next;
 }
 
 /* Organize the queue of packets containing stream data as a splay.
@@ -2326,7 +2178,7 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
          */
         if (cnx != NULL) {
             picoquic_stream_head_t* stream = picoquic_find_stream(cnx, stream_id);
-            if (stream == NULL || stream->reset_sent || 
+            if (stream == NULL || (stream->reset_sent && (offset > stream->reliable_size)) || 
                 picoquic_check_sack_list(&stream->sack_list, offset, offset + data_available - ((fin) ? 0 : 1))) {
                 /* That frame is not needed anymore */
                 is_needed = 0;
@@ -2912,7 +2764,8 @@ void picoquic_estimate_path_bandwidth(picoquic_cnx_t * cnx, picoquic_path_t* pat
                 path_x->delivered_sent_last = send_time;
                 path_x->delivered_last_packet = delivered_prior;
                 path_x->last_bw_estimate_path_limited = rs_is_path_limited;
-                if (path_x->delivered_last_packet > path_x->delivered_limited_index) {
+                if (path_x->delivered_limited_index != 0 &&
+                    path_x->delivered >= path_x->delivered_limited_index) {
                     path_x->delivered_limited_index = 0;
                 }
                 /* Statistics */
@@ -3135,11 +2988,27 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
 /* In a multipath environment, a packet can carry acknowledgements for multiple paths.
  * The packet_data context collects information about updates received for each of
  * these paths. */
+static int picoquic_is_ack_path_limited(picoquic_path_t* old_path, picoquic_packet_t* acked_packet)
+{
+    int is_path_limited = acked_packet->delivered_app_limited;
+
+    if (!is_path_limited && old_path->delivered_limited_index != 0 &&
+        old_path->delivered >= acked_packet->length) {
+        uint64_t delivered_before_ack = old_path->delivered - acked_packet->length;
+
+        is_path_limited = (delivered_before_ack < old_path->delivered_limited_index);
+    }
+
+    return is_path_limited;
+}
+
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet)
 {
     picoquic_path_t* old_path = acked_packet->send_path;
 
     if (old_path != NULL) {
+        int is_path_limited = picoquic_is_ack_path_limited(old_path, acked_packet);
+
         /* Find the path index in the packet data structure */
         int path_i = 0;
         while (path_i < packet_data->nb_path_ack &&
@@ -3162,9 +3031,12 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
             packet_data->path_ack[path_i].lost_prior = acked_packet->lost_prior;
             packet_data->path_ack[path_i].inflight_prior = acked_packet->inflight_prior;
-            packet_data->path_ack[path_i].rs_is_path_limited = acked_packet->delivered_app_limited;
+            packet_data->path_ack[path_i].rs_is_path_limited = is_path_limited;
             packet_data->path_ack[path_i].rs_is_cwnd_limited = acked_packet->sent_cwin_limited;
             packet_data->path_ack[path_i].is_set = 1;
+        }
+        else if (is_path_limited) {
+            packet_data->path_ack[path_i].rs_is_path_limited = 1;
         }
         packet_data->path_ack[path_i].data_acked += acked_packet->length;
     }
@@ -3179,6 +3051,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
 {
     for (int i = 0; i < packet_data->nb_path_ack; i++) {
         uint64_t lost_before_ack = path_x->total_bytes_lost;
+        uint64_t loss_ranges_before_ack = packet_data->path_ack[i].acked_path->nb_loss_ranges_found;
         uint64_t nb_bytes_newly_lost = 0;
 
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, epoch,
@@ -3205,6 +3078,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             ack_state.one_way_delay = packet_data->path_ack[i].acked_path->one_way_delay_sample;
             ack_state.nb_bytes_acknowledged = packet_data->path_ack[i].data_acked;
             ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
+            ack_state.nb_loss_ranges_newly_lost = packet_data->path_ack[i].acked_path->nb_loss_ranges_found - loss_ranges_before_ack;
             if (cnx->cnx_state == picoquic_state_ready) {
                 ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
             }
@@ -3439,7 +3313,7 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 *no_need_to_repeat = 1;
             }
             else {
-                if (stream->reset_sent) {
+                if (stream->reset_sent && offset > stream->reliable_size) {
                     *no_need_to_repeat = 1;
                 }
                 else {
@@ -3943,6 +3817,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[pc];
     uint64_t largest_in_path = 0;
     picoquic_path_t * ack_path = cnx->path[0];
+    picoquic_path_t* ecn_ack_path = NULL;
 
     if (picoquic_parse_ack_header(bytes, bytes_max-bytes, &num_block,
         (has_path_id)?&path_id:NULL,
@@ -3985,6 +3860,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             if (top_packet != NULL && is_new_ack) {
                 largest_in_path = top_packet->sequence_number;
                 ack_path = top_packet->send_path;
+                ecn_ack_path = ack_path;
 
                 if (pkt_ctx->latest_time_acknowledged < top_packet->send_time) {
                     pkt_ctx->latest_time_acknowledged = top_packet->send_time;
@@ -4060,17 +3936,31 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
     }
 
     if (bytes != 0 && is_ecn) {
+        uint64_t delta_ect0 = 0;
+        uint64_t delta_ect1 = 0;
+        uint64_t delta_ce = 0;
+
         if (ecnx3[0] > pkt_ctx->ecn_ect0_total_remote) {
+            delta_ect0 = ecnx3[0] - pkt_ctx->ecn_ect0_total_remote;
             pkt_ctx->ecn_ect0_total_remote = ecnx3[0];
         }
         if (ecnx3[1] > pkt_ctx->ecn_ect1_total_remote) {
+            delta_ect1 = ecnx3[1] - pkt_ctx->ecn_ect1_total_remote;
             pkt_ctx->ecn_ect1_total_remote = ecnx3[1];
         }
         if (ecnx3[2] > pkt_ctx->ecn_ce_total_remote) {
+            delta_ce = ecnx3[2] - pkt_ctx->ecn_ce_total_remote;
+            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
+        }
+        if (pc == picoquic_packet_context_application && ecn_ack_path != NULL) {
+            ecn_ack_path->ecn_ect0_total_remote += delta_ect0;
+            ecn_ack_path->ecn_ect1_total_remote += delta_ect1;
+            ecn_ack_path->ecn_ce_total_remote += delta_ce;
+        }
+        if (delta_ce > 0) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = pc;
             ack_state.lost_packet_number = largest_in_path;
-            pkt_ctx->ecn_ce_total_remote = ecnx3[2];
             cnx->congestion_alg->alg_notify(cnx, ack_path,
                 picoquic_congestion_notification_ecn_ec,
                 &ack_state, current_time);
@@ -4598,11 +4488,11 @@ const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const 
     }
     
     if (stream != NULL && maxdata > stream->maxdata_remote) {
-        /* TODO: call back if the stream was blocked? */
         stream->maxdata_remote = maxdata;
         if (maxdata > cnx->max_stream_data_remote) {
             cnx->max_stream_data_remote = maxdata;
         }
+        picoquic_update_output_stream(cnx, stream);
     }
 
 
@@ -5160,7 +5050,7 @@ const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const 
 }
 
 
-static const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max)
+const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
     uint8_t frame = bytes[0];
     do {

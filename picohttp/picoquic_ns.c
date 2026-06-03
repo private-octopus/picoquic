@@ -958,9 +958,12 @@ static int picoquic_ns_media_excluded(char const* media_excluded, char const* id
     return is_excluded;
 }
 
-int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* spec, FILE* err_fd)
+int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* spec, uint64_t * delay_average, uint64_t * delay_max, FILE* err_fd)
 {
     int ret = 0;
+
+    *delay_average = 0;
+    *delay_max = 0;
 
     for (size_t i = 0; i < quicperf_ctx->nb_scenarios; i++) {
         if (quicperf_ctx->scenarios[i].media_type != quicperf_media_batch &&
@@ -977,6 +980,9 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
             else {
                 if (spec->media_latency_average > 0) {
                     double average_delay = ((double)report->sum_delays) / report->nb_frames_received;
+                    if (average_delay > (double)*delay_average) {
+                        *delay_average = (uint64_t)average_delay;
+                    }
                     if (average_delay > (double)spec->media_latency_average) {
                         if (err_fd != NULL) {
                             fprintf(stderr, "Media %zu (%s), latency average %f, expected %"PRIu64"\n",
@@ -987,6 +993,10 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
                     }
                 }
                 if (spec->media_latency_max > 0 && report->max_delays > spec->media_latency_max) {
+
+                    if (report->max_delays > (double)*delay_max) {
+                        *delay_max = (uint64_t)report->max_delays;
+                    }
                     if (err_fd != NULL) {
                         fprintf(stderr, "Media %zu (%s), latency max %"PRIu64", expected %"PRIu64"\n",
                             i, quicperf_ctx->scenarios[i].id, report->max_delays, spec->media_latency_max);
@@ -1001,17 +1011,31 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
     return ret;
 }
 
-int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id)
+void picoquic_ns_make_random(picoquic_ns_ctx_t* cc_ctx)
+{
+    for (int i = 0; i < PICOQUIC_NS_NB_LINKS; i++) {
+        cc_ctx->link[i]->jitter_seed ^= picoquic_crypto_uniform_random(cc_ctx->q_ctx[0], UINT32_MAX);
+    }
+}
+
+int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id, char const * spec_name)
 {
     int ret = 0;
     picoquic_ns_ctx_t* cc_ctx = picoquic_ns_create_ctx(spec, err_fd, rep_id);
     int nb_inactive = 0;
+    uint64_t delay_average = 0;
+    uint64_t delay_max = 0;
+    int is_success = 1;
 
     if (cc_ctx == NULL) {
         if (err_fd != NULL) {
             fprintf(err_fd, "Cannot allocate simulation context.\n");
         }
         ret = -1;
+    }
+
+    if (ret == 0 && rep_id > 0) {
+        picoquic_ns_make_random(cc_ctx);
     }
     while (ret == 0) {
         int is_active = 0;
@@ -1071,11 +1095,23 @@ int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id)
             fprintf(err_fd, "Simulated time %" PRIu64 ", expected %" PRIu64 "\n",
                 cc_ctx->simulated_time, spec->main_target_time);
         }
-        ret = -1;
+        is_success = 0;
     }
 
     if (ret == 0 && cc_ctx->client_ctx[0] != NULL) {
-        ret = picoquic_ns_media_check(cc_ctx->client_ctx[0]->quicperf_ctx, spec, err_fd);
+        if (picoquic_ns_media_check(cc_ctx->client_ctx[0]->quicperf_ctx, spec, &delay_average, &delay_max, err_fd) != 0) {
+            is_success = 0;
+        }
+    }
+
+    if (ret == 0) {
+        printf("%s, %d, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %s\n",
+            is_success ? "Success" : "Fail", rep_id,
+            cc_ctx->simulated_time, delay_average, delay_max,
+            spec_name);
+        if (!is_success) {
+            ret = -1;
+        }
     }
 
     if (cc_ctx != NULL) {
@@ -1084,11 +1120,11 @@ int picoquic_ns_one(picoquic_ns_spec_t* spec, FILE* err_fd, int rep_id)
     return ret;
 }
 
-int picoquic_ns_n(picoquic_ns_spec_t* spec, FILE* err_fd, int nb_repeats)
+int picoquic_ns_n(picoquic_ns_spec_t* spec, FILE* err_fd, int nb_repeats, char const * spec_name)
 {
     int ret = 0;
     for (int i = 0; ret == 0 && i < nb_repeats; i++) {
-        if ((ret = picoquic_ns_one(spec, err_fd, i)) != 0) {
+        if ((ret = picoquic_ns_one(spec, err_fd, i, spec_name)) != 0) {
             if (err_fd != NULL) {
                 fprintf(err_fd, "Simulation repeat %d fails.\n", i);
                 break;
@@ -1100,5 +1136,5 @@ int picoquic_ns_n(picoquic_ns_spec_t* spec, FILE* err_fd, int nb_repeats)
 
 int picoquic_ns(picoquic_ns_spec_t* spec, FILE* err_fd)
 {
-    return picoquic_ns_n(spec, err_fd, 1);
+    return picoquic_ns_n(spec, err_fd, 1, "");
 }

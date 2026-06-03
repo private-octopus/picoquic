@@ -154,8 +154,8 @@ typedef enum {
     picoquic_frame_type_immediate_ack = 0x1F,
     picoquic_frame_type_time_stamp = 757,
     picoquic_frame_type_path_ack = 0x3e, /* Per quic multipath draft 20 */
-    picoquic_frame_type_path_ack_ecn =  0x3f,  /* Per quic multipath draft 20 */
-    picoquic_frame_type_path_abandon =  0x3e75,  /* Per quic multipath draft 20 */
+    picoquic_frame_type_path_ack_ecn = 0x3f,  /* Per quic multipath draft 20 */
+    picoquic_frame_type_path_abandon = 0x3e75,  /* Per quic multipath draft 20 */
     picoquic_frame_type_path_backup = 0x3e76, /* Per quic multipath draft 20 */
     picoquic_frame_type_path_available = 0x3e77, /* Per quic multipath draft 20 */
     picoquic_frame_type_max_path_id = 0x3e7a, /* Per quic multipath draft 20 */
@@ -169,6 +169,11 @@ typedef enum {
     picoquic_frame_type_fc_state = 0xf4,
     picoquic_frame_type_fc_key = 0xf5
 } picoquic_frame_type_enum_t;
+
+#define FRAME_TYPE_QX_TRANSPORT_PARAMETERS 0x3f5153300d0a0d0aull /* Per qmux draft 01 */
+#define FRAME_TYPE_QX_PING   0x348c67529ef8c7bdull /* Per qmux draft 01 */
+#define FRAME_TYPE_QX_PING_R 0x348c67529ef8c7beull /* Per qmux draft 01 */
+#define PICOQMUX_MAX_RECORD_SIZE_DEFAULT 16382ull /* Per draft-ietf-quic-qmux-01 */
 
 /* PMTU discovery requirement status */
 
@@ -656,6 +661,7 @@ typedef struct st_picoquic_quic_t {
     picohash_table* table_cnx_by_net;
     picohash_table* table_cnx_by_icid;
     picohash_table* table_cnx_by_secret;
+    picohash_table* table_cnx_by_socket_id; /* used for QMux */
 
     picohash_table* table_issued_tickets;
     picoquic_issued_ticket_t* table_issued_tickets_first;
@@ -698,6 +704,14 @@ typedef struct st_picoquic_quic_t {
     */ 
     uint64_t rtt_update_delta;
     uint64_t pacing_rate_update_delta;
+
+    /* Creation of additional socket, if authorized by packet loop. */
+    picoquic_create_socket_fn create_socket_fn;
+    void* create_socket_ctx;
+    /* Handling of QMux*/
+    picoquic_cnx_t* qmux_pending_first;
+    picoquic_cnx_t* qmux_pending_last;
+    picohash_table* qmux_socket_id_table;
 
     /* Logging APIS */
     void* F_log;
@@ -800,7 +814,10 @@ typedef struct st_picoquic_stream_head_t {
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */
     picoquic_sack_list_t sack_list; /* Track which parts of the stream were acknowledged by the peer */
-    /* Stream priority -- lowest is most urgent */
+    /* Stream priority -- lowest is most urgent.
+    * The stream priority should only be modified through the `picoquic_set_stream_priority` API.
+    * Uncontrolled manipulation will lead to errors.
+    */
     uint8_t stream_priority;
     /* Flags describing the state of the stream */
     unsigned int is_active : 1; /* The application is actively managing data sending through callbacks */
@@ -1071,6 +1088,10 @@ typedef struct st_picoquic_path_t {
     /* If using unique path id multipath */
     picoquic_ack_context_t ack_ctx;
     picoquic_packet_context_t pkt_ctx;
+    /* Remote ECN counters attributed to packets sent on this path. */
+    uint64_t ecn_ect0_total_remote;
+    uint64_t ecn_ect1_total_remote;
+    uint64_t ecn_ce_total_remote;
     /* First tuple is the one used by default for the path */
     picoquic_tuple_t* first_tuple;
     /* Manage the transmission of observed addresses */
@@ -1126,6 +1147,8 @@ typedef struct st_picoquic_path_t {
     uint64_t nb_retransmit; /* Number of timeout retransmissions since last ACK */
     uint64_t total_bytes_lost; /* Sum of length of packet lost on this path */
     uint64_t nb_losses_found;
+    uint64_t nb_loss_ranges_found;
+    uint64_t latest_repeat_loss_packet_number;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
                                          
@@ -1232,6 +1255,13 @@ typedef struct st_picoquic_crypto_context_t {
     void* pn_enc; /* Used for PN encryption */
     void* pn_dec; /* Used for PN decryption */
 } picoquic_crypto_context_t;
+
+/* Stream scheduling context
+ */
+typedef struct st_picoquic_output_stream_t {
+    picoquic_stream_head_t* first_output_stream;
+    picoquic_stream_head_t* last_output_stream;
+} picoquic_output_stream_t;
 
 typedef struct st_picoquic_fc_flow_t {
     struct sockaddr unicast_addr;
@@ -1340,6 +1370,9 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_subscribed_to_path_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_notified_that_path_is_allowed : 1; /* application wants to be advised if it is now possible to create a path */
     unsigned int is_reset_stream_at_enabled : 1; /* Reset Stream At is supported */
+    unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
+    unsigned int is_qmux_cleartext : 1; /* This QMux connection is not encrypted */
+    unsigned int is_qmux_tls_ready : 1; /* TLS handshake of QMux connection not complete */
     unsigned int is_flexicast_enabled : 1;
     
     /* PMTUD policy */
@@ -1430,6 +1463,25 @@ typedef struct st_picoquic_cnx_t {
     picoquic_ack_context_t ack_ctx[picoquic_nb_packet_context];
     /* Sequence number of the next observed address frame */
     uint64_t observed_number;
+    /* Handling of qmux queues */
+    picoquic_cnx_t* qmux_pending_next;
+    /* Handling of QMUX socket */
+    void* qmux_socket_id;
+    picohash_item registered_socket_id_item;
+    /* Handling of the QMux QX_PING frame */
+    uint64_t qx_acked_last; /* last qx_ping query of the peer acked */
+    uint64_t qx_query_last; /* sequence of last qx_ping query from the peer */
+    uint64_t qx_sent_last; /* last local qx_ping query sent to the peer */
+    uint64_t qx_query_ack; /* last local qx_ping query acked by the peer */
+    uint64_t qmux_local_max_record_size; /* largest QMUX record payload accepted locally */
+    uint64_t qmux_remote_max_record_size; /* largest QMUX record payload accepted by peer */
+    uint8_t* qmux_incoming_buffer; /* incomplete QMUX record bytes across TCP reads */
+    size_t qmux_incoming_buffer_size; 
+    size_t qmux_incoming_buffer_length; /* number of bytes stored */
+    uint64_t qmux_incoming_record_size;
+    size_t qmux_incoming_buffer_offset;
+
+
     /* Statistics */
     uint64_t nb_bytes_queued;
     uint32_t nb_zero_rtt_sent;
@@ -1498,8 +1550,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
-    picoquic_stream_head_t * first_output_stream;
-    picoquic_stream_head_t * last_output_stream;
+    picoquic_output_stream_t output_streams;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
     uint64_t priority_limit_for_bypass; /* Bypass CC if datagram or stream priority lower than this, 0 means never */
@@ -1816,11 +1867,11 @@ size_t picoquic_pad_to_target_length(uint8_t* bytes, size_t length, size_t targe
 void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t *cnx, picoquic_packet_t * packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t * send_length, uint8_t * send_buffer, size_t send_buffer_max,
-    picoquic_path_t * path_x, uint64_t current_time, picoquic_tuple_t * tuple);
+    picoquic_path_t * path_x, uint64_t current_time, picoquic_tuple_t * tuple, int is_ack_eliciting);
 void picoquic_finalize_and_protect_packet(picoquic_cnx_t* cnx, picoquic_packet_t* packet, int ret,
     size_t length, size_t header_length, size_t checksum_overhead,
     size_t* send_length, uint8_t* send_buffer, size_t send_buffer_max,
-    picoquic_path_t* path_x, uint64_t current_time);
+    picoquic_path_t* path_x, uint64_t current_time, int is_ack_eliciting);
 
 void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc, uint64_t current_time);
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time);
@@ -1937,6 +1988,8 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t * old_path, i
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp);
 
 /* stream management */
+void picoquic_init_tls_tree(picoquic_cnx_t* cnx, int epoch);
+void picoquic_init_stream_tree(picoquic_cnx_t* cnx);
 picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id);
 picoquic_stream_head_t* picoquic_create_missing_streams(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote);
 int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode);
@@ -1948,6 +2001,8 @@ picoquic_stream_head_t * picoquic_stream_from_node(picosplay_node_t * node);
 void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_remove_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t * stream);
 void picoquic_reorder_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
+int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 picoquic_stream_head_t * picoquic_first_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_last_stream(picoquic_cnx_t * cnx);
 picoquic_stream_head_t * picoquic_next_stream(picoquic_stream_head_t * stream);
@@ -1955,13 +2010,20 @@ picoquic_stream_head_t* picoquic_find_stream(picoquic_cnx_t* cnx, uint64_t strea
 void picoquic_add_output_streams(picoquic_cnx_t * cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir);
 picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int is_coalesced);
 picoquic_stream_head_t* picoquic_find_ready_stream(picoquic_cnx_t* cnx);
+void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint64_t old_time_sent);
 int picoquic_is_tls_stream_ready(picoquic_cnx_t* cnx);
 const uint8_t* picoquic_decode_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     const uint8_t* bytes_max, picoquic_stream_data_node_t* received_data, uint64_t current_time);
 
 uint8_t* picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, 
-    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active, int* ret);
-
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, int* is_still_active,
+    int* is_closed, int* ret);
+uint8_t* picoquic_format_stop_sending_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_reset_stream_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t* picoquic_format_reset_stream_at_frame(picoquic_stream_head_t* stream,
+    uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_update_max_stream_ID_local(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 
 /* Handling of retransmission of frames.
@@ -1978,6 +2040,9 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
 uint8_t* picoquic_format_available_stream_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     uint8_t* bytes_next, uint8_t* bytes_max, uint64_t current_priority,
     int* more_data, int* is_pure_ack, int* stream_tried_and_failed, int* ret);
+uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint8_t* bytes_next, uint8_t* bytes_max,
+    int is_first_in_packet, uint64_t max_priority_allowed,
+    int* more_data, int* is_pure_ack, int* no_data_to_send, int* ret);
 
 /* Handling of stream_data_frames that need repeating.
  */
@@ -2053,6 +2118,54 @@ uint8_t* picoquic_format_application_close_frame(picoquic_cnx_t* cnx, uint8_t* b
 uint8_t* picoquic_format_required_max_stream_data_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 uint8_t* picoquic_format_max_data_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t maxdata_increase);
 uint8_t* picoquic_format_max_stream_data_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t new_max_data);
+const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_time_stamp_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t* cnx,
+    picoquic_packet_data_t* packet_data);
+const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint8_t frame_id);
+const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t* path_x, int is_mp);
+const uint8_t* picoquic_decode_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_path_t* path_x, uint64_t ftype);
+const uint8_t* picoquic_decode_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int max_streams_frame_type);
+const uint8_t* picoquic_decode_max_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path_t* path_x, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_decode_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, int max_streams_frame_type);
+uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* bytes_max,
+    uint8_t* frame_id, uint64_t* length);
+const uint8_t* picoquic_decode_max_stream_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+int picoquic_process_ack_of_max_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_process_ack_of_max_stream_data_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed);
+int picoquic_process_ack_of_max_streams_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_size, size_t* consumed);
+int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* p_last_byte, int* no_need_to_repeat);
+int picoquic_path_available_or_backup_frame_need_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_max_path_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_paths_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_paths_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_path_cid_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
+int picoquic_process_ack_of_observed_address_frame(picoquic_path_t* path_x, const uint8_t* bytes,
+    size_t bytes_max, uint64_t ftype, size_t* consumed);
+int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
+
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window); /* Trigger sending more data if window increases */
 uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data);

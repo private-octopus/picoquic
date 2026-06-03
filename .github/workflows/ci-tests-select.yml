@@ -38,7 +38,7 @@ jobs:
         run: |
             ulimit -c unlimited -S
             cd build
-            ./picoquic_ct -S .. -n sockloop_basic sockloop_migration sockloop_nat && QUICRESULT=$?
+            ./picoquic_ct -S .. -n sockloop_basic sockloop_migration sockloop_nat sockloop_qmux && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]] ; then exit 0; fi;
             exit 1
     

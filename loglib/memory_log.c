@@ -130,12 +130,12 @@ int memlog_fill_line(picoquic_cnx_t* cnx, picoquic_path_t* path, picoquic_memory
         memline->stream_blocked = cnx->stream_blocked;
 
         if (cnx->congestion_alg == NULL ||
-            cnx->path[0]->congestion_alg_state == NULL) {
+            path->congestion_alg_state == NULL) {
             memline->cc_state = 0;
             memline->cc_param = 0;
         }
         else {
-            cnx->congestion_alg->alg_observe(cnx->path[0], &memline->cc_state, &memline->cc_param);
+            cnx->congestion_alg->alg_observe(path, &memline->cc_state, &memline->cc_param);
         }
 
         memline->peak_bandwidth_estimate = path->peak_bandwidth_estimate;

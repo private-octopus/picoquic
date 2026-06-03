@@ -218,7 +218,7 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     picoquic_finalize_and_protect_packet_tuple(cnx, packet,
         ret, length, header_length, checksum_overhead,
         send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time, tuple);
+        path_x, current_time, tuple, !is_pure_ack);
 
     if (*send_length > 0) {
         *next_wake_time = current_time;

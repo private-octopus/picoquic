@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.48.0
+        VERSION 1.1.49.2
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -38,6 +38,7 @@ endif()
 
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
+include(CheckCSourceCompiles)
 include(CMakePushCheckState)
 
 if(ENABLE_ASAN)
@@ -90,6 +91,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/config.c
     picoquic/cubic.c
     picoquic/c4.c
+    picoquic/dualq_aqm.c
     picoquic/ech.c
     picoquic/error_names.c
     picoquic/fastcc.c
@@ -116,15 +118,16 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picosplay.c
     picoquic/port_blocking.c
     picoquic/prague.c
+    picoquic/qmux.c
     picoquic/quicctx.c
     picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
     picoquic/sender.c
     picoquic/sim_link.c
-    picoquic/dualq_aqm.c
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/spinbit.c
+    picoquic/streams.c
     picoquic/ticket_store.c
     picoquic/timing.c
     picoquic/token_store.c
@@ -225,6 +228,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
+    picoquictest/qmux_test.c
     picoquictest/quic_tester.c
     picoquictest/red_aqm.c
     picoquictest/rctl_aqm.c
@@ -280,13 +284,47 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/webtransport_test.c)
 
 OPTION(WITH_OPENSSL "build with OpenSSL" ON)
+OPTION(WITH_AEGIS "enable AEGIS support through picotls/libaegis" OFF)
 
 OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
-if(PICOQUIC_FETCH_PTLS)
+OPTION(PICOQUIC_FETCH_AEGIS "Fetch libaegis during configuration when WITH_AEGIS is enabled" OFF)
+OPTION(PICOQUIC_AEGIS_FAVOR_PERFORMANCE "Build fetched libaegis with FAVOR_PERFORMANCE enabled" ON)
+OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for this host CPU" OFF)
+if(WITH_AEGIS)
+    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "7c32032f91449d695b24b82955f20d04d47e6cff")
+else()
+    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "bfa67875982afc4c24f21e146cef4747fa189c2f")
+endif()
+set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
+set(PICOQUIC_FETCH_AEGIS_TAG "0.10.1" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
+if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
     include(FetchContent)
-    FetchContent_Declare(picotls
-        GIT_REPOSITORY      https://github.com/h2o/picotls.git
-        GIT_TAG             bfa67875982afc4c24f21e146cef4747fa189c2f)
+endif()
+if(WITH_AEGIS AND PICOQUIC_FETCH_AEGIS)
+    set(FAVOR_PERFORMANCE ${PICOQUIC_AEGIS_FAVOR_PERFORMANCE} CACHE BOOL "Favor libaegis performance over side-channel mitigations" FORCE)
+    FetchContent_Declare(aegis
+        GIT_REPOSITORY      https://github.com/aegis-aead/libaegis.git
+        GIT_TAG             ${PICOQUIC_FETCH_AEGIS_TAG})
+    FetchContent_MakeAvailable(aegis)
+    if(PICOQUIC_AEGIS_NATIVE_ARCH AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(aegis PRIVATE -march=native)
+    endif()
+    set(AEGIS_INCLUDE_DIR "${aegis_SOURCE_DIR}/src/include" CACHE PATH "Fetched libaegis include directory" FORCE)
+    set(AEGIS_LIBRARY aegis CACHE STRING "Fetched libaegis target" FORCE)
+    set(AEGIS_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
+    set(aegis_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
+endif()
+if(PICOQUIC_FETCH_PTLS)
+    if(WITH_AEGIS)
+        FetchContent_Declare(picotls
+            GIT_REPOSITORY      https://github.com/h2o/picotls.git
+            GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG}
+            PATCH_COMMAND       ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findaegis.cmake <SOURCE_DIR>/cmake/Findaegis.cmake)
+    else()
+        FetchContent_Declare(picotls
+            GIT_REPOSITORY      https://github.com/h2o/picotls.git
+            GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG})
+    endif()
     FetchContent_MakeAvailable(picotls)
 endif()
 
@@ -294,6 +332,48 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
+
+if(WITH_AEGIS)
+    find_package(aegis REQUIRED)
+    if(NOT EXISTS "${AEGIS_INCLUDE_DIR}/aegis.h")
+        message(FATAL_ERROR "libaegis found, but aegis.h not found in ${AEGIS_INCLUDE_DIR}")
+    endif()
+    cmake_push_check_state()
+    set(CMAKE_REQUIRED_INCLUDES ${AEGIS_INCLUDE_DIR})
+    set(PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+    set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+    check_c_source_compiles("
+#include <aegis.h>
+int main(void)
+{
+    aegis128l_state st128;
+    aegis256_state st256;
+    unsigned char in[1] = {0};
+    unsigned char out[1] = {0};
+    unsigned char tag[16] = {0};
+    unsigned char key128[aegis128l_KEYBYTES] = {0};
+    unsigned char nonce128[aegis128l_NPUBBYTES] = {0};
+    unsigned char key256[aegis256_KEYBYTES] = {0};
+    unsigned char nonce256[aegis256_NPUBBYTES] = {0};
+    aegis128l_state_init(&st128, 0, 0, nonce128, key128);
+    aegis256_state_init(&st256, 0, 0, nonce256, key256);
+    return aegis128l_state_encrypt_update(&st128, out, in, sizeof(in)) ||
+        aegis128l_state_encrypt_final(&st128, tag, sizeof(tag)) ||
+        aegis256_state_encrypt_update(&st256, out, in, sizeof(in)) ||
+        aegis256_state_encrypt_final(&st256, tag, sizeof(tag));
+}
+" PICOQUIC_AEGIS_PICOTLS_API_COMPATIBLE)
+    set(CMAKE_TRY_COMPILE_TARGET_TYPE ${PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE})
+    cmake_pop_check_state()
+    if(NOT PICOQUIC_AEGIS_PICOTLS_API_COMPATIBLE)
+        message(FATAL_ERROR "WITH_AEGIS requires the libaegis 0.10.1-compatible incremental API used by current picotls. Use the latest upstream libaegis release or set AEGIS_PREFIX to a compatible install.")
+    endif()
+    message(STATUS "AEGIS include: ${AEGIS_INCLUDE_DIR}")
+    message(STATUS "AEGIS library: ${AEGIS_LIBRARIES}")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_HAVE_AEGIS PICOQUIC_WITH_AEGIS)
+    list(APPEND PICOQUIC_CRYPTO_EXTRA_INCLUDE_DIRS ${AEGIS_INCLUDE_DIR})
+    list(APPEND PICOQUIC_CRYPTO_EXTRA_LIBRARIES ${AEGIS_LIBRARIES})
+endif()
 
 OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
 if(PTLS_WITH_FUSION)
@@ -410,6 +490,7 @@ target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR}
+        ${PICOQUIC_CRYPTO_EXTRA_INCLUDE_DIRS}
     PUBLIC
         $<BUILD_INTERFACE:${MBEDTLS_INCLUDE_DIRS}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
@@ -423,6 +504,7 @@ target_link_libraries(picoquic-core
         ${MBEDTLS_LIBRARIES}
     PUBLIC
         ${PTLS_LIBRARIES}
+        ${PICOQUIC_CRYPTO_EXTRA_LIBRARIES}
         Threads::Threads)
 set_picoquic_compile_settings(picoquic-core)
 
@@ -434,6 +516,7 @@ endif()
 
 if (BUILD_LOGLIB)
     add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
+    add_library(picoquic::picoquic-log ALIAS picoquic-log)
     target_link_libraries(picoquic-log PUBLIC picoquic-core)
     target_include_directories(picoquic-log
         PRIVATE
@@ -558,6 +641,27 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             picoquic-core)
 
     set_picoquic_compile_settings(picoquic_ct)
+
+    add_executable(aegisperf picoquictest/aegis_perf.c)
+
+    target_link_libraries(aegisperf
+        PUBLIC
+            ${PTLS_LIBRARIES}
+            ${OPENSSL_LIBRARIES}
+            ${MBEDTLS_LIBRARIES}
+            picoquic-test
+            picoquic-log
+            picohttp-core
+            picoquic-core)
+
+    target_include_directories(aegisperf
+        PRIVATE
+            ${PTLS_INCLUDE_DIRS}
+            picoquic
+            picohttp
+            picoquictest)
+
+    set_picoquic_compile_settings(aegisperf)
 
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c

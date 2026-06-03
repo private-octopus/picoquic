@@ -1609,8 +1609,9 @@ int h3zero_stream_fuzz_test(void)
                 p = packet_buffer;
                 while (p != NULL && p < p_max) {
                     available_data = 0;
-                    p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
-                    p += available_data;
+                    if ((p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found)) != NULL) {
+                        p += available_data;
+                    }
                 }
                 if (p == NULL) {
                     break;

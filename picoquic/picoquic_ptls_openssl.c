@@ -42,6 +42,9 @@ void picoquic_openssl_load(int unload)
 }
 #else
 #include "picotls/openssl.h"
+#ifdef PTLS_HAVE_AEGIS
+#include <aegis.h>
+#endif
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #if !defined(OPENSSL_NO_ENGINE)
@@ -422,6 +425,10 @@ void picoquic_ptls_openssl_load(int unload)
 #endif
         DBG_PRINTF("OpenSSL_version_num(): %x", OpenSSL_version_num());
 
+#ifdef PTLS_HAVE_AEGIS
+        (void)aegis_init();
+#endif
+
         picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1);
@@ -436,6 +443,10 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
         picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_chacha20poly1305sha256);
         picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_x25519sha256);
+#endif
+#ifdef PTLS_HAVE_AEGIS
+        picoquic_register_ciphersuite(&ptls_openssl_aegis256sha512, 1);
+        picoquic_register_ciphersuite(&ptls_openssl_aegis128lsha256, 1);
 #endif
         picoquic_register_tls_key_provider_fn(
             set_openssl_private_key_from_key_file,

@@ -34,6 +34,8 @@ It also implements the following extensions:
 * The experimental [BDP draft](https://datatracker.ietf.org/doc/draft-kuhn-quic-bdpframe-extension/),
   tested in various simulations of satellite links of interspatial links.
 * An experimental [Timestamp Draft](https://datatracker.ietf.org/doc/draft-huitema-quic-ts/)
+* Experimental AEGIS TLS/QUIC cipher suites, per version 06 of the
+  [AEGIS TLS/DTLS/QUIC draft](https://www.ietf.org/archive/id/draft-denis-tls-aegis-06.html).
 
 The distribution also includes a minimal implementation of HTTP3
 per [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html), including
@@ -157,6 +159,9 @@ Instead of building picotls separately, you can use an integrated option
    cmake -DPICOQUIC_FETCH_PTLS=Y .
    make
 ~~~
+
+AEGIS support is experimental and opt-in: build with `-DWITH_AEGIS=ON`
+and compatible picotls/libaegis support to advertise and negotiate AEGIS suites.
 
 Either way, you can verify that everything worked:
 
