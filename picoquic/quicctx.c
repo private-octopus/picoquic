@@ -883,6 +883,9 @@ static int picoquic_set_tp_value_by_type(picoquic_tp_t* tp, uint64_t tp_type, ui
     case picoquic_tp_reset_stream_at:
         tp->is_reset_stream_at_enabled = (tp_value != 0);
         break;
+    case picoquic_tp_flexicast_support:
+        tp->flexicast_support = (uint8_t)tp_value;
+        break;
     default:
         ret = -1;
         break;
@@ -946,6 +949,16 @@ void picoquic_set_default_multipath_option(picoquic_quic_t* quic, int multipath_
 
     if (multipath_option & 1) {
         quic->default_tp.initial_max_path_id = 2;
+    }
+}
+
+void picoquic_set_default_flexicast_option(picoquic_quic_t* quic, int flexicast_option)
+{
+    PICOQUIC_THREAD_CHECK(quic);
+    quic->default_flexicast_option = flexicast_option;
+    
+    if (flexicast_option & 1) {
+        quic->default_tp.flexicast_support = 1;
     }
 }
 
@@ -2039,6 +2052,17 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
     cnx->nb_paths--;
     cnx->path[cnx->nb_paths] = NULL;
+}
+
+void picoquic_delete_flows(picoquic_cnx_t *cnx)
+{
+    if (cnx->flows) {
+        for (int i = 0; i < cnx->nb_flows; i++) {
+            free(cnx->flows[i]->key);
+            free(cnx->flows[i]);
+        }
+    }
+    free(cnx->flows);
 }
 
 /*
@@ -4839,6 +4863,8 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             free(cnx->path);
             cnx->path = NULL;
         }
+
+        picoquic_delete_flows(cnx);
 
         picoquic_delete_local_cnxid_lists(cnx);
         picoquic_delete_remote_cnxid_stashes(cnx);

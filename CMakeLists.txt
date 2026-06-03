@@ -106,6 +106,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/packet.c
     picoquic/packet_names.c
     picoquic/paths.c
+    picoquic/flexicast.c
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
@@ -683,6 +684,13 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core)
     target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_baton)
+
+    add_executable(
+        picoquic_fc
+        sample/sample_fc_client.c)
+    target_link_libraries(picoquic_fc PRIVATE picoquic-log picoquic-core)
+    target_include_directories(picoquic_fc PRIVATE loglib picoquic)
+    set_picoquic_compile_settings(picoquic_fc)
 
     add_executable(picoquic_sample
         sample/sample.c

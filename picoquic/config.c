@@ -110,7 +110,8 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
     { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
     { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
-    { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
+    { picoquic_option_HELP, 'h', "help", 0, "", "This help message" },
+    { picoquic_option_flexicast, 'f', "flexicast", 0, "", "Enable flexicast support" }
 };
 
 static size_t option_table_size = sizeof(option_table) / sizeof(option_table_line_t);
@@ -550,6 +551,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_HELP:
         ret = -1;
         break;
+    case picoquic_option_flexicast:
+        config->flexicast_option = 1;
+        break;
     default:
         ret = -1;
         break;
@@ -922,6 +926,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_default_lossbit_policy(quic, config->lossbit_policy);
 
         picoquic_set_default_multipath_option(quic, config->multipath_option);
+        picoquic_set_default_flexicast_option(quic, config->flexicast_option);
         picoquic_set_default_idle_timeout(quic, (uint64_t)config->idle_timeout);
 
         picoquic_set_cwin_max(quic, config->cwin_max);

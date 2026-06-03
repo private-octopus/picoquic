@@ -2237,6 +2237,8 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
         /* add a final ack so receiver gets clean state */
         bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data, current_time, pc, 0);
 
+        bytes_next = picoquic_format_fc_leave_state_frames(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
+
         /* Send the disconnect frame */
         if (cnx->local_error == 0) {
             bytes_next = picoquic_format_application_close_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack);
@@ -2886,6 +2888,11 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
          * These frames will be sent immediately, regardless of pacing or flow control.
          */
         bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
+            bytes_next, bytes_max,
+            &more_data, &is_pure_ack, &is_challenge_padding_needed,
+            current_time, next_wake_time);
+        
+        bytes_next = picoquic_prepare_fc_state_frames(cnx, path_x,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);

@@ -164,7 +164,10 @@ typedef enum {
     picoquic_frame_type_bdp = 0xebd9,
     picoquic_frame_type_observed_address_v4 = 0x9f81a6,
     picoquic_frame_type_observed_address_v6 = 0x9f81a7,
-    picoquic_frame_type_reset_stream_at = 0x24
+    picoquic_frame_type_reset_stream_at = 0x24,
+    picoquic_frame_type_fc_announce = 0xf2,
+    picoquic_frame_type_fc_state = 0xf4,
+    picoquic_frame_type_fc_key = 0xf5
 } picoquic_frame_type_enum_t;
 
 #define FRAME_TYPE_QX_TRANSPORT_PARAMETERS 0x3f5153300d0a0d0aull /* Per qmux draft 01 */
@@ -603,6 +606,7 @@ typedef struct st_picoquic_quic_t {
     picoquic_spinbit_version_enum default_spin_policy;
     picoquic_lossbit_version_enum default_lossbit_policy;
     uint32_t default_multipath_option;
+    uint32_t default_flexicast_option;
     uint64_t default_handshake_timeout;
     uint64_t crypto_epoch_length_max; /* Default packet interval between key rotations */
     uint32_t max_simultaneous_logs;
@@ -1130,6 +1134,7 @@ typedef struct st_picoquic_path_t {
     unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
     unsigned int rtt_is_initialized : 1; /* RTT was measured at least once. */
     unsigned int sending_path_cid_blocked_frame : 1; /* Sending a path CID blocked, not acked yet. */
+    unsigned int receive_only_fc_flow_path : 1;
     
     /* Management of retransmissions in a path.
      * The "path_packet" variables are used for the RACK algorithm, per path, to avoid
@@ -1258,6 +1263,33 @@ typedef struct st_picoquic_output_stream_t {
     picoquic_stream_head_t* last_output_stream;
 } picoquic_output_stream_t;
 
+typedef struct st_picoquic_fc_flow_t {
+    struct sockaddr unicast_addr;
+
+    picoquic_path_t* path;
+    picoquic_fc_flow_id_t flow_id;
+    uint64_t remote_sequence_number;
+    uint64_t self_sequence_number;
+    struct sockaddr source_addr;
+    struct sockaddr group_addr;
+    uint16_t udp_port;
+    uint64_t ack_delay_timer;
+    uint64_t packet_number;
+    uint64_t crypto_algo;
+    uint64_t key_len;
+    uint8_t* key;
+    int s_ctx_i;
+
+    unsigned int tree_joined : 1;
+    unsigned int join_sent : 1;
+    unsigned int crypto_received : 1;
+    unsigned int listen_sent : 1;
+    unsigned int leave_required : 1;
+    unsigned int left : 1;
+
+    picoquic_crypto_context_t crypto_context;
+} picoquic_fc_flow_t;
+
 /*
 * Per connection context.
 */
@@ -1341,7 +1373,8 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
     unsigned int is_qmux_cleartext : 1; /* This QMux connection is not encrypted */
     unsigned int is_qmux_tls_ready : 1; /* TLS handshake of QMux connection not complete */
-
+    unsigned int is_flexicast_enabled : 1;
+    
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
     /* Spin bit policy */
@@ -1554,6 +1587,13 @@ typedef struct st_picoquic_cnx_t {
     uint64_t max_path_id_acknowledged;
     uint64_t max_path_id_remote;
     uint64_t paths_blocked_acknowledged;
+
+    /* Management of flexicast flows */
+    picoquic_fc_flow_t ** flows;
+    int nb_flows;
+    int nb_flows_alloc;
+    unsigned int need_flow_update : 1;
+
     /* Management of the CNX-ID stash */
     picoquic_remote_cnxid_stash_t * first_remote_cnxid_stash;
     /* management of local CID stash.
@@ -1652,7 +1692,10 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
-    uint64_t current_time, uint64_t* next_wake_time); 
+    uint64_t current_time, uint64_t* next_wake_time);
+uint8_t *picoquic_prepare_fc_state_frames(picoquic_cnx_t *cnx, picoquic_path_t *path_x,
+    uint8_t *bytes_next, uint8_t *bytes_max, int *more_data, int *is_pure_ack,
+    int *is_challenge_padding_needed, uint64_t current_time,uint64_t *next_wake_time);
 void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
@@ -2172,6 +2215,11 @@ size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_t
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data,
     uint64_t path_id, uint64_t reason);
+uint8_t * picoquic_format_fc_announce_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow);
+uint8_t * picoquic_format_fc_state_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow, uint64_t action);
+uint8_t* picoquic_format_fc_leave_state_frames(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
+uint8_t * picoquic_format_fc_key_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_fc_flow_t* flow);
+int picoquic_update_flow(picoquic_fc_flow_t *flow, picoquic_fc_flow_t *new_flow, picoquic_cnx_t *cnx, uint64_t current_time);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, uint64_t reason);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,

@@ -82,7 +82,8 @@ typedef enum {
     picoquic_option_FLOW_CONTROL_MAX,
     picoquic_option_Preferred_V4,
     picoquic_option_Preferred_V6,
-    picoquic_option_HELP
+    picoquic_option_HELP,
+    picoquic_option_flexicast
 }  picoquic_option_enum_t;
 
 typedef struct st_picoquic_quic_config_t {
@@ -114,6 +115,7 @@ typedef struct st_picoquic_quic_config_t {
     int bdp_frame_option;
     uint64_t cwin_max;
     int address_discovery_mode;
+    int flexicast_option;
     /* TODO: control other extensions, e.g. time stamp, ack delay */
     /* Common flags */
     unsigned int initial_random;

@@ -803,6 +803,10 @@ const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* 
     }
 }
 
+const uint8_t* picoquic_frames_addr_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t ip_version)
+{
+    return picoquic_frames_fixed_skip(bytes, bytes_max, ip_version == 4 ? 4 : 16);
+}
 
 /* Parse a varint. In case of an error, *n64 is unchanged, and NULL is returned */
 const uint8_t* picoquic_frames_varint_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* n64)
@@ -875,6 +879,38 @@ const uint8_t* picoquic_frames_uint64_decode(const uint8_t* bytes, const uint8_t
     if (bytes + sizeof(*n) <= bytes_max) {
         *n = PICOPARSE_64(bytes);
         bytes += sizeof(*n);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+const uint8_t* picoquic_frames_fc_flow_id_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t len, picoquic_fc_flow_id_t * fc_flow_id)
+{
+    if (len <= PICOQUIC_FC_FLOW_ID_MAX_SIZE && bytes + len <= bytes_max) {
+        fc_flow_id->id_len = len;
+        memcpy(fc_flow_id->id, bytes, len);
+        bytes += len;
+    } else {
+        len = 0;
+        fc_flow_id->id_len = 0;
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+const uint8_t* picoquic_frames_addr_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint8_t ip_family, struct sockaddr* addr)
+{
+    if (ip_family == 4 && bytes + sizeof(in_addr_t) <= bytes_max) {
+        addr->sa_family = AF_INET;
+        memcpy((void*)&((struct sockaddr_in*) addr)->sin_addr, bytes, sizeof(in_addr_t));
+        bytes += sizeof(in_addr_t);
+    }
+    else if (ip_family == 6 && bytes + sizeof(struct in6_addr) <= bytes_max) {
+        addr->sa_family = AF_INET6;
+        memcpy((void*)&((struct sockaddr_in6*) addr)->sin6_addr, bytes, sizeof(struct in6_addr));
+        bytes += sizeof(struct in6_addr);
     }
     else {
         bytes = NULL;
@@ -1055,6 +1091,36 @@ uint8_t* picoquic_frames_uint64_encode(uint8_t* bytes, const uint8_t* bytes_max,
     }
     return (bytes);
 
+}
+
+uint8_t* picoquic_frames_fc_flow_id_encode(uint8_t * bytes, const uint8_t* bytes_max, picoquic_fc_flow_id_t * fc_flow_id)
+{
+    if (bytes + fc_flow_id->id_len > bytes_max) {
+        bytes = NULL;
+    }
+    else {
+        for (int i = 0; i < fc_flow_id->id_len;i++){
+            *bytes++ = fc_flow_id->id[i];
+        }
+    }
+    return bytes;
+
+}
+
+uint8_t* picoquic_frames_addr_encode(uint8_t* bytes, const uint8_t* bytes_max, struct sockaddr* addr)
+{
+    if (addr->sa_family == AF_INET && bytes + sizeof(in_addr_t) <= bytes_max) {
+        memcpy(bytes, (void*)&((struct sockaddr_in*) addr)->sin_addr, sizeof(in_addr_t));
+        bytes += sizeof(in_addr_t);
+    }
+    else if (addr->sa_family == AF_INET6 && bytes + sizeof(struct in6_addr) <= bytes_max) {
+        memcpy(bytes, (void*)&((struct sockaddr_in6*) addr)->sin6_addr, sizeof(struct in6_addr));
+        bytes += sizeof(struct in6_addr);
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
 }
 
 uint8_t* picoquic_frames_length_data_encode(uint8_t* bytes, const uint8_t* bytes_max, size_t l, const uint8_t* v)

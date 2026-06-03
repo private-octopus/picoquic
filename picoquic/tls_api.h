@@ -205,6 +205,9 @@ void picoquic_tls_api_reset(uint64_t init_flags);
 
 void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);
 
+int picoquic_set_fc_decryption_from_secret(ptls_cipher_suite_t * cipher,
+    picoquic_crypto_context_t * ctx, const void *secret, const char *prefix_label);
+
 #ifdef __cplusplus
 }
 #endif

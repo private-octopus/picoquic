@@ -33,9 +33,9 @@
 #include "picoqmux.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:hf";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:hf";
 #endif
 int config_option_letters_test(void)
 {
@@ -95,6 +95,7 @@ static picoquic_quic_config_t param1 = {
     1,
     UINT64_MAX, /* Do not limit CWIN */
     3, /* Address discovery mode = 3 (cli param -J 2)*/
+    1,
     /* Common flags */
     1, /* unsigned int initial_random : 1; */
     1, /* unsigned int use_long_log : 1; */
@@ -163,6 +164,7 @@ static char const* config_argv1[] = {
     "-V",
     "-j", "1",
     "-0",
+    "-f",
     "-i", "0N8C-000123",
     "-J", "2",
     "-E", "ech_key.pem", "ech_config.pem",
@@ -202,6 +204,7 @@ static picoquic_quic_config_t param2 = {
     0,
     1000000, /* Limit CWIN to 1 million bytes */
     0, /* Do not enable address discovery */
+    0,
     /* Common flags */
     3, /* unsigned int initial_random : 1; */
     0, /* unsigned int use_long_log : 1; */
@@ -463,6 +466,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_uint64("flow_control_max", expected->flow_control_max, actual->flow_control_max);
     ret |= config_test_compare_string("preferred_address_v4", expected->preferred_address_v4, actual->preferred_address_v4);
     ret |= config_test_compare_string("preferred_address_v6", expected->preferred_address_v6, actual->preferred_address_v6);
+    ret |= config_test_compare_int("flexicast", expected->flexicast_option, actual->flexicast_option);
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
             ret = -1;
