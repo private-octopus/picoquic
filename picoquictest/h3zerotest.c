@@ -921,6 +921,51 @@ int h3zero_parse_qpack_test(void)
     return ret;
 }
 
+static int h3zero_qpack_static_bounds_test_one(
+    const char* test_name, uint8_t* bytes, size_t bytes_length)
+{
+    int ret = 0;
+    h3zero_header_parts_t parts;
+    uint8_t* parsed;
+
+    memset(&parts, 0, sizeof(parts));
+    parsed = h3zero_parse_qpack_header_frame(bytes, bytes + bytes_length, &parts);
+    if (parsed != NULL) {
+        DBG_PRINTF("QPACK static bounds case %s was accepted", test_name);
+        ret = -1;
+    }
+    h3zero_release_header_parts(&parts);
+
+    return ret;
+}
+
+int h3zero_qpack_static_index_bounds_test(void)
+{
+    uint8_t indexed_static_99[] = { 0x00, 0x00, 0xff, 0x24 };
+
+    return h3zero_qpack_static_bounds_test_one("indexed-static-99",
+        indexed_static_99, sizeof(indexed_static_99));
+}
+
+int h3zero_qpack_static_name_ref_bounds_test(void)
+{
+    uint8_t literal_static_name_99[] = { 0x00, 0x00, 0x5f, 0x54, 0x00 };
+
+    return h3zero_qpack_static_bounds_test_one("literal-static-name-99",
+        literal_static_name_99, sizeof(literal_static_name_99));
+}
+
+int h3zero_qpack_static_bounds_test(void)
+{
+    int ret = h3zero_qpack_static_index_bounds_test();
+
+    if (h3zero_qpack_static_name_ref_bounds_test() != 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /*
  * Prepare frames of the different supported types, and 
  * verify that they can be decoded as expected
