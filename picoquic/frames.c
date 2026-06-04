@@ -2887,7 +2887,16 @@ uint64_t picoquic_compute_ack_delay_max(picoquic_cnx_t* cnx, uint64_t rtt, uint6
     if (ack_delay_max < remote_min_ack_delay) {
         ack_delay_max = remote_min_ack_delay;
     }
-
+#if 1
+    if (ack_delay_max < 20000) {
+        if (rtt > 20000) {
+            ack_delay_max = 20000;
+        }
+        else {
+            ack_delay_max = rtt;
+        }
+    }
+#endif
     return ack_delay_max;
 }
 
@@ -2952,9 +2961,11 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
             }
         }
     }
+#if 0
     if (cnx->path[0]->rtt_min < *ack_delay_max * 4 && *ack_gap > 32) {
         *ack_gap = 32;
     }
+#endif
 }
 
 /* In a multipath environment, a packet can carry acknowledgements for multiple paths.

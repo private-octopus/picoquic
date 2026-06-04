@@ -59,7 +59,7 @@ extern "C" {
 #define PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER 1000000ull /* one second */
 #define PICOQUIC_LARGE_RETRANSMIT_TIMER 2000000ull /* two seconds */
 #define PICOQUIC_MIN_RETRANSMIT_TIMER 50000ull /* 50 ms */
-#define PICOQUIC_ACK_DELAY_MAX 10000ull /* 10 ms */
+#define PICOQUIC_ACK_DELAY_MAX 25000ull /* 10 ms */
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000ull /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000ull /* 1 ms */
 #define PICOQUIC_ACK_DELAY_MIN_MAX_VALUE 0xFFFFFFull /* max value that can be negotiated by peers */
