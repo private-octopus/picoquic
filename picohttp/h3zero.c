@@ -615,7 +615,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x3F, &s_index);
 
-            if (s_index > h3zero_qpack_nb_static) {
+            if (s_index >= h3zero_qpack_nb_static) {
                 /* Index out of range */
                 bytes = NULL;
             }
@@ -682,7 +682,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x0F, &s_index);
             if (bytes != NULL) {
-                if (s_index > h3zero_qpack_nb_static) {
+                if (s_index >= h3zero_qpack_nb_static) {
                     /* Index out of range */
                     bytes = NULL;
                 } else {
