@@ -1442,6 +1442,49 @@ int h3zero_stream_test(void)
     return ret;
 }
 
+int h3zero_partial_headers_frame_test(void)
+{
+    uint8_t attack[] = { 0x01, 0x80, 0x01, 0x00, 0x00, 0x00 };
+    h3zero_data_stream_state_t stream_state;
+    size_t available_data = 999;
+    uint64_t error_found = 0;
+    uint8_t* bytes;
+    int ret = 0;
+
+    memset(&stream_state, 0, sizeof(stream_state));
+    bytes = h3zero_parse_data_stream(attack, attack + sizeof(attack),
+        &stream_state, &available_data, &error_found);
+
+    if (bytes != attack + sizeof(attack)) {
+        DBG_PRINTF("Partial HEADERS parsed %d bytes instead of %d",
+            (int)(bytes - attack), (int)sizeof(attack));
+        ret = -1;
+    }
+    else if (error_found != 0) {
+        DBG_PRINTF("Partial HEADERS set error %" PRIu64, error_found);
+        ret = -1;
+    }
+    else if (available_data != 0) {
+        DBG_PRINTF("Partial HEADERS exposed %zu data bytes", available_data);
+        ret = -1;
+    }
+    else if (stream_state.current_frame_length != 0x10000 ||
+        stream_state.current_frame_read != 1) {
+        DBG_PRINTF("Partial HEADERS state length/read = %" PRIu64 "/%" PRIu64,
+            stream_state.current_frame_length, stream_state.current_frame_read);
+        ret = -1;
+    }
+    else if (stream_state.current_frame == NULL ||
+        stream_state.current_frame_allocated >= stream_state.current_frame_length) {
+        DBG_PRINTF("Partial HEADERS reserved %zu bytes for one payload byte",
+            stream_state.current_frame_allocated);
+        ret = -1;
+    }
+
+    h3zero_delete_data_stream_state(&stream_state);
+    return ret;
+}
+
 /* H3Zero stream fuzz test
  */
 

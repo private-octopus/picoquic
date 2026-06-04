@@ -40,6 +40,10 @@
 #include "h3zero.h"
 #include "h3zero_common.h"
 
+#define H3ZERO_FRAME_BUFFER_MAX 0x10000ull
+#define H3ZERO_BUFFERED_PARTIAL_FRAMES_MAX (16 * H3ZERO_FRAME_BUFFER_MAX)
+#define H3ZERO_FRAME_BUFFER_MIN_ALLOC 1024
+
 
 
  /* Stream context splay management */
@@ -142,6 +146,7 @@ h3zero_stream_ctx_t * h3zero_find_or_create_stream(
 			stream_ctx->cnx = cnx;
 			if (is_h3) {
 				stream_ctx->ps.stream_state.h3_ctx = ctx;
+				stream_ctx->ps.stream_state.buffered_partial_frames = &ctx->buffered_partial_frames;
 				stream_ctx->ps.stream_state.stream_type = UINT64_MAX;
 				stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
 				if (!IS_BIDIR_STREAM_ID(stream_id)) {
@@ -325,6 +330,64 @@ int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 		ctx->settings_sent = 1;
 		ret = h3zero_protocol_init(cnx);
 	}
+	return ret;
+}
+
+static int h3zero_reserve_frame_buffer(h3zero_data_stream_state_t* stream_state,
+	size_t required, uint64_t* error_found)
+{
+	int ret = 0;
+
+	if (stream_state->current_frame_length > H3ZERO_FRAME_BUFFER_MAX) {
+		*error_found = H3ZERO_EXCESSIVE_LOAD;
+		ret = -1;
+	}
+	else if (required > (size_t)stream_state->current_frame_length) {
+		*error_found = H3ZERO_INTERNAL_ERROR;
+		ret = -1;
+	}
+	else if (required > stream_state->current_frame_allocated) {
+		size_t new_allocated = stream_state->current_frame_allocated;
+		uint8_t* new_frame;
+
+		if (new_allocated == 0) {
+			new_allocated = H3ZERO_FRAME_BUFFER_MIN_ALLOC;
+		}
+		while (new_allocated < required) {
+			if (new_allocated > (SIZE_MAX / 2)) {
+				new_allocated = required;
+				break;
+			}
+			new_allocated *= 2;
+		}
+		if (new_allocated > (size_t)stream_state->current_frame_length) {
+			new_allocated = (size_t)stream_state->current_frame_length;
+		}
+		if (stream_state->buffered_partial_frames != NULL) {
+			size_t delta = new_allocated - stream_state->current_frame_allocated;
+			if (*stream_state->buffered_partial_frames >
+				H3ZERO_BUFFERED_PARTIAL_FRAMES_MAX - delta) {
+				*error_found = H3ZERO_EXCESSIVE_LOAD;
+				ret = -1;
+			}
+		}
+		if (ret == 0) {
+			new_frame = (uint8_t*)realloc(stream_state->current_frame, new_allocated);
+			if (new_frame == NULL) {
+				*error_found = H3ZERO_INTERNAL_ERROR;
+				ret = -1;
+			}
+			else {
+				if (stream_state->buffered_partial_frames != NULL) {
+					*stream_state->buffered_partial_frames +=
+						new_allocated - stream_state->current_frame_allocated;
+				}
+				stream_state->current_frame = new_frame;
+				stream_state->current_frame_allocated = new_allocated;
+			}
+		}
+	}
+
 	return ret;
 }
 
@@ -687,9 +750,9 @@ static int h3zero_check_frame_type(h3zero_data_stream_state_t* stream_state,
 			*error_found = H3ZERO_FRAME_UNEXPECTED;
 			ret = -1;
 		}
-		else if (stream_state->current_frame_length > 0x10000) {
+		else if (stream_state->current_frame_length > H3ZERO_FRAME_BUFFER_MAX) {
 			/* error, excessive load */
-			*error_found = H3ZERO_INTERNAL_ERROR;
+			*error_found = H3ZERO_EXCESSIVE_LOAD;
 			ret = -1;
 		}
 	}
@@ -742,28 +805,28 @@ static uint8_t* h3zero_parse_frame_prefix(uint8_t* bytes, uint8_t* bytes_max,
 uint8_t* h3zero_parse_header_frame(uint8_t* bytes, size_t available,
 	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
 {
-	if (stream_state->current_frame == NULL) {
-		stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
-	}
-	if (stream_state->current_frame == NULL) {
-		*error_found = H3ZERO_INTERNAL_ERROR;
+	if (h3zero_reserve_frame_buffer(stream_state,
+		(size_t)stream_state->current_frame_read + available, error_found) != 0) {
 		bytes = NULL;
 	}
 	else {
-		memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
+		if (available > 0) {
+			memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
+		}
 		stream_state->current_frame_read += available;
 		bytes += available;
 
 		if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+			uint8_t const* frame = (stream_state->current_frame == NULL) ? bytes : stream_state->current_frame;
 			uint8_t* parsed;
 			h3zero_header_parts_t* parts = (stream_state->header_found) ?
 				&stream_state->trailer : &stream_state->header;
 			stream_state->trailer_found = stream_state->header_found;
 			stream_state->header_found = 1;
 			/* parse */
-			parsed = h3zero_parse_qpack_header_frame(stream_state->current_frame,
-				stream_state->current_frame + stream_state->current_frame_length, parts);
-			if (parsed == NULL || (size_t)(parsed - stream_state->current_frame) != stream_state->current_frame_length) {
+			parsed = h3zero_parse_qpack_header_frame((uint8_t*)frame,
+				(uint8_t*)frame + stream_state->current_frame_length, parts);
+			if (parsed == NULL || (size_t)(parsed - frame) != stream_state->current_frame_length) {
 				/* protocol error */
 				*error_found = H3ZERO_FRAME_ERROR;
 				bytes = NULL;
@@ -771,8 +834,7 @@ uint8_t* h3zero_parse_header_frame(uint8_t* bytes, size_t available,
 			/* free resource */
 			stream_state->frame_prefix_parsed = 0;
 			stream_state->frame_header_read = 0;
-			free(stream_state->current_frame);
-			stream_state->current_frame = NULL;
+			h3zero_release_data_stream_frame_buffer(stream_state);
 		}
 	}
 	return bytes;

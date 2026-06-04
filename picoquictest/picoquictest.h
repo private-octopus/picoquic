@@ -392,6 +392,7 @@ int h3zero_url_template_test(void);
 int h3zero_null_sni_test(void);
 int h3zero_qpack_fuzz_test(void);
 int h3zero_stream_test(void);
+int h3zero_partial_headers_frame_test(void);
 int h3zero_stream_fuzz_test(void);
 int parse_demo_scenario_test(void);
 int h3zero_server_test(void);

@@ -209,6 +209,7 @@ extern "C" {
         h3zero_settings_t settings;
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
+        size_t buffered_partial_frames;
         uint64_t last_datagram_prefix;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;

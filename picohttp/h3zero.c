@@ -1164,6 +1164,23 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
     }
 }
 
+void h3zero_release_data_stream_frame_buffer(h3zero_data_stream_state_t* stream_state)
+{
+    if (stream_state->current_frame != NULL) {
+        if (stream_state->buffered_partial_frames != NULL) {
+            if (*stream_state->buffered_partial_frames >= stream_state->current_frame_allocated) {
+                *stream_state->buffered_partial_frames -= stream_state->current_frame_allocated;
+            }
+            else {
+                *stream_state->buffered_partial_frames = 0;
+            }
+        }
+        free(stream_state->current_frame);
+        stream_state->current_frame = NULL;
+    }
+    stream_state->current_frame_allocated = 0;
+}
+
 void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 {
     if (stream_state->header_found){
@@ -1179,10 +1196,7 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
         stream_state->wt_protocol = NULL;;
     }
 
-    if (stream_state->current_frame != NULL) {
-        free(stream_state->current_frame);
-        stream_state->current_frame = NULL;
-    }
+    h3zero_release_data_stream_frame_buffer(stream_state);
 }
 
 /*
