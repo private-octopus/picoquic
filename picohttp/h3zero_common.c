@@ -396,26 +396,20 @@ uint8_t* h3zero_load_frame_content(uint8_t* bytes, uint8_t* bytes_max,
 {
 	size_t available = bytes_max - bytes;
 
-	if (stream_state->current_frame_length > 0x10000) {
-		/* error, excessive load */
-		*error_found = H3ZERO_INTERNAL_ERROR;
-		return NULL;
-	}
-	else if (stream_state->current_frame == NULL) {
-		stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
-	}
-
-	if (stream_state->current_frame == NULL) {
-		/* error, internal error */
-		*error_found = H3ZERO_INTERNAL_ERROR;
-		return NULL;
-	}
 	if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
 		available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
 	}
-	memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
-	stream_state->current_frame_read += available;
-	bytes += available;
+	if (h3zero_reserve_frame_buffer(stream_state,
+		(size_t)stream_state->current_frame_read + available, error_found) != 0) {
+		bytes = NULL;
+	}
+	else {
+		if (available > 0) {
+			memcpy(stream_state->current_frame + stream_state->current_frame_read, bytes, available);
+		}
+		stream_state->current_frame_read += available;
+		bytes += available;
+	}
 
 	return bytes;
 }
@@ -456,10 +450,8 @@ static void h3zero_reset_control_stream_state(h3zero_data_stream_state_t* stream
 	stream_state->current_frame_type = UINT64_MAX;
 	stream_state->current_frame_length = UINT64_MAX;
 	stream_state->current_frame_read = 0;
-	if (stream_state->current_frame != NULL) {
-		free(stream_state->current_frame);
-		stream_state->current_frame = NULL;
-	}
+	stream_state->is_current_frame_ignored = 0;
+	h3zero_release_data_stream_frame_buffer(stream_state);
 }
 
 static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
@@ -520,7 +512,8 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			}
 			/* Process the frame if needed, or free it */
 			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-				if (stream_state->current_frame != NULL && stream_state->current_frame_type == h3zero_frame_settings) {
+				if (stream_state->current_frame_type == h3zero_frame_settings) {
+					uint8_t const* frame = (stream_state->current_frame == NULL) ? bytes : stream_state->current_frame;
 					const uint8_t* decoded_last = NULL;
 
 					if (opt_cnx != NULL && !ctx->settings.settings_received && stream_state->current_frame_length > 0) {
@@ -533,8 +526,8 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 						picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
 					}
 					/* TODO: actually parse the settings */
-					decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
-						stream_state->current_frame + stream_state->current_frame_length, &ctx->settings);
+					decoded_last = h3zero_settings_components_decode(frame,
+						frame + stream_state->current_frame_length, &ctx->settings);
 					if (decoded_last == NULL) {
 						*error_found = H3ZERO_SETTINGS_ERROR;
 						bytes = NULL;

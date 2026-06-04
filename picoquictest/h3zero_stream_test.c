@@ -474,6 +474,73 @@ int h3zero_setting_error_test(void)
     return ret;
 }
 
+int h3zero_partial_settings_frame_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+    h3zero_stream_ctx_t* stream_ctx = NULL;
+    uint64_t error_found = 0;
+    uint8_t attack[] = { 0x00, 0x04, 0x80, 0x01, 0x00, 0x00, 0x00 };
+    uint8_t* bytes = attack;
+
+    if (ret == 0 &&
+        (stream_ctx = h3zero_find_or_create_stream(cnx, 3, h3_ctx, 1, 1)) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        bytes = h3zero_parse_remote_unidir_stream(attack, attack + sizeof(attack),
+            stream_ctx, h3_ctx, &error_found, NULL);
+        if (bytes != attack + sizeof(attack)) {
+            DBG_PRINTF("Partial SETTINGS parsed %d bytes instead of %d",
+                (int)(bytes - attack), (int)sizeof(attack));
+            ret = -1;
+        }
+        else if (error_found != 0) {
+            DBG_PRINTF("Partial SETTINGS set error %" PRIu64, error_found);
+            ret = -1;
+        }
+        else if (stream_ctx->ps.stream_state.current_frame_length != 0x10000 ||
+            stream_ctx->ps.stream_state.current_frame_read != 1) {
+            DBG_PRINTF("Partial SETTINGS state length/read = %" PRIu64 "/%" PRIu64,
+                stream_ctx->ps.stream_state.current_frame_length,
+                stream_ctx->ps.stream_state.current_frame_read);
+            ret = -1;
+        }
+        else if (stream_ctx->ps.stream_state.current_frame == NULL ||
+            stream_ctx->ps.stream_state.current_frame_allocated >=
+            stream_ctx->ps.stream_state.current_frame_length) {
+            DBG_PRINTF("Partial SETTINGS reserved %zu bytes for one payload byte",
+                stream_ctx->ps.stream_state.current_frame_allocated);
+            ret = -1;
+        }
+        else if (h3_ctx->buffered_partial_frames !=
+            stream_ctx->ps.stream_state.current_frame_allocated) {
+            DBG_PRINTF("Partial SETTINGS aggregate budget is %zu instead of %zu",
+                h3_ctx->buffered_partial_frames,
+                stream_ctx->ps.stream_state.current_frame_allocated);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        h3zero_delete_stream(cnx, h3_ctx, stream_ctx);
+        stream_ctx = NULL;
+        if (h3_ctx->buffered_partial_frames != 0) {
+            DBG_PRINTF("Partial SETTINGS aggregate budget was not released: %zu",
+                h3_ctx->buffered_partial_frames);
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 /* Unit test of data callback.
 * 
 * we want to exercise `h3zero_callback_data` without actually setting up connections.
