@@ -617,30 +617,40 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 			return bytes;
 		}
 		if (stream_state->stream_type == h3zero_stream_type_control) {
-			/* TODO: verify that there is just one control stream. */
-			h3zero_reset_control_stream_state(stream_state);
+			if (ctx->remote_control_stream_seen &&
+				ctx->remote_control_stream_id != stream_ctx->stream_id) {
+				*error_found = H3ZERO_STREAM_CREATION_ERROR;
+				bytes = NULL;
+			}
+			else {
+				ctx->remote_control_stream_seen = 1;
+				ctx->remote_control_stream_id = stream_ctx->stream_id;
+				h3zero_reset_control_stream_state(stream_state);
+			}
 		}
 	}
-	switch (stream_state->stream_type) {
-	case h3zero_stream_type_control: /* used to send/receive setting frame and other control frames. */
-		bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found, opt_cnx);
-		break;
-	case h3zero_stream_type_push: /* Push type not supported in current implementation */
-		bytes = bytes_max;
-		break;
-	case h3zero_stream_type_qpack_encoder: /* not required since not using dynamic table */
-		bytes = bytes_max;
-		break;
-	case h3zero_stream_type_qpack_decoder: /* not required since not using dynamic table */
-		bytes = bytes_max;
-		break;
-	case h3zero_stream_type_webtransport: /* unidir stream is used as specified in web transport */
-		bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
-		break;
-	default:
-		/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */
-		bytes = bytes_max;
-		break;
+	if (bytes != NULL) {
+		switch (stream_state->stream_type) {
+		case h3zero_stream_type_control: /* used to send/receive setting frame and other control frames. */
+			bytes = h3zero_parse_control_stream(bytes, bytes_max, stream_state, ctx, error_found, opt_cnx);
+			break;
+		case h3zero_stream_type_push: /* Push type not supported in current implementation */
+			bytes = bytes_max;
+			break;
+		case h3zero_stream_type_qpack_encoder: /* not required since not using dynamic table */
+			bytes = bytes_max;
+			break;
+		case h3zero_stream_type_qpack_decoder: /* not required since not using dynamic table */
+			bytes = bytes_max;
+			break;
+		case h3zero_stream_type_webtransport: /* unidir stream is used as specified in web transport */
+			bytes = h3zero_wt_parse_control_stream_id(bytes, bytes_max, stream_state, stream_ctx, ctx);
+			break;
+		default:
+			/* Per section 6.2 of RFC 9114, unknown stream types are just ignored */
+			bytes = bytes_max;
+			break;
+		}
 	}
 	return bytes;
 }
@@ -927,6 +937,7 @@ h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters
 		memset(ctx, 0, sizeof(h3zero_callback_ctx_t));
 
 		h3zero_init_stream_tree(&ctx->h3_stream_tree);
+		ctx->remote_control_stream_id = UINT64_MAX;
 
 		if (param != NULL) {
 			ctx->path_table = param->path_table;

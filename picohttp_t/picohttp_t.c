@@ -51,6 +51,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_unidir_error", h3zero_unidir_error_test },
     { "h3zero_setting_error", h3zero_setting_error_test },
     { "h3zero_partial_settings_frame", h3zero_partial_settings_frame_test },
+    { "h3zero_remote_control_stream_singleton", h3zero_remote_control_stream_singleton_test },
     { "h3zero_capsule", h3zero_capsule_test },
     { "h3zero_client_data", h3zero_client_data_test },
     { "qpack_huffman", qpack_huffman_test },
