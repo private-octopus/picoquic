@@ -474,6 +474,52 @@ int h3zero_setting_error_test(void)
     return ret;
 }
 
+int h3zero_remote_control_stream_singleton_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+    h3zero_stream_ctx_t* first_stream_ctx = NULL;
+    h3zero_stream_ctx_t* second_stream_ctx = NULL;
+    uint8_t control_stream_type[] = { 0x00 };
+    uint64_t error_found = 0;
+    uint8_t* bytes;
+
+    if (ret == 0 &&
+        ((first_stream_ctx = h3zero_find_or_create_stream(cnx, 3, h3_ctx, 1, 1)) == NULL ||
+            (second_stream_ctx = h3zero_find_or_create_stream(cnx, 7, h3_ctx, 1, 1)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        bytes = h3zero_parse_remote_unidir_stream(control_stream_type,
+            control_stream_type + sizeof(control_stream_type),
+            first_stream_ctx, h3_ctx, &error_found, NULL);
+        if (bytes != control_stream_type + sizeof(control_stream_type) ||
+            error_found != 0) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        bytes = h3zero_parse_remote_unidir_stream(control_stream_type,
+            control_stream_type + sizeof(control_stream_type),
+            second_stream_ctx, h3_ctx, &error_found, NULL);
+        if (bytes != NULL || error_found != H3ZERO_STREAM_CREATION_ERROR) {
+            DBG_PRINTF("Duplicate control stream returned %p and error %" PRIu64,
+                (void*)bytes, error_found);
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+
 /* Unit test of data callback.
 * 
 * we want to exercise `h3zero_callback_data` without actually setting up connections.

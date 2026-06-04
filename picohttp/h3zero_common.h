@@ -210,11 +210,14 @@ extern "C" {
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
         uint64_t last_datagram_prefix;
+        /* control stream ID remembered for uniqueness checks. */
+        uint64_t remote_control_stream_id;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
         unsigned int connection_closed : 1;
         unsigned int settings_sent : 1;
+        unsigned int remote_control_stream_seen : 1;
         int nb_open_streams;
         int nb_open_files;
         uint32_t nb_client_streams;

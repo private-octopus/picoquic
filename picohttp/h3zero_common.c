@@ -561,8 +561,16 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 			return bytes;
 		}
 		if (stream_state->stream_type == h3zero_stream_type_control) {
-			/* TODO: verify that there is just one control stream. */
-			h3zero_reset_control_stream_state(stream_state);
+			if (ctx->remote_control_stream_seen &&
+				ctx->remote_control_stream_id != stream_ctx->stream_id) {
+				*error_found = H3ZERO_STREAM_CREATION_ERROR;
+				bytes = NULL;
+			}
+			else {
+				ctx->remote_control_stream_seen = 1;
+				ctx->remote_control_stream_id = stream_ctx->stream_id;
+				h3zero_reset_control_stream_state(stream_state);
+			}
 		}
 	}
 	switch (stream_state->stream_type) {
@@ -872,6 +880,7 @@ h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters
 		memset(ctx, 0, sizeof(h3zero_callback_ctx_t));
 
 		h3zero_init_stream_tree(&ctx->h3_stream_tree);
+		ctx->remote_control_stream_id = UINT64_MAX;
 
 		if (param != NULL) {
 			ctx->path_table = param->path_table;
