@@ -53,6 +53,7 @@ extern "C" {
 #define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
+#define H3ZERO_MAX_FIELD_SECTION_SIZE 0x10000
 #define H3ZERO_WT_AVAILABLE_PROTOCOLS "wt-available-protocols"
 #define H3ZERO_WT_PROTOCOL "wt-protocol"
 

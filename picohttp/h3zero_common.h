@@ -168,11 +168,7 @@ extern "C" {
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
-#if 1
-    void h3zero_settings_components_set(h3zero_settings_t* settings, uint64_t component_key, uint64_t component_value);
-#else
     const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
-#endif
 
     /* Handling of stream prefixes, for applications that use it.
      */
