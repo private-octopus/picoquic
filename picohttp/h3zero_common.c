@@ -470,7 +470,10 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 				}
 				h3zero_settings_components_set(&ctx->settings, setting_id, setting_value);
 			}
-		    if (stream_state->current_frame_read == stream_state->current_frame_length){
+		    if (stream_state->current_frame_read == stream_state->current_frame_length) {
+				if (opt_cnx != NULL && !ctx->settings.settings_received) {
+					picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame, length: %" PRIu64, stream_state->current_frame_length);
+				}
 				ctx->settings.settings_received = 1;
 				h3zero_reset_control_stream_state(stream_state);
 			}
@@ -484,8 +487,8 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 			/* This frame is ignored. */
 			while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
 				uint64_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
-				if (skipped > (bytes_max - bytes)) {
-					skipped = (bytes_max - bytes);
+				if (skipped > (size_t)(bytes_max - bytes)) {
+					skipped = (size_t)(bytes_max - bytes);
 				}
 				bytes += skipped;
 				stream_state->current_frame_read += skipped;
