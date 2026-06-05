@@ -467,7 +467,6 @@ int h3zero_setting_error_test(void)
         ret = h3zero_setting_submit(1, unexpected_frames[i], 0);
     }
 
-    int ret = 0;
     /* add random frame to settings, after settings received */
     if (ret == 0) {
         ret = h3zero_setting_submit(1, 12345678, 1);
