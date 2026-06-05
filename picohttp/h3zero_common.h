@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifndef H3ZERO_COMMON_H
+
 #define H3ZERO_COMMON_H
 
 #include <stdint.h>
@@ -167,8 +168,11 @@ extern "C" {
 
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
+#if 1
+    void h3zero_settings_components_set(h3zero_settings_t* settings, uint64_t component_key, uint64_t component_value);
+#else
     const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
-    const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
+#endif
 
     /* Handling of stream prefixes, for applications that use it.
      */
@@ -230,7 +234,11 @@ extern "C" {
 
     int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
-    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
+    const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+        void* opt_cnx);
+
+    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
 
     void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
     
@@ -244,8 +252,8 @@ extern "C" {
         int should_create,
         int is_h3);
 
-    uint8_t* h3zero_parse_incoming_remote_stream(
-        uint8_t* bytes, uint8_t* bytes_max,
+    const uint8_t* h3zero_parse_incoming_remote_stream(
+        const uint8_t* bytes, const uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
         h3zero_callback_ctx_t* ctx,
         picoquic_cnx_t* opt_cnx);

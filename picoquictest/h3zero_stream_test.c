@@ -107,10 +107,10 @@ int h3zero_varint_stream_chunk_test(uint64_t * targets, size_t nb_targets, size_
     int ret = h3zero_varint_stream_test_init(&hvst, targets, nb_targets);
     size_t nb_not_64max = 0;
     size_t nb_chunks = 0;
-    uint8_t* bytes = hvst.bytes;
-    uint8_t* bytes_max = hvst.bytes + hvst.nb_bytes;
-    uint8_t* chunk_start;
-    uint8_t* chunk_end;
+    const uint8_t* bytes = hvst.bytes;
+    const uint8_t* bytes_max = hvst.bytes + hvst.nb_bytes;
+    const uint8_t* chunk_start;
+    const uint8_t* chunk_end;
 
     while (ret == 0) {
         chunk_start = hvst.bytes + chunk_bytes * nb_chunks;
@@ -250,8 +250,8 @@ int h3zero_incoming_unidir_test(void)
         int success = 0;
 
         for (size_t i = 0; ret == 0 && i < 4; i++) {
-            uint8_t * bytes = &unidir_input[i];
-            uint8_t * bytes_max = bytes + 1;
+            const uint8_t * bytes = &unidir_input[i];
+            const uint8_t * bytes_max = bytes + 1;
             bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx, NULL);
             if (bytes == bytes_max) {
                 continue;

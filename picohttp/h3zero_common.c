@@ -399,7 +399,7 @@ static void h3zero_reset_control_stream_state(h3zero_data_stream_state_t* stream
 	}
 }
 
-static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
+const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
 	void* opt_cnx)
 {
@@ -431,9 +431,6 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 					bytes = NULL;
 					continue;
 				}
-				else if (stream_state->current_frame_type != h3zero_frame_settings) {
-					stream_state->is_current_frame_ignored = 1;
-				}
 			}
 		}
 		/* If frame length not known yet, get it. */
@@ -444,6 +441,61 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 				return bytes;
 			}
 		}
+#if 1
+		/* Two different cases. 
+		 * If this is a settings frame, parse the incoming settings one by one. This prevents
+		 * DOS attack in which a peer would announce a very large setting frames and force the
+		 * receiver to allocate a large buffer, which may be never filled, and thus cause memory
+		 * exhaustion.
+		 * Otherwise, the frame is ignored, just read the bytes and throw them away.
+		 */
+		if (stream_state->current_frame_type == h3zero_frame_settings) {
+			while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
+				const uint8_t * bytes0 = bytes;
+				uint64_t setting_id = UINT64_MAX;
+				uint64_t setting_value = UINT64_MAX;
+				bytes = h3zero_varint_from_stream(bytes, bytes_max, &setting_id, stream_state->frame_header, &stream_state->frame_header_read);
+				stream_state->current_frame_read += bytes - bytes0;
+				bytes0 = bytes;
+				if (setting_id == UINT64_MAX) {
+					/* frame type was not updated */
+					continue;
+				}
+				bytes = h3zero_varint_from_stream(bytes, bytes_max, &setting_value, stream_state->frame_header, &stream_state->frame_header_read);
+				stream_state->current_frame_read += bytes - bytes0;
+				bytes0 = bytes;
+				if (setting_value == UINT64_MAX) {
+					/* frame type was not updated */
+					continue;
+				}
+				h3zero_settings_components_set(&ctx->settings, setting_id, setting_value);
+			}
+		    if (stream_state->current_frame_read == stream_state->current_frame_length){
+				ctx->settings.settings_received = 1;
+				h3zero_reset_control_stream_state(stream_state);
+			}
+			else if (bytes != NULL && stream_state->current_frame_read >= stream_state->current_frame_length) {
+				*error_found = H3ZERO_FRAME_ERROR;
+				bytes = NULL;
+				continue;
+			}
+		}
+		else {
+			/* This frame is ignored. */
+			while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
+				size_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
+				if (skipped > (size_t)(bytes_max - bytes)) {
+					skipped = (size_t)(bytes_max - bytes);
+				}
+				bytes += skipped;
+				stream_state->current_frame_read += skipped;
+			}
+			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+				h3zero_reset_control_stream_state(stream_state);
+			}
+		}
+	}
+#else
 		if (stream_state->current_frame_length != UINT64_MAX) {
 			/* Load the frame. May need to allocate memory. */
 			if (stream_state->current_frame_read < stream_state->current_frame_length) {
@@ -484,11 +536,12 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 			}
 		}
 	}
+#endif
 	return bytes;
 }
 
-uint8_t* h3zero_wt_parse_control_stream_id(
-	uint8_t* bytes, uint8_t* bytes_max,
+const uint8_t* h3zero_wt_parse_control_stream_id(
+	const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx)
@@ -521,8 +574,8 @@ uint8_t* h3zero_wt_parse_control_stream_id(
  *  - type h3zero_frame_webtransport_stream
  *  - value control stream id.
  */
-uint8_t* h3zero_parse_remote_bidir_stream(
-	uint8_t* bytes, uint8_t* bytes_max,
+const uint8_t* h3zero_parse_remote_bidir_stream(
+	const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx)
 {
@@ -545,8 +598,8 @@ uint8_t* h3zero_parse_remote_bidir_stream(
 	return bytes;
 }
 
-uint8_t* h3zero_parse_remote_unidir_stream(
-	uint8_t* bytes, uint8_t* bytes_max,
+const uint8_t* h3zero_parse_remote_unidir_stream(
+	const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx,
 	uint64_t * error_found,
@@ -599,8 +652,8 @@ uint8_t* h3zero_parse_remote_unidir_stream(
 
 /* Parse the first bytes of a bidir or unidir stream, and determine what to do with that stream.
 */
-uint8_t* h3zero_parse_incoming_remote_stream(
-	uint8_t* bytes, uint8_t* bytes_max,
+const uint8_t* h3zero_parse_incoming_remote_stream(
+	const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx,
 	picoquic_cnx_t * opt_cnx)
@@ -903,14 +956,14 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 * We maintain this bundling, so the application has complete control on
 * the stream context.
 */
-int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
+int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event,
 	h3zero_stream_ctx_t* stream_ctx)
 {
 	int ret = 0;
 
 	if (stream_ctx != NULL && stream_ctx->path_callback != NULL) {
-		ret = stream_ctx->path_callback(cnx, bytes, length, (fin_or_event == picoquic_callback_stream_fin) ?
+		ret = stream_ctx->path_callback(cnx, (uint8_t *)bytes, length, (fin_or_event == picoquic_callback_stream_fin) ?
 			picohttp_callback_post_fin : picohttp_callback_post_data, stream_ctx, stream_ctx->path_callback_ctx);
 	}
 
@@ -923,7 +976,7 @@ int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 */
 
 int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
-	uint64_t stream_id, uint8_t* bytes, size_t length,
+	uint64_t stream_id, const uint8_t* bytes, size_t length,
 	picoquic_call_back_event_t fin_or_event,
 	h3zero_stream_ctx_t* stream_ctx,
 	h3zero_callback_ctx_t* ctx)
@@ -935,7 +988,7 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 		ret = -1;
 	}
 	else {
-		uint8_t* bytes_max = bytes + length;
+		const uint8_t* bytes_max = bytes + length;
 
 		if (IS_BIDIR_STREAM_ID(stream_id)) {
 			bytes = h3zero_parse_remote_bidir_stream(bytes, bytes_max, stream_ctx, ctx);
@@ -2063,6 +2116,37 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 	return bytes;
 }
 
+#if 1
+void h3zero_settings_components_set(h3zero_settings_t* settings, uint64_t component_key, uint64_t component_value)
+{
+		switch (component_key) {
+		case h3zero_setting_header_table_size:
+			settings->table_size = component_value;
+			break;
+		case h3zero_qpack_blocked_streams:
+			settings->blocked_streams = component_value;
+			break;
+		case h3zero_settings_enable_connect_protocol:
+			settings->enable_connect_protocol = (unsigned int)component_value;
+			break;
+		case h3zero_setting_h3_datagram:
+			settings->h3_datagram = (unsigned int)component_value;
+			break;
+		case h3zero_settings_webtransport_max_sessions:
+		case h3zero_settings_webtransport_max_sessions_old:
+			settings->webtransport_max_sessions = component_value;
+			break;
+		case h3zero_settings_enable_webtransport:
+			/* Chrome sends SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) instead of WT_MAX_SESSIONS */
+			if (component_value > 0 && settings->webtransport_max_sessions == 0) {
+				settings->webtransport_max_sessions = 1;
+			}
+			break;
+		default:
+			break;
+		}
+}
+#else
 const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings)
 {
 	uint64_t component_key;
@@ -2100,30 +2184,7 @@ const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uin
 	}
 	return bytes;
 }
-
-const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings)
-{
-	size_t header_length = 0;
-	memset(settings, 0, sizeof(h3zero_settings_t));
-	if (*bytes != 0x04) {
-		/* not a settings frame */
-		bytes = NULL;
-	} else {
-		bytes++;
-		/* get the decoding length */
-		if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &header_length)) != NULL) {
-			const uint8_t* settings_end = bytes + header_length;
-			if (settings_end > bytes_max) {
-				bytes = NULL;
-			}
-			else {
-				bytes = h3zero_settings_components_decode(bytes, settings_end, settings);
-			}
-		}
-	}
-	return bytes;
-}
-
+#endif
 
 /* TLV buffer accumulator.
 * This is commonly used when parsing data streams.

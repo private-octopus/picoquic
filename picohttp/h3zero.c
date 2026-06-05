@@ -1102,7 +1102,7 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
  * length of the encoding. If there are zero bytes, the first byte
  * to be read will be placed in the buffer.
  */
-uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
+const uint8_t * h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
     uint8_t* bp = buffer + *buffer_length;
     uint8_t* be;

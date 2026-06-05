@@ -325,7 +325,7 @@ typedef struct st_h3zero_data_stream_state_t {
 
 size_t h3zero_varint_skip(const uint8_t* bytes);
 size_t h3zero_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
-uint8_t* h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
+const uint8_t* h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
 void h3zero_release_header_parts(h3zero_header_parts_t* header);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,

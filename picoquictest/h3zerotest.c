@@ -3627,31 +3627,38 @@ int h3zero_settings_encode_test(const uint8_t* ref, size_t ref_length, h3zero_se
 int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_settings_t* ref, int check_length)
 {
     int ret = 0;
-    h3zero_settings_t decoded;
     const uint8_t * bytes_max = bytes + length;
+    uint64_t error_found = 0;
+    h3zero_callback_ctx_t ctx = { 0 };
+    h3zero_data_stream_state_t stream_state = { 0 };
 
-    bytes = h3zero_settings_decode(bytes, bytes_max, &decoded);
+
+    bytes = h3zero_parse_control_stream((uint8_t*)bytes, bytes + length,
+        &stream_state, &ctx, &error_found, NULL);
+
     if (bytes == NULL) {
         ret = -1;
     }
     else if (check_length && bytes != bytes_max) {
         ret = -1;
     }
-    else if (decoded.table_size != ref->table_size) {
+    else if (ctx.settings.table_size != ref->table_size) {
         ret = -1;
     }
-    else if (decoded.blocked_streams != ref->blocked_streams) {
+    else if (ctx.settings.blocked_streams != ref->blocked_streams) {
         ret = -1;
     }
-    else if (decoded.enable_connect_protocol != ref->enable_connect_protocol){
+    else if (ctx.settings.enable_connect_protocol != ref->enable_connect_protocol){
         ret = -1;
     }
-    else if (decoded.h3_datagram != ref->h3_datagram){
+    else if (ctx.settings.h3_datagram != ref->h3_datagram){
         ret = -1;
     }
-    else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
+    else if (ctx.settings.webtransport_max_sessions != ref->webtransport_max_sessions) {
         ret = -1;
     }
+
+
     return ret;
 }
 
