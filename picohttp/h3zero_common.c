@@ -483,9 +483,9 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 		else {
 			/* This frame is ignored. */
 			while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
-				size_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
-				if (skipped > (size_t)(bytes_max - bytes)) {
-					skipped = (size_t)(bytes_max - bytes);
+				uint64_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
+				if (skipped > (bytes_max - bytes)) {
+					skipped = (bytes_max - bytes);
 				}
 				bytes += skipped;
 				stream_state->current_frame_read += skipped;
