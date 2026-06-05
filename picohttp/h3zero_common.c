@@ -335,7 +335,7 @@ uint8_t* h3zero_load_frame_content(uint8_t* bytes, uint8_t* bytes_max,
 
 	if (stream_state->current_frame_length > 0x10000) {
 		/* error, excessive load */
-		*error_found = H3ZERO_INTERNAL_ERROR;
+		*error_found = H3ZERO_EXCESSIVE_LOAD;
 		return NULL;
 	}
 	else if (stream_state->current_frame == NULL) {
@@ -807,6 +807,11 @@ uint8_t* h3zero_parse_header_frame(uint8_t* bytes, size_t available,
 	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
 {
 	if (stream_state->current_frame == NULL) {
+        if (stream_state->current_frame_length > 0x10000) {
+            /* error, excessive load */
+            *error_found = H3ZERO_EXCESSIVE_LOAD;
+            return NULL;
+        }
 		stream_state->current_frame = (uint8_t*)malloc((size_t)stream_state->current_frame_length);
 	}
 	if (stream_state->current_frame == NULL) {
@@ -2095,6 +2100,7 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 			uint8_t* bytes_after_length = bytes;
 			/* encode the various components, as needed */
 			if ((bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_header_table_size, settings->table_size, UINT64_MAX)) != NULL &&
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_max_field_section_size, 0x10000, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_qpack_blocked_streams, settings->blocked_streams, UINT64_MAX)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_connect_protocol, settings->enable_connect_protocol, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_h3_datagram, settings->h3_datagram, 0)) != NULL &&

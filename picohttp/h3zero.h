@@ -216,7 +216,7 @@ typedef struct st_h3zero_header_parts_t {
  */
 #define h3zero_setting_reserved = 0x0
 #define h3zero_setting_header_table_size 0x1
-#define h3zero_setting_max_header_list_size 0x6
+#define h3zero_setting_max_field_section_size 0x6
 #define h3zero_qpack_blocked_streams 0x07
 #define h3zero_setting_grease_signature 0x0a0a
 #define h3zero_setting_grease_mask 0x0f0f
