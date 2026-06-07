@@ -48,6 +48,7 @@ extern "C" {
         picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
         picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
+        picohttp_callback_drain, /* Peer initiated graceful WebTransport drain. */
         picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free
     } picohttp_call_back_event_t;
@@ -60,6 +61,10 @@ extern "C" {
         picohttp_call_back_event_t fin_or_event,
         struct st_h3zero_stream_ctx_t* stream_ctx,
         void * path_app_ctx);
+    typedef int (*picohttp_origin_validator_fn)(
+        const uint8_t* origin, size_t origin_length,
+        const uint8_t* authority, size_t authority_length,
+        void* origin_validator_ctx);
 
     /* Define the table of special-purpose paths used for POST, REST, or connect queries */
     /* TODO: is there a need for path context? */
@@ -68,7 +73,17 @@ extern "C" {
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
+        char const* connect_protocol;
+        size_t connect_protocol_length;
+        picohttp_origin_validator_fn origin_validator;
+        void* origin_validator_ctx;
+        int connect_error_status;
     } picohttp_server_path_item_t;
+
+    int h3zero_origin_validator_allow_all(
+        const uint8_t* origin, size_t origin_length,
+        const uint8_t* authority, size_t authority_length,
+        void* origin_validator_ctx);
 
     /* Define stream context common to http 3 and http 09 callbacks
     */

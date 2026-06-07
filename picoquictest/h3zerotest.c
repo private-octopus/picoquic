@@ -713,118 +713,98 @@ typedef struct st_qpack_test_case_t {
 static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_test_get_slash, sizeof(qpack_test_get_slash),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = 1 }
     },
     {
         qpack_test_get_slash_null, sizeof(qpack_test_get_slash_null),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = 1 }
     },
     {
         qpack_test_get_slash_prefix, sizeof(qpack_test_get_slash_prefix),
-        { h3zero_method_get, qpack_test_string_slash, 1, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = 1 }
     },
     {
         qpack_test_get_index_html, sizeof(qpack_test_get_index_html),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_index_html,
+        .path_length = QPACK_TEST_HEADER_INDEX_HTML_LEN }
     },
     {
         qpack_test_get_index_html_long, sizeof(qpack_test_get_index_html_long),
-        { h3zero_method_get, qpack_test_string_index_html, QPACK_TEST_HEADER_INDEX_HTML_LEN, NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_index_html,
+        .path_length = QPACK_TEST_HEADER_INDEX_HTML_LEN }
     },
     {
         qpack_test_status_404, sizeof(qpack_test_status_404),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 404 }
     },
     {
         qpack_test_status_404_code, sizeof(qpack_test_status_404_code),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 404 }
     },
     {
         qpack_test_status_404_long, sizeof(qpack_test_status_404_long),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 404, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 404 }
     },
     {
         qpack_test_response_html, sizeof(qpack_test_response_html),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_text_html, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 200, .content_type = h3zero_content_type_text_html }
     },
     {
         qpack_test_status_405_code, sizeof(qpack_test_status_405_code),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 405 }
     },
     {
         qpack_test_status_405_null, sizeof(qpack_test_status_405_null),
-        { 0, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 405, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .status = 405 }
     },
     {
         qpack_test_get_zzz, sizeof(qpack_test_get_zzz),
-        { h3zero_method_get, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_zzz, .path_length = sizeof(qpack_test_string_zzz) }
     },
     {
         qpack_test_get_1234, sizeof(qpack_test_get_1234),
-        { h3zero_method_get, qpack_test_string_1234, sizeof(qpack_test_string_1234), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_1234, .path_length = sizeof(qpack_test_string_1234) }
     },
     {
         qpack_test_get_ats, sizeof(qpack_test_get_ats),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = sizeof(qpack_test_string_slash) }
     },
     {
         qpack_test_get_ats2, sizeof(qpack_test_get_ats2),
-        { h3zero_method_get, qpack_test_string_slash, sizeof(qpack_test_string_slash), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = sizeof(qpack_test_string_slash) }
     },
     {
         qpack_test_post_zzz, sizeof(qpack_test_post_zzz),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_post, .path = qpack_test_string_zzz,
+        .path_length = sizeof(qpack_test_string_zzz), .content_type = h3zero_content_type_text_plain }
     },
     {
         qpack_test_post_zzz_null, sizeof(qpack_test_post_zzz_null),
-        { h3zero_method_post, qpack_test_string_zzz, sizeof(qpack_test_string_zzz), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, h3zero_content_type_text_plain, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_post, .path = qpack_test_string_zzz,
+        .path_length = sizeof(qpack_test_string_zzz), .content_type = h3zero_content_type_text_plain }
     },
     {
         qpack_status200_akamai, sizeof(qpack_status200_akamai),
-        { h3zero_method_none, NULL, 0, NULL /* authority */, 0 /* authority_length */, NULL, 0, 200, h3zero_content_type_not_supported, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_none, .status = 200, .content_type = h3zero_content_type_not_supported }
     },
     {
         qpack_get_long_file_name, sizeof(qpack_get_long_file_name),
-        { h3zero_method_get, qpack_test_string_long, sizeof(qpack_test_string_long), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_long, .path_length = sizeof(qpack_test_string_long) }
     },
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
-        { h3zero_method_connect, qpack_test_string_wtp, sizeof(qpack_test_string_wtp), NULL /* authority */, 0 /* authority_length */, NULL, 0, 0, 0,
-        (uint8_t *)web_transport_str, CONNECT_TEST_PROTOCOL_WTP_LEN,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_connect, .path = qpack_test_string_wtp, .path_length = sizeof(qpack_test_string_wtp),
+        .protocol = (uint8_t *)web_transport_str, .protocol_length = CONNECT_TEST_PROTOCOL_WTP_LEN }
     },
     {
         qpack_test_get_slash_range, sizeof(qpack_test_get_slash_range),
-        { h3zero_method_get, qpack_test_string_slash, 1,
-        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
-        0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = 1,
+        .range = qpack_test_range_text, .range_length = sizeof(qpack_test_range_text) }
     },
     {
         qpack_test_get_slash_range_long, sizeof(qpack_test_get_slash_range_long),
-        { h3zero_method_get, qpack_test_string_slash, 1,
-        NULL /* authority */, 0 /* authority_length */, qpack_test_range_text, sizeof(qpack_test_range_text),
-        0, 0, NULL, 0,
-        NULL /* wt_available_protocols */, 0 /* wt_available_protocols_length */, NULL /* wt_protocol */, 0 /* wt_protocol_length */, 0 }
+        { .method = h3zero_method_get, .path = qpack_test_string_slash, .path_length = 1,
+        .range = qpack_test_range_text, .range_length = sizeof(qpack_test_range_text) }
     }
 };
 
@@ -1243,8 +1223,8 @@ static uint8_t h3zero_stream_test3[] = {
     QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
     h3zero_frame_data, 12,
     H3ZERO_STREAM_TEST2_DATA,
-    h3zero_frame_header, 8,
-    QPACK_TEST_HEADER_BLOCK_PREFIX, 0x50 | 0x0F, 13, 3, '4', '0', '4'
+    h3zero_frame_header, 3,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 7
 };
 
 static uint8_t h3zero_stream_test_grease[] = {
@@ -2383,10 +2363,10 @@ static const picoquic_demo_stream_desc_t post_test_scenario[] = {
 };
 
 picohttp_server_path_item_t ping_test_item = {
-    "/ping",
-    5,
-    h3zero_test_ping_callback,
-    NULL
+    .path = "/ping",
+    .path_length = 5,
+    .path_callback = h3zero_test_ping_callback,
+    .path_app_ctx = NULL
 };
 
 picohttp_server_parameters_t ping_test_param = {
@@ -3609,7 +3589,9 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
 }
 
 h3zero_settings_t default_setting_expected = {
-    1, 0, 0, 0, 1, 1, 0
+    .h3_datagram = 1,
+    .enable_connect_protocol = 1,
+    .webtransport_enabled = 1
 };
 
 int h3zero_settings_test(void)

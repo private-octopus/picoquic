@@ -41,6 +41,19 @@
 #include "h3zero_common.h"
 
 
+int h3zero_origin_validator_allow_all(
+	const uint8_t* origin, size_t origin_length,
+	const uint8_t* authority, size_t authority_length,
+	void* origin_validator_ctx)
+{
+	(void)origin;
+	(void)origin_length;
+	(void)authority;
+	(void)authority_length;
+	(void)origin_validator_ctx;
+	return 0;
+}
+
 
  /* Stream context splay management */
 
@@ -280,7 +293,7 @@ int h3zero_protocol_init(picoquic_cnx_t* cnx)
 	 */
 	if (cnx->local_parameters.max_datagram_frame_size > 0) {
 		settings.h3_datagram = 1;
-		settings.webtransport_max_sessions = 1;
+		settings.webtransport_enabled = 1;
 	}
 
 	settings_buffer[0] = (uint8_t)h3zero_stream_type_control;
@@ -2029,14 +2042,16 @@ uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const 
 			/* remember how many bytes were used to encode the length */
 			uint8_t* bytes_after_length = bytes;
 			/* encode the various components, as needed */
+			/* Picoquic does not advertise WebTransport session flow-control
+			 * SETTINGS or implement the matching capsules. QUIC connection and
+			 * stream flow control already bound resource use, and picoquic keeps
+			 * one WebTransport session per QUIC connection.
+			 */
 			if ((bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_header_table_size, settings->table_size, UINT64_MAX)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_qpack_blocked_streams, settings->blocked_streams, UINT64_MAX)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_connect_protocol, settings->enable_connect_protocol, 0)) != NULL &&
 				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_setting_h3_datagram, settings->h3_datagram, 0)) != NULL &&
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions, settings->webtransport_max_sessions, 0)) != NULL &&
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_webtransport_max_sessions_old, settings->webtransport_max_sessions, 0)) != NULL &&
-				/* Chrome compatibility: also send SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) */
-				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_enable_webtransport, (settings->webtransport_max_sessions > 0) ? 1 : 0, 0)) != NULL) {
+				(bytes = h3zero_settings_component_encode(bytes, bytes_max, h3zero_settings_wt_enabled, settings->webtransport_enabled, 0)) != NULL) {
 				size_t actual_length = bytes - bytes_after_length;
 				uint8_t* bytes_final_length = picoquic_frames_varint_encode(bytes_of_length, bytes_after_length, actual_length);
 				if (bytes_final_length == NULL) {
@@ -2074,6 +2089,9 @@ const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uin
 			break;
 		case h3zero_setting_h3_datagram:
 			settings->h3_datagram = (unsigned int)component_value;
+			break;
+		case h3zero_settings_wt_enabled:
+			settings->webtransport_enabled = component_value;
 			break;
 		case h3zero_settings_webtransport_max_sessions:
 		case h3zero_settings_webtransport_max_sessions_old:

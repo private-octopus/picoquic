@@ -2,6 +2,16 @@
 
 Implementation of the web transport protocol on top of picoquic and h3zero implementation of HTTP3.
 
+The in-tree WebTransport CTest labels and strict versus compatibility policy are
+documented in [`webtransport_conformance.md`](webtransport_conformance.md).
+Browser smoke, browser E2E, and WPT adapter coverage is maintained in the
+separate `h3browserconformance` repository. Picoquic CI only gates the external
+WPT adapter smoke against the small in-tree `pico_baton`; full browser
+draft-compatibility testing stays in that separate repository.
+Picoquic does not advertise the draft WebTransport session-level flow-control
+SETTINGS or capsules; it relies on QUIC flow control and keeps a single
+WebTransport session on each QUIC connection.
+
 ## Pico Web Transport architecture
 
 The web transport implementation runs on top of the "h3zero" implementation of HTTP3,
@@ -147,6 +157,8 @@ defines the following callback events:
         picohttp_callback_post_datagram, /* Datagram received on this context */
         picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
+        picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
+        picohttp_callback_drain, /* Peer initiated graceful WebTransport drain. */
         picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free
 ~~~
@@ -264,5 +276,4 @@ QUIC context and a single UDP port. The requirements are:
 There is an example of this process in `demoserver.c`, with the ALPN selection
 function `picoquic_demo_server_callback_select_alpn` and the redirection
 callback `picoquic_demo_server_callback`.
-
 

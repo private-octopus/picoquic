@@ -5206,6 +5206,17 @@ uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_i
     return remote_error;
 }
 
+uint64_t picoquic_get_remote_stream_stop_error(picoquic_cnx_t* cnx, uint64_t stream_id)
+{
+    uint64_t remote_stop_error = 0;
+    picoquic_stream_head_t* stream;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
+        remote_stop_error = stream->remote_stop_error;
+    }
+    return remote_stop_error;
+}
+
 uint64_t picoquic_get_data_sent(picoquic_cnx_t* cnx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);

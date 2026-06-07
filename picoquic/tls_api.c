@@ -2378,7 +2378,8 @@ int picoquic_add_proposed_alpn(void* tls_context, const char* alpn)
     return ret;
 }
 
-int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen)
+static int picoquic_export_secret_ex(picoquic_cnx_t* cnx, const char* label,
+    ptls_iovec_t context, uint8_t* out, size_t outlen)
 {
     if (cnx == NULL || label == NULL || out == NULL || outlen == 0) {
         return -1;
@@ -2390,7 +2391,21 @@ int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out,
     }
 
     ptls_t* tls = tls_ctx->tls;
-    return ptls_export_secret(tls, out, outlen, label, ptls_iovec_init(NULL, 0), 0);
+    return ptls_export_secret(tls, out, outlen, label, context, 0);
+}
+
+int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen)
+{
+    return picoquic_export_secret_ex(cnx, label, ptls_iovec_init(NULL, 0), out, outlen);
+}
+
+int picoquic_export_secret_with_context(picoquic_cnx_t* cnx, const char* label,
+    const uint8_t* context, size_t context_len, uint8_t* out, size_t outlen)
+{
+    if (context == NULL && context_len > 0) {
+        return -1;
+    }
+    return picoquic_export_secret_ex(cnx, label, ptls_iovec_init(context, context_len), out, outlen);
 }
 
 /* Prepare the initial message when starting a connection.
