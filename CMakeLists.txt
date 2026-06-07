@@ -259,8 +259,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/picoquic_ns.c
-    picohttp/webtransport.c
-    picohttp/wt_baton.c)
+    picohttp/webtransport.c)
 
 set(PICOHTTP_HEADERS
      picoquic/picosplay.h
@@ -272,8 +271,7 @@ set(PICOHTTP_HEADERS
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
      picohttp/picoquic_ns.h
-     picohttp/picomask.h
-     picohttp/wt_baton.h)
+     picohttp/picomask.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
@@ -560,6 +558,7 @@ endif()
 if (BUILD_DEMO)
     add_executable(picoquicdemo
         picoquicfirst/picoquicdemo.c
+        picohttp/wt_baton.c
         picoquicfirst/getopt.c)
     target_link_libraries(picoquicdemo
         PUBLIC
@@ -665,6 +664,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c
+        picohttp/wt_baton.c
         ${PICOHTTP_TEST_LIBRARY_FILES})
         
     target_link_libraries(picohttp_ct
@@ -680,7 +680,9 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 
-    add_executable(pico_baton baton_app/baton_app.c)
+    add_executable(pico_baton
+        baton_app/baton_app.c
+        picohttp/wt_baton.c)
     target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core)
     target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_baton)
@@ -698,6 +700,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
              COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
              COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
+
 
     add_executable(thread_test
         thread_tester/thread_test.c)

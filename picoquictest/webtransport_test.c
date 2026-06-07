@@ -56,16 +56,19 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_st
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
 
 wt_baton_app_ctx_t baton_test_ctx = {
-    15
+    .nb_turns_required = 15
 };
 
 picohttp_server_path_item_t path_item_list[1] =
 {
     {
-        "/baton",
-        6,
-        wt_baton_callback,
-        &baton_test_ctx
+        .path = "/baton",
+        .path_length = 6,
+        .path_callback = wt_baton_callback,
+        .path_app_ctx = &baton_test_ctx,
+        .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+        .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+        .origin_validator = h3zero_origin_validator_allow_all
     }
 };
 
@@ -108,6 +111,7 @@ static int picowt_baton_test_one_ex(
     picohttp_server_parameters_t server_param = { 0 };
     picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0, 0, 0, 0, 0}, 8 };
     h3zero_callback_ctx_t* h3zero_cb = NULL;
+    h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
 
     initial_cid.id[3] = test_id;
@@ -146,33 +150,8 @@ static int picowt_baton_test_one_ex(
     if (ret == 0) {
         /* Set the client callback context using as much as possible
         * the generic picowt calls. */
-        h3zero_stream_ctx_t* control_stream_ctx = NULL;
-
         ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
             &test_ctx->cnx_client, &h3zero_cb, &control_stream_ctx, simulated_time, PICOQUIC_TEST_SNI);
-
-        if (ret == 0) {
-            ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
-                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
-        }
-
-        if (ret == 0) {
-            if (test_id == 8) {
-                uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
-                ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
-                    baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
-            }
-            else {
-                ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
-                    baton_ctx.authority, baton_ctx.server_path,
-                    wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
-            }
-        }
-
-        if (ret == 0) {
-            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
-        }
 
         if (ret == 0) {
             /* Initialize the server -- should include the path setup for connect action */
@@ -184,6 +163,10 @@ static int picowt_baton_test_one_ex(
             picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
             picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         }
+
+        if (ret == 0) {
+            ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+        }
     }
 
     /* Establish the connection from client to server. At this stage,
@@ -192,6 +175,30 @@ static int picowt_baton_test_one_ex(
 
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && !h3zero_cb->settings.settings_received) {
+        DBG_PRINTF("Settings not received before WebTransport CONNECT at t: %llu", simulated_time);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
+            control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+    }
+
+    if (ret == 0) {
+        if (test_id == 8) {
+            uint8_t grease_capsule[12] = { 0x00,0x0a,0xc0,0xe9,0x89,0x05,0x97,0xf9,0x46,0xe4,0x01,0x1d };
+            ret = picowt_connect_ex(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN, grease_capsule, 12);
+        }
+        else {
+            ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx,
+                baton_ctx.authority, baton_ctx.server_path,
+                wt_baton_callback, &baton_ctx, PICOWT_BATON_ALPN_AVAILABLE);
+        }
     }
 
     /* Simulate the connection from the client side. */
@@ -356,7 +363,14 @@ int picowt_baton_reset_test(void)
 int picowt_baton_wildcard_test(void)
 {
     picohttp_server_path_item_t wildcard_table[1] = {
-        { "*", 1, wt_baton_callback, NULL }
+        {
+            .path = "*",
+            .path_length = 1,
+            .path_callback = wt_baton_callback,
+            .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+            .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+            .origin_validator = h3zero_origin_validator_allow_all
+        }
     };
     /* /baton is not a specific entry in wildcard_table; the '*' handler must catch it */
     return picowt_baton_test_one_ex(1, "/baton?baton=240", 0, 2000000, ".", ".",
