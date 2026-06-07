@@ -519,21 +519,26 @@ int picoquic_process_ack_of_reset_stream_at_frame(picoquic_cnx_t* cnx, const uin
     const uint8_t* byte_first = bytes;
     const uint8_t* bytes_max = bytes + bytes_size;
     uint64_t stream_id = 0;
-    uint64_t final_offset = 0;
+    uint64_t reliable_size = 0;
     picoquic_stream_head_t* stream;
 
     if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) == NULL ||
         (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &final_offset)) == NULL ||
-        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL) {
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reliable_size)) == NULL) {
         /* Internal error -- cannot parse the stored packet */
         *consumed = bytes_size;
         ret = -1;
     }
     else {
         *consumed = bytes - byte_first;
-        /* Find the stream, if it exists. If it was already deleted, do nothing. */
-        if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
+        /* Find the stream, if it exists. If it was already deleted, do nothing.
+        * If the reliable_size parameter in the stream context does not match
+        * the reliable_size parameter in the frame, it means that the stream was reset 
+        * again after the packet was sent, and thus the reset is not acked yet.
+        */
+        if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL &&
+            reliable_size == stream->reliable_size) {
             /* mark reset as acked by peer */
             stream->reset_acked = 1;
             /* Delete stream if closed. */
@@ -3589,10 +3594,6 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                 byte_index += frame_length;
         }
         else {
-            size_t l_ftype = picoquic_varint_decode(&p->bytes[byte_index], p->length - byte_index, &ftype);
-            if (l_ftype == 0) {
-                break;
-            }
             switch (ftype) {
             case picoquic_frame_type_path_ack:
                 ret = picoquic_process_ack_of_path_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
@@ -3604,7 +3605,7 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                 break;
             case picoquic_frame_type_handshake_done:
                 cnx->is_handshake_done_acked = 1;
-                byte_index += l_ftype;
+                byte_index += 1;
                 break;
             case picoquic_frame_type_new_connection_id:
                 ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 0, &frame_length);
@@ -3641,6 +3642,10 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                 ret = picoquic_process_ack_of_reset_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
                 byte_index += frame_length;
                 break;
+            case picoquic_frame_type_reset_stream_at:
+                ret = picoquic_process_ack_of_reset_stream_at_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
             default:
                 if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
                     if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
@@ -3665,11 +3670,13 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                     break;
                 }
                 else {
-                    switch (ftype) {
-                    case picoquic_frame_type_reset_stream_at:
-                        ret = picoquic_process_ack_of_reset_stream_at_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-                        byte_index += frame_length;
+                    size_t l_ftype = picoquic_varint_decode(&p->bytes[byte_index], p->length - byte_index, &ftype);
+                    if (l_ftype == 0) {
+                        byte_index = p->length;
+                        ret = PICOQUIC_ERROR_INVALID_FRAME;
                         break;
+                    }
+                    switch (ftype) {
                     case picoquic_frame_type_path_new_connection_id:
                         ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 1, &frame_length);
                         byte_index += frame_length;
