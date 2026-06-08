@@ -553,12 +553,18 @@ if (BUILD_HTTP)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picohttp-core)
+
+    add_library(wt_baton STATIC EXCLUDE_FROM_ALL picohttp/wt_baton.c)
+    target_link_libraries(wt_baton PUBLIC picoquic-log picoquic-core picohttp-core)
+    target_include_directories(wt_baton PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>)
+    set_picoquic_compile_settings(wt_baton)
 endif()
 
 if (BUILD_DEMO)
     add_executable(picoquicdemo
         picoquicfirst/picoquicdemo.c
-        picohttp/wt_baton.c
         picoquicfirst/getopt.c)
     target_link_libraries(picoquicdemo
         PUBLIC
@@ -567,7 +573,8 @@ if (BUILD_DEMO)
             ${MBEDTLS_LIBRARIES}
             picoquic-log
             picoquic-core
-            picohttp-core)
+            picohttp-core
+            wt_baton)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
 endif()
@@ -664,7 +671,6 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
 
     add_executable(picohttp_ct
         picohttp_t/picohttp_t.c
-        picohttp/wt_baton.c
         ${PICOHTTP_TEST_LIBRARY_FILES})
         
     target_link_libraries(picohttp_ct
@@ -675,15 +681,15 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             picoquic-test
             picoquic-log
             picohttp-core
-            picoquic-core)
+            picoquic-core
+            wt_baton)
 
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 
     add_executable(pico_baton
-        baton_app/baton_app.c
-        picohttp/wt_baton.c)
-    target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core)
+        baton_app/baton_app.c)
+    target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core wt_baton)
     target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_baton)
 

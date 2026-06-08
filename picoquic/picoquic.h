@@ -743,10 +743,6 @@ void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 /* Export keying material from the TLS connection using the given exporter label */
 int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
 
-/* Export keying material from the TLS connection using the given exporter label and context */
-int picoquic_export_secret_with_context(picoquic_cnx_t* cnx, const char* label,
-    const uint8_t* context, size_t context_len, uint8_t* out, size_t outlen);
-
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
  * will also have certificaye and key. In that case, the function "enforce_client_only"
@@ -1708,10 +1704,6 @@ uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
 
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);
-
-/* Returns the remote STOP_SENDING error for the given stream. */
-uint64_t picoquic_get_remote_stream_stop_error(picoquic_cnx_t* cnx, uint64_t stream_id);
-
 
 uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 

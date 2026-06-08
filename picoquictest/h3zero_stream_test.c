@@ -555,7 +555,7 @@ uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
     return bytes;
 }
 
-uint8_t* h3zero_client_data_get_trailer(uint8_t* bytes, uint8_t* bytes_max)
+static uint8_t* h3zero_client_data_format_trailer(uint8_t* bytes, uint8_t* bytes_max)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_header)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 3)) != NULL) {
@@ -679,7 +679,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     }
     /* Encode a stream trailer */
     if (ret == 0 && spec->add_trailer &&
-        (bytes = h3zero_client_data_get_trailer(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_trailer(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
 
