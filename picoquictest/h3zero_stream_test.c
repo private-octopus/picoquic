@@ -529,7 +529,7 @@ int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const
     return ret;
 }
 
-uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
+uint8_t* h3zero_client_data_format_response(uint8_t * bytes, uint8_t * bytes_max)
 {
     uint8_t* length_byte = NULL;
     uint8_t* data_byte = NULL;
@@ -664,12 +664,12 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 
     /* Encode a stream header */
     if (ret == 0 && !spec->skip_header && 
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL){
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL){
         ret = -1;
     }
     /* encode a stray trailer */
     if (ret == 0 && spec->trailer_after_header &&
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
     /* Encode a data frame (or 2?)*/
