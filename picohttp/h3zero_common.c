@@ -2253,7 +2253,11 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		}
 	}
 	if (capsule->is_length_known) {
-		if (capsule->capsule_buffer_size < capsule->capsule_length) {
+		if (capsule->capsule_length == 0) {
+			capsule->value_read = 0;
+			capsule->is_stored = 1;
+		}
+		else if (capsule->capsule_buffer_size < capsule->capsule_length) {
 			uint8_t* capsule_buffer = (uint8_t*)malloc(capsule->capsule_length);
 			if (capsule_buffer != NULL && capsule->value_read > 0) {
 				memcpy(capsule_buffer, capsule->capsule_buffer, capsule->value_read);
@@ -2264,11 +2268,12 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 			capsule->capsule_buffer = capsule_buffer;
 			capsule->capsule_buffer_size = capsule->capsule_length;
 		}
- 		if (capsule->capsule_buffer == NULL) {
+		if (capsule->capsule_length > 0 && capsule->capsule_buffer == NULL) {
 			capsule->value_read = 0;
 			capsule->capsule_buffer_size = 0;
 			bytes = NULL;
-		} else {
+		}
+		else if (capsule->capsule_length > 0) {
 			size_t available = bytes_max - bytes;
 			if (capsule->value_read + available > capsule->capsule_length) {
 				available = capsule->capsule_length - capsule->value_read;
@@ -2351,7 +2356,8 @@ int h3zero_send_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* control_stream
 	int ret = 0;
 	uint8_t* bytes;
 	uint8_t* bytes_max = buffer + sizeof(buffer);
-	size_t data_length = ((capsule_type < 64) ? 1 : 2) + ((capsule_length < 64) ? 1 : 2) + capsule_length;
+	size_t data_length = picoquic_frames_varint_encode_length(capsule_type) +
+		picoquic_frames_varint_encode_length(capsule_length) + capsule_length;
 
 	if ((bytes = picoquic_frames_varint_encode(buffer, bytes_max, h3zero_frame_data)) == NULL ||
 		(bytes = picoquic_frames_varint_encode(bytes, bytes_max, data_length)) == NULL ||

@@ -344,6 +344,12 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      */
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
             ret = picowt_receive_capsule(cnx, bytes, (bytes == NULL)?NULL:(bytes + length), &baton_ctx->capsule);
+            if (ret == 0 &&
+                baton_ctx->capsule.h3_capsule.is_stored &&
+                baton_ctx->capsule.h3_capsule.capsule_type == picowt_capsule_drain_webtransport_session) {
+                /* Drain is advisory; legacy apps may not handle the callback. */
+                (void)wt_baton_callback(cnx, NULL, 0, picohttp_callback_drain, stream_ctx, path_app_ctx);
+            }
             if (ret == 0 && is_fin) {
                 stream_ctx->ps.stream_state.is_fin_received = 1;
                 baton_ctx->baton_state = wt_baton_state_closed;
@@ -833,6 +839,10 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             break;
         case picohttp_callback_stop_sending: /* peer wants to abandon the stream */
             ret = wt_baton_stream_stop(cnx, stream_ctx, path_app_ctx);
+            break;
+        case picohttp_callback_drain:
+            ((wt_baton_ctx_t*)path_app_ctx)->baton_state = wt_baton_state_done;
+            picoquic_log_app_message(cnx, "WT drain received on stream %" PRIu64, stream_ctx->stream_id);
             break;
         case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
             /* Free the memory attached to the stream */

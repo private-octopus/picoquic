@@ -531,7 +531,7 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
         ret = -1;
     }
     else {
-        ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_close_webtransport_session,
+        ret = h3zero_send_capsule(cnx, control_stream_ctx, picowt_capsule_drain_webtransport_session,
             0, null_msg, 0 /* Do not set fin, there could be other capsules */);
     }
 
@@ -564,6 +564,18 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint
             if (capsule->h3_capsule.is_stored) {
                 switch (capsule->h3_capsule.capsule_type) {
                 case picowt_capsule_drain_webtransport_session:
+                    if (capsule->h3_capsule.capsule_length != 0) {
+                        picoquic_log_app_message(cnx, "Web transport drain capsule length must be zero, got %zu bytes",
+                            capsule->h3_capsule.capsule_length);
+                        ret = -1;
+                    }
+                    else {
+                        capsule->error_code = 0;
+                        capsule->error_msg = NULL;
+                        capsule->error_msg_len = 0;
+                        picoquic_log_app_message(cnx, "Received web transport drain session capsule");
+                    }
+                    break;
                 case picowt_capsule_close_webtransport_session:
                     if (capsule->h3_capsule.capsule_length < 4) {
                         picoquic_log_app_message(cnx, "Web transport capsule too short, %zu bytes", capsule->h3_capsule.capsule_length);
@@ -582,9 +594,8 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint
                         }
                         text[text_len] = 0;
                         picoquic_log_app_message(cnx,
-                            "Received web transport session capsule, type: 0x%" PRIx64 " (%s), error: %" PRIx32 " (%s)",
+                            "Received web transport session capsule, type: 0x%" PRIx64 " (close session), error: %" PRIx32 " (%s)",
                             capsule->h3_capsule.capsule_type,
-                            (capsule->h3_capsule.capsule_type == picowt_capsule_close_webtransport_session) ? "close session" : "drain session",
                             capsule->error_code, text);
                     }
                     break;
@@ -602,6 +613,9 @@ int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint
 void picowt_release_capsule(picowt_capsule_t* capsule)
 {
     h3zero_release_capsule(&capsule->h3_capsule);
+    capsule->error_code = 0;
+    capsule->error_msg = NULL;
+    capsule->error_msg_len = 0;
 }
 
 void picowt_deregister(picoquic_cnx_t* cnx,

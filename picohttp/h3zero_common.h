@@ -48,9 +48,9 @@ extern "C" {
         picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
         picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
-        picohttp_callback_drain, /* Peer initiated graceful WebTransport drain. */
         picohttp_callback_deregister, /* Context has been deregistered */
-        picohttp_callback_free
+        picohttp_callback_free,
+        picohttp_callback_drain /* Peer initiated graceful WebTransport drain. */
     } picohttp_call_back_event_t;
 
     struct st_h3zero_stream_ctx_t;
