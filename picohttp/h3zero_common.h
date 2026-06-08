@@ -125,9 +125,11 @@ extern "C" {
         picohttp_post_data_cb_fn path_callback;
         void* path_callback_ctx;
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
+        size_t pending_connect_length;
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
+        unsigned int is_connect_pending : 1; /* CONNECT is waiting for peer SETTINGS */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;

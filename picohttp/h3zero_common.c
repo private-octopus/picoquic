@@ -341,6 +341,58 @@ int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 	return ret;
 }
 
+static int h3zero_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+{
+	const picoquic_tp_t* remote_tp = (cnx == NULL) ? NULL : picoquic_get_transport_parameters(cnx, 0);
+
+	return ctx != NULL &&
+		ctx->settings.settings_received &&
+		ctx->settings.enable_connect_protocol &&
+		ctx->settings.h3_datagram &&
+		ctx->settings.webtransport_enabled > 0 &&
+		remote_tp != NULL &&
+		remote_tp->max_datagram_frame_size > 0 &&
+		remote_tp->is_reset_stream_at_enabled;
+}
+
+static int h3zero_process_pending_connects(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+{
+	int ret = 0;
+	int can_send_connect = h3zero_webtransport_requirements_met(cnx, ctx);
+	picosplay_node_t* node = picosplay_first(&ctx->h3_stream_tree);
+
+	while (ret == 0 && node != NULL) {
+		picosplay_node_t* next = picosplay_next(node);
+		h3zero_stream_ctx_t* stream_ctx = (h3zero_stream_ctx_t*)picohttp_stream_node_value(node);
+
+		if (stream_ctx->is_connect_pending) {
+			if (can_send_connect) {
+				ret = picoquic_add_to_stream_with_ctx(cnx, stream_ctx->stream_id,
+					stream_ctx->frame, stream_ctx->pending_connect_length, 0, stream_ctx);
+			}
+			else {
+				picoquic_log_app_message(cnx,
+					"Deferred CONNECT on stream %" PRIu64 " rejected by peer WebTransport requirements",
+					stream_ctx->stream_id);
+				if (stream_ctx->path_callback != NULL) {
+					(void)stream_ctx->path_callback(cnx, NULL, 0,
+						picohttp_callback_connect_refused,
+						stream_ctx, stream_ctx->path_callback_ctx);
+				}
+				h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
+			}
+
+			if (ret == 0) {
+				stream_ctx->is_connect_pending = 0;
+				stream_ctx->pending_connect_length = 0;
+			}
+		}
+		node = next;
+	}
+
+	return ret;
+}
+
 uint8_t* h3zero_load_frame_content(uint8_t* bytes, uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state, uint64_t* error_found)
 {
@@ -491,6 +543,11 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 					}
 					else {
 						ctx->settings.settings_received = 1;
+						if (opt_cnx != NULL &&
+							h3zero_process_pending_connects((picoquic_cnx_t*)opt_cnx, ctx) != 0) {
+							*error_found = H3ZERO_INTERNAL_ERROR;
+							bytes = NULL;
+						}
 					}
 				}
 				h3zero_reset_control_stream_state(stream_state);

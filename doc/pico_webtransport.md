@@ -99,8 +99,9 @@ to that connection. In picoquic, this requires:
 
  * Create a stream in the connection.
  
- * Wait until peer HTTP/3 SETTINGS have been received, then call the API
-   `picowt_connect` defined in `pico_webtransport.h`
+ * Call the API `picowt_connect` defined in `pico_webtransport.h`. The API may
+   be called before peer HTTP/3 SETTINGS arrive; h3zero defers the CONNECT
+   bytes until SETTINGS and WebTransport transport requirements are validated.
  
  * Run the server socket loop connected to the picoquic context.
 
@@ -129,9 +130,7 @@ The web transport connection is set in five phases:
  2- Prepare the application state before the connection. This may
     include documenting the control stream context.
  
- 3- Start the H3 connection and wait until peer SETTINGS have been received.
-
- 4- Call the picowt_connect API to prepare and queue the web transport
+ 3- Call the picowt_connect API to prepare and queue the web transport
     connect message. The API takes the following parameters:
  
   - `cnx`: QUIC connection context
@@ -139,6 +138,13 @@ The web transport connection is set in five phases:
   - `path`: the path parameter for the connect request
   - `wt_callback`: the path callback used for the application
   - `wt_ctx`: the web transport application context associated with the path callback
+
+    The call may happen before peer SETTINGS arrive; the implementation defers
+    the CONNECT bytes internally until peer SETTINGS and WebTransport transport
+    requirements are validated.
+
+ 4- Start or continue the H3 connection so the deferred CONNECT can be sent
+    after validation.
  
  5- Make sure that the application is ready to process incoming streams.
 
