@@ -1504,7 +1504,6 @@ int picoquic_packet_loop_uring(
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    int* is_wake_up_event,
     unsigned char* received_ecn,
     uint8_t** received_buffer,
     picoquic_packet_loop_action_enum* action,
@@ -2589,9 +2588,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, thread_ctx, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_IO_URING)
         bytes_recv = picoquic_packet_loop_uring(
-            &ring, s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets, current_time, delta_t, thread_ctx,
-            &addr_from, &addr_to, &if_index_to, &is_wake_up_event, &received_ecn,
+            &ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
+            &addr_from, &addr_to, &if_index_to, &received_ecn,
             &received_buffer, &socket_rank, &action);
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
