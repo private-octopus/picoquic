@@ -1511,6 +1511,7 @@ int picoquic_packet_loop_uring(
 {
     int ret = 0;
     int bytes_recv = 0;
+    static int poll_no_data = 0;
 
     /* Restart the wake pipe if needed. */
     if (thread_ctx->wake_up_defined && !thread_ctx->is_pipe_io_uring_started){
@@ -1578,6 +1579,13 @@ int picoquic_packet_loop_uring(
             }
         }
         else if (io_ret == -ETIME) {
+#if 1
+            poll_no_data++;
+            if (poll_no_data > 1000000) {
+                fprint(stderr, "Hot loop on wait!");
+                exit(-1);
+            }
+#endif
             /* timeout expired: no bytes received */
             *received_buffer = NULL;
             bytes_recv = 0;
@@ -1585,6 +1593,10 @@ int picoquic_packet_loop_uring(
         }
         else {
             /* error */
+#if 1
+            fprint(stderr, "Error: %d (0x%x)!", io_ret, io_ret);
+            exit(-1);
+#endif
             ret = -1;
         }
     }
