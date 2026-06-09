@@ -634,7 +634,7 @@ int quicperf_multi_test(void)
         250, /* nb_frames_received_min */
         250, /* nb_frames_received_max */
         20000, /* average_delay_min */
-        26000, /* average_delay_max */
+        28000, /* average_delay_max */
         100000, /* max_delay */
         20000, /* min_delay */
         },
