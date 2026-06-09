@@ -2590,7 +2590,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
         bytes_recv = picoquic_packet_loop_uring(
             &ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
             &addr_from, &addr_to, &if_index_to, &received_ecn,
-            &received_buffer, &socket_rank, &action);
+            &received_buffer, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
