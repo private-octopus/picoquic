@@ -473,8 +473,7 @@ int picoquic_start_server_threads(
 
 /* Following declarations are used for unit tests. */
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx);
-int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
-    int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
+int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
 picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
     int af, uint16_t public_port, int is_port_shared, int is_listening);
 void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx);
