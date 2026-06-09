@@ -1535,7 +1535,7 @@ int picoquic_packet_loop_uring(
         (void)io_uring_submit(ring);
         /* set the timeout value */
         ts.tv_sec = delta_t / 1000000;
-        ts.tv_nsec = (delta_t - 1000 * ts.tv_sec) * 1000;
+        ts.tv_nsec = (delta_t%1000000) * 1000;
         /* call wait for sqe or timeout */
         io_ret = io_uring_wait_cqe_timeout(ring, &cqe, &ts);
         if (io_ret == 0) {
