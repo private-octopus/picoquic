@@ -1540,6 +1540,9 @@ int picoquic_packet_loop_uring(
         /* call wait for sqe or timeout */
         io_ret = io_uring_wait_cqe_timeout(ring, &cqe, &ts);
         if (io_ret == 0) {
+#if 1
+            poll_no_data = 0;
+#endif
             /* Normal case. First, get the data and identify the socket */
             uint64_t id64 = io_uring_cqe_get_data64(cqe);
             if (id64 == 0) {
