@@ -1585,7 +1585,7 @@ int picoquic_packet_loop_uring(
 #if 1
             poll_no_data++;
             if (poll_no_data > 1000000) {
-                fprint(stderr, "Hot loop on wait!");
+                fprintf(stderr, "Hot loop on wait!");
                 exit(-1);
             }
 #endif
@@ -1597,7 +1597,7 @@ int picoquic_packet_loop_uring(
         else {
             /* error */
 #if 1
-            fprint(stderr, "Error: %d (0x%x)!", io_ret, io_ret);
+            fprintf(stderr, "Error: %d (0x%x)!", io_ret, io_ret);
             exit(-1);
 #endif
             ret = -1;
