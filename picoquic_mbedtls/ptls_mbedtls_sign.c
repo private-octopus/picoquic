@@ -1325,10 +1325,20 @@ ptls_verify_certificate_t* ptls_mbedtls_get_certificate_verifier(char const* pem
         if (psa_ret == 0) {
             *is_cert_store_not_empty = 1;
             verifier = ptls_mbedssl_init_verify_certificate_complete(chain_head, NULL, NULL, NULL);
+            if (verifier == NULL) {
+                /* verifier allocation failed: free the cert contents AND the head node */
+                mbedtls_x509_crt_free(chain_head);
+                free(chain_head);
+            }
         }
         else {
-
+            /* mbedtls_x509_crt_free() only releases the linked-list contents and
+             * the tail nodes, NOT the caller-allocated head node. We malloc'd
+             * chain_head above, so we must free it here as well, otherwise the
+             * head struct leaks on every call that fails to parse (including the
+             * pem_fname == NULL path). */
             mbedtls_x509_crt_free(chain_head);
+            free(chain_head);
         }
     }
     return (verifier==NULL)?NULL:&verifier->super;
@@ -1340,7 +1350,12 @@ void ptls_mbedtls_dispose_verify_certificate(ptls_verify_certificate_t* v)
         (ptls_mbedtls_verify_certificate_t*)v;
     if (verifier != NULL) {
         if (verifier->trust_ca != NULL) {
+            /* trust_ca is the head node allocated with malloc() in
+             * ptls_mbedtls_get_certificate_verifier(). mbedtls_x509_crt_free()
+             * releases the contents and any tail nodes but not the head node
+             * itself, so free() it explicitly to avoid leaking it. */
             mbedtls_x509_crt_free(verifier->trust_ca);
+            free(verifier->trust_ca);
             verifier->trust_ca = NULL;
         }
         if (verifier->trust_crl != NULL) {

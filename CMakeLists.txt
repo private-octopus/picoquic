@@ -264,6 +264,7 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/wt_baton.c)
 
 set(PICOHTTP_HEADERS
+     picoquic/picosplay.h
      picohttp/h3zero.h
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
