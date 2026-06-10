@@ -248,6 +248,13 @@ extern "C" {
         int should_create,
         int is_h3);
 
+
+    const uint8_t* h3zero_parse_incoming_remote_stream_ex(
+        const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_stream_ctx_t* stream_ctx,
+        h3zero_callback_ctx_t* ctx,
+        picoquic_cnx_t* opt_cnx, uint64_t* error_found);
+
     const uint8_t* h3zero_parse_incoming_remote_stream(
         const uint8_t* bytes, const uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
