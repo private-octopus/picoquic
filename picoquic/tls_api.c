@@ -1946,7 +1946,9 @@ static int picoquic_clone_ptls_template(ptls_context_t* ctx, const ptls_context_
         return PICOQUIC_ERROR_MEMORY;
     }
 
-    memcpy(suites, old_ctx->cipher_suites, sizeof(ptls_cipher_suite_t*) * (count + 1));
+    for (size_t i = 0; i <= count; i++) {
+        suites[i] = old_ctx->cipher_suites[i];
+    }
     ctx->cipher_suites = suites;
     return 0;
 }

@@ -5459,6 +5459,10 @@ typedef struct st_cert_rollover_credential_t {
 typedef struct st_cert_rollover_test_ctx_t {
     uint64_t simulated_time;
     picoquic_test_tls_api_ctx_t* test_ctx;
+    char rsa_cert_file[512];
+    char ecdsa_cert_file[512];
+    char ecdsa_key_file[512];
+    char bad_key_file[512];
     cert_rollover_credential_t rsa_credential;
     cert_rollover_credential_t ecdsa_credential;
     cert_rollover_verify_ctx_t verify_ctx;
@@ -5469,11 +5473,6 @@ static const uint16_t cert_rollover_algos[] = {
     PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PTLS_SIGNATURE_RSA_PKCS1_SHA256,
     PTLS_SIGNATURE_RSA_PKCS1_SHA1, UINT16_MAX
 };
-
-#define CERT_ROLLOVER_RSA_CERT_FILE "../" PICOQUIC_TEST_FILE_SERVER_CERT
-#define CERT_ROLLOVER_ECDSA_CERT_FILE "../" PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA
-#define CERT_ROLLOVER_ECDSA_KEY_FILE "../" PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA
-#define CERT_ROLLOVER_BAD_KEY_FILE CERT_ROLLOVER_ECDSA_KEY_FILE ".bad"
 
 static void cert_rollover_free_certificates(ptls_iovec_t* certs, size_t count)
 {
@@ -5539,6 +5538,29 @@ static void cert_rollover_verify_expect(cert_rollover_verify_ctx_t* verify_ctx, 
     verify_ctx->matched_expected = 0;
 }
 
+static int cert_rollover_set_file_names(cert_rollover_test_ctx_t* ctx)
+{
+    int ret = picoquic_get_input_path(ctx->rsa_cert_file, sizeof(ctx->rsa_cert_file),
+        picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(ctx->ecdsa_cert_file, sizeof(ctx->ecdsa_cert_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(ctx->ecdsa_key_file, sizeof(ctx->ecdsa_key_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_sprintf(ctx->bad_key_file, sizeof(ctx->bad_key_file), NULL,
+            "%s.bad", ctx->ecdsa_key_file);
+    }
+
+    return ret;
+}
+
 static void cert_rollover_free_test(cert_rollover_test_ctx_t* ctx)
 {
     if (ctx->test_ctx != NULL) {
@@ -5562,12 +5584,16 @@ static int cert_rollover_init_test(cert_rollover_test_ctx_t* ctx, int use_ecdsa_
 
     cert_rollover_verify_init(&ctx->verify_ctx);
 
+    if (ret == 0) {
+        ret = cert_rollover_set_file_names(ctx);
+    }
+
     if (ret == 0 && load_rsa) {
-        ret = cert_rollover_load_credential(&ctx->rsa_credential, CERT_ROLLOVER_RSA_CERT_FILE);
+        ret = cert_rollover_load_credential(&ctx->rsa_credential, ctx->rsa_cert_file);
     }
 
     if (ret == 0 && load_ecdsa) {
-        ret = cert_rollover_load_credential(&ctx->ecdsa_credential, CERT_ROLLOVER_ECDSA_CERT_FILE);
+        ret = cert_rollover_load_credential(&ctx->ecdsa_credential, ctx->ecdsa_cert_file);
     }
 
     if (ret == 0) {
@@ -5722,7 +5748,7 @@ int cert_rollover_inflight_test(void)
 
     if (ret == 0) {
         ret = picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
-            CERT_ROLLOVER_ECDSA_CERT_FILE, CERT_ROLLOVER_ECDSA_KEY_FILE);
+            ctx.ecdsa_cert_file, ctx.ecdsa_key_file);
     }
 
     if (ret == 0) {
@@ -5758,7 +5784,7 @@ int cert_rollover_active_connection_test(void)
     }
 
     if (ret == 0 && picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
-        CERT_ROLLOVER_ECDSA_CERT_FILE, CERT_ROLLOVER_BAD_KEY_FILE) == 0) {
+        ctx.ecdsa_cert_file, ctx.bad_key_file) == 0) {
         ret = -1;
     }
 
@@ -5773,7 +5799,7 @@ int cert_rollover_active_connection_test(void)
 
     if (ret == 0) {
         ret = picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
-            CERT_ROLLOVER_ECDSA_CERT_FILE, CERT_ROLLOVER_ECDSA_KEY_FILE);
+            ctx.ecdsa_cert_file, ctx.ecdsa_key_file);
     }
 
     if (ret == 0) {
