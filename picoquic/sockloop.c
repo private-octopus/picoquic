@@ -363,13 +363,8 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #endif
 }
 
-#ifdef _WINDOWS
-int picoquic_packet_loop_open_socket(int socket_buffer_size, int do_not_use_gso,
+int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
     picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
-#else
-int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_use_gso),
-    picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
-#endif
 {
     int ret = 0;
     struct sockaddr_storage local_address;
@@ -381,7 +376,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_u
     int send_coalesced = 0;
 
     /* Assess whether coalescing is supported */
-    if (!do_not_use_gso) {
+    if (!param->do_not_use_gso) {
         picoquic_sockloop_win_coalescing_test(&recv_coalesced, &send_coalesced);
 #if 0
         /* TODO: remove temporary fix, after we figure how to work that out. */
@@ -424,7 +419,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_u
         }
         
 #ifndef ESP_PLATFORM
-        if (socket_buffer_size > 0) {
+        if (param->socket_buffer_size > 0) {
             socklen_t opt_len;
             int opt_ret;
             int so_sndbuf;
@@ -433,13 +428,13 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_u
             char const* last_op_name = "SO_SNDBUF";
 
             opt_len = sizeof(int);
-            so_sndbuf = socket_buffer_size;
+            so_sndbuf = param->socket_buffer_size;
             opt_ret = setsockopt(s_ctx->fd, SOL_SOCKET, SO_SNDBUF, (const char*)&so_sndbuf, opt_len);
             if (opt_ret == 0) {
                 last_op = SO_RCVBUF;
                 last_op_name = "SO_RECVBUF";
                 opt_len = sizeof(int);
-                so_rcvbuf = socket_buffer_size;
+                so_rcvbuf = param->socket_buffer_size;
                 opt_ret = setsockopt(s_ctx->fd, SOL_SOCKET, SO_RCVBUF, (const char*)&so_rcvbuf, opt_len);
             }
             if (opt_ret != 0) {
@@ -451,7 +446,7 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_u
 #endif
                 opt_ret = getsockopt(s_ctx->fd, SOL_SOCKET, last_op, (char*)&so_errbuf, &opt_len);
                 DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
-                    last_op_name, socket_buffer_size, sock_error, so_errbuf, opt_ret);
+                    last_op_name, param->socket_buffer_size, sock_error, so_errbuf, opt_ret);
                 ret = -1;
             }
         }
@@ -467,17 +462,16 @@ int picoquic_packet_loop_open_socket(int socket_buffer_size, int UNUSED(do_not_u
     return ret;
 }
 
-int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_t public_port, int is_shared,
-    int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
     int nb_sockets = 0;
     int af[2];
     int nb_af;
-    uint16_t current_port = local_port;
+    uint16_t current_port = param->local_port;
     int sock_ret = 0;
 
-    if (local_af == 0) {
+    if (param->local_af == 0) {
 #ifdef ESP_PLATFORM
         nb_af = 1;
         af[0] = AF_INET;
@@ -489,27 +483,27 @@ int picoquic_packet_loop_open_sockets(uint16_t local_port, int local_af, uint16_
     }
     else {
         nb_af = 1;
-        af[0] = local_af;
+        af[0] = param->local_af;
     }
-    for (int iteration = 0; sock_ret == 0 && iteration < 1 + (extra_socket_required); iteration++) {
+    for (int iteration = 0; sock_ret == 0 && iteration < 1 + (param->extra_socket_required); iteration++) {
         for (int i_af = 0; sock_ret == 0 && i_af < nb_af; i_af++) {
             s_ctx[nb_sockets].af = af[i_af];
             s_ctx[nb_sockets].port = current_port;
             s_ctx[nb_sockets].n_port = htons(current_port);
             s_ctx[nb_sockets].is_port_shared = 0;
-            if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets], ecn_value)) == 0) {
+            if ((sock_ret = picoquic_packet_loop_open_socket(param, &s_ctx[nb_sockets], ecn_value)) == 0) {
                 if (current_port == 0) {
                     current_port = s_ctx[nb_sockets].port;
                     s_ctx[nb_sockets].n_port = htons(current_port);
                 }
                 nb_sockets++;
             }
-            if (sock_ret == 0 && public_port != 0) {
+            if (sock_ret == 0 && param->public_port != 0) {
                 s_ctx[nb_sockets].af = af[i_af];
-                s_ctx[nb_sockets].port = public_port;
-                s_ctx[nb_sockets].n_port = htons(public_port);
-                s_ctx[nb_sockets].is_port_shared = (is_shared != 0);
-                if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, &s_ctx[nb_sockets], ecn_value)) == 0) {
+                s_ctx[nb_sockets].port = param->public_port;
+                s_ctx[nb_sockets].n_port = htons(param->public_port);
+                s_ctx[nb_sockets].is_port_shared = (param->is_port_shared != 0);
+                if ((sock_ret = picoquic_packet_loop_open_socket(param, &s_ctx[nb_sockets], ecn_value)) == 0) {
                     nb_sockets++;
                 }
             }
@@ -1510,7 +1504,6 @@ int picoquic_packet_loop_uring(
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
-    int* is_wake_up_event,
     unsigned char* received_ecn,
     uint8_t** received_buffer,
     picoquic_packet_loop_action_enum* action,
@@ -2442,10 +2435,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     }
 
     memset(s_ctx, 0, sizeof(s_ctx));
-    if ((nb_sockets = picoquic_packet_loop_open_sockets(param->local_port,
-        param->local_af, param->public_port, param->is_port_shared,
-        param->socket_buffer_size,
-        param->extra_socket_required, param->do_not_use_gso, s_ctx, ecn_value)) <= 0) {
+    if ((nb_sockets = picoquic_packet_loop_open_sockets(param, s_ctx, ecn_value)) <= 0) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     }
     else if (qmux != NULL) {
@@ -2598,10 +2588,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             delta_t, thread_ctx, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_IO_URING)
         bytes_recv = picoquic_packet_loop_uring(
-            &ring, s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets, current_time, delta_t, thread_ctx,
-            &addr_from, &addr_to, &if_index_to, &is_wake_up_event, &received_ecn,
-            &received_buffer, &socket_rank, &action);
+            &ring, s_ctx, nb_sockets_available, delta_t, thread_ctx,
+            &addr_from, &addr_to, &if_index_to, &received_ecn,
+            &received_buffer, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
         bytes_recv = picoquic_packet_loop_poll(
             s_ctx, nb_sockets_available,
@@ -2766,7 +2755,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                                 new_ctx->port = ntohs(((struct sockaddr_in*)&peer_addr)->sin_port);
                             }
                             new_ctx->n_port = htons(new_ctx->port);
-                            if (picoquic_packet_loop_open_socket(param->socket_buffer_size, param->do_not_use_gso, new_ctx, ecn_value) == 0) {
+                            if (picoquic_packet_loop_open_socket(param, new_ctx, ecn_value) == 0) {
                                 send_socket = new_ctx->fd;
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;

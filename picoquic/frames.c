@@ -1882,6 +1882,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                         if (is_still_active != NULL) {
                             *is_still_active = stream_data_context.is_still_active;
                         }
+                        if (!stream->is_active) {
+                            picoquic_update_output_stream(cnx, stream);
+                        }
                     }
                 }
             }

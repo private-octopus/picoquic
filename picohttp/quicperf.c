@@ -1304,16 +1304,20 @@ int quicperf_prepare_to_send_media(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, qui
         available = (size_t)(send_limit - stream_ctx->frame_bytes_sent);
         stream_ctx->nb_frames_sent++;
 
+        /* Check whether this is the last frame for the stream */
         if (stream_ctx->nb_frames_sent >= stream_ctx->nb_frames) {
+            /* If this is the last frame, prepare to close the stream. */
             is_fin = 1;
             stream_ctx->is_activated = 0;
         }
         else {
+            /* If this is not the last frame, check whether the sender should wait before sending the next frame. */
             uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
             if (stream_ctx->frequency > 0) {
                 stream_ctx->next_frame_time = stream_ctx->start_time + (stream_ctx->nb_frames_sent * 1000000) / stream_ctx->frequency;
             }
-            if (current_time < stream_ctx->next_frame_time){
+            if (current_time < stream_ctx->next_frame_time) {
+                /* the next frame cannot be sent immediately. Mark the stream as inactive/ */
                 stream_ctx->is_activated = 0;
                 if (ctx->stream_wakeup_time == 0 || ctx->stream_wakeup_time > stream_ctx->next_frame_time) {
                     ctx->stream_wakeup_time = stream_ctx->next_frame_time;
@@ -1324,6 +1328,9 @@ int quicperf_prepare_to_send_media(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, qui
         }
     }
 
+    /* The number of bytes available is the minimum of the number of remaining bytes
+     * for the frame and the length of the callback buffer.
+     */
     buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, stream_ctx->is_activated);
     if (buffer != NULL) {
         size_t byte_index = 0;
@@ -1445,7 +1452,7 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                         ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
                         stream_ctx->is_activated = 1;
                     }
-                    if (stream_ctx->next_frame_time < next_wakeup_time) {
+                    else {
                         next_wakeup_time = stream_ctx->next_frame_time;
                     }
                 }
