@@ -937,7 +937,7 @@ static int picoquic_ns_media_excluded(char const* media_excluded, char const* id
 {
     int is_excluded = 0;
     size_t id_len = strlen(id);
-    while (*media_excluded != 0){
+    while (media_excluded != NULL && *media_excluded != 0){
         size_t to_next_comma = 0;
 
         while (*media_excluded == ' ' || *media_excluded == '\t') {
