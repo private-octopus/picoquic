@@ -76,13 +76,13 @@ int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
 
     if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
         is_closed = ((stream->fin_requested && stream->fin_sent) || 
-            (stream->reset_requested && stream->reset_sent && 
-                (stream->reliable_size == 0 || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size) != 0))) &&
+            (stream->reset_requested && stream->reset_sent && picoquic_reliable_prefix_is_acked(stream))) &&
             ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
     }
     else if (IS_LOCAL_STREAM_ID(stream->stream_id, client_mode)) {
         /* Unidir from local host*/
-        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent));
+        is_closed = ((stream->fin_requested && stream->fin_sent) || 
+            (stream->reset_requested && stream->reset_sent && picoquic_reliable_prefix_is_acked(stream)));
     }
     else {
         is_closed = ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
@@ -219,6 +219,11 @@ int picoquic_flow_control_check_stream_offset(picoquic_cnx_t* cnx, picoquic_stre
  *
  * An endpoint may use a RST_STREAM frame (type=0x01) to abruptly terminate a stream.
  */
+
+int picoquic_reliable_prefix_is_acked(picoquic_stream_head_t* stream)
+{
+    return (stream->reliable_size == 0 || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size - 1) != 0);
+}
 
 static const uint8_t* picoquic_skip_reset_stream_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -419,7 +424,7 @@ int picoquic_check_reset_stream_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
     uint64_t stream_id = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -571,7 +576,8 @@ int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8
         /* Internal error -- cannot parse the stored packet */
         ret = -1;
     }
-    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL ||
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL || 
+        reliable_size != stream->reliable_size ||
         stream->reset_acked) {
         *no_need_to_repeat = 1;
     }
