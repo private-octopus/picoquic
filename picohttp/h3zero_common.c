@@ -54,7 +54,6 @@ int h3zero_origin_validator_allow_all(
 	return 0;
 }
 
-
  /* Stream context splay management */
 
 static int64_t picohttp_stream_node_compare(void *l, void *r)
@@ -75,8 +74,6 @@ void * picohttp_stream_node_value(picosplay_node_t * node)
 
 static void picohttp_clear_stream_ctx(h3zero_stream_ctx_t* stream_ctx)
 {
-	picowt_clear_pending_connect(stream_ctx);
-
 	if (stream_ctx->file_path != NULL) {
 		free(stream_ctx->file_path);
 		stream_ctx->file_path = NULL;
@@ -115,6 +112,7 @@ void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3ze
 	if (cnx != NULL) {
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
+	picowt_clear_pending_connect(ctx, stream_ctx);
 	picosplay_delete(&ctx->h3_stream_tree, &stream_ctx->http_stream_node);
 }
 
@@ -495,7 +493,7 @@ static uint8_t* h3zero_parse_control_stream(uint8_t* bytes, uint8_t* bytes_max,
 					else {
 						ctx->settings.settings_received = 1;
 						if (opt_cnx != NULL &&
-							picowt_process_pending_connects((picoquic_cnx_t*)opt_cnx, ctx) != 0) {
+							picowt_process_pending_connect((picoquic_cnx_t*)opt_cnx, ctx) != 0) {
 							*error_found = H3ZERO_INTERNAL_ERROR;
 							bytes = NULL;
 						}
@@ -906,6 +904,7 @@ h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters
 
 void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
+	picowt_clear_pending_connect(ctx, NULL);
 	h3zero_delete_all_stream_prefixes(cnx, ctx);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
@@ -1150,19 +1149,47 @@ int h3zero_process_request_frame(
 		if (stream_ctx->path_callback == NULL) {
 			int path_item = h3zero_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, app_ctx->path_table, app_ctx->path_table_nb);
 			if (path_item >= 0) {
-				stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-				if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
-					stream_ctx, app_ctx->path_table[path_item].path_app_ctx) != 0) {
-					/* This callback is not supported */
-					picoquic_log_app_message(cnx, "Unsupported callback on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, app_ctx->path_table[path_item].path);
-					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
+				const picohttp_server_path_item_t* item = &app_ctx->path_table[path_item];
+				char error_code[4] = "404";
+
+				if (item->connect_error_status >= 100 && item->connect_error_status <= 999) {
+					(void)snprintf(error_code, sizeof(error_code), "%03d", item->connect_error_status);
+				}
+				if (item->connect_protocol != NULL &&
+					(stream_ctx->ps.stream_state.header.protocol == NULL ||
+					stream_ctx->ps.stream_state.header.protocol_length != item->connect_protocol_length ||
+					memcmp(stream_ctx->ps.stream_state.header.protocol,
+						item->connect_protocol, item->connect_protocol_length) != 0)) {
+					picoquic_log_app_message(cnx, "Unsupported CONNECT protocol on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
+					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, error_code, H3ZERO_USER_AGENT_STRING);
+				}
+				else if (item->origin_validator != NULL &&
+					stream_ctx->ps.stream_state.header.origin != NULL &&
+					item->origin_validator(
+						stream_ctx->ps.stream_state.header.origin,
+						stream_ctx->ps.stream_state.header.origin_length,
+						stream_ctx->ps.stream_state.header.authority,
+						stream_ctx->ps.stream_state.header.authority_length,
+						item->origin_validator_ctx) != 0) {
+					picoquic_log_app_message(cnx, "Rejected CONNECT origin on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
+					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, error_code, H3ZERO_USER_AGENT_STRING);
 				}
 				else {
-					/* Create a connect accept frame */
-					picoquic_log_app_message(cnx, "Connect accepted on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, app_ctx->path_table[path_item].path);
-					/* TODO: path callback, fill additional HTTP headers */
-                    o_bytes = h3zero_create_response_header_frame_ex(o_bytes, o_bytes_max, h3zero_content_type_none, H3ZERO_USER_AGENT_STRING, stream_ctx->ps.stream_state.wt_protocol);
-					stream_ctx->is_upgraded = 1;
+					stream_ctx->path_callback = item->path_callback;
+					if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
+						stream_ctx, item->path_app_ctx) != 0) {
+						/* This callback is not supported */
+						picoquic_log_app_message(cnx, "Unsupported callback on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
+						stream_ctx->path_callback = NULL;
+						o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, "501", H3ZERO_USER_AGENT_STRING);
+					}
+					else {
+						/* Create a connect accept frame */
+						picoquic_log_app_message(cnx, "Connect accepted on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
+						/* TODO: path callback, fill additional HTTP headers */
+						o_bytes = h3zero_create_response_header_frame_ex(o_bytes, o_bytes_max, h3zero_content_type_none, H3ZERO_USER_AGENT_STRING, stream_ctx->ps.stream_state.wt_protocol);
+						stream_ctx->is_upgraded = 1;
+					}
 				}
 			}
 			else {

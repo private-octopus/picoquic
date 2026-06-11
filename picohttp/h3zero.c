@@ -489,6 +489,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->authority, &parts->authority_length);
                 }
                 break;
+            case http_header_origin:
+                if (parts->origin != NULL) {
+                    /* Duplicate origin! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->origin, &parts->origin_length);
+                }
+                break;
             case http_header_range:
                 if (parts->range != NULL) {
                     /* Duplicate content type! */
@@ -1141,6 +1151,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->authority);
         *((uint8_t**)&header->authority) = NULL;
         header->authority_length = 0;
+    }
+    if (header->origin != NULL) {
+        free((uint8_t*)header->origin);
+        *((uint8_t**)&header->origin) = NULL;
+        header->origin_length = 0;
     }
     if (header->range != NULL) {
         free((uint8_t*)header->range);

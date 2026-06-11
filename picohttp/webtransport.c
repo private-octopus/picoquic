@@ -305,7 +305,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
         }
         if (candidate_length > 0) {
             /* check whether there is a match*/
-            int os = 0;
+            size_t os = 0;
             while (os + candidate_length <= s_len) {
                 if (supported[os] == ' ' || supported[os] == '\t' || supported[os] == ',') {
                     os++;
@@ -322,7 +322,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
                         break;
                     }
                     else while (os + candidate_length <= s_len &&
-                        supported[os] != ' ' && supported[os] != '\t') {
+                        supported[os] != ' ' && supported[os] != '\t' && supported[os] != ',') {
                         os++;
                     }
                 }
@@ -395,10 +395,14 @@ static int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
         *connect_length = bytes - stream_ctx->frame;
         stream_ctx->ps.stream_state.is_upgrade_requested = 1;
 
-        if (extra != NULL && extra_length > 0 &&
-            *connect_length + extra_length <= sizeof(stream_ctx->frame)) {
-            memcpy(stream_ctx->frame + *connect_length, extra, extra_length);
-            *connect_length += extra_length;
+        if (extra != NULL && extra_length > 0) {
+            if (*connect_length + extra_length > sizeof(stream_ctx->frame)) {
+                ret = -1;
+            }
+            else {
+                memcpy(stream_ctx->frame + *connect_length, extra, extra_length);
+                *connect_length += extra_length;
+            }
         }
     }
 
@@ -424,28 +428,39 @@ static void picowt_delete_pending_connect(picowt_pending_connect_t* pending)
     }
 }
 
-void picowt_clear_pending_connect(h3zero_stream_ctx_t* stream_ctx)
+void picowt_clear_pending_connect(h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx)
 {
-    if (stream_ctx != NULL) {
-        picowt_delete_pending_connect(stream_ctx->pending_connect);
-        stream_ctx->pending_connect = NULL;
-        stream_ctx->is_connect_pending = 0;
+    if (ctx != NULL &&
+        (stream_ctx == NULL || ctx->pending_wt_connect == stream_ctx)) {
+        picowt_delete_pending_connect(ctx->pending_wt_connect_data);
+        ctx->pending_wt_connect_data = NULL;
+        ctx->pending_wt_connect = NULL;
     }
 }
 
-static int picowt_set_pending_connect(h3zero_stream_ctx_t* stream_ctx,
+static int picowt_set_pending_connect(h3zero_callback_ctx_t* ctx,
+    h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, char const* wt_available_protocols,
     uint8_t* extra, size_t extra_length)
 {
     int ret = 0;
     picowt_pending_connect_t* pending = NULL;
 
-    picowt_clear_pending_connect(stream_ctx);
-    if ((pending = (picowt_pending_connect_t*)malloc(sizeof(picowt_pending_connect_t))) == NULL) {
+    if (ctx == NULL || stream_ctx == NULL ||
+        (ctx->pending_wt_connect != NULL && ctx->pending_wt_connect != stream_ctx)) {
         ret = -1;
     }
     else {
-        memset(pending, 0, sizeof(picowt_pending_connect_t));
+        picowt_clear_pending_connect(ctx, stream_ctx);
+    }
+    if (ret == 0) {
+        pending = (picowt_pending_connect_t*)malloc(sizeof(picowt_pending_connect_t));
+        if (pending == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(pending, 0, sizeof(picowt_pending_connect_t));
+        }
     }
     if (ret == 0 &&
         ((authority != NULL &&
@@ -468,8 +483,8 @@ static int picowt_set_pending_connect(h3zero_stream_ctx_t* stream_ctx,
     }
 
     if (ret == 0) {
-        stream_ctx->pending_connect = pending;
-        stream_ctx->is_connect_pending = 1;
+        ctx->pending_wt_connect = stream_ctx;
+        ctx->pending_wt_connect_data = pending;
     }
     else {
         picowt_delete_pending_connect(pending);
@@ -483,7 +498,9 @@ static int picowt_send_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_
 {
     int ret;
     size_t connect_length = 0;
-    picowt_pending_connect_t* pending = stream_ctx->pending_connect;
+    picowt_pending_connect_t* pending = (ctx == NULL ||
+        ctx->pending_wt_connect != stream_ctx) ? NULL :
+        ctx->pending_wt_connect_data;
 
     if (pending == NULL) {
         ret = -1;
@@ -502,40 +519,35 @@ static int picowt_send_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_
     }
 
     if (ret == 0) {
-        picowt_clear_pending_connect(stream_ctx);
+        picowt_clear_pending_connect(ctx, stream_ctx);
     }
 
     return ret;
 }
 
-int picowt_process_pending_connects(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
     int ret = 0;
-    int can_send_connect = picowt_webtransport_requirements_met(cnx, ctx);
-    picosplay_node_t* node = (ctx == NULL) ? NULL : picosplay_first(&ctx->h3_stream_tree);
 
-    while (ret == 0 && node != NULL) {
-        picosplay_node_t* next = picosplay_next(node);
-        h3zero_stream_ctx_t* stream_ctx = (h3zero_stream_ctx_t*)picohttp_stream_node_value(node);
+    if (ctx != NULL && ctx->pending_wt_connect != NULL) {
+        h3zero_stream_ctx_t* stream_ctx = ctx->pending_wt_connect;
+        uint64_t stream_id = stream_ctx->stream_id;
 
-        if (stream_ctx->is_connect_pending) {
-            if (can_send_connect) {
-                ret = picowt_send_pending_connect(cnx, ctx, stream_ctx);
-            }
-            else {
-                picoquic_log_app_message(cnx,
-                    "Deferred WebTransport CONNECT on stream %" PRIu64 " rejected by peer settings",
-                    stream_ctx->stream_id);
-                if (stream_ctx->path_callback != NULL) {
-                    (void)stream_ctx->path_callback(cnx, NULL, 0,
-                        picohttp_callback_connect_refused,
-                        stream_ctx, stream_ctx->path_callback_ctx);
-                }
-                h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
-                picowt_clear_pending_connect(stream_ctx);
-            }
+        if (picowt_webtransport_requirements_met(cnx, ctx)) {
+            ret = picowt_send_pending_connect(cnx, ctx, stream_ctx);
         }
-        node = next;
+        else {
+            picoquic_log_app_message(cnx,
+                "Deferred WebTransport CONNECT on stream %" PRIu64 " rejected by peer settings",
+                stream_id);
+            if (stream_ctx->path_callback != NULL) {
+                (void)stream_ctx->path_callback(cnx, NULL, 0,
+                    picohttp_callback_connect_refused,
+                    stream_ctx, stream_ctx->path_callback_ctx);
+            }
+            h3zero_delete_stream_prefix(cnx, ctx, stream_id);
+            picowt_clear_pending_connect(ctx, stream_ctx);
+        }
     }
 
     return ret;
@@ -571,7 +583,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 
         if (ret == 0) {
             if (!ctx->settings.settings_received) {
-                ret = picowt_set_pending_connect(stream_ctx, authority, path,
+                ret = picowt_set_pending_connect(ctx, stream_ctx, authority, path,
                     wt_available_protocols, extra, extra_length);
                 if (cnx != NULL) {
                     picoquic_log_app_message(cnx,
@@ -601,7 +613,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
     }
 
     if (ret != 0) {
-        picowt_clear_pending_connect(stream_ctx);
+        picowt_clear_pending_connect(ctx, stream_ctx);
         h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
     }
 
@@ -771,6 +783,9 @@ void picowt_deregister(picoquic_cnx_t* cnx,
 {
     picosplay_node_t* previous = NULL;
     uint64_t control_stream_id = control_stream_ctx->stream_id;
+
+    picowt_clear_pending_connect(h3_ctx, control_stream_ctx);
+
     /* Free the streams created for this session */
     while (1) {
         picosplay_node_t* next = (previous == NULL) ? picosplay_first(&h3_ctx->h3_stream_tree) : picosplay_next(previous);

@@ -53,6 +53,7 @@ extern "C" {
         picohttp_callback_drain /* Peer initiated graceful WebTransport drain. */
     } picohttp_call_back_event_t;
 
+    struct st_h3zero_callback_ctx_t;
     struct st_h3zero_stream_ctx_t;
     struct st_picowt_pending_connect_t;
 
@@ -126,11 +127,9 @@ extern "C" {
         picohttp_post_data_cb_fn path_callback;
         void* path_callback_ctx;
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-        struct st_picowt_pending_connect_t* pending_connect;
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
-        unsigned int is_connect_pending : 1; /* CONNECT is waiting for peer SETTINGS */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
@@ -161,7 +160,6 @@ extern "C" {
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
-    void picowt_clear_pending_connect(h3zero_stream_ctx_t* stream_ctx);
 
     /* Handling of capsules */
 #define h3zero_capsule_type_datagram 0x00
@@ -228,6 +226,8 @@ extern "C" {
         h3zero_settings_t settings;
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
+        h3zero_stream_ctx_t* pending_wt_connect;
+        struct st_picowt_pending_connect_t* pending_wt_connect_data;
         uint64_t last_datagram_prefix;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
@@ -239,7 +239,8 @@ extern "C" {
         uint32_t nb_client_streams;
     } h3zero_callback_ctx_t;
 
-    int picowt_process_pending_connects(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+    void picowt_clear_pending_connect(h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
+    int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);

@@ -183,7 +183,7 @@ static int picowt_baton_test_one_ex(
             }
         }
 
-        if (ret == 0 && !control_stream_ctx->is_connect_pending) {
+        if (ret == 0 && h3zero_cb->pending_wt_connect != control_stream_ctx) {
             DBG_PRINTF("WebTransport CONNECT was not deferred before peer SETTINGS at t: %llu", simulated_time);
             ret = -1;
         }
@@ -206,7 +206,7 @@ static int picowt_baton_test_one_ex(
         ret = -1;
     }
 
-    if (ret == 0 && control_stream_ctx->is_connect_pending) {
+    if (ret == 0 && h3zero_cb->pending_wt_connect != NULL) {
         DBG_PRINTF("WebTransport CONNECT still pending after peer SETTINGS at t: %llu", simulated_time);
         ret = -1;
     }

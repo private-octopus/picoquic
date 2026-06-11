@@ -702,6 +702,7 @@ static uint8_t qpack_test_string_zzz[] = { 'Z', 'Z', 'Z' };
 static uint8_t qpack_test_string_1234[] = { '/', '1', '2', '3', '4' };
 static uint8_t qpack_test_string_long[] = { '/', FILE_NAME_LONG };
 static uint8_t qpack_test_string_wtp[] = { CONNECT_TEST_PROTOCOL_PATH };
+static uint8_t qpack_test_string_origin[] = { CONNECT_TEST_ORIGIN };
 static uint8_t qpack_test_range_text[] = { 'b', 'y', 't', 'e', 's', '=', '1', '-', '1', '0' };
 
 typedef struct st_qpack_test_case_t {
@@ -794,7 +795,8 @@ static qpack_test_case_t qpack_test_case[] = {
     {
         qpack_connect_webtransport, sizeof(qpack_connect_webtransport),
         { .method = h3zero_method_connect, .path = qpack_test_string_wtp, .path_length = sizeof(qpack_test_string_wtp),
-        .protocol = (uint8_t *)web_transport_str, .protocol_length = CONNECT_TEST_PROTOCOL_WTP_LEN }
+        .protocol = (uint8_t *)web_transport_str, .protocol_length = CONNECT_TEST_PROTOCOL_WTP_LEN,
+        .origin = qpack_test_string_origin, .origin_length = sizeof(qpack_test_string_origin) }
     },
     {
         qpack_test_get_slash_range, sizeof(qpack_test_get_slash_range),
@@ -878,6 +880,19 @@ static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_len
     else if (parts.protocol != NULL && parts.protocol_length > 0 &&
         memcmp(parts.protocol, qpack_test_case[i].parts.protocol, parts.protocol_length) != 0) {
         DBG_PRINTF("Qpack case %d parse wrong path", i);
+        ret = -1;
+    }
+    else if (parts.origin_length != qpack_test_case[i].parts.origin_length) {
+        DBG_PRINTF("Qpack case %d parse wrong origin length", i);
+        ret = -1;
+    }
+    else if (parts.origin == NULL && qpack_test_case[i].parts.origin != NULL) {
+        DBG_PRINTF("Qpack case %d parse origin not null", i);
+        ret = -1;
+    }
+    else if (parts.origin != NULL && parts.origin_length > 0 &&
+        memcmp(parts.origin, qpack_test_case[i].parts.origin, parts.origin_length) != 0) {
+        DBG_PRINTF("Qpack case %d parse wrong origin", i);
         ret = -1;
     }
 

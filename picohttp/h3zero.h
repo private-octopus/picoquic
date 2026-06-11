@@ -200,6 +200,8 @@ typedef struct st_h3zero_header_parts_t {
     size_t path_length;
     uint8_t const * authority;
     size_t authority_length;
+    uint8_t const* origin;
+    size_t origin_length;
     uint8_t const * range;
     size_t range_length;
     int status;

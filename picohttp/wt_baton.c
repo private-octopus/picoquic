@@ -620,6 +620,16 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                     ret = wt_baton_relay(cnx, NULL, baton_ctx, lane_id);
                 }
             }
+            if (ret != 0) {
+                if (stream_ctx != NULL) {
+                    stream_ctx->path_callback = NULL;
+                    stream_ctx->path_callback_ctx = NULL;
+                    if (h3_ctx != NULL) {
+                        h3zero_delete_stream_prefix(cnx, h3_ctx, stream_ctx->stream_id);
+                    }
+                }
+                free(baton_ctx);
+            }
         }
         return ret;
     }
@@ -808,7 +818,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                     wt_protocol_len = 254;
                 }
                 memcpy(baton_ctx->wt_protocol, stream_ctx->ps.stream_state.header.wt_protocol, wt_protocol_len);
-                baton_ctx->wt_protocol[wt_protocol_len + 1] = 0;
+                baton_ctx->wt_protocol[wt_protocol_len] = 0;
             }
             break;
         case picohttp_callback_post_fin:
