@@ -212,7 +212,6 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
     }
 }
 
-
 int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* app_stream_ctx, int do_update_ctx)
 {
@@ -225,7 +224,7 @@ int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
         if (is_active) {
             /* The call only fails if the stream was closed or reset */
             if (!stream->fin_requested &&
-                (!stream->reset_requested || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size) == 0) &&
+                (!stream->reset_requested || !picoquic_reliable_prefix_is_acked(stream)) &&
                 cnx->callback_fn != NULL) {
                 if (do_update_ctx) {
                     stream->app_stream_ctx = app_stream_ctx;
@@ -340,7 +339,7 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
     }
 
     /* If our side has sent RST_STREAM or received STOP_SENDING, we should not send anymore data. */
-    if (ret == 0 && (stream->reset_sent || stream->stop_sending_received)) {
+    if (ret == 0 && ((stream->reset_sent && stream->sent_offset >= stream->reliable_size) || stream->stop_sending_received)) {
         ret = -1;
     }
 
@@ -982,7 +981,9 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
                 found_stream = stream;
                 break;
             }
-            else if (((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
+            else if (((stream->fin_requested && stream->fin_sent) ||
+                (stream->reset_requested && stream->reset_sent && picoquic_reliable_prefix_is_acked(stream)))
+                && (!stream->stop_sending_requested || stream->stop_sending_sent)) {
                 /* TODO: this should be done per event, not in the loop */
                 /* If stream is exhausted, remove from output list */
                 picoquic_remove_output_stream(cnx, stream);
