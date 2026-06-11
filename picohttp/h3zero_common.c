@@ -413,6 +413,18 @@ static void h3zero_reset_control_stream_state(h3zero_data_stream_state_t* stream
 	}
 }
 
+static int h3zero_on_settings_received(h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+	void* opt_cnx)
+{
+	ctx->settings.settings_received = 1;
+	if (opt_cnx != NULL &&
+		picowt_process_pending_connect((picoquic_cnx_t*)opt_cnx, ctx) != 0) {
+		*error_found = H3ZERO_INTERNAL_ERROR;
+		return -1;
+	}
+	return 0;
+}
+
 const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* bytes_max,
 	h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
 	void* opt_cnx)
@@ -476,7 +488,9 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
 					if (stream_state->current_frame_length == 0) {
 						/* empty settings frame is not an error, but just means that all settings are at default values. */
-						ctx->settings.settings_received = 1;
+						if (h3zero_on_settings_received(ctx, error_found, opt_cnx) != 0) {
+							bytes = NULL;
+						}
 					}
 					else if (stream_state->current_frame != NULL) {
 						const uint8_t* decoded_last = NULL;
@@ -496,13 +510,8 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 							*error_found = H3ZERO_SETTINGS_ERROR;
 							bytes = NULL;
 						}
-						else {
-							ctx->settings.settings_received = 1;
-							if (opt_cnx != NULL &&
-								picowt_process_pending_connect((picoquic_cnx_t*)opt_cnx, ctx) != 0) {
-								*error_found = H3ZERO_INTERNAL_ERROR;
-								bytes = NULL;
-							}
+						else if (h3zero_on_settings_received(ctx, error_found, opt_cnx) != 0) {
+							bytes = NULL;
 						}
 					}
 					h3zero_reset_control_stream_state(stream_state);
@@ -604,14 +613,8 @@ const uint8_t* h3zero_parse_remote_unidir_stream(
 		if (stream_state->stream_type == h3zero_stream_type_control) {
 			if (ctx->remote_control_stream_seen &&
 				ctx->remote_control_stream_id != stream_ctx->stream_id) {
-                if (opt_cnx != NULL) {
-                    (void)picoquic_close_ex(opt_cnx, H3ZERO_STREAM_CREATION_ERROR, "Attempt to create second control stream");
-					bytes = NULL;
-                }
-				else {
-					*error_found = H3ZERO_STREAM_CREATION_ERROR;
-					bytes = NULL;
-				}
+				*error_found = H3ZERO_STREAM_CREATION_ERROR;
+				bytes = NULL;
 			}
 			else {
 				ctx->remote_control_stream_seen = 1;
