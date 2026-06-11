@@ -1591,6 +1591,7 @@ int picoquic_packet_loop_uring(
                 }
                 fprintf(stderr, "%d bytes received on socket %d.\n", bytes_recv, i);
             }
+            io_uring_cqe_seen(ring, cqe);
         }
         else if (io_ret == -ETIME) {
 #if 1
