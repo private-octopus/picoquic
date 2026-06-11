@@ -232,6 +232,7 @@ int h3zero_incoming_unidir_test(void)
         }
         else {
             unidir_input[2] = (uint8_t)control_stream_ctx->stream_id;
+            control_stream_ctx->is_upgraded = 1;
             /* Need to program a stream prefix that matches the connection */
             ret = h3zero_declare_stream_prefix(h3_ctx, control_stream_ctx->stream_id, incoming_unidir_test_fn, NULL);
         }
@@ -528,7 +529,7 @@ int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const
     return ret;
 }
 
-uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
+uint8_t* h3zero_client_data_format_response(uint8_t * bytes, uint8_t * bytes_max)
 {
     uint8_t* length_byte = NULL;
     uint8_t* data_byte = NULL;
@@ -550,6 +551,22 @@ uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
         size_t sz = bytes - data_byte;
         length_byte[0] = 0x40 + (uint8_t)(sz >> 8);
         length_byte[1] = (uint8_t)(sz & 0xff);
+    }
+    return bytes;
+}
+
+static uint8_t* h3zero_client_data_format_trailer(uint8_t* bytes, uint8_t* bytes_max)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_header)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 3)) != NULL) {
+        if (bytes + 3 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            *bytes++ = 0;
+            *bytes++ = 0;
+            *bytes++ = 0xC0 | 7; /* etag static header, no pseudo header in trailers. */
+        }
     }
     return bytes;
 }
@@ -647,12 +664,12 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 
     /* Encode a stream header */
     if (ret == 0 && !spec->skip_header && 
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL){
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL){
         ret = -1;
     }
     /* encode a stray trailer */
     if (ret == 0 && spec->trailer_after_header &&
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
     /* Encode a data frame (or 2?)*/
@@ -662,7 +679,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     }
     /* Encode a stream trailer */
     if (ret == 0 && spec->add_trailer &&
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_trailer(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
 

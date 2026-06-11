@@ -50,8 +50,13 @@ extern "C" {
 #define H3ZERO_QPACK_DECODER_STREAM_ERROR 0x0202 /* Error on the decoder stream */
 #define H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED 0x3994bd84 /* Stream arrived before webtransport session established */
 #define H3ZERO_WEBTRANSPORT_SESSION_GONE 0x170d7b68 /* Stream arrived after web transport session closed */
-#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_FIRST 0x52e4a40fa8dbull
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_LAST 0x52e5ac983162ull
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_FIRST + (uint64_t)(code) + ((uint64_t)(code) / 0x1eull))
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
+
+#define H3ZERO_WEBTRANSPORT_H3_PROTOCOL "webtransport-h3"
+#define H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD "webtransport"
 
 #define H3ZERO_WT_AVAILABLE_PROTOCOLS "wt-available-protocols"
 #define H3ZERO_WT_PROTOCOL "wt-protocol"
@@ -195,6 +200,8 @@ typedef struct st_h3zero_header_parts_t {
     size_t path_length;
     uint8_t const * authority;
     size_t authority_length;
+    uint8_t const* origin;
+    size_t origin_length;
     uint8_t const * range;
     size_t range_length;
     int status;
@@ -222,6 +229,11 @@ typedef struct st_h3zero_header_parts_t {
 #define h3zero_setting_grease_mask 0x0f0f
 #define h3zero_settings_enable_connect_protocol 0x8
 #define h3zero_setting_h3_datagram 0x33
+/* Draft WebTransport enablement setting. Picoquic deliberately does not
+ * advertise the WT session flow-control SETTINGS: QUIC flow control already
+ * bounds resource use, and picoquic keeps one WT session per QUIC connection.
+ */
+#define h3zero_settings_wt_enabled 0x2c7cf000
 #define h3zero_settings_webtransport_max_sessions 0x14e9cd29
 #define h3zero_settings_webtransport_max_sessions_old 0xc671706aull
 /* Chrome compatibility: SETTINGS_ENABLE_WEBTRANSPORT from older draft */
@@ -229,6 +241,7 @@ typedef struct st_h3zero_header_parts_t {
 
 typedef struct st_h3zero_settings_t {
     uint64_t webtransport_max_sessions;
+    uint64_t webtransport_enabled;
     uint64_t table_size;
     uint64_t max_header_list_size;
     uint64_t blocked_streams;

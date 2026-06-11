@@ -2,6 +2,16 @@
 
 Implementation of the web transport protocol on top of picoquic and h3zero implementation of HTTP3.
 
+The in-tree WebTransport CTest labels and strict versus compatibility policy are
+documented in [`webtransport_conformance.md`](webtransport_conformance.md).
+Browser smoke, browser E2E, and WPT adapter coverage is maintained in the
+separate `h3browserconformance` repository. Picoquic CI only gates the external
+WPT adapter smoke against the small in-tree `pico_baton`; full browser
+draft-compatibility testing stays in that separate repository.
+Picoquic does not advertise the draft WebTransport session-level flow-control
+SETTINGS or capsules; it relies on QUIC flow control and keeps a single
+WebTransport session on each QUIC connection.
+
 ## Pico Web Transport architecture
 
 The web transport implementation runs on top of the "h3zero" implementation of HTTP3,
@@ -67,8 +77,12 @@ requirements are:
 
  * Configure the HTTP3 server to accept and process Web Transport requests by
    configuring a "path table". Each path specifies a local URL, a path callback
-   function, and a path callback context, per `picohttp_server_path_item_t`
-   in `h3zero_common.h`.
+   function, a path callback context, and the required Extended CONNECT
+   protocol `webtransport-h3`, per `picohttp_server_path_item_t` in
+   `h3zero_common.h`. WebTransport paths also need an Origin policy callback.
+   The demo baton app uses `h3zero_origin_validator_allow_all` as an explicit
+   test/demo policy; production applications should replace it with an
+   allowlist validator.
 
  * Run the server socket loop connected to the picoquic context.
 
@@ -85,7 +99,9 @@ to that connection. In picoquic, this requires:
 
  * Create a stream in the connection.
  
- * Call the API `picowt_connect` defined in `pico_webtransport.h`
+ * Call the API `picowt_connect` defined in `pico_webtransport.h`. The API may
+   be called before peer HTTP/3 SETTINGS arrive; h3zero defers the CONNECT
+   bytes until SETTINGS and WebTransport transport requirements are validated.
  
  * Run the server socket loop connected to the picoquic context.
 
@@ -106,7 +122,7 @@ QUIC stack in three ways:
 
 ### Setting up a web transport session on the client
 
-The web transport connection is set in four phases:
+The web transport connection is set in five phases:
  
  1- Create an h3zero stream context for the control stream, using
     the API picowt_set_control_stream.
@@ -122,8 +138,15 @@ The web transport connection is set in four phases:
   - `path`: the path parameter for the connect request
   - `wt_callback`: the path callback used for the application
   - `wt_ctx`: the web transport application context associated with the path callback
+
+    The call may happen before peer SETTINGS arrive; the implementation defers
+    the CONNECT bytes internally until peer SETTINGS and WebTransport transport
+    requirements are validated.
+
+ 4- Start or continue the H3 connection so the deferred CONNECT can be sent
+    after validation.
  
- 4- Make sure that the application is ready to process incoming streams.
+ 5- Make sure that the application is ready to process incoming streams.
 
 The function `wt_baton_connect` in `wt_baton.c` provides an example
 of setting the web transport session on the client._
@@ -147,8 +170,10 @@ defines the following callback events:
         picohttp_callback_post_datagram, /* Datagram received on this context */
         picohttp_callback_provide_datagram, /* Ready to send datagram in this context */
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
+        picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
         picohttp_callback_deregister, /* Context has been deregistered */
-        picohttp_callback_free
+        picohttp_callback_free,
+        picohttp_callback_drain /* Peer initiated graceful WebTransport drain. */
 ~~~
 
 The callback definition is generic -- it is used for any kind of web server
@@ -163,7 +188,7 @@ in `wt_baton.c`._
 ### WT Protocol negotiation
 
 The web transport protocol is negotiated as part of the HTTP3 connection.
-The client proposes a list of avalaible protocols as an argument
+The client proposes a list of available protocols as an argument
 to "picowt_connect":
 
 ```
@@ -173,10 +198,9 @@ to "picowt_connect":
     char const* wt_available_protocols);
 ```
 
-The list of protocols is encoded as a comma separated list of protocol identifiers,
-as specified in the
-[web transport draft](https://datatracker.ietf.org/doc/draft-ietf-webtrans-http3/),
-for example: "protocol1, protocol2, protocol3".
+The API argument is a comma-separated list of protocol identifiers, for example
+`"protocol1, protocol2, protocol3"`. H3zero encodes this as a
+`WT-Available-Protocols` Structured Fields list of strings on the wire.
 
 The server selects the protocol by calling the `picowt_select_wt_protocol` API:
 
@@ -264,5 +288,3 @@ QUIC context and a single UDP port. The requirements are:
 There is an example of this process in `demoserver.c`, with the ALPN selection
 function `picoquic_demo_server_callback_select_alpn` and the redirection
 callback `picoquic_demo_server_callback`.
-
-
