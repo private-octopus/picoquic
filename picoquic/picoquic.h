@@ -718,6 +718,10 @@ picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int 
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
 
+/* Refresh the TLS certificate used by new server connections. */
+int picoquic_refresh_tls_certificate(picoquic_quic_t* quic,
+    char const* cert_file_name, char const* key_file_name);
+
 /* Set the TLS root certificates (DER format) for the QUIC context. The context will take ownership over the certs pointer.
  * The root certificates will be used to verify the certificate chain of the server and client (with client authentication activated).
  * Returns `0` on success, `-1` on error while loading X509 certificate or `-2` on error while adding a cert to the certificate store.

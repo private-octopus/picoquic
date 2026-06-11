@@ -5443,6 +5443,382 @@ int set_verify_certificate_callback_test(void)
     return ret;
 }
 
+typedef struct st_cert_rollover_verify_ctx_t {
+    ptls_verify_certificate_t super;
+    ptls_iovec_t expected_cert;
+    int call_count;
+    int sign_count;
+    int matched_expected;
+} cert_rollover_verify_ctx_t;
+
+typedef struct st_cert_rollover_credential_t {
+    ptls_iovec_t* certs;
+    size_t cert_count;
+} cert_rollover_credential_t;
+
+typedef struct st_cert_rollover_test_ctx_t {
+    uint64_t simulated_time;
+    picoquic_test_tls_api_ctx_t* test_ctx;
+    char rsa_cert_file[512];
+    char ecdsa_cert_file[512];
+    char ecdsa_key_file[512];
+    char bad_key_file[512];
+    cert_rollover_credential_t rsa_credential;
+    cert_rollover_credential_t ecdsa_credential;
+    cert_rollover_verify_ctx_t verify_ctx;
+} cert_rollover_test_ctx_t;
+
+static const uint16_t cert_rollover_algos[] = {
+    PTLS_SIGNATURE_ED25519, PTLS_SIGNATURE_RSA_PSS_RSAE_SHA256,
+    PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PTLS_SIGNATURE_RSA_PKCS1_SHA256,
+    PTLS_SIGNATURE_RSA_PKCS1_SHA1, UINT16_MAX
+};
+
+static void cert_rollover_free_certificates(ptls_iovec_t* certs, size_t count)
+{
+    if (certs != NULL) {
+        for (size_t i = 0; i < count; i++) {
+            free(certs[i].base);
+        }
+        free(certs);
+    }
+}
+
+static void cert_rollover_free_credential(cert_rollover_credential_t* credential)
+{
+    cert_rollover_free_certificates(credential->certs, credential->cert_count);
+    credential->certs = NULL;
+    credential->cert_count = 0;
+}
+
+static int cert_rollover_load_credential(cert_rollover_credential_t* credential, const char* cert_file)
+{
+    int ret = 0;
+
+    credential->certs = picoquic_get_certs_from_file(cert_file, &credential->cert_count);
+    if (credential->certs == NULL || credential->cert_count == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int cert_rollover_verify_certificate_cb(struct st_ptls_verify_certificate_t* self,
+    ptls_t* UNUSED(tls), const char* UNUSED(server_name),
+    int (**verify_sign)(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t sign), void** verify_data,
+    ptls_iovec_t* certs, size_t num_certs)
+{
+    cert_rollover_verify_ctx_t* verify_ctx = (cert_rollover_verify_ctx_t*)
+        ((char*)self - offsetof(cert_rollover_verify_ctx_t, super.cb));
+
+    verify_ctx->call_count++;
+    if (num_certs > 0 && certs[0].len == verify_ctx->expected_cert.len &&
+        memcmp(certs[0].base, verify_ctx->expected_cert.base, certs[0].len) == 0) {
+        verify_ctx->matched_expected = 1;
+    }
+
+    *verify_sign = verify_sign_test;
+    *verify_data = (void*)&verify_ctx->sign_count;
+
+    return 0;
+}
+
+static void cert_rollover_verify_init(cert_rollover_verify_ctx_t* verify_ctx)
+{
+    memset(verify_ctx, 0, sizeof(cert_rollover_verify_ctx_t));
+    verify_ctx->super.cb = cert_rollover_verify_certificate_cb;
+    verify_ctx->super.algos = cert_rollover_algos;
+}
+
+static void cert_rollover_verify_expect(cert_rollover_verify_ctx_t* verify_ctx, ptls_iovec_t expected_cert)
+{
+    verify_ctx->expected_cert = expected_cert;
+    verify_ctx->call_count = 0;
+    verify_ctx->sign_count = 0;
+    verify_ctx->matched_expected = 0;
+}
+
+static int cert_rollover_set_file_names(cert_rollover_test_ctx_t* ctx)
+{
+    int ret = picoquic_get_input_path(ctx->rsa_cert_file, sizeof(ctx->rsa_cert_file),
+        picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(ctx->ecdsa_cert_file, sizeof(ctx->ecdsa_cert_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(ctx->ecdsa_key_file, sizeof(ctx->ecdsa_key_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_sprintf(ctx->bad_key_file, sizeof(ctx->bad_key_file), NULL,
+            "%s.bad", ctx->ecdsa_key_file);
+    }
+
+    return ret;
+}
+
+static void cert_rollover_free_test(cert_rollover_test_ctx_t* ctx)
+{
+    if (ctx->test_ctx != NULL) {
+        tls_api_delete_ctx(ctx->test_ctx);
+        ctx->test_ctx = NULL;
+    }
+
+    cert_rollover_free_credential(&ctx->rsa_credential);
+    cert_rollover_free_credential(&ctx->ecdsa_credential);
+}
+
+static int cert_rollover_init_test(cert_rollover_test_ctx_t* ctx, int use_ecdsa_server,
+    int load_rsa, int load_ecdsa)
+{
+    int ret;
+
+    memset(ctx, 0, sizeof(cert_rollover_test_ctx_t));
+    ret = tls_api_init_ctx_ex2(&ctx->test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &ctx->simulated_time, NULL, NULL,
+        0, 0, 0, NULL, 8, 0, 0, use_ecdsa_server);
+
+    cert_rollover_verify_init(&ctx->verify_ctx);
+
+    if (ret == 0) {
+        ret = cert_rollover_set_file_names(ctx);
+    }
+
+    if (ret == 0 && load_rsa) {
+        ret = cert_rollover_load_credential(&ctx->rsa_credential, ctx->rsa_cert_file);
+    }
+
+    if (ret == 0 && load_ecdsa) {
+        ret = cert_rollover_load_credential(&ctx->ecdsa_credential, ctx->ecdsa_cert_file);
+    }
+
+    if (ret == 0) {
+        picoquic_set_verify_certificate_callback(ctx->test_ctx->qclient, &ctx->verify_ctx.super, NULL);
+    }
+
+    return ret;
+}
+
+static int cert_rollover_recreate_client_connection(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t simulated_time)
+{
+    int ret = 0;
+
+    if (test_ctx->cnx_client != NULL) {
+        picoquic_delete_cnx(test_ctx->cnx_client);
+        test_ctx->cnx_client = NULL;
+    }
+
+    if (test_ctx->cnx_server != NULL) {
+        picoquic_delete_cnx(test_ctx->cnx_server);
+        test_ctx->cnx_server = NULL;
+    }
+
+    test_api_delete_test_streams(test_ctx);
+    test_ctx->test_finished = 0;
+    test_ctx->streams_finished = 0;
+    test_ctx->stream0_target = 0;
+    test_ctx->stream0_sent = 0;
+    test_ctx->stream0_received = 0;
+
+    tls_api_endpoint_release(&test_ctx->client_endpoint);
+    tls_api_endpoint_release(&test_ctx->server_endpoint);
+    test_ctx->client_endpoint.queue_size = 0;
+    test_ctx->server_endpoint.queue_size = 0;
+    test_ctx->client_endpoint.next_time_ready = simulated_time;
+    test_ctx->server_endpoint.next_time_ready = simulated_time;
+
+    test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*)&test_ctx->server_addr, simulated_time,
+        PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+    if (test_ctx->cnx_client == NULL) {
+        ret = -1;
+    } else {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    return ret;
+}
+
+static int cert_rollover_server_tls_created(picoquic_test_tls_api_ctx_t* test_ctx)
+{
+    if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->tls_ctx != NULL) {
+        picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)test_ctx->cnx_server->tls_ctx;
+        return tls_ctx->tls != NULL;
+    }
+
+    return 0;
+}
+
+static int cert_rollover_wait_server_tls_created(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time)
+{
+    int ret = 0;
+    int nb_trials = 0;
+    int nb_inactive = 0;
+
+    test_ctx->c_to_s_link->loss_mask = NULL;
+    test_ctx->s_to_c_link->loss_mask = NULL;
+    test_ctx->c_to_s_link->queue_delay_max = 0;
+    test_ctx->s_to_c_link->queue_delay_max = 0;
+
+    while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 &&
+        !cert_rollover_server_tls_created(test_ctx)) {
+        int was_active = 0;
+        nb_trials++;
+
+        ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+
+        if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
+            (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
+            ret = -1;
+            break;
+        }
+
+        if (was_active) {
+            nb_inactive = 0;
+        } else {
+            nb_inactive++;
+        }
+    }
+
+    if (ret == 0 && !cert_rollover_server_tls_created(test_ctx)) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int cert_rollover_run_connection_expect(picoquic_test_tls_api_ctx_t* test_ctx,
+    cert_rollover_verify_ctx_t* verify_ctx, ptls_iovec_t expected_cert,
+    uint64_t* simulated_time)
+{
+    uint64_t loss_mask = 0;
+    int ret;
+
+    cert_rollover_verify_expect(verify_ctx, expected_cert);
+    ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, simulated_time);
+
+    if (ret == 0 && (verify_ctx->call_count == 0 || !verify_ctx->matched_expected)) {
+        ret = -1;
+    }
+
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int cert_rollover_send_active_data(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time)
+{
+    uint64_t loss_mask = 0;
+    int ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_q_and_r, sizeof(test_scenario_q_and_r));
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
+    return ret;
+}
+
+int cert_rollover_inflight_test(void)
+{
+    cert_rollover_test_ctx_t ctx;
+    int ret = cert_rollover_init_test(&ctx, 0, 1, 1);
+
+    if (ret == 0) {
+        cert_rollover_verify_expect(&ctx.verify_ctx, ctx.rsa_credential.certs[0]);
+        ret = cert_rollover_wait_server_tls_created(ctx.test_ctx, &ctx.simulated_time);
+    }
+
+    if (ret == 0 && ctx.verify_ctx.call_count != 0 && !ctx.verify_ctx.matched_expected) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
+            ctx.ecdsa_cert_file, ctx.ecdsa_key_file);
+    }
+
+    if (ret == 0) {
+        uint64_t loss_mask = 0;
+        ret = tls_api_connection_loop(ctx.test_ctx, &loss_mask, 0, &ctx.simulated_time);
+    }
+
+    if (ret == 0 && (ctx.verify_ctx.call_count == 0 || !ctx.verify_ctx.matched_expected)) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_recreate_client_connection(ctx.test_ctx, ctx.simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_run_connection_expect(ctx.test_ctx, &ctx.verify_ctx,
+            ctx.ecdsa_credential.certs[0], &ctx.simulated_time);
+    }
+
+    cert_rollover_free_test(&ctx);
+    return ret;
+}
+
+int cert_rollover_active_connection_test(void)
+{
+    cert_rollover_test_ctx_t ctx;
+    int ret = cert_rollover_init_test(&ctx, 0, 1, 1);
+
+    if (ret == 0) {
+        ret = cert_rollover_run_connection_expect(ctx.test_ctx, &ctx.verify_ctx,
+            ctx.rsa_credential.certs[0], &ctx.simulated_time);
+    }
+
+    if (ret == 0 && picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
+        ctx.ecdsa_cert_file, ctx.bad_key_file) == 0) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_recreate_client_connection(ctx.test_ctx, ctx.simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_run_connection_expect(ctx.test_ctx, &ctx.verify_ctx,
+            ctx.rsa_credential.certs[0], &ctx.simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_refresh_tls_certificate(ctx.test_ctx->qserver,
+            ctx.ecdsa_cert_file, ctx.ecdsa_key_file);
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_send_active_data(ctx.test_ctx, &ctx.simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_recreate_client_connection(ctx.test_ctx, ctx.simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = cert_rollover_run_connection_expect(ctx.test_ctx, &ctx.verify_ctx,
+            ctx.ecdsa_credential.certs[0], &ctx.simulated_time);
+    }
+
+    cert_rollover_free_test(&ctx);
+    return ret;
+}
+
 /*
  * Verify that the simulated time works as expected
  */
