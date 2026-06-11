@@ -56,6 +56,7 @@ extern "C" {
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
 
 #define H3ZERO_WEBTRANSPORT_H3_PROTOCOL "webtransport-h3"
+#define H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD "webtransport"
 
 #define H3ZERO_WT_AVAILABLE_PROTOCOLS "wt-available-protocols"
 #define H3ZERO_WT_PROTOCOL "wt-protocol"

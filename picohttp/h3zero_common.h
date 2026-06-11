@@ -54,6 +54,7 @@ extern "C" {
     } picohttp_call_back_event_t;
 
     struct st_h3zero_stream_ctx_t;
+    struct st_picowt_pending_connect_t;
 
     typedef int (*picohttp_post_data_cb_fn)(
         picoquic_cnx_t* cnx,
@@ -125,7 +126,7 @@ extern "C" {
         picohttp_post_data_cb_fn path_callback;
         void* path_callback_ctx;
         uint8_t frame[PICOHTTP_SERVER_FRAME_MAX];
-        size_t pending_connect_length;
+        struct st_picowt_pending_connect_t* pending_connect;
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
@@ -160,6 +161,7 @@ extern "C" {
 
     void* picohttp_stream_node_value(picosplay_node_t* node);
     void h3zero_init_stream_tree(picosplay_tree_t* h3_stream_tree);
+    void picowt_clear_pending_connect(h3zero_stream_ctx_t* stream_ctx);
 
     /* Handling of capsules */
 #define h3zero_capsule_type_datagram 0x00
@@ -236,6 +238,8 @@ extern "C" {
         int nb_open_files;
         uint32_t nb_client_streams;
     } h3zero_callback_ctx_t;
+
+    int picowt_process_pending_connects(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);

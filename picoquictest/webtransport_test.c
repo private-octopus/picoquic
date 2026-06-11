@@ -387,6 +387,92 @@ int picowt_baton_wildcard_test(void)
         wildcard_table, 1);
 }
 
+static int picowt_noop_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picohttp_call_back_event_t UNUSED(wt_event),
+    struct st_h3zero_stream_ctx_t* UNUSED(stream_ctx),
+    void* UNUSED(path_app_ctx))
+{
+    return 0;
+}
+
+static int picowt_parse_connect_protocol(uint8_t* frame, h3zero_header_parts_t* header)
+{
+    uint64_t frame_type = 0;
+    uint64_t header_length = 0;
+    const uint8_t* bytes = frame;
+    const uint8_t* bytes_max = frame + PICOHTTP_SERVER_FRAME_MAX;
+
+    memset(header, 0, sizeof(h3zero_header_parts_t));
+    bytes = picoquic_frames_varint_decode(bytes, bytes_max, &frame_type);
+    if (bytes == NULL || frame_type != h3zero_frame_header ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &header_length)) == NULL ||
+        bytes + header_length > bytes_max ||
+        h3zero_parse_qpack_header_frame((uint8_t*)bytes,
+            (uint8_t*)bytes + header_length, header) != bytes + header_length) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int picowt_connect_protocol_test_one(picoquic_cnx_t* cnx,
+    int draft15, const char* expected_protocol)
+{
+    h3zero_callback_ctx_t h3_ctx = { 0 };
+    h3zero_stream_ctx_t* stream_ctx = NULL;
+    h3zero_header_parts_t header = { 0 };
+    int ret = 0;
+
+    h3zero_init_stream_tree(&h3_ctx.h3_stream_tree);
+    h3_ctx.settings.settings_received = 1;
+    h3_ctx.settings.h3_datagram = 1;
+    if (draft15) {
+        h3_ctx.settings.enable_connect_protocol = 1;
+        h3_ctx.settings.webtransport_enabled = 1;
+    }
+    else {
+        h3_ctx.settings.webtransport_max_sessions = 1;
+    }
+    cnx->remote_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+    cnx->remote_parameters.is_reset_stream_at_enabled = 1;
+
+    stream_ctx = picowt_set_control_stream(cnx, &h3_ctx);
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picowt_connect_ex(cnx, &h3_ctx, stream_ctx, PICOQUIC_TEST_SNI,
+            "/baton", picowt_noop_callback, NULL, PICOWT_BATON_ALPN_AVAILABLE, NULL, 0);
+    }
+    if (ret == 0) {
+        ret = picowt_parse_connect_protocol(stream_ctx->frame, &header);
+    }
+    if (ret == 0 && (header.protocol_length != strlen(expected_protocol) ||
+        memcmp(header.protocol, expected_protocol, header.protocol_length) != 0)) {
+        ret = -1;
+    }
+
+    h3zero_release_header_parts(&header);
+    if (stream_ctx != NULL) {
+        h3zero_delete_stream(cnx, &h3_ctx, stream_ctx);
+    }
+    h3zero_delete_all_stream_prefixes(cnx, &h3_ctx);
+
+    return ret;
+}
+
+static int picowt_connect_protocol_test(picoquic_cnx_t* cnx)
+{
+    int ret = picowt_connect_protocol_test_one(cnx, 1, H3ZERO_WEBTRANSPORT_H3_PROTOCOL);
+
+    if (ret == 0) {
+        ret = picowt_connect_protocol_test_one(cnx, 0, H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD);
+    }
+
+    return ret;
+}
+
 int picowt_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -431,6 +517,9 @@ int picowt_tp_test(void)
             cnx->local_parameters.max_datagram_frame_size == 0) {
             ret = -1;
         }
+    }
+    if (ret == 0) {
+        ret = picowt_connect_protocol_test(cnx);
     }
 
     picoquic_set_callback(cnx, NULL, NULL);

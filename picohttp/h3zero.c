@@ -1195,7 +1195,7 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    13, /* Length of setting frame content */
+    27, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
     /* enable_connect_protocol = 0x8 */
@@ -1209,7 +1209,21 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     ((h3zero_settings_wt_enabled >> 24)&0xff)|0x80,
     (uint8_t)((h3zero_settings_wt_enabled >> 16)&0xff),
     (uint8_t)((h3zero_settings_wt_enabled >> 8)&0xff),
-    (uint8_t)((h3zero_settings_wt_enabled)&0xff), 1
+    (uint8_t)((h3zero_settings_wt_enabled)&0xff), 1,
+    /* WT_MAX_SESSIONS, drafts 13-14 */
+    ((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1,
+    /* WEBTRANSPORT_MAX_SESSIONS, drafts 7-12 */
+    (uint8_t)(((h3zero_settings_webtransport_max_sessions_old >> 56)&0xff)|0xc0),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 48)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 40)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 32)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 24)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;

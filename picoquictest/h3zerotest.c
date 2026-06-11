@@ -3582,6 +3582,9 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
     else if (decoded.h3_datagram != ref->h3_datagram){
         ret = -1;
     }
+    else if (decoded.webtransport_enabled != ref->webtransport_enabled) {
+        ret = -1;
+    }
     else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
         ret = -1;
     }
@@ -3591,7 +3594,8 @@ int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_sett
 h3zero_settings_t default_setting_expected = {
     .h3_datagram = 1,
     .enable_connect_protocol = 1,
-    .webtransport_enabled = 1
+    .webtransport_enabled = 1,
+    .webtransport_max_sessions = 1
 };
 
 int h3zero_settings_test(void)
