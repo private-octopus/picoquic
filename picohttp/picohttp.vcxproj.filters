@@ -25,9 +25,6 @@
     <ClCompile Include="h3zero_client.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="wt_baton.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="h3zero_uri.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -57,9 +54,6 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="h3zero_common.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="wt_baton.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="h3zero_uri.h">

@@ -75,12 +75,14 @@ int picoquic_is_stream_closed(picoquic_stream_head_t* stream, int client_mode)
     int is_closed = 0;
 
     if (IS_BIDIR_STREAM_ID(stream->stream_id)) {
-        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent)) &&
+        is_closed = ((stream->fin_requested && stream->fin_sent) || 
+            (stream->reset_requested && stream->reset_sent && picoquic_reliable_prefix_is_acked(stream))) &&
             ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
     }
     else if (IS_LOCAL_STREAM_ID(stream->stream_id, client_mode)) {
         /* Unidir from local host*/
-        is_closed = ((stream->fin_requested && stream->fin_sent) || (stream->reset_requested && stream->reset_sent));
+        is_closed = ((stream->fin_requested && stream->fin_sent) || 
+            (stream->reset_requested && stream->reset_sent && picoquic_reliable_prefix_is_acked(stream)));
     }
     else {
         is_closed = ((stream->fin_received && stream->fin_signalled) || (stream->reset_received && stream->reset_signalled));
@@ -217,6 +219,11 @@ int picoquic_flow_control_check_stream_offset(picoquic_cnx_t* cnx, picoquic_stre
  *
  * An endpoint may use a RST_STREAM frame (type=0x01) to abruptly terminate a stream.
  */
+
+int picoquic_reliable_prefix_is_acked(picoquic_stream_head_t* stream)
+{
+    return (stream->reliable_size == 0 || picoquic_check_sack_list(&stream->sack_list, 0, stream->reliable_size - 1) != 0);
+}
 
 static const uint8_t* picoquic_skip_reset_stream_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -386,7 +393,8 @@ int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t * cnx, const uint8
     uint64_t stream_id = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
+    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -416,7 +424,7 @@ int picoquic_check_reset_stream_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
     uint64_t stream_id = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -443,7 +451,7 @@ int picoquic_check_reset_stream_needs_repeat(picoquic_cnx_t* cnx, const uint8_t*
 
 static const uint8_t* picoquic_skip_reset_stream_at_frame(const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    /* Stream ID */
+    /* 1 byte type + Stream ID */
     bytes = picoquic_frames_varint_skip(bytes + 1, bytes_max);
     /* Error code */
     if (bytes != NULL) {
@@ -516,27 +524,32 @@ int picoquic_process_ack_of_reset_stream_at_frame(picoquic_cnx_t* cnx, const uin
     const uint8_t* byte_first = bytes;
     const uint8_t* bytes_max = bytes + bytes_size;
     uint64_t stream_id = 0;
+    uint64_t reliable_size = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
-        bytes = picoquic_frames_varint_skip(bytes, bytes_max);
-        if (bytes != NULL) {
-            bytes = picoquic_frames_varint_skip(bytes, bytes_max);
-        }
-    }
-    if (bytes == NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (bytes = picoquic_frames_varint_skip(bytes, bytes_max)) == NULL ||
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &reliable_size)) == NULL) {
         /* Internal error -- cannot parse the stored packet */
         *consumed = bytes_size;
         ret = -1;
     }
     else {
         *consumed = bytes - byte_first;
-        /* Find the stream, if it exists. If it was already deleted, do nothing. */
-        if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL) {
+        /* Find the stream, if it exists. If it was already deleted, do nothing.
+        * If the reliable_size parameter in the stream context does not match
+        * the reliable_size parameter in the frame, it means that the stream was reset 
+        * again after the packet was sent, and thus the reset is not acked yet.
+        */
+        if ((stream = picoquic_find_stream(cnx, stream_id)) != NULL &&
+            reliable_size == stream->reliable_size) {
             /* mark reset as acked by peer */
             stream->reset_acked = 1;
             /* Delete stream if closed. */
-            (void)picoquic_delete_stream_if_closed(cnx, stream);
+            if (stream->consumed_offset >= stream->reliable_size) {
+                (void)picoquic_delete_stream_if_closed(cnx, stream);
+            }
         }
     }
     return ret;
@@ -550,8 +563,7 @@ int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8
     uint64_t reliable_size = 0;
     picoquic_stream_head_t* stream;
 
-    if ((bytes = picoquic_frames_varint_skip(bytes, bytes_max)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &stream_id)) != NULL) {
         bytes = picoquic_frames_varint_skip(bytes, bytes_max);
         if (bytes != NULL) {
             bytes = picoquic_frames_varint_skip(bytes, bytes_max);
@@ -564,7 +576,8 @@ int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8
         /* Internal error -- cannot parse the stored packet */
         ret = -1;
     }
-    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL ||
+    else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL || 
+        reliable_size != stream->reliable_size ||
         stream->reset_acked) {
         *no_need_to_repeat = 1;
     }
@@ -1868,6 +1881,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                         stream->is_active = stream_data_context.is_still_active;
                         if (is_still_active != NULL) {
                             *is_still_active = stream_data_context.is_still_active;
+                        }
+                        if (!stream->is_active) {
+                            picoquic_update_output_stream(cnx, stream);
                         }
                     }
                 }
@@ -3570,106 +3586,76 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
     byte_index = p->offset;
 
     while (ret == 0 && byte_index < p->length) {
-        uint64_t ftype;
-        size_t l_ftype = picoquic_varint_decode(&p->bytes[byte_index], p->length - byte_index, &ftype);
-        if (l_ftype == 0) {
-            break;
-        }
+        uint64_t ftype = p->bytes[byte_index];
 
-        switch (ftype) {
-        case picoquic_frame_type_ack:
-            ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].sack_list,
-                &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
+        if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+            ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
             byte_index += frame_length;
-            break;
-        case picoquic_frame_type_ack_ecn:
-            ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].sack_list,
-                &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_path_ack:
-            ret = picoquic_process_ack_of_path_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_path_ack_ecn:
-            ret = picoquic_process_ack_of_path_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_handshake_done:
-            cnx->is_handshake_done_acked = 1;
-            byte_index += l_ftype;
-            break;
-        case picoquic_frame_type_new_connection_id:
-            ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 0, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_path_new_connection_id:
-            ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 1, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_retire_connection_id:
-            ret = picoquic_process_ack_of_retire_connection_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_path_retire_connection_id:
-            ret = picoquic_process_ack_of_retire_connection_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_crypto_hs:
-            ret = picoquic_process_ack_of_crypto_frame(cnx, &p->bytes[byte_index], p->length - byte_index, p->ptype, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_new_token:
-            ret = picoquic_skip_frame(&p->bytes[byte_index],
-                p->length - byte_index, &frame_length, &frame_is_pure_ack);
-            byte_index += frame_length;
-            cnx->is_new_token_acked = 1;
-            break;
-        case picoquic_frame_type_max_data:
-            ret = picoquic_process_ack_of_max_data_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_max_stream_data:
-            ret = picoquic_process_ack_of_max_stream_data_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_max_streams_bidir:
-        case picoquic_frame_type_max_streams_unidir:
-            ret = picoquic_process_ack_of_max_streams_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_reset_stream:
-            ret = picoquic_process_ack_of_reset_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_max_path_id:
-            ret = picoquic_process_ack_of_max_path_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_paths_blocked:
-            ret = picoquic_process_ack_of_paths_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_path_cid_blocked:
-            ret = picoquic_process_ack_of_path_cid_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-            byte_index += frame_length;
-            break;
-        case picoquic_frame_type_observed_address_v4:
-        case picoquic_frame_type_observed_address_v6:
-            ret = picoquic_process_ack_of_observed_address_frame(p->send_path, &p->bytes[byte_index], p->length - byte_index, ftype, &frame_length);
-            byte_index += frame_length;
-            break;
-        default:
-            if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-                ret = picoquic_process_ack_of_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
-                byte_index += frame_length;
-                if (p->send_path != NULL) {
-                    if (p->send_time > p->send_path->last_time_acked_data_frame_sent) {
-                        p->send_path->last_time_acked_data_frame_sent = p->send_time;
-                    }
+            if (p->send_path != NULL) {
+                if (p->send_time > p->send_path->last_time_acked_data_frame_sent) {
+                    p->send_path->last_time_acked_data_frame_sent = p->send_time;
                 }
             }
-            else {
+        }
+        else if (ftype == picoquic_frame_type_ack || ftype == picoquic_frame_type_ack_ecn) {
+                ret = picoquic_process_ack_of_ack_frame(&cnx->ack_ctx[p->pc].sack_list,
+                    &p->bytes[byte_index], p->length - byte_index, &frame_length, ftype&1);
+                byte_index += frame_length;
+        }
+        else {
+            switch (ftype) {
+            case picoquic_frame_type_path_ack:
+                ret = picoquic_process_ack_of_path_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_path_ack_ecn:
+                ret = picoquic_process_ack_of_path_ack_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_handshake_done:
+                cnx->is_handshake_done_acked = 1;
+                byte_index += 1;
+                break;
+            case picoquic_frame_type_new_connection_id:
+                ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 0, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_retire_connection_id:
+                ret = picoquic_process_ack_of_retire_connection_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 0);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_crypto_hs:
+                ret = picoquic_process_ack_of_crypto_frame(cnx, &p->bytes[byte_index], p->length - byte_index, p->ptype, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_new_token:
+                ret = picoquic_skip_frame(&p->bytes[byte_index],
+                    p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                byte_index += frame_length;
+                cnx->is_new_token_acked = 1;
+                break;
+            case picoquic_frame_type_max_data:
+                ret = picoquic_process_ack_of_max_data_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_max_stream_data:
+                ret = picoquic_process_ack_of_max_stream_data_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_max_streams_bidir:
+            case picoquic_frame_type_max_streams_unidir:
+                ret = picoquic_process_ack_of_max_streams_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_reset_stream:
+                ret = picoquic_process_ack_of_reset_stream_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
+            case picoquic_frame_type_reset_stream_at:
+                ret = picoquic_process_ack_of_reset_stream_at_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                byte_index += frame_length;
+                break;
+            default:
                 if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
                     if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                         p->send_path->last_time_acked_data_frame_sent = p->send_time;
@@ -3687,13 +3673,53 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                             (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                             cnx->callback_ctx, NULL);
                     }
+                    ret = picoquic_skip_frame(&p->bytes[byte_index],
+                        p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                    byte_index += frame_length;
+                    break;
                 }
-
-                ret = picoquic_skip_frame(&p->bytes[byte_index],
-                    p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                byte_index += frame_length;
+                else {
+                    size_t l_ftype = picoquic_varint_decode(&p->bytes[byte_index], p->length - byte_index, &ftype);
+                    if (l_ftype == 0) {
+                        byte_index = p->length;
+                        ret = PICOQUIC_ERROR_INVALID_FRAME;
+                        break;
+                    }
+                    switch (ftype) {
+                    case picoquic_frame_type_path_new_connection_id:
+                        ret = picoquic_process_ack_of_new_cid_frame(cnx, &p->bytes[byte_index], p->length - byte_index, 1, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_path_retire_connection_id:
+                        ret = picoquic_process_ack_of_retire_connection_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length, 1);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_max_path_id:
+                        ret = picoquic_process_ack_of_max_path_id_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_paths_blocked:
+                        ret = picoquic_process_ack_of_paths_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_path_cid_blocked:
+                        ret = picoquic_process_ack_of_path_cid_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_observed_address_v4:
+                    case picoquic_frame_type_observed_address_v6:
+                        ret = picoquic_process_ack_of_observed_address_frame(p->send_path, &p->bytes[byte_index], p->length - byte_index, ftype, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    default:
+                        ret = picoquic_skip_frame(&p->bytes[byte_index],
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                        byte_index += frame_length;
+                        break;
+                    }
+                }
             }
-            break;
+
         }
     }
 }

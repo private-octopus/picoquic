@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.49.2
+        VERSION 1.1.50.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -259,10 +259,10 @@ set(PICOHTTP_LIBRARY_FILES
     picohttp/picomask.c
     picohttp/quicperf.c
     picohttp/picoquic_ns.c
-    picohttp/webtransport.c
-    picohttp/wt_baton.c)
+    picohttp/webtransport.c)
 
 set(PICOHTTP_HEADERS
+     picoquic/picosplay.h
      picohttp/h3zero.h
      picohttp/h3zero_common.h
      picohttp/h3zero_uri.h
@@ -271,8 +271,7 @@ set(PICOHTTP_HEADERS
      picohttp/demoserver.h
      picohttp/pico_webtransport.h
      picohttp/picoquic_ns.h
-     picohttp/picomask.h
-     picohttp/wt_baton.h)
+     picohttp/picomask.h)
 
 set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zerotest.c
@@ -554,6 +553,13 @@ if (BUILD_HTTP)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_picoquic_compile_settings(picohttp-core)
+
+    add_library(wt_baton STATIC EXCLUDE_FROM_ALL picohttp/wt_baton.c)
+    target_link_libraries(wt_baton PUBLIC picoquic-log picoquic-core picohttp-core)
+    target_include_directories(wt_baton PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>)
+    set_picoquic_compile_settings(wt_baton)
 endif()
 
 if (BUILD_DEMO)
@@ -567,7 +573,8 @@ if (BUILD_DEMO)
             ${MBEDTLS_LIBRARIES}
             picoquic-log
             picoquic-core
-            picohttp-core)
+            picohttp-core
+            wt_baton)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
 endif()
@@ -674,13 +681,15 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             picoquic-test
             picoquic-log
             picohttp-core
-            picoquic-core)
+            picoquic-core
+            wt_baton)
 
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
 
-    add_executable(pico_baton baton_app/baton_app.c)
-    target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core)
+    add_executable(pico_baton
+        baton_app/baton_app.c)
+    target_link_libraries(pico_baton PRIVATE picoquic-log picoquic-core picohttp-core wt_baton)
     target_include_directories(pico_baton PRIVATE loglib picoquic picohttp)
     set_picoquic_compile_settings(pico_baton)
 
@@ -697,6 +706,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
              COMMAND picoquic_ct -S ${PROJECT_SOURCE_DIR} -n -r)
     add_test(NAME picohttp_ct
              COMMAND picohttp_ct -S ${PROJECT_SOURCE_DIR} -n -r)
+
 
     add_executable(thread_test
         thread_tester/thread_test.c)

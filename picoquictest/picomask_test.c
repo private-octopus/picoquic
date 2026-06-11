@@ -464,7 +464,7 @@ void picomask_test_delete(picomask_test_ctx_t* pt_ctx)
 int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
 {
     int ret = 0;
-    picohttp_server_path_item_t* path_item = (picohttp_server_path_item_t*)malloc(sizeof(picohttp_server_path_item_t));
+    picohttp_server_path_item_t* path_item = (picohttp_server_path_item_t*)calloc(1, sizeof(picohttp_server_path_item_t));
     picomask_ctx_t* picomask_ctx = (picomask_ctx_t*)malloc(sizeof(picomask_ctx_t));
 
     if (path_item == NULL || picomask_ctx == NULL ||
@@ -484,6 +484,8 @@ int picomask_test_set_server_ctx(picomask_test_ctx_t* pt_ctx)
         path_item->path_callback = picomask_callback;
         picomask_ctx->is_proxy_server = 1;
         path_item->path_app_ctx = (void*)picomask_ctx;
+        path_item->connect_protocol = "connect-udp";
+        path_item->connect_protocol_length = sizeof("connect-udp") - 1;
 
         pt_ctx->server_context.path_table = path_item;
         pt_ctx->server_context.path_table_nb = 1;
