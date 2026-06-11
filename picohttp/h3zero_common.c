@@ -426,8 +426,12 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 				else if (stream_state->current_frame_type == h3zero_frame_data ||
 					stream_state->current_frame_type == h3zero_frame_header ||
 					stream_state->current_frame_type == h3zero_frame_push_promise ||
-					stream_state->current_frame_type == h3zero_frame_webtransport_stream) {
-					*error_found = H3ZERO_INTERNAL_ERROR;
+					stream_state->current_frame_type == h3zero_frame_webtransport_stream ||
+					stream_state->current_frame_type == 2 ||
+					stream_state->current_frame_type == 6 ||
+					stream_state->current_frame_type == 8 ||
+					stream_state->current_frame_type == 9) {
+					*error_found = H3ZERO_FRAME_UNEXPECTED;
 					bytes = NULL;
 					continue;
 				}
@@ -441,64 +445,66 @@ const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* 
 				return bytes;
 			}
 		}
-		if (stream_state->current_frame_type == h3zero_frame_settings) {
-			/* Load the frame. May need to allocate memory. */
-			if (stream_state->current_frame_read < stream_state->current_frame_length) {
-				if (stream_state->current_frame_length > H3ZERO_MAX_FIELD_SECTION_SIZE) {
-					/* error, excessive load */
-					*error_found = H3ZERO_EXCESSIVE_LOAD;
-					return NULL;
-				}
-				else {
-					bytes = h3zero_load_frame_content(bytes, bytes_max, stream_state, error_found);
-				}
-			}
-			/* Process the frame if needed, or free it */
-			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-				if (stream_state->current_frame_type == h3zero_frame_settings) {
-					if (stream_state->current_frame_length == 0){
-                        /* empty settings frame is not an error, but just means that all settings are at default values. */
-                        ctx->settings.settings_received = 1;
-                    }
-					else if (stream_state->current_frame != NULL) {
-						const uint8_t* decoded_last = NULL;
-
-						if (opt_cnx != NULL && !ctx->settings.settings_received && stream_state->current_frame_length > 0) {
-							char x[256];
-
-							for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
-								size_t nb_chars = 0;
-								picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
-							}
-							picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
-						}
-						/* TODO: actually parse the settings */
-						decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
-							stream_state->current_frame + stream_state->current_frame_length, &ctx->settings);
-						if (decoded_last == NULL) {
-							*error_found = H3ZERO_SETTINGS_ERROR;
-							bytes = NULL;
-						}
-						else {
-							ctx->settings.settings_received = 1;
-						}
+		if (bytes != NULL) {
+			if (stream_state->current_frame_type == h3zero_frame_settings) {
+				/* Load the frame. May need to allocate memory. */
+				if (stream_state->current_frame_read < stream_state->current_frame_length) {
+					if (stream_state->current_frame_length > H3ZERO_MAX_FIELD_SECTION_SIZE) {
+						/* error, excessive load */
+						*error_found = H3ZERO_EXCESSIVE_LOAD;
+						return NULL;
+					}
+					else {
+						bytes = h3zero_load_frame_content(bytes, bytes_max, stream_state, error_found);
 					}
 				}
-				h3zero_reset_control_stream_state(stream_state);
-			}
-		}
-		else {
-			/* This frame is ignored. */
-			while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
-				uint64_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
-				if (skipped > (size_t)(bytes_max - bytes)) {
-					skipped = (size_t)(bytes_max - bytes);
+				/* Process the frame if needed, or free it */
+				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+					if (stream_state->current_frame_type == h3zero_frame_settings) {
+						if (stream_state->current_frame_length == 0) {
+							/* empty settings frame is not an error, but just means that all settings are at default values. */
+							ctx->settings.settings_received = 1;
+						}
+						else if (stream_state->current_frame != NULL) {
+							const uint8_t* decoded_last = NULL;
+
+							if (opt_cnx != NULL && !ctx->settings.settings_received && stream_state->current_frame_length > 0) {
+								char x[256];
+
+								for (size_t i = 0, j = 0; i < stream_state->current_frame_length && j < 253; i++, j += 2) {
+									size_t nb_chars = 0;
+									picoquic_sprintf(x + j, 256 - j, &nb_chars, "%02x", stream_state->current_frame[i]);
+								}
+								picoquic_log_app_message((picoquic_cnx_t*)opt_cnx, "H3 control frame: %s", x);
+							}
+							/* TODO: actually parse the settings */
+							decoded_last = h3zero_settings_components_decode(stream_state->current_frame,
+								stream_state->current_frame + stream_state->current_frame_length, &ctx->settings);
+							if (decoded_last == NULL) {
+								*error_found = H3ZERO_SETTINGS_ERROR;
+								bytes = NULL;
+							}
+							else {
+								ctx->settings.settings_received = 1;
+							}
+						}
+					}
+					h3zero_reset_control_stream_state(stream_state);
 				}
-				bytes += skipped;
-				stream_state->current_frame_read += skipped;
 			}
-			if (stream_state->current_frame_read >= stream_state->current_frame_length) {
-				h3zero_reset_control_stream_state(stream_state);
+			else {
+				/* This frame is ignored. */
+				while (bytes != NULL && bytes < bytes_max && stream_state->current_frame_read < stream_state->current_frame_length) {
+					uint64_t skipped = stream_state->current_frame_length - stream_state->current_frame_read;
+					if (skipped > (size_t)(bytes_max - bytes)) {
+						skipped = (size_t)(bytes_max - bytes);
+					}
+					bytes += skipped;
+					stream_state->current_frame_read += skipped;
+				}
+				if (stream_state->current_frame_read >= stream_state->current_frame_length) {
+					h3zero_reset_control_stream_state(stream_state);
+				}
 			}
 		}
 	}
@@ -584,6 +590,7 @@ const uint8_t* h3zero_parse_remote_unidir_stream(
 				ctx->remote_control_stream_id != stream_ctx->stream_id) {
                 if (opt_cnx != NULL) {
                     (void)picoquic_close_ex(opt_cnx, H3ZERO_STREAM_CREATION_ERROR, "Attempt to create second control stream");
+					bytes = NULL;
                 }
 				else {
 					*error_found = H3ZERO_STREAM_CREATION_ERROR;
@@ -751,7 +758,11 @@ static int h3zero_check_frame_type(h3zero_data_stream_state_t* stream_state,
 		*error_found = H3ZERO_GENERAL_PROTOCOL_ERROR;
 		ret = -1;
 	}
-	else if (stream_state->current_frame_type == h3zero_frame_settings) {
+	else if (stream_state->current_frame_type == h3zero_frame_settings ||
+		stream_state->current_frame_type == 2 ||
+		stream_state->current_frame_type == 6 ||
+		stream_state->current_frame_type == 8 ||
+		stream_state->current_frame_type == 9) {
 		*error_found = H3ZERO_FRAME_UNEXPECTED;
 		ret = -1;
 	}
@@ -2134,6 +2145,17 @@ const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uin
 				settings->webtransport_max_sessions = 1;
 			}
 			break;
+		case 0: /* Reserved[RFC9113] */
+        case 2: /* ENABLE_PUSH, which is not relevant for HTTP3 */
+        case 3: /* MAX_CONCURRENT_STREAMS, which is not relevant for HTTP3 */
+        case 4: /* INITIAL_WINDOW_SIZE, which is not relevant for HTTP3 */
+        case 5: /* MAX_FRAME_SIZE, which is not relevant for HTTP3 */
+            /* RFC 9114 recommends to return an error if the setting frames contains
+			* elements defined for HTTP2 but not for HTTP3, and lists the 5 values
+            * above. More elements might be added in the future, but for now we just ignore them.
+			*/
+			bytes = NULL;
+            break;
 		default:
 			break;
 		}
