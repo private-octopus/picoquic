@@ -1567,8 +1567,7 @@ int picoquic_packet_loop_uring(
                 else if (cqe->res == 0) {
                     bytes_recv = -1;
                 }
-                fprintf(stderr, "%d bytes received on pipe.\n",
-                    bytes_recv, submit_ret);
+                fprintf(stderr, "%d bytes received on pipe.\n", bytes_recv);
                 *action = picoquic_packet_loop_action_wake_up;
             }
             else {
