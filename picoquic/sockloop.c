@@ -1511,18 +1511,21 @@ int picoquic_packet_loop_uring(
 {
     int ret = 0;
     int bytes_recv = 0;
+    int nb_new_entry = 0;
     static int poll_no_data = 0;
 
     /* Restart the wake pipe if needed. */
     if (thread_ctx->wake_up_defined && !thread_ctx->is_pipe_io_uring_started){
         ret = picoquic_packet_loop_start_pipe_readv(ring, thread_ctx, 0);
         thread_ctx->is_pipe_io_uring_started = 1;
+        nb_new_entry++;
     }
     /* Restart the socket if needed */
     for (int i = 0; ret == 0 && i < nb_sockets; i++) {
         if (!s_ctx[i].is_started) {
             ret = picoquic_packet_loop_start_recvmsg(ring, & s_ctx[i], i+1);
             s_ctx[i].is_started = 1;
+            nb_new_entry++;
         }
     }
     if (ret != 0) {
@@ -1533,7 +1536,13 @@ int picoquic_packet_loop_uring(
         int io_ret;
 
         *action = picoquic_packet_loop_action_none;
-        (void)io_uring_submit(ring);
+        if (nb_new_entry > 0) {
+            int submit_ret = io_uring_submit(ring);
+            if (submit_ret != nb_new_entry) {
+                fprintf(stderr, "Error: %d entries created, %d returned by io_uring_submit\n",
+                    nb_new_entry, submit_ret);
+            }
+        }
         /* set the timeout value */
         ts.tv_sec = delta_t / 1000000;
         ts.tv_nsec = (delta_t%1000000) * 1000;
@@ -1558,6 +1567,8 @@ int picoquic_packet_loop_uring(
                 else if (cqe->res == 0) {
                     bytes_recv = -1;
                 }
+                fprintf(stderr, "%d bytes received on pipe.\n",
+                    bytes_recv, submit_ret);
                 *action = picoquic_packet_loop_action_wake_up;
             }
             else {
@@ -1579,12 +1590,13 @@ int picoquic_packet_loop_uring(
                     *received_buffer = s_ctx[i].data_iovec.iov_base;
                     *action = picoquic_packet_loop_action_udp_received;
                 }
+                fprintf(stderr, "%d bytes received on socket %d.\n", bytes_recv, i);
             }
         }
         else if (io_ret == -ETIME) {
 #if 1
             poll_no_data++;
-            if (poll_no_data > 1000000) {
+            if (poll_no_data > 10000) {
                 fprintf(stderr, "Hot loop on wait!");
                 exit(-1);
             }
