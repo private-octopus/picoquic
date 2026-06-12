@@ -1,4 +1,4 @@
-#include <h3zero.h>
+#include <h3zero_common.h>
 #include <stdio.h>
 
 int main(void)
