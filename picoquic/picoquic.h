@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.49.2"
+#define PICOQUIC_VERSION "1.1.50.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1715,7 +1715,6 @@ uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
 
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);
-
 
 uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 

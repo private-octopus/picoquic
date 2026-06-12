@@ -107,10 +107,10 @@ int h3zero_varint_stream_chunk_test(uint64_t * targets, size_t nb_targets, size_
     int ret = h3zero_varint_stream_test_init(&hvst, targets, nb_targets);
     size_t nb_not_64max = 0;
     size_t nb_chunks = 0;
-    uint8_t* bytes = hvst.bytes;
-    uint8_t* bytes_max = hvst.bytes + hvst.nb_bytes;
-    uint8_t* chunk_start;
-    uint8_t* chunk_end;
+    const uint8_t* bytes = hvst.bytes;
+    const uint8_t* bytes_max = hvst.bytes + hvst.nb_bytes;
+    const uint8_t* chunk_start;
+    const uint8_t* chunk_end;
 
     while (ret == 0) {
         chunk_start = hvst.bytes + chunk_bytes * nb_chunks;
@@ -232,6 +232,7 @@ int h3zero_incoming_unidir_test(void)
         }
         else {
             unidir_input[2] = (uint8_t)control_stream_ctx->stream_id;
+            control_stream_ctx->is_upgraded = 1;
             /* Need to program a stream prefix that matches the connection */
             ret = h3zero_declare_stream_prefix(h3_ctx, control_stream_ctx->stream_id, incoming_unidir_test_fn, NULL);
         }
@@ -250,8 +251,8 @@ int h3zero_incoming_unidir_test(void)
         int success = 0;
 
         for (size_t i = 0; ret == 0 && i < 4; i++) {
-            uint8_t * bytes = &unidir_input[i];
-            uint8_t * bytes_max = bytes + 1;
+            const uint8_t * bytes = &unidir_input[i];
+            const uint8_t * bytes_max = bytes + 1;
             bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, h3_ctx, NULL);
             if (bytes == bytes_max) {
                 continue;
@@ -466,6 +467,7 @@ int h3zero_setting_error_test(void)
     for (int i = 0; ret == 0 && i < 4; i++) {
         ret = h3zero_setting_submit(1, unexpected_frames[i], 0);
     }
+
     /* add random frame to settings, after settings received */
     if (ret == 0) {
         ret = h3zero_setting_submit(1, 12345678, 1);
@@ -473,6 +475,52 @@ int h3zero_setting_error_test(void)
 
     return ret;
 }
+
+int h3zero_remote_control_stream_singleton_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+    h3zero_stream_ctx_t* first_stream_ctx = NULL;
+    h3zero_stream_ctx_t* second_stream_ctx = NULL;
+    uint8_t control_stream_type[] = { 0x00 };
+    uint64_t error_found = 0;
+    uint8_t* bytes;
+
+    if (ret == 0 &&
+        ((first_stream_ctx = h3zero_find_or_create_stream(cnx, 3, h3_ctx, 1, 1)) == NULL ||
+            (second_stream_ctx = h3zero_find_or_create_stream(cnx, 7, h3_ctx, 1, 1)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        bytes = h3zero_parse_remote_unidir_stream(control_stream_type,
+            control_stream_type + sizeof(control_stream_type),
+            first_stream_ctx, h3_ctx, &error_found, NULL);
+        if (bytes != control_stream_type + sizeof(control_stream_type) ||
+            error_found != 0) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        bytes = h3zero_parse_remote_unidir_stream(control_stream_type,
+            control_stream_type + sizeof(control_stream_type),
+            second_stream_ctx, h3_ctx, &error_found, NULL);
+        if (bytes != NULL || error_found != H3ZERO_STREAM_CREATION_ERROR) {
+            DBG_PRINTF("Duplicate control stream returned %p and error %" PRIu64,
+                (void*)bytes, error_found);
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 
 /* Unit test of data callback.
 * 
@@ -528,7 +576,7 @@ int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const
     return ret;
 }
 
-uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
+uint8_t* h3zero_client_data_format_response(uint8_t * bytes, uint8_t * bytes_max)
 {
     uint8_t* length_byte = NULL;
     uint8_t* data_byte = NULL;
@@ -550,6 +598,22 @@ uint8_t* h3zero_client_data_get_response(uint8_t * bytes, uint8_t * bytes_max)
         size_t sz = bytes - data_byte;
         length_byte[0] = 0x40 + (uint8_t)(sz >> 8);
         length_byte[1] = (uint8_t)(sz & 0xff);
+    }
+    return bytes;
+}
+
+static uint8_t* h3zero_client_data_format_trailer(uint8_t* bytes, uint8_t* bytes_max)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_frame_header)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 3)) != NULL) {
+        if (bytes + 3 > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            *bytes++ = 0;
+            *bytes++ = 0;
+            *bytes++ = 0xC0 | 7; /* etag static header, no pseudo header in trailers. */
+        }
     }
     return bytes;
 }
@@ -647,12 +711,12 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
 
     /* Encode a stream header */
     if (ret == 0 && !spec->skip_header && 
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL){
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL){
         ret = -1;
     }
     /* encode a stray trailer */
     if (ret == 0 && spec->trailer_after_header &&
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_response(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
     /* Encode a data frame (or 2?)*/
@@ -662,7 +726,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     }
     /* Encode a stream trailer */
     if (ret == 0 && spec->add_trailer &&
-        (bytes = h3zero_client_data_get_response(bytes, bytes_max)) == NULL) {
+        (bytes = h3zero_client_data_format_trailer(bytes, bytes_max)) == NULL) {
         ret = -1;
     }
 

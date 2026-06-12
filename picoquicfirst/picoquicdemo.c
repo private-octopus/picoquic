@@ -266,16 +266,17 @@ int demoserver_post_callback(picoquic_cnx_t* UNUSED(cnx),
 picohttp_server_path_item_t path_item_list[2] =
 {
     {
-        "/post",
-        5,
-        demoserver_post_callback,
-        NULL
+        .path = "/post",
+        .path_length = 5,
+        .path_callback = demoserver_post_callback
     },
     {
-        "/baton",
-        6,
-        wt_baton_callback,
-        NULL
+        .path = "/baton",
+        .path_length = 6,
+        .path_callback = wt_baton_callback,
+        .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+        .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+        .origin_validator = h3zero_origin_validator_allow_all
     }
 };
 

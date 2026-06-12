@@ -489,6 +489,16 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
                         decoded_length, &parts->authority, &parts->authority_length);
                 }
                 break;
+            case http_header_origin:
+                if (parts->origin != NULL) {
+                    /* Duplicate origin! */
+                    bytes = 0;
+                }
+                else {
+                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                        decoded_length, &parts->origin, &parts->origin_length);
+                }
+                break;
             case http_header_range:
                 if (parts->range != NULL) {
                     /* Duplicate content type! */
@@ -615,7 +625,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x3F, &s_index);
 
-            if (s_index > h3zero_qpack_nb_static) {
+            if (s_index >= h3zero_qpack_nb_static) {
                 /* Index out of range */
                 bytes = NULL;
             }
@@ -682,7 +692,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x0F, &s_index);
             if (bytes != NULL) {
-                if (s_index > h3zero_qpack_nb_static) {
+                if (s_index >= h3zero_qpack_nb_static) {
                     /* Index out of range */
                     bytes = NULL;
                 } else {
@@ -1102,7 +1112,7 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
  * length of the encoding. If there are zero bytes, the first byte
  * to be read will be placed in the buffer.
  */
-uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
+const uint8_t * h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
     uint8_t* bp = buffer + *buffer_length;
     uint8_t* be;
@@ -1141,6 +1151,11 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->authority);
         *((uint8_t**)&header->authority) = NULL;
         header->authority_length = 0;
+    }
+    if (header->origin != NULL) {
+        free((uint8_t*)header->origin);
+        *((uint8_t**)&header->origin) = NULL;
+        header->origin_length = 0;
     }
     if (header->range != NULL) {
         free((uint8_t*)header->range);
@@ -1195,29 +1210,36 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    27, /* Length of setting frame content */
+    0x20, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
+    (uint8_t)h3zero_setting_max_field_section_size, 0x80, 0x01, 0, 0, /* var int type ( < 64), the var in value 0x10000 */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
     /* enable_connect_protocol = 0x8 */
     (uint8_t)h3zero_settings_enable_connect_protocol, 1,
     /* datagram support */
     (uint8_t)h3zero_setting_h3_datagram, 1,
-    /* Declare max 1 web transport session (draft-14: SETTINGS_WT_MAX_SESSIONS) */
+    /* SETTINGS_WT_ENABLED. Picoquic does not advertise WebTransport
+     * session flow-control settings: QUIC flow control already bounds the
+     * data, and picoquic keeps one WebTransport session per QUIC connection.
+     */
+    ((h3zero_settings_wt_enabled >> 24)&0xff)|0x80,
+    (uint8_t)((h3zero_settings_wt_enabled >> 16)&0xff),
+    (uint8_t)((h3zero_settings_wt_enabled >> 8)&0xff),
+    (uint8_t)((h3zero_settings_wt_enabled)&0xff), 1,
+    /* WT_MAX_SESSIONS, drafts 13-14 */
     ((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1,
-    /* Old draft: SETTINGS_WEBTRANSPORT_MAX_SESSIONS */
-    0xc0, 0x00, 0x00, 0x00,
-    ((h3zero_settings_webtransport_max_sessions_old >> 24) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old) & 0xff), 1,
-    /* Chrome compatibility: SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) */
-    ((h3zero_settings_enable_webtransport >> 24)&0xff)|0x80,
-    (uint8_t)((h3zero_settings_enable_webtransport >> 16)&0xff),
-    (uint8_t)((h3zero_settings_enable_webtransport >> 8)&0xff),
-    (uint8_t)((h3zero_settings_enable_webtransport)&0xff), 1
+    /* WEBTRANSPORT_MAX_SESSIONS, drafts 7-12 */
+    (uint8_t)(((h3zero_settings_webtransport_max_sessions_old >> 56)&0xff)|0xc0),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 48)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 40)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 32)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 24)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
