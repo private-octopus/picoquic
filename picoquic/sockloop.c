@@ -1589,7 +1589,10 @@ int picoquic_packet_loop_uring(
                     *received_buffer = s_ctx[i].data_iovec.iov_base;
                     *action = picoquic_packet_loop_action_udp_received;
                 }
+                char txt[256];
                 fprintf(stderr, "%d bytes received on socket %d.\n", bytes_recv, i);
+                fprintf(stderr, "Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)addr_from, txt, sizeof(txt)));
+                fprintf(stderr, "Addr_dest: %s\n", picoquic_addr_text((struct sockaddr*)addr_dest, txt, sizeof(txt)));
             }
             io_uring_cqe_seen(ring, cqe);
         }
@@ -2284,8 +2287,8 @@ int picoquic_packet_loop_udp_received(
         ret = picoquic_incoming_packet_ex(quic, received_buffer,
             (size_t)bytes_recv, addr_from, addr_to, if_index_to, received_ecn,
             last_cnx, current_time);
-        fprintf(stderr, "Submitted %d bytes to QUIC, last_cnx = %s\n", bytes_recv,
-            (*last_cnx == NULL) ? "NULL" : "not null");
+        fprintf(stderr, "Submitted %d bytes to QUIC, last_cnx state = %d\n", bytes_recv,
+            (*last_cnx == NULL) ? -1 : picoquic_get_cnx_state(*last_cnx);
 #endif
         if (loop_callback != NULL) {
             size_t b_recvd = (size_t)bytes_recv;
