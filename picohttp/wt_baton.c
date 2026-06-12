@@ -918,7 +918,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
 }
 
 int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
+    uint64_t stream_id, const uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event,
     h3zero_stream_ctx_t* stream_ctx,
     wt_baton_ctx_t* baton_ctx)
@@ -933,7 +933,7 @@ int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
         ret = -1;
     }
     else {
-        uint8_t* bytes_max = bytes + length;
+        const uint8_t* bytes_max = bytes + length;
 
         bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx, cnx);
 

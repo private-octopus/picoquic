@@ -625,7 +625,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x3F, &s_index);
 
-            if (s_index > h3zero_qpack_nb_static) {
+            if (s_index >= h3zero_qpack_nb_static) {
                 /* Index out of range */
                 bytes = NULL;
             }
@@ -692,7 +692,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x0F, &s_index);
             if (bytes != NULL) {
-                if (s_index > h3zero_qpack_nb_static) {
+                if (s_index >= h3zero_qpack_nb_static) {
                     /* Index out of range */
                     bytes = NULL;
                 } else {
@@ -1112,7 +1112,7 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
  * length of the encoding. If there are zero bytes, the first byte
  * to be read will be placed in the buffer.
  */
-uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
+const uint8_t * h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
     uint8_t* bp = buffer + *buffer_length;
     uint8_t* be;
@@ -1210,8 +1210,9 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    27, /* Length of setting frame content */
+    0x20, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
+    (uint8_t)h3zero_setting_max_field_section_size, 0x80, 0x01, 0, 0, /* var int type ( < 64), the var in value 0x10000 */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
     /* enable_connect_protocol = 0x8 */
     (uint8_t)h3zero_settings_enable_connect_protocol, 1,

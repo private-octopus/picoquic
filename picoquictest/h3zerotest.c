@@ -59,6 +59,7 @@ static uint8_t h3zero_pref127_valmax[] = {
 static uint8_t h3zero_pref7_err1[] = { 0x07 };
 static uint8_t h3zero_pref7_err2[] = { 0x07, 0xFF, 0xFF, 0x80, 0x80, 0x80 };
 static uint8_t h3zero_pref127_val255[] = { 0x7F, 0x80, 0x01 };
+static uint8_t h3zero_prefC0_val99[] = { 0xFF, 36 };
 
 typedef struct st_h3zero_test_integer_case_t {
     uint64_t test_value;
@@ -75,7 +76,8 @@ static h3zero_test_integer_case_t h3zero_int_case[] = {
     { 0x3FFFFFFFFFFFFFFFull, 0x7F, h3zero_pref127_valmax, sizeof(h3zero_pref127_valmax)},
     { 0xFFFFFFFFFFFFFFFFull, 0x07, h3zero_pref7_err1, sizeof(h3zero_pref7_err1)},
     { 0xFFFFFFFFFFFFFFFFull, 0x07, h3zero_pref7_err2, sizeof(h3zero_pref7_err2)},
-    { 0xFF, 0x7F, h3zero_pref127_val255, sizeof(h3zero_pref127_val255)}
+    { 0xFF, 0x7F, h3zero_pref127_val255, sizeof(h3zero_pref127_val255)},
+    { 99, 0x3F, h3zero_prefC0_val99, sizeof(h3zero_prefC0_val99)}
 };
 
 static size_t nb_h3zero_int_case = sizeof(h3zero_int_case) / sizeof(h3zero_test_integer_case_t);
@@ -812,6 +814,37 @@ static qpack_test_case_t qpack_test_case[] = {
 
 static size_t nb_qpack_test_case = sizeof(qpack_test_case) / sizeof(qpack_test_case_t);
 
+#define QPACK_BAD_CODE_C0 0xFF,36
+#define QPACK_BAD_CODE_D0 0xDF,84
+#define QPACK_BAD_CODE_50 0x5F,84
+
+static uint8_t qpack_test_get_slash_bad[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, QPACK_BAD_CODE_C0, 0xC0 | 17, 0xC0 | 1 };
+
+static uint8_t qpack_status200_bad[] = {
+    0x00, 0x00, QPACK_BAD_CODE_D0, 0x54, 0x84, 0x08, 0x04, 0xd0,
+    0x3f, 0x5f, 0x1d, 0x90, 0x1d, 0x75, 0xd0, 0x62,
+    0x0d, 0x26, 0x3d, 0x4c, 0x1c, 0x89, 0x2a, 0x56,
+    0x42, 0x6c, 0x28, 0xe9, 0xe3
+};
+
+static uint8_t qpack_status_bad_50[] = {
+    QPACK_TEST_HEADER_BLOCK_PREFIX, QPACK_BAD_CODE_50, 13, 3, '4', '0', '4' };
+
+typedef struct st_qpack_test_bad_case_t {
+    uint8_t* bytes;
+    size_t bytes_length;
+} qpack_test_bad_case_t;
+
+static qpack_test_bad_case_t qpack_test_bad_case[] = {
+    { qpack_test_get_slash_bad, sizeof(qpack_test_get_slash_bad) },
+    { qpack_status200_bad, sizeof(qpack_status200_bad) },
+    { qpack_status_bad_50, sizeof(qpack_status_bad_50) }
+};
+
+static size_t nb_qpack_test_bad_case = sizeof(qpack_test_bad_case) / sizeof(qpack_test_bad_case_t);
+
+
 static int h3zero_parse_qpack_test_one(size_t i, uint8_t * data, size_t data_length)
 {
     int ret = 0;
@@ -1152,6 +1185,8 @@ int h3zero_null_sni_test(void)
  * Verify that the parser does not crash or loop.
  */
 
+
+
 int h3zero_qpack_fuzz_test(void)
 {
     uint8_t* bytes = malloc(PICOQUIC_MAX_PACKET_SIZE);
@@ -1176,6 +1211,18 @@ int h3zero_qpack_fuzz_test(void)
             n_good += (parsed != NULL) ? 1 : 0;
             n_trials++;
         }
+    }
+
+    for (size_t x = 0; ret == 0 && x < nb_qpack_test_bad_case; x++) {
+        h3zero_header_parts_t parts = { 0 };
+        uint8_t* parsed = NULL;
+
+        memcpy(bytes, qpack_test_bad_case[x].bytes, qpack_test_bad_case[x].bytes_length);
+
+        parsed = h3zero_parse_qpack_header_frame(bytes, bytes + qpack_test_bad_case[x].bytes_length, &parts);
+        h3zero_release_header_parts(&parts);
+        n_good += (parsed != NULL) ? 1 : 0;
+        n_trials++;
     }
 
     for (int i = 0; ret == 0 && i < 512; i++) {
@@ -3575,34 +3622,38 @@ int h3zero_settings_encode_test(const uint8_t* ref, size_t ref_length, h3zero_se
 int h3zero_settings_decode_test(const uint8_t* bytes, size_t length, h3zero_settings_t* ref, int check_length)
 {
     int ret = 0;
-    h3zero_settings_t decoded;
     const uint8_t * bytes_max = bytes + length;
+    uint64_t error_found = 0;
+    h3zero_callback_ctx_t ctx = { 0 };
+    h3zero_data_stream_state_t stream_state = { 0 };
 
-    bytes = h3zero_settings_decode(bytes, bytes_max, &decoded);
+
+    bytes = h3zero_parse_control_stream((uint8_t*)bytes, bytes + length,
+        &stream_state, &ctx, &error_found, NULL);
+
     if (bytes == NULL) {
         ret = -1;
     }
     else if (check_length && bytes != bytes_max) {
         ret = -1;
     }
-    else if (decoded.table_size != ref->table_size) {
+    else if (ctx.settings.table_size != ref->table_size) {
         ret = -1;
     }
-    else if (decoded.blocked_streams != ref->blocked_streams) {
+    else if (ctx.settings.blocked_streams != ref->blocked_streams) {
         ret = -1;
     }
-    else if (decoded.enable_connect_protocol != ref->enable_connect_protocol){
+    else if (ctx.settings.enable_connect_protocol != ref->enable_connect_protocol){
         ret = -1;
     }
-    else if (decoded.h3_datagram != ref->h3_datagram){
+    else if (ctx.settings.h3_datagram != ref->h3_datagram){
         ret = -1;
     }
-    else if (decoded.webtransport_enabled != ref->webtransport_enabled) {
+    else if (ctx.settings.webtransport_max_sessions != ref->webtransport_max_sessions) {
         ret = -1;
     }
-    else if (decoded.webtransport_max_sessions != ref->webtransport_max_sessions) {
-        ret = -1;
-    }
+
+
     return ret;
 }
 
