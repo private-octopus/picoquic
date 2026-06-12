@@ -2288,7 +2288,7 @@ int picoquic_packet_loop_udp_received(
             (size_t)bytes_recv, addr_from, addr_to, if_index_to, received_ecn,
             last_cnx, current_time);
         fprintf(stderr, "Submitted %d bytes to QUIC, last_cnx state = %d\n", bytes_recv,
-            (*last_cnx == NULL) ? -1 : picoquic_get_cnx_state(*last_cnx);
+            (*last_cnx == NULL) ? -1 : picoquic_get_cnx_state(*last_cnx));
 #endif
         if (loop_callback != NULL) {
             size_t b_recvd = (size_t)bytes_recv;
