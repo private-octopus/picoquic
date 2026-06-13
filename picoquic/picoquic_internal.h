@@ -684,7 +684,7 @@ typedef struct st_picoquic_quic_t {
     void* cnx_id_callback_ctx;
 
     picoquic_server_state_key_t server_state_key[2];
-    uint8_t server_state_key_active_slot;
+    uint8_t server_state_key_active_slot : 1;
     void ** retry_integrity_sign_ctx;
     void ** retry_integrity_verify_ctx;
 

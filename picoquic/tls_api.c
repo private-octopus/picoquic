@@ -909,7 +909,7 @@ void picoquic_log_crypto_errors(picoquic_cnx_t* cnx, int ret)
 }
 
 
-static int picoquic_server_setup_server_state_aead_contexts(picoquic_quic_t* quic,
+static int picoquic_setup_server_state_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
 
@@ -1990,7 +1990,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic,
         }
 
         if (ret == 0) {
-            ret = picoquic_server_setup_server_state_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
+            ret = picoquic_setup_server_state_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
         }
 
         if (ret == 0) {
@@ -2611,7 +2611,7 @@ void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, 
     return v_aead;
 }
 
-static int picoquic_server_setup_server_state_aead_contexts(picoquic_quic_t* quic,
+static int picoquic_setup_server_state_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length)
 {
@@ -2669,7 +2669,7 @@ int picoquic_set_server_state_key(picoquic_quic_t* quic,
     else {
         PICOQUIC_THREAD_CHECK(quic);
 
-        ret = picoquic_server_setup_server_state_aead_contexts(quic, NULL,
+        ret = picoquic_setup_server_state_aead_contexts(quic, NULL,
             server_state_key, server_state_key_length);
     }
 
