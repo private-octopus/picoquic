@@ -3926,10 +3926,17 @@ int tls_retry_token_valid_test(void)
     /* Test of an invalid token: valid token with changed bytes */
 
     for (int token_mode = 0; ret == 0 && token_mode < 2; token_mode++) {
-        if (picoquic_prepare_retry_token(quic, addr[0], time_base * 1000000 + time_delta[1], odcid[token_mode],
+        if (picoquic_set_server_state_key(quic,
+            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key)) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_prepare_retry_token(quic, addr[0], time_base * 1000000 + time_delta[1], odcid[token_mode],
             cid[token_mode], pn[1],
             token_buffer, sizeof(token_buffer), &token_size) != 0) {
             ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else if (PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(PICOPARSE_64(token_buffer)) != 0) {
+            ret = -1;
         }
 
         if (ret == 0) {
@@ -4006,6 +4013,35 @@ int tls_retry_token_valid_test(void)
                     DBG_PRINTF("%s", "Bad length check fails\n");
                     ret = -1;
                 }
+            }
+        }
+
+        if (ret == 0 && picoquic_set_server_state_key(quic,
+            test_ticket_badcrypt_key, sizeof(test_ticket_badcrypt_key)) != 0) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            verified = picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                &is_new_token, &odcid_found, cid[0], pn[2], token_buffer, token_size, 0);
+            if (verified != 0) {
+                ret = -1;
+            }
+            else if (is_new_token != (odcid[token_mode]->id_len == 0)) {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            if (picoquic_prepare_retry_token(quic, addr[0], time_base * 1000000 + time_delta[1], odcid[token_mode],
+                cid[token_mode], pn[1], token_buffer, sizeof(token_buffer), &token_size) != 0) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else if (PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(PICOPARSE_64(token_buffer)) != 1) {
+                ret = -1;
+            }
+            else if (picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
+                &is_new_token, &odcid_found, cid[0], pn[2], token_buffer, token_size, 0) != 0) {
+                ret = -1;
             }
         }
     }
