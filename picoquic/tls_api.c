@@ -3073,8 +3073,7 @@ void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
  * - 64 bit random sequence number.
  * - Encrypted value of the token.
  * - AEAD checksum.
- * The most significant bit of the random number is set to 1 (0x80) for a "new token",
- * and to zero for a "retry token".
+ * The top bit identifies server state key slot 0 or 1; the next bit marks NEW_TOKEN.
  * When invoking AEAD, the sequence number is used to update the IV, and the IP address
  * is passed as "authenticated" data. The 64 bit random number alleviates the concern of
  * reusing the same AEAD key twice. The authenticated data ensures that if the token is
@@ -3089,8 +3088,9 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
     uint64_t sequence;
     uint8_t* auth_data;
     size_t auth_data_length;
+    picoquic_server_state_key_t* key = &quic->server_state_key[quic->server_state_key_active_slot];
 
-    if (text_length + 1u + 16u > token_max) {
+    if (!picoquic_server_state_key_is_set(key) || text_length + 8u + key->checksum_length > token_max) {
         ret = -1;
         *token_length = 0;
     }
@@ -3104,17 +3104,17 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
             auth_data = (uint8_t*)&((struct sockaddr_in6*)addr_peer)->sin6_addr;
             auth_data_length = 16;
         }
-        picoquic_crypto_random(quic, token, 8);
+        sequence = picoquic_server_state_random_sequence(quic->server_state_key_active_slot);
         if (is_new_token) {
-            token[0] |= 0x80;
+            sequence |= PICOQUIC_TOKEN_TYPE_NEW;
         }
         else {
-            token[0] &= 0x7F;
+            sequence &= ~PICOQUIC_TOKEN_TYPE_NEW;
         }
-        sequence = PICOPARSE_64(token);
+        picoformat_64(token, sequence);
 
-        *token_length = (size_t)8u + picoquic_aead_encrypt_generic(token + 8, text, text_length,
-            sequence, auth_data, auth_data_length, quic->aead_encrypt_ticket_ctx);
+        *token_length = 8u + picoquic_aead_encrypt_generic(token + 8, text, text_length,
+            sequence, auth_data, auth_data_length, key->aead_encrypt_ctx);
     }
 
     return ret;
@@ -3142,13 +3142,19 @@ int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sock
         ret = -1;
     }
     else {
-        *is_new_token = ((token[0] & 0x80) == 0) ? 0: 1;
         sequence = PICOPARSE_64(token);
+        *is_new_token = ((sequence & PICOQUIC_TOKEN_TYPE_NEW) == 0) ? 0: 1;
 
-        *text_length = picoquic_aead_decrypt_generic(text, token+8, token_length-8,
-            sequence, auth_data, auth_data_length, quic->aead_decrypt_ticket_ctx);
-        if (*text_length >= token_length - 8) {
+        picoquic_server_state_key_t* key = &quic->server_state_key[PICOQUIC_SERVER_STATE_KEY_SLOT(sequence)];
+        if (!picoquic_server_state_key_is_set(key) || token_length < 8 + key->checksum_length) {
             ret = -1;
+        }
+        else {
+            *text_length = picoquic_aead_decrypt_generic(text, token+8, token_length-8,
+                sequence, auth_data, auth_data_length, key->aead_decrypt_ctx);
+            if (*text_length >= token_length - 8) {
+                ret = -1;
+            }
         }
     }
 
