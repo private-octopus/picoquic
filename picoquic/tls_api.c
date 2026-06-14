@@ -1237,7 +1237,7 @@ static int picoquic_server_state_key_is_set(picoquic_server_state_key_t* key)
     return key->aead_encrypt_ctx != NULL && key->aead_decrypt_ctx != NULL;
 }
 
-static uint64_t picoquic_server_state_random_sequence(uint8_t key_slot)
+static uint64_t picoquic_server_state_random_sequence(unsigned int key_slot)
 {
     uint64_t sequence;
 
