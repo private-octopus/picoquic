@@ -2288,8 +2288,6 @@ int picoquic_packet_loop_udp_received(
         ret = picoquic_incoming_packet_ex(quic, received_buffer,
             (size_t)bytes_recv, addr_from, addr_to, if_index_to, received_ecn,
             last_cnx, current_time);
-        fprintf(stderr, "Submitted %d bytes to QUIC, last_cnx state = %d\n", bytes_recv,
-            (*last_cnx == NULL) ? -1 : picoquic_get_cnx_state(*last_cnx));
 #endif
         if (loop_callback != NULL) {
             size_t b_recvd = (size_t)bytes_recv;
@@ -2343,8 +2341,6 @@ int picoquic_packet_loop_do_udp_send(
             sock_ret = picoquic_sendmsg(send_socket,
                 (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
                 (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
-            fprintf(stderr, "Sent %d bytes, sock ret: %d, errno: %x\n",
-                (int)send_length, sock_ret, sock_err);
         }
     }
     if (sock_ret <= 0) {
