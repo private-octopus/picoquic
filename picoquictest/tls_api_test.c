@@ -5756,6 +5756,14 @@ int cert_rollover_inflight_test(void)
         ret = tls_api_connection_loop(ctx.test_ctx, &loss_mask, 0, &ctx.simulated_time);
     }
 
+    if (ret == 0) {
+        picoquic_test_tls_api_ctx_t* test_ctx = ctx.test_ctx;
+
+        if (!TEST_CLIENT_READY || !TEST_SERVER_READY) {
+            ret = -1;
+        }
+    }
+
     if (ret == 0 && (ctx.verify_ctx.call_count == 0 || !ctx.verify_ctx.matched_expected)) {
         ret = -1;
     }
