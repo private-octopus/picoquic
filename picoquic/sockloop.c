@@ -347,7 +347,15 @@ int picoquic_win_recvmsg_async_finish(
 void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 {
     if (s_ctx->fd != INVALID_SOCKET) {
+#ifdef PICOQUIC_WITH_IO_URING
+        int ret = close(s_ctx->fd);
+        if (ret != 0) {
+            DBGPRINTF("closing socket on port %d returns %d, errno = %x",
+                s_ctx->port, ret, errno);
+        }
+#else
         SOCKET_CLOSE(s_ctx->fd);
+#endif
         s_ctx->fd = INVALID_SOCKET;
     }
 #ifdef _WINDOWS
