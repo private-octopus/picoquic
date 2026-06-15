@@ -1601,6 +1601,7 @@ int picoquic_packet_loop_uring(
                 fprintf(stderr, "Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)addr_from, txt, sizeof(txt)));
                 fprintf(stderr, "Addr_dest: %s\n", picoquic_addr_text((struct sockaddr*)addr_dest, txt, sizeof(txt)));
                 fprintf(stderr, "S_Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)&s_ctx[i].addr_from, txt, sizeof(txt)));
+                picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[i].addr_from);
             }
             io_uring_cqe_seen(ring, cqe);
         }
