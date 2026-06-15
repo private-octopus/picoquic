@@ -1650,6 +1650,8 @@ void io_uring_cancel_and_free(
     if (thread_ctx->wake_up_defined) {
         picoquic_packet_loop_pipe_buffer_uring_free(thread_ctx);
     }
+    /* update the ring with the cancellation */
+    io_uring_submit(ring);
     /* Free the socket if needed */
     for (int i = 0; i < nb_sockets; i++) {
         picoquic_packet_loop_recv_buf_uring_free(&s_ctx[i]);
