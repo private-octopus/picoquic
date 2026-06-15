@@ -1,5 +1,5 @@
 ---
-name: "CITestsSelect"
+name: "CITestsIoUring"
 
 on:
   push:
@@ -29,6 +29,7 @@ jobs:
 
       - name: Building picoquic
         run: |
+          sudo apt install liburing-dev
           sudo apt-get install -y libssl-dev
           ./ci/build_picotls.sh
           cmake -S . -B build "-DWITH_IO_URING=ON"
