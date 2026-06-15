@@ -56,9 +56,9 @@ static const uint8_t test_ticket_badcrypt_key[32] = {
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 };
 
-#define PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(sequence) (uint8_t)((sequence) >> 63)
+#define PICOQUIC_TEST_TICKET_KEY_SLOT(sequence) (uint8_t)((sequence) >> 63)
 
-static const uint8_t test_server_state_replace_key[32] = { 1 };
+static const uint8_t test_ticket_key_replace_key[32] = { 1 };
 /*
  * Generic call back function.
  */
@@ -3926,7 +3926,7 @@ int tls_retry_token_valid_test(void)
     /* Test of an invalid token: valid token with changed bytes */
 
     for (int token_mode = 0; ret == 0 && token_mode < 2; token_mode++) {
-        if (picoquic_set_server_state_key(quic,
+        if (picoquic_set_ticket_key(quic,
             test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key)) != 0) {
             ret = -1;
         }
@@ -3935,7 +3935,7 @@ int tls_retry_token_valid_test(void)
             token_buffer, sizeof(token_buffer), &token_size) != 0) {
             ret = PICOQUIC_ERROR_MEMORY;
         }
-        else if (PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(PICOPARSE_64(token_buffer)) != 0) {
+        else if (PICOQUIC_TEST_TICKET_KEY_SLOT(PICOPARSE_64(token_buffer)) != 0) {
             ret = -1;
         }
 
@@ -4016,7 +4016,7 @@ int tls_retry_token_valid_test(void)
             }
         }
 
-        if (ret == 0 && picoquic_set_server_state_key(quic,
+        if (ret == 0 && picoquic_set_ticket_key(quic,
             test_ticket_badcrypt_key, sizeof(test_ticket_badcrypt_key)) != 0) {
             ret = -1;
         }
@@ -4036,7 +4036,7 @@ int tls_retry_token_valid_test(void)
                 cid[token_mode], pn[1], token_buffer, sizeof(token_buffer), &token_size) != 0) {
                 ret = PICOQUIC_ERROR_MEMORY;
             }
-            else if (PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(PICOPARSE_64(token_buffer)) != 1) {
+            else if (PICOQUIC_TEST_TICKET_KEY_SLOT(PICOPARSE_64(token_buffer)) != 1) {
                 ret = -1;
             }
             else if (picoquic_verify_retry_token(quic, addr[0], time_base * 1000000 + time_delta[0],
@@ -4413,26 +4413,26 @@ int session_resume_test(void)
     return ret;
 }
 
-static char const* server_state_key_rotation_file_name = "server_state_key_rotation_tickets.bin";
+static char const* ticket_key_rotation_file_name = "ticket_key_rotation_tickets.bin";
 
-int server_state_key_rotation_test(void)
+int ticket_key_rotation_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = picoquic_save_tickets(NULL, simulated_time, server_state_key_rotation_file_name);
+    int ret = picoquic_save_tickets(NULL, simulated_time, ticket_key_rotation_file_name);
 
     for (int i = 0; ret == 0 && i < 3; i++) {
         uint64_t loss_mask = 0;
         ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
-            &simulated_time, server_state_key_rotation_file_name, NULL, 0, 0, 0);
+            &simulated_time, ticket_key_rotation_file_name, NULL, 0, 0, 0);
 
         if (ret == 0 && i > 0) {
-            ret = picoquic_set_server_state_key(test_ctx->qserver,
-                (i == 1) ? test_ticket_encrypt_key : test_server_state_replace_key,
+            ret = picoquic_set_ticket_key(test_ctx->qserver,
+                (i == 1) ? test_ticket_encrypt_key : test_ticket_key_replace_key,
                 sizeof(test_ticket_encrypt_key));
         }
         if (ret == 0) {
-            ret = picoquic_set_server_state_key(test_ctx->qserver,
+            ret = picoquic_set_ticket_key(test_ctx->qserver,
                 (i == 0) ? test_ticket_encrypt_key : test_ticket_badcrypt_key,
                 sizeof(test_ticket_encrypt_key));
         }
@@ -4448,7 +4448,7 @@ int server_state_key_rotation_test(void)
             ret = (i == 0) ? session_resume_wait_for_ticket(test_ctx, &simulated_time) :
                 tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 0, 1);
         }
-        if (ret == 0 && PICOQUIC_TEST_SERVER_STATE_KEY_SLOT(test_ctx->cnx_server->issued_ticket_id) != (uint8_t)(i == 0 ? 0 : 1)) {
+        if (ret == 0 && PICOQUIC_TEST_TICKET_KEY_SLOT(test_ctx->cnx_server->issued_ticket_id) != (uint8_t)(i == 0 ? 0 : 1)) {
             ret = -1;
         }
         if (ret == 0) {
@@ -4456,7 +4456,7 @@ int server_state_key_rotation_test(void)
         }
         if (ret == 0 && i == 0) {
             ret = picoquic_save_tickets(test_ctx->qclient->p_first_ticket, simulated_time,
-                server_state_key_rotation_file_name);
+                ticket_key_rotation_file_name);
         }
         if (test_ctx != NULL) {
             tls_api_delete_ctx(test_ctx);

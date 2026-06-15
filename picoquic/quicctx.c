@@ -1078,7 +1078,7 @@ void picoquic_free(picoquic_quic_t* quic)
         picoquic_delete_retry_protection_contexts(quic);
 
         for (int i = 0; i < 2; i++) {
-            picoquic_dispose_server_state_key(&quic->server_state_key[i]);
+            picoquic_dispose_ticket_key_state(&quic->ticket_key_state[i]);
         }
 
         if (quic->default_alpn != NULL) {

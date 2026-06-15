@@ -124,7 +124,7 @@ int ticket_seed_test(void);
 int ticket_seed_from_bdp_frame_test(void);
 int token_store_test(void);
 int session_resume_test(void);
-int server_state_key_rotation_test(void);
+int ticket_key_rotation_test(void);
 int zero_rtt_test(void);
 int zero_rtt_loss_test(void);
 int stop_sending_test(void);
