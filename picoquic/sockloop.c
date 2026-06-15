@@ -350,7 +350,7 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #ifdef PICOQUIC_WITH_IO_URING
         int ret = close(s_ctx->fd);
         if (ret != 0) {
-            DBGPRINTF("closing socket on port %d returns %d, errno = %x",
+            DBG_PRINTF("closing socket on port %d returns %d, errno = %x",
                 s_ctx->port, ret, errno);
         }
 #else
