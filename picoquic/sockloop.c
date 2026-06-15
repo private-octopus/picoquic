@@ -1571,7 +1571,7 @@ int picoquic_packet_loop_uring(
                 *action = picoquic_packet_loop_action_wake_up;
             }
             else {
-                /* sendmsg completed on socket id64 - 1. */
+                /* recvmsg completed on socket id64 - 1. */
                 int i = (int)id64 - 1;
                 *socket_rank = i;
                 s_ctx[i].is_started = 0;
@@ -1600,6 +1600,7 @@ int picoquic_packet_loop_uring(
                 fprintf(stderr, "%d bytes received on socket %d.\n", bytes_recv, i);
                 fprintf(stderr, "Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)addr_from, txt, sizeof(txt)));
                 fprintf(stderr, "Addr_dest: %s\n", picoquic_addr_text((struct sockaddr*)addr_dest, txt, sizeof(txt)));
+                fprintf(stderr, "S_Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)&s_ctx[i].addr_from, txt, sizeof(txt)));
             }
             io_uring_cqe_seen(ring, cqe);
         }
