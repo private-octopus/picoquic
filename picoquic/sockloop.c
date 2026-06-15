@@ -1512,7 +1512,13 @@ int picoquic_packet_loop_uring(
     int ret = 0;
     int bytes_recv = 0;
     int nb_new_entry = 0;
-    static int poll_no_data = 0;
+
+    /* TODO: the new entries should be created immediately after
+    * processing the CQE, to avoid doing the polling code on every
+    * loop.
+     */
+    /* TODO: add support for io_uring versio of sendmsg. */
+    /* TODO: manage TCP sockets used for QMUX. */
 
     /* Restart the wake pipe if needed. */
     if (thread_ctx->wake_up_defined && !thread_ctx->is_pipe_io_uring_started){
@@ -1549,9 +1555,6 @@ int picoquic_packet_loop_uring(
         /* call wait for sqe or timeout */
         io_ret = io_uring_wait_cqe_timeout(ring, &cqe, &ts);
         if (io_ret == 0) {
-#if 1
-            poll_no_data = 0;
-#endif
             /* Normal case. First, get the data and identify the socket */
             uint64_t id64 = io_uring_cqe_get_data64(cqe);
             if (id64 == 0) {
@@ -1591,28 +1594,17 @@ int picoquic_packet_loop_uring(
                     else if (addr_dest->ss_family == AF_INET) {
                         ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
                     }
+                    /* make the addr_from available */
+                    picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[i].addr_from);
                     /* document bytes received */
                     bytes_recv = cqe->res;
                     *received_buffer = s_ctx[i].data_iovec.iov_base;
                     *action = picoquic_packet_loop_action_udp_received;
                 }
-                char txt[256];
-                fprintf(stderr, "%d bytes received on socket %d.\n", bytes_recv, i);
-                fprintf(stderr, "Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)addr_from, txt, sizeof(txt)));
-                fprintf(stderr, "Addr_dest: %s\n", picoquic_addr_text((struct sockaddr*)addr_dest, txt, sizeof(txt)));
-                fprintf(stderr, "S_Addr_from: %s\n", picoquic_addr_text((struct sockaddr*)&s_ctx[i].addr_from, txt, sizeof(txt)));
-                picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[i].addr_from);
             }
             io_uring_cqe_seen(ring, cqe);
         }
         else if (io_ret == -ETIME) {
-#if 1
-            poll_no_data++;
-            if (poll_no_data > 10000) {
-                fprintf(stderr, "Hot loop on wait!");
-                exit(-1);
-            }
-#endif
             /* timeout expired: no bytes received */
             *received_buffer = NULL;
             bytes_recv = 0;
