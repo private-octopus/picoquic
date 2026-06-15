@@ -414,8 +414,14 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
-        DBG_PRINTF("Cannot set socket (fd=%d, af=%d, port = %d, shared: %d)\n",
-          (int)s_ctx->fd, s_ctx->af, s_ctx->port, s_ctx->is_port_shared);
+        DBG_PRINTF("Cannot set socket (fd=%d, af=%d, port = %d, shared: %d, errno: %x)\n",
+          (int)s_ctx->fd, s_ctx->af, s_ctx->port, s_ctx->is_port_shared,
+#ifdef _WINDOWS
+            GetLastError()
+#else
+            errno
+#endif           
+            );
         ret = -1;
     }
     else {
