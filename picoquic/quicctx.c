@@ -1077,14 +1077,8 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Delete TLS and AEAD cntexts */
         picoquic_delete_retry_protection_contexts(quic);
 
-        if (quic->aead_encrypt_ticket_ctx != NULL) {
-            picoquic_aead_free(quic->aead_encrypt_ticket_ctx);
-            quic->aead_encrypt_ticket_ctx = NULL;
-        }
-
-        if (quic->aead_decrypt_ticket_ctx != NULL) {
-            picoquic_aead_free(quic->aead_decrypt_ticket_ctx);
-            quic->aead_decrypt_ticket_ctx = NULL;
+        for (int i = 0; i < 2; i++) {
+            picoquic_dispose_ticket_key_state(&quic->ticket_key_state[i]);
         }
 
         if (quic->default_alpn != NULL) {

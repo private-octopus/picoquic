@@ -204,6 +204,7 @@ static const picoquic_test_def_t test_table[] = {
     { "token_store", token_store_test },
     { "token_reuse_api", token_reuse_api_test },
     { "session_resume", session_resume_test },
+    { "ticket_key_rotation", ticket_key_rotation_test },
     { "zero_rtt", zero_rtt_test },
     { "zero_rtt_loss", zero_rtt_loss_test },
     { "stop_sending", stop_sending_test },

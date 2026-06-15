@@ -665,6 +665,10 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
+/* Ticket keys protect TLS tickets and tokens. key[0] selects slot 0/1; last set is active. */
+int picoquic_set_ticket_key(picoquic_quic_t* quic,
+    const uint8_t* ticket_key, size_t ticket_key_length);
+
 /* Preference for low memory options.
  * setting this flag instructs picoquic to chose implementations of algorithms 
  * that use less memory while maintaining reasonable performance. For example,

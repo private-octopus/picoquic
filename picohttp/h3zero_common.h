@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifndef H3ZERO_COMMON_H
+
 #define H3ZERO_COMMON_H
 
 #include <stdint.h>
@@ -185,7 +186,6 @@ extern "C" {
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
     const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
-    const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
 
     /* Handling of stream prefixes, for applications that use it.
      */
@@ -229,11 +229,14 @@ extern "C" {
         h3zero_stream_ctx_t* pending_wt_connect;
         struct st_picowt_pending_connect_t* pending_wt_connect_data;
         uint64_t last_datagram_prefix;
+        /* control stream ID remembered for uniqueness checks. */
+        uint64_t remote_control_stream_id;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
         unsigned int connection_closed : 1;
         unsigned int settings_sent : 1;
+        unsigned int remote_control_stream_seen : 1;
         int nb_open_streams;
         int nb_open_files;
         uint32_t nb_client_streams;
@@ -249,7 +252,11 @@ extern "C" {
 
     int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
-    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
+    const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+        void* opt_cnx);
+
+    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
 
     void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
     
@@ -263,8 +270,15 @@ extern "C" {
         int should_create,
         int is_h3);
 
-    uint8_t* h3zero_parse_incoming_remote_stream(
-        uint8_t* bytes, uint8_t* bytes_max,
+
+    const uint8_t* h3zero_parse_incoming_remote_stream_ex(
+        const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_stream_ctx_t* stream_ctx,
+        h3zero_callback_ctx_t* ctx,
+        picoquic_cnx_t* opt_cnx, uint64_t* error_found);
+
+    const uint8_t* h3zero_parse_incoming_remote_stream(
+        const uint8_t* bytes, const uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
         h3zero_callback_ctx_t* ctx,
         picoquic_cnx_t* opt_cnx);
