@@ -644,6 +644,8 @@ int picomask_callback(picoquic_cnx_t* cnx,
         /* Control stream has been abandoned. */
         picomask_release_stream(stream_ctx);
         break;
+    case picohttp_callback_drain:
+        break;
     case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
                                  /* Free the memory attached to the stream */
         picomask_release_stream(stream_ctx);

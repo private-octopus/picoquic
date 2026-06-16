@@ -3411,6 +3411,11 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_remote_control_stream_singleton) {
+            int ret = h3zero_remote_control_stream_singleton_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_capsule) {
             int ret = h3zero_capsule_test();
 

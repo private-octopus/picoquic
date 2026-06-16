@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifndef H3ZERO_COMMON_H
+
 #define H3ZERO_COMMON_H
 
 #include <stdint.h>
@@ -49,10 +50,13 @@ extern "C" {
         picohttp_callback_reset, /* Stream has been abandoned by peer. */
         picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
         picohttp_callback_deregister, /* Context has been deregistered */
-        picohttp_callback_free
+        picohttp_callback_free,
+        picohttp_callback_drain /* Peer initiated graceful WebTransport drain. */
     } picohttp_call_back_event_t;
 
+    struct st_h3zero_callback_ctx_t;
     struct st_h3zero_stream_ctx_t;
+    struct st_picowt_pending_connect_t;
 
     typedef int (*picohttp_post_data_cb_fn)(
         picoquic_cnx_t* cnx,
@@ -60,6 +64,10 @@ extern "C" {
         picohttp_call_back_event_t fin_or_event,
         struct st_h3zero_stream_ctx_t* stream_ctx,
         void * path_app_ctx);
+    typedef int (*picohttp_origin_validator_fn)(
+        const uint8_t* origin, size_t origin_length,
+        const uint8_t* authority, size_t authority_length,
+        void* origin_validator_ctx);
 
     /* Define the table of special-purpose paths used for POST, REST, or connect queries */
     /* TODO: is there a need for path context? */
@@ -68,7 +76,17 @@ extern "C" {
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
+        char const* connect_protocol;
+        size_t connect_protocol_length;
+        picohttp_origin_validator_fn origin_validator;
+        void* origin_validator_ctx;
+        int connect_error_status;
     } picohttp_server_path_item_t;
+
+    int h3zero_origin_validator_allow_all(
+        const uint8_t* origin, size_t origin_length,
+        const uint8_t* authority, size_t authority_length,
+        void* origin_validator_ctx);
 
     /* Define stream context common to http 3 and http 09 callbacks
     */
@@ -168,7 +186,6 @@ extern "C" {
     /* handling of setting frames */
     uint8_t* h3zero_settings_encode(uint8_t* bytes, const uint8_t* bytes_max, const h3zero_settings_t* settings);
     const uint8_t* h3zero_settings_components_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
-    const uint8_t* h3zero_settings_decode(const uint8_t* bytes, const uint8_t* bytes_max, h3zero_settings_t* settings);
 
     /* Handling of stream prefixes, for applications that use it.
      */
@@ -209,16 +226,24 @@ extern "C" {
         h3zero_settings_t settings;
         /* connection wide tracking of stream prefixes */
         h3zero_stream_prefixes_t stream_prefixes;
+        h3zero_stream_ctx_t* pending_wt_connect;
+        struct st_picowt_pending_connect_t* pending_wt_connect_data;
         uint64_t last_datagram_prefix;
+        /* control stream ID remembered for uniqueness checks. */
+        uint64_t remote_control_stream_id;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
         unsigned int connection_closed : 1;
         unsigned int settings_sent : 1;
+        unsigned int remote_control_stream_seen : 1;
         int nb_open_streams;
         int nb_open_files;
         uint32_t nb_client_streams;
     } h3zero_callback_ctx_t;
+
+    void picowt_clear_pending_connect(h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
+    int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
     h3zero_callback_ctx_t* h3zero_callback_create_context(picohttp_server_parameters_t* param);
     void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
@@ -227,7 +252,11 @@ extern "C" {
 
     int h3zero_protocol_init_safe(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
-    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
+    const uint8_t* h3zero_parse_control_stream(const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_data_stream_state_t* stream_state, h3zero_callback_ctx_t* ctx, uint64_t* error_found,
+        void* opt_cnx);
+
+    int h3zero_post_data_or_fin(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event, h3zero_stream_ctx_t* stream_ctx);
 
     void h3zero_delete_stream(picoquic_cnx_t * cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx);
     
@@ -241,8 +270,15 @@ extern "C" {
         int should_create,
         int is_h3);
 
-    uint8_t* h3zero_parse_incoming_remote_stream(
-        uint8_t* bytes, uint8_t* bytes_max,
+
+    const uint8_t* h3zero_parse_incoming_remote_stream_ex(
+        const uint8_t* bytes, const uint8_t* bytes_max,
+        h3zero_stream_ctx_t* stream_ctx,
+        h3zero_callback_ctx_t* ctx,
+        picoquic_cnx_t* opt_cnx, uint64_t* error_found);
+
+    const uint8_t* h3zero_parse_incoming_remote_stream(
+        const uint8_t* bytes, const uint8_t* bytes_max,
         h3zero_stream_ctx_t* stream_ctx,
         h3zero_callback_ctx_t* ctx,
         picoquic_cnx_t* opt_cnx);

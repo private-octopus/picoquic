@@ -135,6 +135,8 @@ void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
 
+void picoquic_dispose_ticket_key_state(picoquic_ticket_key_state_t* key);
+
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
