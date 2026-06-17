@@ -673,6 +673,10 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
+/* Ticket keys protect TLS tickets and tokens. key[0] selects slot 0/1; last set is active. */
+int picoquic_set_ticket_key(picoquic_quic_t* quic,
+    const uint8_t* ticket_key, size_t ticket_key_length);
+
 /* Preference for low memory options.
  * setting this flag instructs picoquic to chose implementations of algorithms 
  * that use less memory while maintaining reasonable performance. For example,
@@ -725,6 +729,10 @@ picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int 
 
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
+
+/* Refresh the TLS certificate used by new server connections. */
+int picoquic_refresh_tls_certificate(picoquic_quic_t* quic,
+    char const* cert_file_name, char const* key_file_name);
 
 /* Set the TLS root certificates (DER format) for the QUIC context. The context will take ownership over the certs pointer.
  * The root certificates will be used to verify the certificate chain of the server and client (with client authentication activated).

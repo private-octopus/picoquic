@@ -87,6 +87,18 @@ struct st_picoquic_log_event_t {
     FILE* fp;
 };
 
+typedef struct st_picoquic_tls_master_ref_t {
+    ptls_update_open_count_t open_count;
+    picoquic_quic_t* quic;
+    ptls_context_t* ctx;
+    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn;
+    uint32_t ref_count;
+} picoquic_tls_master_ref_t;
+
+static void picoquic_tls_master_ref_release(picoquic_tls_master_ref_t* ref);
+static picoquic_tls_master_ref_t* picoquic_tls_master_ref_from_ctx(ptls_context_t* ctx);
+static void picoquic_free_log_event_ctx(ptls_context_t* ctx);
+
 
 /* This first part of this file provides a set of function for accessing
  * the cryptographic libraries.
@@ -892,8 +904,6 @@ void picoquic_hash_finalize(uint8_t* output, void* hash_context) {
 
 static void picoquic_setup_cleartext_aead_salt(size_t version_index, ptls_iovec_t* salt);
 
-static void picoquic_free_log_event(picoquic_quic_t* quic);
-
 void picoquic_log_crypto_errors(picoquic_cnx_t* cnx, int ret)
 {
     unsigned long crypto_err;
@@ -909,7 +919,7 @@ void picoquic_log_crypto_errors(picoquic_cnx_t* cnx, int ret)
 }
 
 
-int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
+static int picoquic_setup_ticket_key_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length);
 
@@ -1229,6 +1239,31 @@ int picoquic_client_hello_call_back(ptls_on_client_hello_t* on_hello_cb_ctx,
  * Should return 0 if the ticket is good, etc.
  */
 
+#define PICOQUIC_TOKEN_TYPE_NEW 0x4000000000000000ull
+#define PICOQUIC_TICKET_KEY_SLOT(sequence) ((uint8_t)((sequence) >> 63))
+#define PICOQUIC_AEAD_TAG_SIZE(aead_context) (((ptls_aead_context_t*)(aead_context))->algo->tag_size)
+
+static int picoquic_ticket_key_state_is_set(picoquic_ticket_key_state_t* key)
+{
+    return key->aead_encrypt_ctx != NULL && key->aead_decrypt_ctx != NULL;
+}
+
+static uint64_t picoquic_ticket_key_random_sequence(unsigned int key_slot)
+{
+    return (picoquic_public_random_64() & 0x7fffffffffffffffull) | (((uint64_t)key_slot & 1) << 63);
+}
+
+void picoquic_dispose_ticket_key_state(picoquic_ticket_key_state_t* key)
+{
+    if (key->aead_encrypt_ctx != NULL) {
+        picoquic_aead_free(key->aead_encrypt_ctx);
+    }
+    if (key->aead_decrypt_ctx != NULL) {
+        picoquic_aead_free(key->aead_decrypt_ctx);
+    }
+    memset(key, 0, sizeof(picoquic_ticket_key_state_t));
+}
+
 int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_ticket_ctx,
     ptls_t* UNUSED(tls), int is_encrypt, ptls_buffer_t* dst, ptls_iovec_t src)
 {
@@ -1265,14 +1300,14 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
     picoformat_64(param_bytes, quic->default_tp.initial_max_stream_id_unidir);
 
     if (is_encrypt != 0) {
-        ptls_aead_context_t* aead_enc = (ptls_aead_context_t*)quic->aead_encrypt_ticket_ctx;
+        picoquic_ticket_key_state_t* key = &quic->ticket_key_state[quic->ticket_key_state_active_slot];
         /* Encoding*/
-        if (aead_enc == NULL) {
+        if (!picoquic_ticket_key_state_is_set(key)) {
             ret = -1;
-        } else if ((ret = ptls_buffer_reserve(dst, 8 + 4 + src.len + aead_enc->algo->tag_size)) == 0) {
+        } else if ((ret = ptls_buffer_reserve(dst, 8 + 4 + src.len + PICOQUIC_AEAD_TAG_SIZE(key->aead_encrypt_ctx))) == 0) {
             /* Create and store the ticket sequence number */
             uint32_t version_number = picoquic_supported_versions[quic->cnx_in_progress->version_index].version;
-            uint64_t seq_num = picoquic_public_random_64();
+            uint64_t seq_num = picoquic_ticket_key_random_sequence(quic->ticket_key_state_active_slot);
             size_t start_off;
             size_t data_length;
 
@@ -1286,26 +1321,32 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
             picoformat_32(dst->base + dst->off + data_length, version_number);
             data_length += 4;
             /* Run AEAD encryption */
-            dst->off += ptls_aead_encrypt(aead_enc, dst->base + dst->off,
-                dst->base + start_off, data_length, seq_num, param_verif, sizeof(param_verif));
+            dst->off += picoquic_aead_encrypt_generic(dst->base + dst->off,
+                dst->base + start_off, data_length, seq_num, param_verif,
+                sizeof(param_verif), key->aead_encrypt_ctx);
             /* Remember issued ticket ID in connection context */
             quic->cnx_in_progress->issued_ticket_id = seq_num;
         }
     } else {
-        ptls_aead_context_t* aead_dec = (ptls_aead_context_t*)quic->aead_decrypt_ticket_ctx;
+        picoquic_ticket_key_state_t* key = NULL;
         /* Decoding*/
-        if (aead_dec == NULL) {
+        if (src.len >= 8) {
+            key = &quic->ticket_key_state[PICOQUIC_TICKET_KEY_SLOT(PICOPARSE_64(src.base))];
+        }
+        if (key == NULL || !picoquic_ticket_key_state_is_set(key)) {
             ret = -1;
-        } else if (src.len < 8 + 4 + aead_dec->algo->tag_size) {
+        } else if (src.len < 8 + 4 + PICOQUIC_AEAD_TAG_SIZE(key->aead_decrypt_ctx)) {
             ret = -1;
         } else if ((ret = ptls_buffer_reserve(dst, src.len)) == 0) {
             /* Decode the ticket sequence number */
             uint64_t seq_num = PICOPARSE_64(src.base);
+            size_t cipher_length = src.len - 8;
             /* Decrypt */
-            size_t decrypted = ptls_aead_decrypt(aead_dec, dst->base + dst->off,
-                src.base + 8, src.len - 8, seq_num, param_verif, sizeof(param_verif));
+            size_t decrypted = picoquic_aead_decrypt_generic(dst->base + dst->off,
+                src.base + 8, cipher_length, seq_num, param_verif,
+                sizeof(param_verif), key->aead_decrypt_ctx);
 
-            if (decrypted > src.len - 8) {
+            if (decrypted < 4 || decrypted > cipher_length) {
                 /* decryption error */
                 ret = -1;
                 picoquic_log_app_message(quic->cnx_in_progress, "%s",
@@ -1404,15 +1445,19 @@ int picoquic_enable_custom_verify_certificate_callback(picoquic_quic_t* quic)
     return 0;
 }
 #endif
-void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+static void picoquic_dispose_verify_certificate_callback_ctx(ptls_context_t* ctx,
+    picoquic_free_verify_certificate_ctx* free_verify_certificate_callback_fn)
+{
+    if (ctx == NULL) {
+        return;
+    }
 
     if (ctx->verify_certificate != NULL) {
-        if (quic->free_verify_certificate_callback_fn != NULL) {
+        if (*free_verify_certificate_callback_fn != NULL) {
             picoquic_dispose_certificate_verifier_t disposer =
-                (picoquic_dispose_certificate_verifier_t)quic->free_verify_certificate_callback_fn;
+                (picoquic_dispose_certificate_verifier_t)*free_verify_certificate_callback_fn;
             disposer(ctx->verify_certificate);
-            quic->free_verify_certificate_callback_fn = NULL;
+            *free_verify_certificate_callback_fn = NULL;
         }
         /*
         free(ctx->verify_certificate);
@@ -1423,16 +1468,32 @@ void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
     ctx->verify_certificate = NULL;
 }
 
+void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic) {
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    picoquic_tls_master_ref_t* ref = picoquic_tls_master_ref_from_ctx(ctx);
+
+    picoquic_dispose_verify_certificate_callback_ctx(ctx,
+        (ref == NULL) ? &quic->free_verify_certificate_callback_fn :
+        &ref->free_verify_certificate_callback_fn);
+}
+
 void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
     struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    picoquic_tls_master_ref_t* ref;
 
     picoquic_dispose_verify_certificate_callback(quic);
+    ref = picoquic_tls_master_ref_from_ctx(ctx);
 
     ctx->verify_certificate = cb;
     quic->is_cert_store_not_empty = 1;
-    quic->free_verify_certificate_callback_fn = free_fn;
+    if (ref == NULL) {
+        quic->free_verify_certificate_callback_fn = free_fn;
+    }
+    else {
+        ref->free_verify_certificate_callback_fn = free_fn;
+    }
 }
 
 /* set key from secret: this is used to create AEAD contexts and PN encoding contexts
@@ -1546,7 +1607,7 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t* UNUSE
 {
     picoquic_cnx_t* cnx = (picoquic_cnx_t*)*ptls_get_data_ptr(tls);
     picoquic_tls_ctx_t * tls_ctx = (picoquic_tls_ctx_t *)cnx->tls_ctx;
-    ptls_context_t* ctx = (ptls_context_t*)cnx->quic->tls_master_ctx;
+    ptls_context_t* ctx = ptls_get_context(tls);
     ptls_cipher_suite_t * cipher = ptls_get_cipher(tls);
     UNREFERENCED_PARAMETER(self);
     const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
@@ -1560,7 +1621,7 @@ static int picoquic_update_traffic_key_callback(ptls_update_traffic_key_t* UNUSE
         memcpy((is_enc) ? tls_ctx->app_secret_enc : tls_ctx->app_secret_dec, secret, cipher->hash->digest_size);
     }
 
-    if (ctx->log_event != NULL) {
+    if (ctx != NULL && ctx->log_event != NULL) {
         char hexbuf[PTLS_MAX_DIGEST_SIZE * 2 + 1];
         static const char *log_labels[2][4] = {
             {NULL, "CLIENT_EARLY_TRAFFIC_SECRET", "CLIENT_HANDSHAKE_TRAFFIC_SECRET", "CLIENT_TRAFFIC_SECRET_0"},
@@ -1877,144 +1938,6 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx)
  * On servers, this implies setting the "on hello" call back
  */
 
-int picoquic_master_tlscontext(picoquic_quic_t* quic,
-    char const* cert_file_name, char const* key_file_name, const char * cert_root_file_name,
-    const uint8_t* ticket_key, size_t ticket_key_length)
-{
-    /* Create a client context or a server context */
-    int ret = 0;
-    ptls_context_t* ctx;
-    ptls_on_client_hello_t* och = NULL;
-    ptls_encrypt_ticket_t* encrypt_ticket = NULL;
-    ptls_save_ticket_t* save_ticket = NULL;
-    unsigned int is_cert_store_not_empty = 0;
-
-    picoquic_tls_api_init(); /* For example, init openSSL if in use. */
-
-    ctx = (ptls_context_t*)malloc(sizeof(ptls_context_t));
-
-    if (ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        memset(ctx, 0, sizeof(ptls_context_t));
-        picoquic_set_random_provider_in_ctx(ctx);
-        
-        ret = picoquic_set_key_exchange_in_ctx(ctx, 0); /* was: ctx->key_exchanges = picoquic_key_exchanges; */
-
-        if (ret == 0) {
-            ret = picoquic_set_cipher_suite_in_ctx(ctx, 0, quic->use_low_memory); /* was: ptls_openssl_cipher_suites; */
-        }
-
-        if (ret == 0) {
-            ctx->send_change_cipher_spec = 0;
-
-            ctx->hkdf_label_prefix__obsolete = NULL;
-            ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
-
-            if (quic->p_simulated_time == NULL) {
-                ctx->get_time = &ptls_get_time;
-            }
-            else {
-                ptls_get_time_t* time_getter = (ptls_get_time_t*)malloc(sizeof(ptls_get_time_t) + sizeof(uint64_t*));
-                if (time_getter == NULL) {
-                    ret = PICOQUIC_ERROR_MEMORY;
-                }
-                else {
-                    uint64_t** pp_simulated_time = (uint64_t**)(((char*)time_getter) + sizeof(ptls_get_time_t));
-
-                    time_getter->cb = picoquic_get_simulated_time_cb;
-                    *pp_simulated_time = quic->p_simulated_time;
-                    ctx->get_time = time_getter;
-                }
-            }
-
-            if (cert_file_name != NULL && key_file_name != NULL) {
-                /* Read the certificate file */
-                if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
-                    DBG_PRINTF("Cannot load certificate: %s", cert_file_name);
-                    ret = -1;
-                }
-                else {
-                    ret = set_private_key_from_file(key_file_name, ctx);
-                    if (ret != 0){
-                        DBG_PRINTF("Cannot load key: %s, ret = 0x%x", key_file_name, ret);
-                    }
-                }
-            }
-        }
-
-        if (ret == 0) {
-            och = (ptls_on_client_hello_t*)malloc(sizeof(ptls_on_client_hello_t) + sizeof(picoquic_quic_t*));
-            if (och != NULL) {
-                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)och) + sizeof(ptls_on_client_hello_t));
-
-                och->cb = picoquic_client_hello_call_back;
-                ctx->on_client_hello = och;
-                *ppquic = quic;
-            } else {
-                ret = PICOQUIC_ERROR_MEMORY;
-            }
-        }
-
-        if (ret == 0) {
-            ret = picoquic_server_setup_ticket_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
-        }
-
-        if (ret == 0) {
-            encrypt_ticket = (ptls_encrypt_ticket_t*)malloc(sizeof(ptls_encrypt_ticket_t) + sizeof(picoquic_quic_t*));
-            if (encrypt_ticket == NULL) {
-                ret = PICOQUIC_ERROR_MEMORY;
-            } else {
-                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
-
-                encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
-                *ppquic = quic;
-
-                ctx->encrypt_ticket = encrypt_ticket;
-                ctx->ticket_lifetime = 100000; /* 100,000 seconds, a bit more than one day */
-                ctx->require_dhe_on_psk = 1;
-                ctx->max_early_data_size = 0xFFFFFFFF;
-            }
-        }
-
-        if (ret == 0) {
-            ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
-                &is_cert_store_not_empty, (picoquic_free_verify_certificate_ctx*)
-                &quic->free_verify_certificate_callback_fn);
-            quic->is_cert_store_not_empty = is_cert_store_not_empty;
-        }
-
-        if (ret == 0 && quic->ticket_file_name != NULL) {
-            save_ticket = (ptls_save_ticket_t*)malloc(sizeof(ptls_save_ticket_t) + sizeof(picoquic_quic_t*));
-            if (save_ticket != NULL) {
-                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
-
-                save_ticket->cb = picoquic_client_save_ticket_call_back;
-                ctx->save_ticket = save_ticket;
-                *ppquic = quic;
-            }
-        }
-
-        if (ret == 0) {
-            /* Tell Picotls to not require EOED messages during handshake */
-            ctx->omit_end_of_early_data = 1;
-        }
-
-        if (ret == 0) {
-            quic->tls_master_ctx = ctx;
-            picoquic_public_random_seed(quic);
-        } else {
-            quic->tls_master_ctx = ctx;
-            picoquic_master_tlscontext_free(quic);
-            quic->tls_master_ctx = NULL;
-            free(ctx);
-        }
-    }
-
-    return ret;
-}
-
 static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     if (certs == NULL) {
         return;
@@ -2026,10 +1949,73 @@ static void free_certificates_list(ptls_iovec_t* certs, size_t len) {
     free(certs);
 }
 
-void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
+static int picoquic_clone_ptls_template(ptls_context_t* ctx, const ptls_context_t* old_ctx)
 {
-    if (quic->tls_master_ctx != NULL) {
-        ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    size_t count = 0;
+    ptls_cipher_suite_t** suites;
+
+    if (old_ctx->cipher_suites == NULL) {
+        return -1;
+    }
+
+    *ctx = *old_ctx;
+    ctx->get_time = NULL;
+    ctx->cipher_suites = NULL;
+    ctx->certificates.list = NULL;
+    ctx->certificates.count = 0;
+    ctx->on_client_hello = NULL;
+    ctx->sign_certificate = NULL;
+    ctx->verify_certificate = NULL;
+    ctx->encrypt_ticket = NULL;
+    ctx->save_ticket = NULL;
+    ctx->log_event = NULL;
+    ctx->update_open_count = NULL;
+    ctx->update_traffic_key = NULL;
+
+    while (old_ctx->cipher_suites[count] != NULL) {
+        count++;
+    }
+
+    suites = (ptls_cipher_suite_t**)malloc(sizeof(ptls_cipher_suite_t*) * (count + 1));
+    if (suites == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
+    for (size_t i = 0; i <= count; i++) {
+        suites[i] = old_ctx->cipher_suites[i];
+    }
+    ctx->cipher_suites = suites;
+    return 0;
+}
+
+static int picoquic_set_time_getter_in_ctx(picoquic_quic_t* quic, ptls_context_t* ctx)
+{
+    int ret = 0;
+
+    if (quic->p_simulated_time == NULL) {
+        ctx->get_time = &ptls_get_time;
+    }
+    else {
+        ptls_get_time_t* time_getter = (ptls_get_time_t*)malloc(sizeof(ptls_get_time_t) + sizeof(uint64_t*));
+        if (time_getter == NULL) {
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            uint64_t** pp_simulated_time = (uint64_t**)(((char*)time_getter) + sizeof(ptls_get_time_t));
+
+            time_getter->cb = picoquic_get_simulated_time_cb;
+            *pp_simulated_time = quic->p_simulated_time;
+            ctx->get_time = time_getter;
+        }
+    }
+
+    return ret;
+}
+
+static void picoquic_ptls_context_free(picoquic_quic_t* quic, ptls_context_t* ctx,
+    picoquic_free_verify_certificate_ctx* free_verify_certificate_callback_fn)
+{
+    if (ctx != NULL) {
 
         if (quic->p_simulated_time != NULL && ctx->get_time != NULL) {
             free(ctx->get_time);
@@ -2040,30 +2026,307 @@ void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
 
         picoquic_dispose_sign_certificate(ctx);
 
-        picoquic_dispose_verify_certificate_callback(quic);
+        picoquic_dispose_verify_certificate_callback_ctx(ctx, free_verify_certificate_callback_fn);
 
-        if (ctx->on_client_hello != NULL) {
-            free(ctx->on_client_hello);
+        free(ctx->on_client_hello);
+        free(ctx->encrypt_ticket);
+        free(ctx->update_traffic_key);
+        free(ctx->save_ticket);
+        free((void*)ctx->cipher_suites);
+
+        picoquic_free_log_event_ctx(ctx);
+    }
+}
+
+static void picoquic_tls_master_ref_free(picoquic_tls_master_ref_t* ref)
+{
+    if (ref != NULL) {
+        picoquic_ptls_context_free(ref->quic, ref->ctx, &ref->free_verify_certificate_callback_fn);
+        free(ref->ctx);
+        free(ref);
+    }
+}
+
+static void picoquic_tls_master_ref_release(picoquic_tls_master_ref_t* ref)
+{
+    if (ref != NULL && ref->ref_count > 0 && --ref->ref_count == 0) {
+        picoquic_tls_master_ref_free(ref);
+    }
+}
+
+static void picoquic_tls_master_open_count_cb(ptls_update_open_count_t* self, ssize_t delta)
+{
+    picoquic_tls_master_ref_t* ref = (picoquic_tls_master_ref_t*)self;
+
+    if (delta > 0) {
+        ref->ref_count++;
+    }
+    else if (delta < 0) {
+        picoquic_tls_master_ref_release(ref);
+    }
+}
+
+static picoquic_tls_master_ref_t* picoquic_tls_master_ref_create(picoquic_quic_t* quic,
+    ptls_context_t* ctx, picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn)
+{
+    picoquic_tls_master_ref_t* ref = (picoquic_tls_master_ref_t*)calloc(1, sizeof(picoquic_tls_master_ref_t));
+
+    if (ref != NULL) {
+        ref->open_count.cb = picoquic_tls_master_open_count_cb;
+        ref->quic = quic;
+        ref->ctx = ctx;
+        ref->free_verify_certificate_callback_fn = free_verify_certificate_callback_fn;
+        ref->ref_count = 1;
+        ctx->update_open_count = &ref->open_count;
+    }
+
+    return ref;
+}
+
+static picoquic_tls_master_ref_t* picoquic_tls_master_ref_from_ctx(ptls_context_t* ctx)
+{
+    return (ctx == NULL || ctx->update_open_count == NULL) ?
+        NULL : (picoquic_tls_master_ref_t*)ctx->update_open_count;
+}
+
+static void picoquic_set_verify_certificate_in_ctx(picoquic_quic_t* quic,
+    ptls_context_t* ctx, ptls_context_t* old_ctx, const char* cert_root_file_name,
+    picoquic_free_verify_certificate_ctx* free_verify_certificate_callback_fn)
+{
+    unsigned int is_cert_store_not_empty = 0;
+    picoquic_tls_master_ref_t* old_ref = picoquic_tls_master_ref_from_ctx(old_ctx);
+
+    *free_verify_certificate_callback_fn = NULL;
+
+    if (old_ctx != NULL && old_ctx->verify_certificate == NULL) {
+        ctx->verify_certificate = NULL;
+    }
+    else if (old_ctx != NULL && old_ref != NULL &&
+        old_ref->free_verify_certificate_callback_fn == NULL) {
+        ctx->verify_certificate = old_ctx->verify_certificate;
+        is_cert_store_not_empty = (ctx->verify_certificate != NULL);
+    }
+    else {
+        ctx->verify_certificate = picoquic_get_certificate_verifier(cert_root_file_name,
+            &is_cert_store_not_empty, free_verify_certificate_callback_fn);
+    }
+
+    quic->is_cert_store_not_empty = is_cert_store_not_empty;
+}
+
+static int picoquic_create_ptls_context(picoquic_quic_t* quic,
+    ptls_context_t* old_ctx, char const* cert_file_name, char const* key_file_name,
+    const char* cert_root_file_name, const uint8_t* ticket_key, size_t ticket_key_length,
+    int setup_ticket_aead, ptls_context_t** ctx_out,
+    picoquic_free_verify_certificate_ctx* free_verify_certificate_callback_fn)
+{
+    int ret = 0;
+    ptls_context_t* ctx = NULL;
+
+    *ctx_out = NULL;
+    *free_verify_certificate_callback_fn = NULL;
+    picoquic_tls_api_init();
+
+    ctx = (ptls_context_t*)malloc(sizeof(ptls_context_t));
+    if (ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    else {
+        memset(ctx, 0, sizeof(ptls_context_t));
+
+        if (old_ctx == NULL) {
+            picoquic_set_random_provider_in_ctx(ctx);
+            ret = picoquic_set_key_exchange_in_ctx(ctx, 0);
+            if (ret == 0) {
+                ret = picoquic_set_cipher_suite_in_ctx(ctx, 0, quic->use_low_memory);
+            }
+            ctx->send_change_cipher_spec = 0;
+            ctx->hkdf_label_prefix__obsolete = NULL;
+            ctx->omit_end_of_early_data = 1;
+            ctx->ticket_lifetime = 100000;
+            ctx->require_dhe_on_psk = 1;
+            ctx->max_early_data_size = 0xFFFFFFFF;
+        }
+        else {
+            ret = picoquic_clone_ptls_template(ctx, old_ctx);
         }
 
-        if (ctx->encrypt_ticket != NULL) {
-            free(ctx->encrypt_ticket);
+        if (ret == 0) {
+            ret = picoquic_set_time_getter_in_ctx(quic, ctx);
         }
 
-        if (ctx->update_traffic_key != NULL) {
-            free(ctx->update_traffic_key);
+        if (ret == 0) {
+            ctx->update_traffic_key = picoquic_set_update_traffic_key_callback();
+            if (ctx->update_traffic_key == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
         }
 
-        /* Need to be tested */
-        if (ctx->save_ticket != NULL) {
-            free(ctx->save_ticket);
+        if (ret == 0 && cert_file_name != NULL && key_file_name != NULL) {
+            if (ptls_load_certificates(ctx, (char*)cert_file_name) != 0) {
+                DBG_PRINTF("Cannot load certificate: %s", cert_file_name);
+                ret = -1;
+            }
+            else {
+                ret = set_private_key_from_file(key_file_name, ctx);
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot load key: %s, ret = 0x%x", key_file_name, ret);
+                }
+            }
         }
 
-        if (ctx->cipher_suites != NULL) {
-            free((void*)ctx->cipher_suites);
+        if (ret == 0) {
+            ptls_on_client_hello_t* och = (ptls_on_client_hello_t*)malloc(
+                sizeof(ptls_on_client_hello_t) + sizeof(picoquic_quic_t*));
+            if (och == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)och) + sizeof(ptls_on_client_hello_t));
+
+                och->cb = picoquic_client_hello_call_back;
+                ctx->on_client_hello = och;
+                *ppquic = quic;
+            }
         }
 
-        picoquic_free_log_event(quic);
+        if (ret == 0 && setup_ticket_aead) {
+            ret = picoquic_setup_ticket_key_aead_contexts(quic, ctx, ticket_key, ticket_key_length);
+        }
+
+        if (ret == 0) {
+            ptls_encrypt_ticket_t* encrypt_ticket = (ptls_encrypt_ticket_t*)malloc(
+                sizeof(ptls_encrypt_ticket_t) + sizeof(picoquic_quic_t*));
+            if (encrypt_ticket == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)encrypt_ticket) + sizeof(ptls_encrypt_ticket_t));
+
+                encrypt_ticket->cb = picoquic_server_encrypt_ticket_call_back;
+                ctx->encrypt_ticket = encrypt_ticket;
+                *ppquic = quic;
+            }
+        }
+
+        if (ret == 0) {
+            picoquic_set_verify_certificate_in_ctx(quic, ctx, old_ctx,
+                cert_root_file_name, free_verify_certificate_callback_fn);
+        }
+
+        if (ret == 0 && (quic->ticket_file_name != NULL ||
+            (old_ctx != NULL && old_ctx->save_ticket != NULL))) {
+            ptls_save_ticket_t* save_ticket = (ptls_save_ticket_t*)malloc(
+                sizeof(ptls_save_ticket_t) + sizeof(picoquic_quic_t*));
+            if (save_ticket == NULL) {
+                ret = PICOQUIC_ERROR_MEMORY;
+            }
+            else {
+                picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
+
+                save_ticket->cb = picoquic_client_save_ticket_call_back;
+                ctx->save_ticket = save_ticket;
+                *ppquic = quic;
+            }
+        }
+
+        if (ret == 0) {
+            *ctx_out = ctx;
+        }
+        else {
+            picoquic_ptls_context_free(quic, ctx, free_verify_certificate_callback_fn);
+            free(ctx);
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_master_tlscontext(picoquic_quic_t* quic,
+    char const* cert_file_name, char const* key_file_name, const char * cert_root_file_name,
+    const uint8_t* ticket_key, size_t ticket_key_length)
+{
+    ptls_context_t* ctx = NULL;
+    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn = NULL;
+    int ret = picoquic_create_ptls_context(quic, NULL, cert_file_name, key_file_name,
+        cert_root_file_name, ticket_key, ticket_key_length, 1, &ctx,
+        &free_verify_certificate_callback_fn);
+
+    if (ret == 0) {
+        picoquic_tls_master_ref_t* ref = picoquic_tls_master_ref_create(quic, ctx,
+            free_verify_certificate_callback_fn);
+        if (ref == NULL) {
+            picoquic_ptls_context_free(quic, ctx, &free_verify_certificate_callback_fn);
+            free(ctx);
+            ret = PICOQUIC_ERROR_MEMORY;
+        }
+        else {
+            quic->tls_master_ctx = ctx;
+            quic->free_verify_certificate_callback_fn = NULL;
+            picoquic_public_random_seed(quic);
+        }
+    }
+
+    return ret;
+}
+
+int picoquic_refresh_tls_certificate(picoquic_quic_t* quic,
+    char const* cert_file_name, char const* key_file_name)
+{
+    int ret;
+    ptls_context_t* old_ctx;
+    ptls_context_t* new_ctx = NULL;
+    picoquic_tls_master_ref_t* old_ref;
+    picoquic_free_verify_certificate_ctx free_verify_certificate_callback_fn = NULL;
+
+    if (quic == NULL || cert_file_name == NULL || key_file_name == NULL) {
+        return PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+
+    PICOQUIC_THREAD_CHECK(quic);
+
+    old_ctx = (ptls_context_t*)quic->tls_master_ctx;
+    old_ref = picoquic_tls_master_ref_from_ctx(old_ctx);
+    ret = picoquic_create_ptls_context(quic, old_ctx, cert_file_name, key_file_name,
+        quic->tls_cert_root_file_name, NULL, 0, 0, &new_ctx,
+        &free_verify_certificate_callback_fn);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (picoquic_tls_master_ref_create(quic, new_ctx, free_verify_certificate_callback_fn) == NULL) {
+        picoquic_ptls_context_free(quic, new_ctx, &free_verify_certificate_callback_fn);
+        free(new_ctx);
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
+    quic->tls_master_ctx = new_ctx;
+    quic->free_verify_certificate_callback_fn = NULL;
+    quic->enforce_client_only = 0;
+
+    if (old_ref != NULL) {
+        picoquic_tls_master_ref_release(old_ref);
+    }
+    else if (old_ctx != NULL) {
+        picoquic_ptls_context_free(quic, old_ctx, &quic->free_verify_certificate_callback_fn);
+        free(old_ctx);
+    }
+
+    return 0;
+}
+
+void picoquic_master_tlscontext_free(picoquic_quic_t* quic)
+{
+    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    picoquic_tls_master_ref_t* ref = picoquic_tls_master_ref_from_ctx(ctx);
+
+    quic->tls_master_ctx = NULL;
+    if (ref != NULL) {
+        picoquic_tls_master_ref_release(ref);
+    }
+    else if (ctx != NULL) {
+        picoquic_ptls_context_free(quic, ctx, &quic->free_verify_certificate_callback_fn);
+        free(ctx);
     }
 }
 
@@ -2177,11 +2440,9 @@ static void picoquic_log_event_call_back(ptls_log_event_t *_self, ptls_t *tls, c
  * Free the log-event call back, either when the TLS master context is freed,
  * or when the key log file is reset.
  */
-static void picoquic_free_log_event(picoquic_quic_t* quic)
+static void picoquic_free_log_event_ctx(ptls_context_t* ctx)
 {
-    ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
-
-    if (ctx->log_event != NULL) {
+    if (ctx != NULL && ctx->log_event != NULL) {
         struct st_picoquic_log_event_t* picoquic_log_event = (struct st_picoquic_log_event_t*)ctx->log_event;
         if (picoquic_log_event != NULL && picoquic_log_event->fp != NULL) {
             picoquic_file_close(picoquic_log_event->fp);
@@ -2560,12 +2821,7 @@ void picoquic_cipher_free(void* cipher_context)
 
 size_t picoquic_aead_get_checksum_length(void* aead_context)
 {
-    size_t tag_size = ((ptls_aead_context_t*)aead_context)->algo->tag_size;
-    /* TODO: remove this temporary fix to deal with Feb 2019 change in picotls */
-    if (tag_size > 16) {
-        tag_size = 16;
-    }
-    return tag_size;
+    return PICOQUIC_AEAD_TAG_SIZE(aead_context);
 }
 
 /* Setting of encryption contexts for test */
@@ -2579,15 +2835,19 @@ void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, 
     return v_aead;
 }
 
-int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
+static int picoquic_setup_ticket_key_aead_contexts(picoquic_quic_t* quic,
     ptls_context_t* tls_ctx,
     const uint8_t* secret, size_t secret_length)
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
     ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(0);
+    picoquic_ticket_key_state_t new_key = { 0 };
+    uint8_t key_slot = 0;
 
-    if (cipher->hash->digest_size > sizeof(temp_secret)) {
+    if (quic == NULL || ((secret == NULL || secret_length == 0) && tls_ctx == NULL)) {
+        ret = -1;
+    } else if (cipher->hash->digest_size > sizeof(temp_secret)) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
     } else {
         if (secret != NULL && secret_length > 0) {
@@ -2597,15 +2857,45 @@ int picoquic_server_setup_ticket_aead_contexts(picoquic_quic_t* quic,
             tls_ctx->random_bytes(temp_secret, cipher->hash->digest_size);
         }
 
-        /* Create the AEAD contexts */
-        ret = picoquic_set_aead_from_secret(&quic->aead_encrypt_ticket_ctx, cipher, 1, temp_secret, "random label");
         if (ret == 0) {
-            ret = picoquic_set_aead_from_secret(&quic->aead_decrypt_ticket_ctx, cipher, 0, temp_secret, "random label");
+            key_slot = temp_secret[0] >> 7;
+            ret = picoquic_set_aead_from_secret(&new_key.aead_encrypt_ctx, cipher, 1, temp_secret, "random label");
+        }
+        if (ret == 0) {
+            ret = picoquic_set_aead_from_secret(&new_key.aead_decrypt_ctx, cipher, 0, temp_secret, "random label");
+        }
+
+        if (ret != 0) {
+            picoquic_dispose_ticket_key_state(&new_key);
+        }
+        else {
+            picoquic_dispose_ticket_key_state(&quic->ticket_key_state[key_slot]);
+            quic->ticket_key_state[key_slot] = new_key;
+            memset(&new_key, 0, sizeof(picoquic_ticket_key_state_t));
+            quic->ticket_key_state_active_slot = key_slot;
         }
 
         /* erase the temporary secret */
         ptls_clear_memory(temp_secret, cipher->hash->digest_size);
     }
+    return ret;
+}
+
+int picoquic_set_ticket_key(picoquic_quic_t* quic,
+    const uint8_t* ticket_key, size_t ticket_key_length)
+{
+    int ret = 0;
+
+    if (quic == NULL || ticket_key == NULL || ticket_key_length == 0) {
+        ret = -1;
+    }
+    else {
+        PICOQUIC_THREAD_CHECK(quic);
+
+        ret = picoquic_setup_ticket_key_aead_contexts(quic, NULL,
+            ticket_key, ticket_key_length);
+    }
+
     return ret;
 }
 
@@ -2855,7 +3145,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
                     /* If client authentication is activated, the client sends the certificates with its `Finished` packet.
                        The server does not send any further packets, so, we can switch into false start state here.
                     */
-                    if (data_pushed == 0 && ((ptls_context_t*)cnx->quic->tls_master_ctx)->require_client_authentication == 1) {
+                    if (data_pushed == 0 && ptls_get_context(ctx->tls)->require_client_authentication == 1) {
                         picoquic_false_start_transition(cnx, current_time);
                     }
                     else {
@@ -3006,8 +3296,7 @@ void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
  * - 64 bit random sequence number.
  * - Encrypted value of the token.
  * - AEAD checksum.
- * The most significant bit of the random number is set to 1 (0x80) for a "new token",
- * and to zero for a "retry token".
+ * The top bit identifies ticket key slot 0 or 1; the next bit marks NEW_TOKEN.
  * When invoking AEAD, the sequence number is used to update the IV, and the IP address
  * is passed as "authenticated" data. The 64 bit random number alleviates the concern of
  * reusing the same AEAD key twice. The authenticated data ensures that if the token is
@@ -3022,8 +3311,10 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
     uint64_t sequence;
     uint8_t* auth_data;
     size_t auth_data_length;
+    picoquic_ticket_key_state_t* key = &quic->ticket_key_state[quic->ticket_key_state_active_slot];
 
-    if (text_length + 1u + 16u > token_max) {
+    if (!picoquic_ticket_key_state_is_set(key) ||
+        text_length + 8u + PICOQUIC_AEAD_TAG_SIZE(key->aead_encrypt_ctx) > token_max) {
         ret = -1;
         *token_length = 0;
     }
@@ -3037,17 +3328,17 @@ static int picoquic_server_encrypt_retry_token(picoquic_quic_t * quic, const str
             auth_data = (uint8_t*)&((struct sockaddr_in6*)addr_peer)->sin6_addr;
             auth_data_length = 16;
         }
-        picoquic_crypto_random(quic, token, 8);
+        sequence = picoquic_ticket_key_random_sequence(quic->ticket_key_state_active_slot);
         if (is_new_token) {
-            token[0] |= 0x80;
+            sequence |= PICOQUIC_TOKEN_TYPE_NEW;
         }
         else {
-            token[0] &= 0x7F;
+            sequence &= ~PICOQUIC_TOKEN_TYPE_NEW;
         }
-        sequence = PICOPARSE_64(token);
+        picoformat_64(token, sequence);
 
-        *token_length = (size_t)8u + picoquic_aead_encrypt_generic(token + 8, text, text_length,
-            sequence, auth_data, auth_data_length, quic->aead_encrypt_ticket_ctx);
+        *token_length = 8u + picoquic_aead_encrypt_generic(token + 8, text, text_length,
+            sequence, auth_data, auth_data_length, key->aead_encrypt_ctx);
     }
 
     return ret;
@@ -3075,13 +3366,20 @@ int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sock
         ret = -1;
     }
     else {
-        *is_new_token = ((token[0] & 0x80) == 0) ? 0: 1;
         sequence = PICOPARSE_64(token);
+        *is_new_token = ((sequence & PICOQUIC_TOKEN_TYPE_NEW) == 0) ? 0: 1;
 
-        *text_length = picoquic_aead_decrypt_generic(text, token+8, token_length-8,
-            sequence, auth_data, auth_data_length, quic->aead_decrypt_ticket_ctx);
-        if (*text_length >= token_length - 8) {
+        picoquic_ticket_key_state_t* key = &quic->ticket_key_state[PICOQUIC_TICKET_KEY_SLOT(sequence)];
+        if (!picoquic_ticket_key_state_is_set(key) ||
+            token_length < 8 + PICOQUIC_AEAD_TAG_SIZE(key->aead_decrypt_ctx)) {
             ret = -1;
+        }
+        else {
+            *text_length = picoquic_aead_decrypt_generic(text, token+8, token_length-8,
+                sequence, auth_data, auth_data_length, key->aead_decrypt_ctx);
+            if (*text_length >= token_length - 8) {
+                ret = -1;
+            }
         }
     }
 

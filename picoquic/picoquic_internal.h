@@ -576,6 +576,11 @@ typedef int (*picoquic_performance_log_fn)(picoquic_quic_t* quic, picoquic_cnx_t
 /* QUIC context, defining the tables of connections,
  * open sockets, etc.
  */
+typedef struct st_picoquic_ticket_key_state_t {
+    void* aead_encrypt_ctx;
+    void* aead_decrypt_ctx;
+} picoquic_ticket_key_state_t;
+
 typedef struct st_picoquic_quic_t {
     void* tls_master_ctx;
     picoquic_stream_data_cb_fn default_callback_fn;
@@ -583,6 +588,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picomask_ctx_t* picomask_ctx;
     struct st_picomask_fns_t* picomask_fns;
     char const* default_alpn;
+    char* tls_cert_root_file_name;
     picoquic_alpn_select_fn alpn_select_fn;
     picoquic_alpn_select_fn_v2 alpn_select_fn_v2;
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
@@ -681,8 +687,8 @@ typedef struct st_picoquic_quic_t {
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
 
-    void* aead_encrypt_ticket_ctx;
-    void* aead_decrypt_ticket_ctx;
+    picoquic_ticket_key_state_t ticket_key_state[2];
+    unsigned int ticket_key_state_active_slot : 1;
     void ** retry_integrity_sign_ctx;
     void ** retry_integrity_verify_ctx;
 
