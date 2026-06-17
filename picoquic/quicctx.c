@@ -659,6 +659,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->default_callback_ctx = default_callback_ctx;
         quic->default_congestion_alg = PICOQUIC_DEFAULT_CONGESTION_ALGORITHM;
         quic->default_alpn = picoquic_string_duplicate(default_alpn);
+        quic->tls_cert_root_file_name = picoquic_string_duplicate(cert_root_file_name);
         quic->cnx_id_callback_fn = cnx_id_callback;
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
@@ -1147,9 +1148,6 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Delete the picotls context */
         if (quic->tls_master_ctx != NULL) {
             picoquic_master_tlscontext_free(quic);
-
-            free(quic->tls_master_ctx);
-            quic->tls_master_ctx = NULL;
         }
 
         /* Close the logs */
@@ -1157,6 +1155,7 @@ void picoquic_free(picoquic_quic_t* quic)
 
         quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
         quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
+        quic->tls_cert_root_file_name = picoquic_string_free(quic->tls_cert_root_file_name);
 
         if (quic->perflog_fn != NULL) {
             (void)(quic->perflog_fn)(quic, NULL, 1);

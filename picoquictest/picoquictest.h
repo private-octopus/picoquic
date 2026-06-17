@@ -149,6 +149,8 @@ int tls_zero_share_test(void);
 int transport_param_log_test(void);
 int bad_certificate_test(void);
 int set_verify_certificate_callback_test(void);
+int cert_rollover_inflight_test(void);
+int cert_rollover_active_connection_test(void);
 int virtual_time_test(void);
 int tls_different_params_test(void);
 int tls_quant_params_test(void);

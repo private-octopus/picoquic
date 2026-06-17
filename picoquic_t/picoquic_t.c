@@ -240,6 +240,8 @@ static const picoquic_test_def_t test_table[] = {
     { "transport_param_log", transport_param_log_test },
     { "bad_certificate", bad_certificate_test },
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
+    { "cert_rollover_inflight", cert_rollover_inflight_test },
+    { "cert_rollover_active_connection", cert_rollover_active_connection_test },
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
     { "quant_params", tls_quant_params_test },

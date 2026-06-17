@@ -585,6 +585,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picomask_ctx_t* picomask_ctx;
     struct st_picomask_fns_t* picomask_fns;
     char const* default_alpn;
+    char* tls_cert_root_file_name;
     picoquic_alpn_select_fn alpn_select_fn;
     picoquic_alpn_select_fn_v2 alpn_select_fn_v2;
     uint8_t reset_seed[PICOQUIC_RESET_SECRET_SIZE];
