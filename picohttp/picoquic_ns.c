@@ -235,7 +235,7 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
             ret = -1;
         }
         else{
-            /* Set log and trigger for media statistsics and file. */
+            /* Set log and trigger for media statistics and file. */
             client_ctx->quicperf_ctx->stats_start = spec->media_stats_start;
             if (spec->qperf_log != NULL) {
                 /* scenario requires a performance log */
@@ -978,11 +978,14 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
                 break;
             }
             else {
+                double average_delay = ((double)report->sum_delays) / report->nb_frames_received;
+                if (average_delay > (double)*delay_average) {
+                    *delay_average = (uint64_t)average_delay;
+                }
+                if (report->max_delays > (double)*delay_max) {
+                    *delay_max = (uint64_t)report->max_delays;
+                }
                 if (spec->media_latency_average > 0) {
-                    double average_delay = ((double)report->sum_delays) / report->nb_frames_received;
-                    if (average_delay > (double)*delay_average) {
-                        *delay_average = (uint64_t)average_delay;
-                    }
                     if (average_delay > (double)spec->media_latency_average) {
                         if (err_fd != NULL) {
                             fprintf(stderr, "Media %zu (%s), latency average %f, expected %"PRIu64"\n",
@@ -994,9 +997,6 @@ int picoquic_ns_media_check(quicperf_ctx_t* quicperf_ctx, picoquic_ns_spec_t* sp
                 }
                 if (spec->media_latency_max > 0 && report->max_delays > spec->media_latency_max) {
 
-                    if (report->max_delays > (double)*delay_max) {
-                        *delay_max = (uint64_t)report->max_delays;
-                    }
                     if (err_fd != NULL) {
                         fprintf(stderr, "Media %zu (%s), latency max %"PRIu64", expected %"PRIu64"\n",
                             i, quicperf_ctx->scenarios[i].id, report->max_delays, spec->media_latency_max);
