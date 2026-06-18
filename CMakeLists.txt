@@ -165,6 +165,7 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_logger.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
+    picoquic/picoquic_set_unified_log_fns.h
     picoquic/picoquic_unified_log.h
     picoquic/picosplay.h
     picoquic/tls_api.h

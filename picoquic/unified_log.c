@@ -28,6 +28,7 @@
 #include <sys/time.h>
 #endif
 #include "picoquic_unified_log.h"
+#include "picoquic_set_unified_log_fns.h"
 
 /* Close the quic level resource associated with logs */
 void picoquic_log_close_logs(picoquic_quic_t* quic)
@@ -342,4 +343,38 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             path_x->is_cc_data_updated = 0;
         }
     }
+}
+
+/* ------------------------------------------------------------------
+ * Public setter for installing custom unified-log callback structs
+ * (see picoquic_set_unified_log_fns.h). Allows external consumers to
+ * provide their own picoquic_unified_logging_t implementation without
+ * reaching into picoquic_internal.h.
+ *
+ * The caller retains ownership of fns; picoquic stores the pointer
+ * as-is and does not copy or free it. Pass fns == NULL to clear a
+ * slot.
+ * ------------------------------------------------------------------ */
+int picoquic_set_unified_log_fns(
+    picoquic_quic_t* quic,
+    picoquic_log_slot_t slot,
+    picoquic_unified_logging_t* fns)
+{
+    if (quic == NULL) {
+        return -1;
+    }
+    switch (slot) {
+    case PICOQUIC_LOG_SLOT_TEXT:
+        quic->text_log_fns = fns;
+        break;
+    case PICOQUIC_LOG_SLOT_BIN:
+        quic->bin_log_fns = fns;
+        break;
+    case PICOQUIC_LOG_SLOT_QLOG:
+        quic->qlog_fns = fns;
+        break;
+    default:
+        return -1;
+    }
+    return 0;
 }
