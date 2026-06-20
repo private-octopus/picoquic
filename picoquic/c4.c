@@ -112,7 +112,11 @@
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
+#if 0
+#define C4_NB_CRUISE_BEFORE_PUSH 2
+#else
 #define C4_NB_CRUISE_BEFORE_PUSH 4
+#endif
 #define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
@@ -121,10 +125,20 @@
 #define C4_PROBE_LEVEL_MAX 3
 #define C4_PROBE_LEVEL_DEFAULT 1
 
+#define C4_ALPHA_PUSH_12_5 1152 /* 112.5 % */
+#define C4_ALPHA_PUSH_50_0 1536 /* 150.0% % */
+#define C4_ALPHA_PUSH_100_0 2048 /* 150.0% % */
+#define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
+
+#if 1
+uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
+    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
+};
+#else
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_1024, C4_ALPHA_PUSH_1024
 };
-
+#endif
 typedef enum {
     c4_initial = 0,
     c4_recovery,
@@ -188,6 +202,10 @@ static void c4_enter_recovery(
     c4_congestion_t c_mode);
 
 static void c4_enter_cruise(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state);
+
+static void c4_enter_push(
     picoquic_path_t* path_x,
     c4_state_t* c4_state);
 
@@ -703,6 +721,9 @@ static void c4_exit_recovery(
     if (c4_state->probe_level > C4_PROBE_LEVEL_MAX) {
         c4_enter_initial(path_x, c4_state);
     }
+    else if (c4_state->probe_level > C4_PROBE_LEVEL_DEFAULT) {
+        c4_enter_push(path_x, c4_state);
+    }
     else {
         c4_enter_cruise(path_x, c4_state);
     }
@@ -719,14 +740,15 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
 
-    if (c4_state->probe_level > C4_PROBE_LEVEL_DEFAULT) {
-        c4_state->nb_cruise_left_before_push = 0;
-    }
-    else {
+#if 0
+        if (c4_state->nb_cruise_left_before_push == 0) {
+            c4_state->nb_cruise_left_before_push = 1;
+        }
+#else
         if (c4_state->nb_cruise_left_before_push == 0) {
             c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
-        }     
-    }
+        }
+#endif
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
         /* When operating in a CPU limited environment, pacing is too
