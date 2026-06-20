@@ -150,7 +150,9 @@
     <ClCompile Include="cidset.c" />
     <ClCompile Include="csv.c" />
     <ClCompile Include="logconvert.c" />
+    <ClCompile Include="logger.c" />
     <ClCompile Include="logreader.c" />
+    <ClCompile Include="logwriter.c" />
     <ClCompile Include="memory_log.c" />
     <ClCompile Include="qlog.c" />
     <ClCompile Include="qlog_fns.c" />

@@ -42,9 +42,6 @@
     <ClCompile Include="tls_api.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="logger.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="transport.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -79,9 +76,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="cc_common.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="logwriter.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="bbr.c">

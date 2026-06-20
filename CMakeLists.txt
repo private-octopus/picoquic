@@ -98,8 +98,6 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/frames.c
     picoquic/frame_names.c
     picoquic/intformat.c
-    picoquic/logger.c
-    picoquic/logwriter.c
     picoquic/loss_recovery.c
     picoquic/newreno.c
     picoquic/pacing.c
@@ -175,7 +173,9 @@ set(LOGLIB_LIBRARY_FILES
     loglib/cidset.c
     loglib/csv.c
     loglib/logconvert.c
+    loglib/logger.c
     loglib/logreader.c
+    loglib/logwriter.c
     loglib/memory_log.c
     loglib/qlog.c
     loglib/qlog_frames.c

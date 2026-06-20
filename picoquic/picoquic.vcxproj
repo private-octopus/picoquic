@@ -158,8 +158,6 @@
     <ClCompile Include="frames.c" />
     <ClCompile Include="frame_names.c" />
     <ClCompile Include="intformat.c" />
-    <ClCompile Include="logger.c" />
-    <ClCompile Include="logwriter.c" />
     <ClCompile Include="loss_recovery.c" />
     <ClCompile Include="newreno.c" />
     <ClCompile Include="pacing.c" />

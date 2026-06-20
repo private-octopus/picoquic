@@ -36,5 +36,11 @@
     <ClCompile Include="qlog_fns.c">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="logwriter.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="logger.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
