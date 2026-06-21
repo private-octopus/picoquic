@@ -698,7 +698,7 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
         sample/sample_background.c
         sample/sample_client.c
         sample/sample_server.c)
-    target_link_libraries(picoquic_sample PRIVATE picoquic-log picoquic-core)
+    target_link_libraries(picoquic_sample PUBLIC picoquic-log picoquic-core)
     target_include_directories(picoquic_sample PRIVATE loglib picoquic)
     set_picoquic_compile_settings(picoquic_sample)
 
