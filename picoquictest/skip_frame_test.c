@@ -1962,6 +1962,7 @@ void logger_test_pdus(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
         (struct sockaddr*)&s4_2, (struct sockaddr*)&s4_1, 55);
 }
 
+
 int logger_test(void)
 {
     FILE* F = NULL;
@@ -2023,6 +2024,7 @@ int logger_test(void)
         /* Manually remove the reference to the text log in the QUIC context
         * so as to not interfere with the next tests
         */
+        cnx->log_ctx[0] = NULL;
         quic->log_fns[0] = NULL;
         quic->log_params[0] = NULL;
     }
@@ -2057,6 +2059,7 @@ int logger_test(void)
             ret &= fprintf(F_log, "Log packet test #%d\n", (int)i);
             picoquic_textlog_frames(F_log, 0, buffer, bytes_max);
             F_log = picoquic_file_close(F_log);
+            cnx->log_ctx[0] = NULL;
             quic->log_fns[0] = NULL;
             quic->log_params[0] = NULL;
         }
@@ -2113,6 +2116,7 @@ int logger_test(void)
 
 
             F_log = picoquic_file_close(F_log);
+            cnx->log_ctx[0] = NULL;
             quic->log_fns[0] = NULL;
             quic->log_params[0] = NULL;
             running_sum += picoquic_sum_text_file(log_error_test_file);
@@ -2142,6 +2146,7 @@ int logger_test(void)
             picoquic_textlog_frames(F_log, 0, fuzz_buffer, bytes_max);
         }
         F_log = picoquic_file_close(F_log);
+        cnx->log_ctx[0] = NULL;
         quic->log_fns[0] = NULL;
         quic->log_params[0] = NULL;
         running_sum += picoquic_sum_text_file(log_fuzz_test_file);
