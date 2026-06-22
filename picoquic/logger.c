@@ -2190,11 +2190,11 @@ void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
 
 /* Adding here a declaration of binlog message defined in logwriter.c,
  * so the call the log_app_message writes on both log file and binlog */
-void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs);
+void picoquic_binlog_message_v(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs);
 
-void picoquic_txtlog_message_v(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
+void picoquic_txtlog_message_v(picoquic_quic_t* quic, void* log_ctx, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
 {
-    FILE* F = quic->F_log;
+    FILE* F = (FILE*)log_ctx;
     textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(*cid));
 
 #ifdef _WINDOWS
@@ -2209,14 +2209,14 @@ void picoquic_txtlog_message_v(picoquic_quic_t* quic, const picoquic_connection_
 void txtlog_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * cid, const char* fmt, va_list vargs)
 {
     if (quic->F_log != NULL) {
-        picoquic_txtlog_message_v(quic, cid, fmt, vargs);
+        picoquic_txtlog_message_v(quic, quic->F_log, cid, fmt, vargs);
     }
 }
 
-static void textlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
+static void textlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs)
 {
-    if (cnx->quic->F_log != NULL) {
-        picoquic_txtlog_message_v(cnx->quic, &cnx->initial_cnxid, fmt, vargs);
+    if (log_ctx != NULL) {
+        picoquic_txtlog_message_v(cnx->quic, log_ctx, &cnx->initial_cnxid, fmt, vargs);
     }
 }
 
@@ -2233,7 +2233,7 @@ static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curr
     }
 }
 
-static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+static void textlog_pdu_ex(picoquic_cnx_t* cnx, void* log_ctx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* UNUSED(addr_local), size_t packet_length,
     uint64_t UNUSED(unique_path_id), unsigned char UNUSED(ecn))
 {
@@ -2242,27 +2242,27 @@ static void textlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_
     UNREFERENCED_PARAMETER(unique_path_id);
     UNREFERENCED_PARAMETER(ecn);
 #endif
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_packet_address(cnx->quic->F_log,
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        textlog_packet_address((FILE*)log_ctx,
             picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)),
             cnx, addr_peer, receiving, packet_length, current_time);
     }
 }
 
-static void textlog_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), int receiving, uint64_t UNUSED(current_time),
+static void textlog_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x), int receiving, uint64_t UNUSED(current_time),
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_decrypted_segment(cnx->quic->F_log, 1, 
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        textlog_decrypted_segment((FILE*)log_ctx, 1,
             cnx, receiving, ph, bytes, bytes_max, 0);
     }
 }
 
-static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x), picoquic_packet_header* ph,
+static void textlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x), picoquic_packet_header* ph,
     size_t packet_size, int ret, uint64_t UNUSED(current_time))
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        FILE* F = cnx->quic->F_log;
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        FILE* F = (FILE*)log_ctx;
 
         if (ret == PICOQUIC_ERROR_PADDING_PACKET) {
             uint64_t log_cnxid64 = 0;
@@ -2283,11 +2283,11 @@ static void textlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(
     }
 }
 
-static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
+static void textlog_buffered_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x),
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        FILE* F = cnx->quic->F_log;
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        FILE* F = (FILE*) log_ctx;
 
         textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
@@ -2295,23 +2295,23 @@ static void textlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED
     }
 }
 
-static void textlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* UNUSED(path_x),
+static void textlog_outgoing_packet(picoquic_cnx_t* cnx, void * log_ctx, picoquic_path_t* UNUSED(path_x),
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t UNUSED(current_time))
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        textlog_outgoing_segment(cnx->quic->F_log, 1,
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        textlog_outgoing_segment((FILE*)log_ctx, 1,
             cnx, bytes, sequence_number, length, send_buffer, send_length, pn_length);
     }
 }
 
-static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void textlog_packet_lost(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        FILE* F = cnx->quic->F_log;
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        FILE* F = (FILE*)log_ctx;
 
         textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx)));
         textlog_time(F, cnx, current_time, "T= ", ", ");
@@ -2325,7 +2325,7 @@ static void textlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     }
 }
 
-static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     uint8_t const* UNUSED(sni), size_t UNUSED(sni_len), uint8_t const* UNUSED(alpn), size_t UNUSED(alpn_len),
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
@@ -2343,7 +2343,7 @@ static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
 }
 
 
-static void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+static void textlog_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     size_t param_length, uint8_t* params)
 {
     if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
@@ -2352,31 +2352,30 @@ static void textlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
     }
 }
 
-static void textlog_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length)
+static void textlog_tls_ticket(picoquic_cnx_t* cnx, void* log_ctx, uint8_t* ticket, uint16_t ticket_length)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        picoquic_textlog_picotls_ticket(cnx->quic->F_log, picoquic_get_logging_cnxid(cnx),
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        picoquic_textlog_picotls_ticket((FILE*)log_ctx, picoquic_get_logging_cnxid(cnx),
             ticket, ticket_length);
     }
 }
 
-static void textlog_new_connection(picoquic_cnx_t* UNUSED(cnx))
+static void textlog_new_connection(picoquic_cnx_t* cnx, void** log_ctx)
+{
+    * log_ctx = cnx->quic->F_log;
+}
+
+static void textlog_close_connection(picoquic_cnx_t* UNUSED(cnx), void* UNUSED(log_ctx))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(log_ctx);
 #endif
 }
 
-static void textlog_close_connection(picoquic_cnx_t* UNUSED(cnx))
+static void textlog_cc_dump(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, uint64_t current_time)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
-}
-
-static void textlog_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
-{
-    textlog_congestion_state(cnx->quic->F_log, cnx, path_x, current_time);
+    textlog_congestion_state((FILE*)log_ctx, cnx, path_x, current_time);
 }
 
 
@@ -2434,8 +2433,13 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
                 quic->should_close_log = 1;
             }
         }
-
+#if 1
+        if (ret == 0) {
+            ret = picoquic_register_log_functions(quic, &textlog_functions);
+        }
+#else
         quic->text_log_fns = &textlog_functions;
+#endif
     }
 
     return ret;

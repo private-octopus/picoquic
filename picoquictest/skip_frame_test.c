@@ -2004,6 +2004,9 @@ int logger_test(void)
             picoquic_textlog_frames(quic->F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
         }
         fprintf(quic->F_log, "\n");
+        /* hack: set the parameter cnx->log_ctx[0], because the connection was not set 
+         * properly, and because we are only logging with text_log */
+        cnx->log_ctx[0] = quic->F_log;
         picoquic_log_tls_ticket(cnx,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
 
@@ -2134,7 +2137,7 @@ int logger_test(void)
 
 // Test of binary logs.
 
-void binlog_new_connection(picoquic_cnx_t* cnx);
+void binlog_new_connection(picoquic_cnx_t* cnx, void** log_ctx);
 
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);
@@ -2201,7 +2204,7 @@ int binlog_test(void)
                 ph.offset = 0;
                 ph.payload_length = test_skip_list[i].len;
 
-                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+                binlog_packet((FILE*)cnx->log_ctx[0], &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
             }
             /* Log of bad backets */
             for (size_t i = 0; i < nb_test_frame_error_list; i++) {
@@ -2216,7 +2219,7 @@ int binlog_test(void)
                 ph.offset = 0;
                 ph.payload_length = test_frame_error_list[i].len;
 
-                binlog_packet(cnx->f_binlog, &initial_cid, 0, 0, 0, &ph, test_frame_error_list[i].val, test_frame_error_list[i].len);
+                binlog_packet((FILE*)cnx->log_ctx[0], &initial_cid, 0, 0, 0, &ph, test_frame_error_list[i].val, test_frame_error_list[i].len);
             }
             picoquic_delete_cnx(cnx);
         }

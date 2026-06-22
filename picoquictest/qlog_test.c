@@ -122,7 +122,8 @@ int autoqlog_unique(void)
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
+		/* TODO: fix that, It assumes that binlog is the only method declared in context. */
+		binlog_new_connection(cnx, &cnx->log_ctx[0]);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}

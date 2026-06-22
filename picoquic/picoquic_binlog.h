@@ -71,39 +71,39 @@ void binlog_packet(FILE * f, const picoquic_connection_id_t* cid, uint64_t path_
     const picoquic_packet_header * ph, const uint8_t* bytes, size_t bytes_max);
 
 /* Report that a packet was dropped due to some error */
-void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_header* ph, size_t packet_size, int err, uint64_t current_time);
+void binlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, picoquic_packet_header* ph, size_t packet_size, int err, uint64_t current_time);
 
 /* Report that packet was buffered waiting for decryption */
-void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);
+void binlog_buffered_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time);
 
 /* binary alternative to picoquic_log_outgoing_segment() */
-void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+void binlog_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time);
 
 /* Logging packet lost events */
-void binlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+void binlog_packet_lost(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time);
 
 /* Logging of SNI and ALPN negotiation */
-void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+void binlog_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count);
 
 /* binary alternative to picoquic_log_transport_extension() */
-void binlog_transport_extension(picoquic_cnx_t * cnx, int is_local,
+void binlog_transport_extension(picoquic_cnx_t * cnx, void* log_ctx, int is_local,
     size_t param_length, uint8_t* params);
 
 /* binary alternative to picoquic_log_tls_ticket() */
 void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     uint8_t* ticket, uint16_t ticket_length);
 
-void binlog_new_connection(picoquic_cnx_t * cnx);
-void binlog_close_connection(picoquic_cnx_t * cnx);
+void binlog_new_connection(picoquic_cnx_t * cnx, void** log_ctx);
+void binlog_close_connection(picoquic_cnx_t * cnx, void* log_ctx);
 
-void binlog_cc_dump(picoquic_cnx_t * cnx, picoquic_path_t* path_x, uint64_t current_time);
+void binlog_cc_dump(picoquic_cnx_t * cnx, void* log_ctx, picoquic_path_t* path_x, uint64_t current_time);
 
 /* Set the binary log folder and start generating per connection traces into it.
  * Set to NULL value to stop binary tracing.

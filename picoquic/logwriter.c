@@ -721,12 +721,12 @@ void binlog_pdu(FILE* f, const picoquic_connection_id_t* cid, int receiving, uin
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
-static void binlog_pdu_ex(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
+static void binlog_pdu_ex(picoquic_cnx_t* cnx, void* log_ctx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
     uint64_t unique_path_id, unsigned char ecn)
 {
-    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        binlog_pdu(cnx->f_binlog, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length,
+    if (cnx != NULL && (FILE*) log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_pdu((FILE*) log_ctx, &cnx->initial_cnxid, receiving, current_time, addr_peer, addr_local, packet_length,
             unique_path_id, ecn);
     }
 }
@@ -787,19 +787,19 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_i
     (void)fseek(f, 0, SEEK_END);
 }
 
-static void binlog_packet_ex(picoquic_cnx_t* cnx, picoquic_path_t * path_x, int receiving, uint64_t current_time,
+static void binlog_packet_ex(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t * path_x, int receiving, uint64_t current_time,
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
-    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        binlog_packet(cnx->f_binlog, &cnx->initial_cnxid, binlog_get_path_id(cnx, path_x),
+    if (cnx != NULL && (FILE*) log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_packet((FILE*) log_ctx, &cnx->initial_cnxid, binlog_get_path_id(cnx, path_x),
             receiving, current_time, ph, bytes, bytes_max);
     }
 }
 
-void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+void binlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
     picoquic_packet_header* ph, size_t packet_size, int err, uint64_t current_time)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
@@ -817,10 +817,10 @@ void binlog_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
-void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
+void binlog_buffered_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, 
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
@@ -838,11 +838,11 @@ void binlog_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 }
 
 
-void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
+void binlog_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t * path_x,
     uint8_t * bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
 
     picoquic_cnx_t* pcnx = cnx;
     picoquic_packet_header ph;
@@ -887,12 +887,12 @@ void binlog_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
     binlog_packet(f, cnxid, binlog_get_path_id(cnx, path_x),  0, current_time, &ph, bytes, length);
 }
 
-void binlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+void binlog_packet_lost(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype,  uint64_t sequence_number, char const * trigger,
     picoquic_connection_id_t * dcid, size_t packet_size,
     uint64_t current_time)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
 
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -918,11 +918,11 @@ void binlog_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 }
 
 
-void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
+void binlog_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     uint8_t const * sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
 
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -956,10 +956,10 @@ void binlog_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
-void binlog_transport_extension(picoquic_cnx_t* cnx, int is_local,
+void binlog_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     size_t param_length, uint8_t* params)
 {
-    FILE* f = cnx->f_binlog;
+    FILE* f = (FILE*) log_ctx;
 
     bytestream_buf stream_msg;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -1000,37 +1000,40 @@ void binlog_picotls_ticket(FILE* f, picoquic_connection_id_t cnx_id,
     (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
 }
 
-static void binlog_picotls_ticket_ex(picoquic_cnx_t* cnx,
+static void binlog_picotls_ticket_ex(picoquic_cnx_t* cnx, void* log_ctx,
     uint8_t* ticket, uint16_t ticket_length)
 {
-    if (cnx != NULL && cnx->f_binlog != NULL && picoquic_cnx_is_still_logging(cnx)) {
-        binlog_picotls_ticket(cnx->f_binlog, cnx->initial_cnxid, ticket, ticket_length);
+    if (cnx != NULL && (FILE*) log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
+        binlog_picotls_ticket((FILE*) log_ctx, cnx->initial_cnxid, ticket, ticket_length);
     }
 }
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int multipath_enabled);
 
-void binlog_new_connection(picoquic_cnx_t * cnx)
+void binlog_new_connection(picoquic_cnx_t * cnx, void ** log_ctx)
 {
-    char const* bin_dir = (cnx->quic->binlog_dir == NULL) ? cnx->quic->qlog_dir : cnx->quic->binlog_dir;
+    char const* bin_dir = cnx->quic->binlog_dir;
+    FILE* log_file = NULL;
 
+#if 1
+    if (bin_dir == NULL) {
+        return;
+    }
+#else
     if (bin_dir == NULL || cnx->quic->bin_log_fns == NULL) {
         return;
     }
-
+#endif
     if (cnx->quic->current_number_of_open_logs >= cnx->quic->max_simultaneous_logs) {
         return;
     }
 
     int ret = 0;
-
-    cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
     
     char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
     if (picoquic_print_connection_id_hexa(cid_name, sizeof(cid_name), &cnx->initial_cnxid) != 0) {
         ret = -1;
     }
-
     char log_filename[512];
     if (ret == 0) {
         int sprintf_ret = -1;
@@ -1054,14 +1057,15 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
     }
 
     if (ret == 0) {
-        cnx->f_binlog = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
+        log_file = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
            cnx->local_parameters.initial_max_path_id > 0);
-        if (cnx->f_binlog == NULL) {
+        if (log_file == NULL) {
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
             ret = -1;
         }
         else {
             cnx->quic->current_number_of_open_logs++;
+            *log_ctx = log_file;
         }
     }
 
@@ -1083,14 +1087,14 @@ void binlog_new_connection(picoquic_cnx_t * cnx)
         bytestream * head = bytestream_buf_init(&stream_head, 8);
         bytewrite_int32(head, (uint32_t)bytestream_length(msg));
 
-        (void)fwrite(bytestream_data(head), bytestream_length(head), 1, cnx->f_binlog);
-        (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, cnx->f_binlog);
+        (void)fwrite(bytestream_data(head), bytestream_length(head), 1, log_file);
+        (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, log_file);
     }
 }
 
-void binlog_close_connection(picoquic_cnx_t * cnx)
+void binlog_close_connection(picoquic_cnx_t * cnx, void* log_ctx)
 {
-    FILE * f = cnx->f_binlog;
+    FILE * f = (FILE*) log_ctx;
     if (f == NULL) {
         return;
     }
@@ -1109,7 +1113,7 @@ void binlog_close_connection(picoquic_cnx_t * cnx)
 
     fflush(f);
 
-    cnx->f_binlog = picoquic_file_close(cnx->f_binlog);
+    (void) picoquic_file_close((FILE*)log_ctx);
 
     if (cnx->quic->qlog_dir != NULL && cnx->quic->autoqlog_fn != NULL) {
         (void)cnx->quic->autoqlog_fn(cnx);
@@ -1150,7 +1154,7 @@ FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned in
  * sending a packet.
  */
 
-void binlog_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+void binlog_cc_dump(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, uint64_t current_time)
 {
     bytestream_buf stream_msg;
     bytestream* ps_msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
@@ -1226,17 +1230,17 @@ void binlog_cc_dump(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t curre
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
 
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, (FILE*) log_ctx);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, (FILE*) log_ctx);
 }
 
 /*
  * Write an information message frame, for free form debugging.
  */
 
-void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
+void picoquic_binlog_message_v(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs)
 {
-    if (cnx->f_binlog == NULL) {
+    if (log_ctx == NULL) {
         return;
     }
     bytestream_buf stream_msg;
@@ -1267,8 +1271,8 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list var
 
     bytewrite_int32(ps_head, (uint32_t)bytestream_length(ps_msg));
 
-    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, cnx->f_binlog);
-    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, cnx->f_binlog);
+    (void)fwrite(bytestream_data(ps_head), bytestream_length(ps_head), 1, (FILE*) log_ctx);
+    (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, (FILE*) log_ctx);
 }
 
 #if 0
@@ -1299,11 +1303,9 @@ void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving)
 }
 #endif
 /* Log an event relating to a specific connection */
-static void binlog_app_message(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
+static void binlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs)
 {
-    if (cnx->f_binlog != NULL) {
-        picoquic_binlog_message_v(cnx, fmt, vargs);
-    }
+    picoquic_binlog_message_v(cnx, log_ctx, fmt, vargs);
 }
 
 /* Return from close with nothing, as this is per connection only */
@@ -1337,13 +1339,28 @@ struct st_picoquic_unified_logging_t binlog_functions = {
 
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
 {
+#if 1
+    int ret = 0;
+    
+    if ((ret = picoquic_register_log_functions(quic, &binlog_functions)) == 0) {
+        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
+        quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    }
+    return ret;
+#else
     quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
     quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
     quic->bin_log_fns = &binlog_functions;
     return 0;
+#endif
 }
 
+/* TODO: this is never used. Remove? */
 void picoquic_enable_binlog(picoquic_quic_t* quic)
 {
+#if 1
+    (void)picoquic_register_log_functions(quic, &binlog_functions);
+#else
     quic->bin_log_fns = &binlog_functions;
+#endif
 }
