@@ -6747,7 +6747,7 @@ const uint8_t* picoquic_decode_fc_state_frame(picoquic_cnx_t* cnx, picoquic_path
     ) {
         switch (action) {
             case 2:
-                cnx->flows[i]->leave_required = 1;
+                cnx->flows[i]->state = MAX(picoquic_fc_cli_leaving, cnx->flows[i]->state);
                 cnx->need_flow_update = 1;
             break;
             default:
@@ -6804,7 +6804,7 @@ const uint8_t* picoquic_decode_fc_key_frame(picoquic_cnx_t* cnx, picoquic_path_t
     picoquic_fc_flow_id_t flow_id;
     uint64_t sequence_number;
     const uint8_t *k_bytes;
-    int i;
+    int i = -1;
 
     const uint8_t *b = bytes;
 
@@ -6829,9 +6829,10 @@ const uint8_t* picoquic_decode_fc_key_frame(picoquic_cnx_t* cnx, picoquic_path_t
         ptls_cipher_suite_t* algo;
         const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
         if ((algo = picoquic_get_cipher_suite_by_id_v(cnx->flows[i]->crypto_algo, cnx->quic->use_low_memory)) != NULL &&
-            (picoquic_set_fc_decryption_from_secret(algo, &cnx->flows[i]->crypto_context, cnx->flows[i]->key, prefix_label) == 0)
+            (picoquic_set_fc_decryption_from_secret(algo, &cnx->flows[i]->crypto_context, cnx->flows[i]->key, prefix_label) == 0) &&
+            cnx->flows[i]->state == picoquic_fc_cli_joined_no_key
         ) {
-            cnx->flows[i]->crypto_received = 1;
+            cnx->flows[i]->state = picoquic_fc_cli_joined_w_key;
         }
     }
     else {
@@ -6851,9 +6852,10 @@ const uint8_t* picoquic_decode_fc_key_frame(picoquic_cnx_t* cnx, picoquic_path_t
             ptls_cipher_suite_t* algo;
             const char *prefix_label = picoquic_supported_versions[cnx->version_index].tls_prefix_label;
             if ((algo = picoquic_get_cipher_suite_by_id_v(cnx->flows[i]->crypto_algo, cnx->quic->use_low_memory)) != NULL &&
-                (picoquic_set_fc_decryption_from_secret(algo, &cnx->flows[i]->crypto_context, cnx->flows[i]->key, prefix_label) == 0)
+                (picoquic_set_fc_decryption_from_secret(algo, &cnx->flows[i]->crypto_context, cnx->flows[i]->key, prefix_label) == 0) &&
+                cnx->flows[i]->state == picoquic_fc_cli_joined_no_key
             ) {
-                cnx->flows[i]->crypto_received = 1;
+                cnx->flows[i]->state = picoquic_fc_cli_joined_w_key;
             }
         }
         else {
