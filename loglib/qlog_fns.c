@@ -41,7 +41,6 @@ typedef struct st_qlog_fns_path_context_t {
     uint64_t rtt_min;
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
-    uint64_t smoothed_rtt_for_bug;
     uint64_t cc_state;
     uint64_t cc_param;
 
@@ -847,12 +846,6 @@ void qlog_fns_cc_dump_path(picoquic_path_t* path,
 
         if (path->smoothed_rtt != path_ctx->smoothed_rtt) {
             fprintf(f, "%s\"smoothed_rtt\": %" PRIu64, comma, path->smoothed_rtt);
-#if 1
-            path_ctx->smoothed_rtt_for_bug = path->smoothed_rtt;
-#else
-            /* Bug compatibility with first implementation */
-            path_ctx->smoothed_rtt = path->smoothed_rtt;
-#endif
             comma = ",";
         }
 
@@ -1031,7 +1024,6 @@ picoquic_unified_logging_t qlog_fns = {
 
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
 {
-#if 1
     int ret = 0;
     char* dup_dir = picoquic_string_duplicate(qlog_dir);
     if (dup_dir == NULL) {
@@ -1047,11 +1039,4 @@ int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
         }
     }
     return ret;
-#else
-    quic->qlog_fns = &qlog_fns;
-    quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
-    quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
-
-    return 0;
-#endif
 }

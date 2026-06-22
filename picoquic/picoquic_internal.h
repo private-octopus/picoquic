@@ -117,9 +117,7 @@ extern "C" {
 
 #define PICOQUIC_DEFAULT_HOLE_PERIOD 256
 
-#if 1
-#define PICOQUIC_MAX_LOG_FUNCTIONS 4
-#endif
+#define PICOQUIC_MAX_LOG_FUNCTIONS 3
 
 /*
  * Types of frames.
@@ -720,20 +718,8 @@ typedef struct st_picoquic_quic_t {
     picohash_table* qmux_socket_id_table;
 
     /* Logging APIS */
-#if 0
-    void* F_log;
-    char* binlog_dir;
-    char* qlog_dir;
-    picoquic_autoqlog_fn autoqlog_fn;
-#endif
-#if 1
     struct st_picoquic_unified_logging_t* log_fns[PICOQUIC_MAX_LOG_FUNCTIONS];
     void* log_params[PICOQUIC_MAX_LOG_FUNCTIONS];
-#else
-    struct st_picoquic_unified_logging_t* text_log_fns;
-    struct st_picoquic_unified_logging_t* bin_log_fns;
-    struct st_picoquic_unified_logging_t* qlog_fns;
-#endif
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
 #ifdef BBRExperiment
@@ -1597,18 +1583,9 @@ typedef struct st_picoquic_cnx_t {
 
     /* Log handling */
     uint16_t log_unique;
-#if 1
-#else
-    FILE* f_binlog;
-    char* binlog_file_name;
-#endif
     void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
     void *memlog_ctx;
-#if 1
     void* log_ctx[PICOQUIC_MAX_LOG_FUNCTIONS];
-#else
-    void* qlog_ctx;
-#endif
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {

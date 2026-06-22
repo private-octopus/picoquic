@@ -110,12 +110,6 @@ void binlog_cc_dump(picoquic_cnx_t * cnx, void* log_ctx, picoquic_path_t* path_x
  */
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
 
-#if 1
-#else
-/* Enable binary logs, e.g. if autoqlog is requests */
-void picoquic_enable_binlog(picoquic_quic_t* quic);
-#endif
-
 #ifdef __cplusplus
 }
 #endif

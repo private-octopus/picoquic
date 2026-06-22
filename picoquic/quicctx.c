@@ -1152,10 +1152,7 @@ void picoquic_free(picoquic_quic_t* quic)
 
         /* Close the logs */
         picoquic_log_close_logs(quic);
-#if 0
-        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
-#endif
+
         quic->tls_cert_root_file_name = picoquic_string_free(quic->tls_cert_root_file_name);
 
         if (quic->perflog_fn != NULL) {

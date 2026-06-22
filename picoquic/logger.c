@@ -2423,17 +2423,9 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
     int ret = 0;
     FILE* F_log = NULL;
 
-#if 0
-    picoquic_textlog_close(quic);
-#endif
-
     if (textlog_file != NULL) {
         if (strcmp(textlog_file, "-") == 0) {
             F_log = stdout;
-#if 0
-            quic->F_log = stdout;
-            quic->should_close_log = 0;
-#endif
         }
         else {
             F_log = picoquic_file_open(textlog_file, "w");
@@ -2441,24 +2433,13 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
                 DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
                 ret = -1;
             }
-#if 0
-            else {
-                quic->F_log = F_log;
-                quic->should_close_log = 1;
-
-            }
-#endif
         }
-#if 1
         if (ret == 0) {
             ret = picoquic_register_log_functions(quic, &textlog_functions, F_log);
             if (ret != 0 && F_log != NULL && F_log != stdout) {
                 picoquic_file_close(F_log);
             }
         }
-#else
-        quic->text_log_fns = &textlog_functions;
-#endif
     }
 
     return ret;

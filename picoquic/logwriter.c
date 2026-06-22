@@ -1015,15 +1015,9 @@ void binlog_new_connection(picoquic_cnx_t * cnx, void* log_param, void ** log_ct
     char const* bin_dir = (char const *)log_param;
     FILE* log_file = NULL;
 
-#if 1
     if (bin_dir == NULL) {
         return;
     }
-#else
-    if (bin_dir == NULL || cnx->quic->bin_log_fns == NULL) {
-        return;
-    }
-#endif
     if (cnx->quic->current_number_of_open_logs >= cnx->quic->max_simultaneous_logs) {
         return;
     }
@@ -1050,21 +1044,12 @@ void binlog_new_connection(picoquic_cnx_t * cnx, void* log_param, void ** log_ct
         if (sprintf_ret != 0) {
             ret = -1;
         }
-#if 0
-        else {
-            picoquic_string_free(cnx->binlog_file_name);
-            cnx->binlog_file_name = picoquic_string_duplicate(log_filename);
-        }
-#endif
     }
 
     if (ret == 0) {
         log_file = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
            cnx->local_parameters.initial_max_path_id > 0);
         if (log_file == NULL) {
-#if 0
-            cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
-#endif
             ret = -1;
         }
         else {
@@ -1281,33 +1266,6 @@ void picoquic_binlog_message_v(picoquic_cnx_t* cnx, void* log_ctx, const char* f
     (void)fwrite(bytestream_data(ps_msg), bytestream_length(ps_msg), 1, (FILE*) log_ctx);
 }
 
-#if 0
-/* Log an event that cannot be attached to a specific connection */
-void binlog_ignore_quic_app_message(picoquic_quic_t* UNUSED(quic), const picoquic_connection_id_t* UNUSED(cid), const char* UNUSED(fmt), va_list(vargs))
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(quic);
-    UNREFERENCED_PARAMETER(cid);
-    UNREFERENCED_PARAMETER(fmt);
-#endif
-}
-#endif
-#if 0
-/* Log arrival or departure of an UDP datagram for an unknown connection */
-void binlog_ignore_quic_pdu(picoquic_quic_t* UNUSED(quic), int UNUSED(receiving), uint64_t UNUSED(current_time), uint64_t UNUSED(cid64),
-    const struct sockaddr* UNUSED(addr_peer), const struct sockaddr* UNUSED(addr_local), size_t UNUSED(packet_length))
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(quic);
-
-    UNREFERENCED_PARAMETER(receiving);
-    UNREFERENCED_PARAMETER(current_time);
-    UNREFERENCED_PARAMETER(addr_peer);
-    UNREFERENCED_PARAMETER(addr_local);
-    UNREFERENCED_PARAMETER(packet_length);
-#endif
-}
-#endif
 /* Log an event relating to a specific connection */
 static void binlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs)
 {
@@ -1357,7 +1315,6 @@ struct st_picoquic_unified_logging_t binlog_functions = {
 
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
 {
-#if 1
     int ret = 0;
     char * dup_dir = picoquic_string_duplicate(binlog_dir);
     
@@ -1368,23 +1325,4 @@ int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
         free(dup_dir);
     }
     return ret;
-#else
-    quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-    quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
-    quic->bin_log_fns = &binlog_functions;
-    return 0;
-#endif
 }
-
-#if 1
-#else
-/* TODO: this is never used. Remove? */
-void picoquic_enable_binlog(picoquic_quic_t* quic)
-{
-#if 1
-    (void)picoquic_register_log_functions(quic, &binlog_functions);
-#else
-    quic->bin_log_fns = &binlog_functions;
-#endif
-}
-#endif
