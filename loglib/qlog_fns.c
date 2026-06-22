@@ -275,13 +275,16 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
 }
 
 /* Log arrival or departure of an UDP datagram on a connection */
-void qlog_fns_pdu(picoquic_cnx_t* cnx, void* log_ctx, int receiving, uint64_t current_time,
+void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
     uint64_t unique_path_id, unsigned char ecn)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
     int log_ecn = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 
     qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "transport",
         (receiving == 0) ? "datagram_sent" : "datagram_received");
@@ -400,11 +403,14 @@ void qlog_fns_packet_start(qlog_fns_context_t* ctx,
     }
 }
 
-void qlog_fns_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
+void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     
     qlog_fns_packet_start(ctx, path_x, receiving, current_time, ph, byte_length);
 
@@ -432,10 +438,14 @@ void qlog_fns_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x
 }
 
 /* Report that a packet was dropped due to some error */
-void qlog_fns_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint64_t current_time)
+void qlog_fns_dropped_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size, int err, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+
     qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", "packet_dropped");
 
     if (err != PICOQUIC_ERROR_PADDING_PACKET) {
@@ -449,12 +459,15 @@ void qlog_fns_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t
 }
 
 /* Report that packet was buffered waiting for decryption */
-void qlog_fns_buffered_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time)
+void qlog_fns_buffered_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", "packet_buffered");
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 
+    qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", "packet_buffered");
     fprintf(f, "\n    \"type\" : \"%s\"", picoquic_packet_type_name(ptype));
     fprintf(f, ",\n    \"trigger\": \"keys_unavailable\"");
     fprintf(f, "}]");
@@ -510,12 +523,16 @@ void qlog_fns_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_
 }
 
 /* Log packet lost events */
-void qlog_fns_packet_lost(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x,
+void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x,
     picoquic_packet_type_enum ptype, uint64_t sequence_number, char const* trigger,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time){
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+
     qlog_fns_event_start(ctx, path_x, 0, current_time, "recovery", "packet_lost");
     fprintf(f, "\n    \"packet_type\" : \"%s\"", 
         picoquic_packet_type_name(ptype));
@@ -965,11 +982,14 @@ void qlog_fns_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ct
 }
 
 /* log the end of a connection */
-void qlog_fns_close_connection(picoquic_cnx_t* cnx, void* log_ctx)
+void qlog_fns_close_connection(picoquic_cnx_t* UNUSED(cnx), void* log_ctx)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     qlog_fns_path_context_t* path_ctx = ctx->first_path_ctx;
     FILE* f = ctx->f_txtlog;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     fprintf(f, "]}]}\n");
     picoquic_file_close(f);
     ctx->f_txtlog = NULL;
