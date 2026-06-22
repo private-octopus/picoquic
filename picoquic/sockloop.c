@@ -539,7 +539,7 @@ int picoquic_join_multicast_tree(picoquic_fc_flow_t *flow, picoquic_socket_ctx_t
 }
 
 int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can_be_shared,
-    int socket_buffer_size, int extra_socket_required, int do_not_use_gso, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
+    picoquic_packet_loop_param_t *param, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     /* Compute how many sockets are necessary, and set the intial value of AF and port per socket */
     int sock_ret = 0;
@@ -548,7 +548,7 @@ int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can
     s_ctx->port = flow->udp_port;
     s_ctx->n_port = htons(flow->udp_port);
     s_ctx->is_port_shared = 0;
-    if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, s_ctx, ecn_value)) == 0) {
+    if ((sock_ret = picoquic_packet_loop_open_socket(param, s_ctx, ecn_value)) == 0) {
         if (picoquic_is_flexicast_address(&flow->group_addr)) {
             if (!picoquic_join_multicast_tree(flow, s_ctx))
                 return 0;
@@ -557,7 +557,7 @@ int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can
     }
     if (sock_ret == 0 && can_be_shared != 0) {
         s_ctx->is_port_shared = (can_be_shared != 0);
-        if ((sock_ret = picoquic_packet_loop_open_socket(socket_buffer_size, do_not_use_gso, s_ctx, ecn_value)) == 0) {
+        if ((sock_ret = picoquic_packet_loop_open_socket(param, s_ctx, ecn_value)) == 0) {
             if (picoquic_is_flexicast_address(&flow->group_addr)) {
                 if (!picoquic_join_multicast_tree(flow, s_ctx))
                     return 0;
@@ -573,8 +573,7 @@ int picoquic_packet_loop_open_flexicast_socket(picoquic_fc_flow_t *flow, int can
 void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_loop_param_t *param, picoquic_socket_ctx_t* s_ctx, int *nb_sockets, uint8_t ecn_value, uint64_t current_time)
 {
     if (quic->current_number_connections > 0) {
-        for (int i = 0; i < quic->current_number_connections; i++) {
-            picoquic_cnx_t *cnx = &quic->cnx_list[i];
+        for (picoquic_cnx_t *cnx = quic->cnx_list; cnx != NULL; cnx = cnx->next_in_table) {
             if (cnx->is_flexicast_enabled && cnx->need_flow_update &&
                 cnx->nb_flows > 0) {
                 for (int j = 0; j < cnx->nb_flows; j++) {
@@ -595,9 +594,7 @@ void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_l
                                 :
                                     ((struct sockaddr_in6 *)&flow->unicast_addr)->sin6_port
                             ) || flow->udp_port <= 1000,
-                            param->socket_buffer_size,
-                            0,
-                            param->do_not_use_gso,
+                            param,
                             &s_ctx[*nb_sockets],
                             ecn_value
                         )
@@ -2618,7 +2615,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 
         packet_loop_open_flexicast_sockets(quic, param, s_ctx, &nb_sockets, ecn_value, current_time);
 
-        picoquic_packet_loop_set_fds(poll_list, s_ctx, nb_sockets, thread_ctx);
+        picoquic_packet_loop_set_fds(poll_list, poll_list_size, s_ctx, nb_sockets,
+                sqmux_ctx, nb_qmux_sockets, thread_ctx, current_time);
 
         nb_sockets_available = nb_sockets;
 
