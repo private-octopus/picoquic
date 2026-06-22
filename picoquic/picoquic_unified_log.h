@@ -48,10 +48,10 @@ extern "C" {
 #endif
 
 /* Log an event that cannot be attached to a specific connection */
-typedef void (*picoquic_log_quic_app_message_fn)(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs);
+typedef void (*picoquic_log_quic_app_message_fn)(picoquic_quic_t* quic, void* log_param, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs);
 
 /* Log arrival or departure of an UDP datagram for an unknown connection */
-typedef void (*picoquic_log_quic_pdu_fn)(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
+typedef void (*picoquic_log_quic_pdu_fn)(picoquic_quic_t* quic, void* log_param, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length);
 
 /* Log an event relating to a specific connection */
@@ -97,7 +97,7 @@ typedef void (*picoquic_log_tls_ticket_fn)(picoquic_cnx_t * cnx, void* log_ctx,
     uint8_t* ticket, uint16_t ticket_length);
 
 /* log the start of a connection */
-typedef void (*picoquic_log_new_connection_fn)(picoquic_cnx_t* cnx, void** log_ctx);
+typedef void (*picoquic_log_new_connection_fn)(picoquic_cnx_t* cnx, void * log_param, void** log_ctx);
 /* log the end of a connection */
 typedef void (*picoquic_log_close_connection_fn)(picoquic_cnx_t* cnx, void* log_ctx);
 
@@ -105,7 +105,10 @@ typedef void (*picoquic_log_close_connection_fn)(picoquic_cnx_t* cnx, void* log_
 typedef void (*picoquic_log_cc_dump_fn)(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, uint64_t current_time);
 
 /* close resource allocated for logging in QUIC context */
-typedef void (*picoquic_log_quic_close)(picoquic_quic_t* quic);
+typedef void (*picoquic_log_quic_close)(picoquic_quic_t* quic, void* log_param);
+
+/* flush the logs, to ensure that critical events are well captured */
+typedef void (*picoquic_log_flush_fn)(picoquic_cnx_t* cnx, void* log_ctx);
 
 typedef struct st_picoquic_unified_logging_t {
     /* Per context log function */
@@ -126,6 +129,7 @@ typedef struct st_picoquic_unified_logging_t {
     picoquic_log_new_connection_fn log_new_connection;
     picoquic_log_close_connection_fn log_close_connection;
     picoquic_log_cc_dump_fn log_cc_dump;
+    picoquic_log_flush_fn log_flush;
 } picoquic_unified_logging_t;
 
 /* Log an event that cannot be attached to a specific connection */
@@ -187,8 +191,12 @@ void picoquic_log_close_connection(picoquic_cnx_t* cnx);
 /* log congestion control parameters */
 void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time);
 
+/* flush the logs */
+void picoquic_log_flush(picoquic_cnx_t* cnx);
+
 /* Registration of the function for a log function type */
-int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logging_t* fns);
+int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logging_t* fns, void* params);
+void* picoquic_get_log_params(picoquic_quic_t* quic, picoquic_unified_logging_t* fns);
 
 #ifdef __cplusplus
 }

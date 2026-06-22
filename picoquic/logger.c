@@ -2206,10 +2206,10 @@ void picoquic_txtlog_message_v(picoquic_quic_t* quic, void* log_ctx, const picoq
     fputc('\n', F);
 }
 
-void txtlog_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t * cid, const char* fmt, va_list vargs)
+void txtlog_context_free_app_message(picoquic_quic_t* quic, void* log_param, const picoquic_connection_id_t * cid, const char* fmt, va_list vargs)
 {
-    if (quic->F_log != NULL) {
-        picoquic_txtlog_message_v(quic, quic->F_log, cid, fmt, vargs);
+    if (log_param != NULL) {
+        picoquic_txtlog_message_v(quic, log_param, cid, fmt, vargs);
     }
 }
 
@@ -2220,15 +2220,15 @@ static void textlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* 
     }
 }
 
-static void textlog_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time,
+static void textlog_quic_pdu(picoquic_quic_t* quic, void* log_param, int receiving, uint64_t current_time,
     uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* UNUSED(addr_local), size_t packet_length)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(addr_local);
 #endif
-    if (quic->F_log != NULL) {
-        textlog_packet_address(quic->F_log, cid64,
+    if (log_param != NULL) {
+        textlog_packet_address((FILE*)log_param, cid64,
             NULL, addr_peer, receiving, packet_length, current_time);
     }
 }
@@ -2278,7 +2278,7 @@ static void textlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_
             fprintf(F, "\n");
         }
         else {
-            textlog_decrypted_segment(cnx->quic->F_log, 1, cnx, 1, ph, NULL, packet_size, ret);
+            textlog_decrypted_segment(F, 1, cnx, 1, ph, NULL, packet_size, ret);
         }
     }
 }
@@ -2335,9 +2335,9 @@ static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_l
     UNREFERENCED_PARAMETER(alpn);
     UNREFERENCED_PARAMETER(alpn_len);
 #endif
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         /* TODO: alpn */
-        picoquic_textlog_negotiated_alpn(cnx->quic->F_log, cnx, 
+        picoquic_textlog_negotiated_alpn((FILE*)log_ctx, cnx,
             (is_local) ? 0 : 1, 1, alpn_list, alpn_count);
     }
 }
@@ -2346,9 +2346,9 @@ static void textlog_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_l
 static void textlog_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     size_t param_length, uint8_t* params)
 {
-    if (cnx->quic->F_log != NULL && picoquic_cnx_is_still_logging(cnx)) {
+    if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         /* TODO: alpn */
-        picoquic_textlog_transport_extension(cnx->quic->F_log, cnx, (is_local)?0:1, 1, params, param_length);
+        picoquic_textlog_transport_extension((FILE*)log_ctx, cnx, (is_local) ? 0 : 1, 1, params, param_length);
     }
 }
 
@@ -2360,9 +2360,9 @@ static void textlog_tls_ticket(picoquic_cnx_t* cnx, void* log_ctx, uint8_t* tick
     }
 }
 
-static void textlog_new_connection(picoquic_cnx_t* cnx, void** log_ctx)
+static void textlog_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx)
 {
-    * log_ctx = cnx->quic->F_log;
+    * log_ctx = log_param;
 }
 
 static void textlog_close_connection(picoquic_cnx_t* UNUSED(cnx), void* UNUSED(log_ctx))
@@ -2378,15 +2378,22 @@ static void textlog_cc_dump(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t*
     textlog_congestion_state((FILE*)log_ctx, cnx, path_x, current_time);
 }
 
-
-void picoquic_textlog_close(picoquic_quic_t* quic)
+static void textlog_flush(picoquic_cnx_t* cnx, void * log_ctx)
 {
-    if (quic->F_log != NULL && quic->should_close_log) {
-        (void)picoquic_file_close(quic->F_log);
+    if (cnx != NULL && log_ctx != NULL) {
+        fflush((FILE*)log_ctx);
     }
+}
 
-    quic->F_log = NULL;
-    quic->should_close_log = 0;
+void picoquic_textlog_close(picoquic_quic_t* UNUSED(quic), void* log_param)
+{
+    FILE* F_log = (FILE*)log_param;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
+    if (F_log != NULL && F_log != stdout) {
+        (void)picoquic_file_close(F_log);
+    }
 }
 
 struct st_picoquic_unified_logging_t textlog_functions = {
@@ -2407,20 +2414,26 @@ struct st_picoquic_unified_logging_t textlog_functions = {
     textlog_tls_ticket,
     textlog_new_connection,
     textlog_close_connection,
-    textlog_cc_dump
+    textlog_cc_dump,
+    textlog_flush
 };
 
 int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
 {
     int ret = 0;
-    FILE* F_log;
+    FILE* F_log = NULL;
 
+#if 0
     picoquic_textlog_close(quic);
+#endif
 
     if (textlog_file != NULL) {
         if (strcmp(textlog_file, "-") == 0) {
+            F_log = stdout;
+#if 0
             quic->F_log = stdout;
             quic->should_close_log = 0;
+#endif
         }
         else {
             F_log = picoquic_file_open(textlog_file, "w");
@@ -2428,14 +2441,20 @@ int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file)
                 DBG_PRINTF("Cannot create log file <%s>\n", textlog_file);
                 ret = -1;
             }
+#if 0
             else {
                 quic->F_log = F_log;
                 quic->should_close_log = 1;
+
             }
+#endif
         }
 #if 1
         if (ret == 0) {
-            ret = picoquic_register_log_functions(quic, &textlog_functions);
+            ret = picoquic_register_log_functions(quic, &textlog_functions, F_log);
+            if (ret != 0 && F_log != NULL && F_log != stdout) {
+                picoquic_file_close(F_log);
+            }
         }
 #else
         quic->text_log_fns = &textlog_functions;

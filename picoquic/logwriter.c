@@ -1010,9 +1010,9 @@ static void binlog_picotls_ticket_ex(picoquic_cnx_t* cnx, void* log_ctx,
 
 FILE* create_binlog(char const* binlog_file, uint64_t creation_time, unsigned int multipath_enabled);
 
-void binlog_new_connection(picoquic_cnx_t * cnx, void ** log_ctx)
+void binlog_new_connection(picoquic_cnx_t * cnx, void* log_param, void ** log_ctx)
 {
-    char const* bin_dir = cnx->quic->binlog_dir;
+    char const* bin_dir = (char const *)log_param;
     FILE* log_file = NULL;
 
 #if 1
@@ -1050,17 +1050,21 @@ void binlog_new_connection(picoquic_cnx_t * cnx, void ** log_ctx)
         if (sprintf_ret != 0) {
             ret = -1;
         }
+#if 0
         else {
             picoquic_string_free(cnx->binlog_file_name);
             cnx->binlog_file_name = picoquic_string_duplicate(log_filename);
         }
+#endif
     }
 
     if (ret == 0) {
         log_file = create_binlog(log_filename, picoquic_get_quic_time(cnx->quic),
            cnx->local_parameters.initial_max_path_id > 0);
         if (log_file == NULL) {
+#if 0
             cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
+#endif
             ret = -1;
         }
         else {
@@ -1115,10 +1119,12 @@ void binlog_close_connection(picoquic_cnx_t * cnx, void* log_ctx)
 
     (void) picoquic_file_close((FILE*)log_ctx);
 
+#if 0
     if (cnx->quic->qlog_dir != NULL && cnx->quic->autoqlog_fn != NULL) {
         (void)cnx->quic->autoqlog_fn(cnx);
     }
     cnx->binlog_file_name = picoquic_string_free(cnx->binlog_file_name);
+#endif
     if (cnx->quic->current_number_of_open_logs > 0) {
         cnx->quic->current_number_of_open_logs--;
     }
@@ -1308,12 +1314,23 @@ static void binlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* f
     picoquic_binlog_message_v(cnx, log_ctx, fmt, vargs);
 }
 
+static void binlog_flush(picoquic_cnx_t* cnx, void* log_param)
+{
+    if (cnx != NULL && log_param != NULL) {
+        fflush((FILE*)log_param);
+    }
+}
+
 /* Return from close with nothing, as this is per connection only */
-void binlog_close(picoquic_quic_t* UNUSED(quic))
+void binlog_close(picoquic_quic_t* UNUSED(quic), void* log_param)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(quic);
 #endif
+    /* log param points to the qlog directory */
+    if (log_param != NULL) {
+        free(log_param);
+    }
 }
 
 struct st_picoquic_unified_logging_t binlog_functions = {
@@ -1334,17 +1351,21 @@ struct st_picoquic_unified_logging_t binlog_functions = {
     binlog_picotls_ticket_ex,
     binlog_new_connection,
     binlog_close_connection,
-    binlog_cc_dump
+    binlog_cc_dump,
+    binlog_flush
 };
 
 int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
 {
 #if 1
     int ret = 0;
+    char * dup_dir = picoquic_string_duplicate(binlog_dir);
     
-    if ((ret = picoquic_register_log_functions(quic, &binlog_functions)) == 0) {
-        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-        quic->binlog_dir = picoquic_string_duplicate(binlog_dir);
+    if (dup_dir == NULL) {
+        ret = -1;
+    }
+    else if ((ret = picoquic_register_log_functions(quic, &binlog_functions, (void*)dup_dir)) != 0) {
+        free(dup_dir);
     }
     return ret;
 #else
@@ -1355,6 +1376,8 @@ int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir)
 #endif
 }
 
+#if 1
+#else
 /* TODO: this is never used. Remove? */
 void picoquic_enable_binlog(picoquic_quic_t* quic)
 {
@@ -1364,3 +1387,4 @@ void picoquic_enable_binlog(picoquic_quic_t* quic)
     quic->bin_log_fns = &binlog_functions;
 #endif
 }
+#endif

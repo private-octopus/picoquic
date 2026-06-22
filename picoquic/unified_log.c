@@ -30,7 +30,7 @@
 #include "picoquic_unified_log.h"
 
 #if 1
-int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logging_t * fns)
+int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logging_t * fns, void * params)
 {
     int ret = -1;
     if (fns != NULL) {
@@ -42,6 +42,7 @@ int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logg
             }
             if (quic->log_fns[i] == NULL) {
                 quic->log_fns[i] = fns;
+                quic->log_params[i] = params;
                 ret = 0;
                 break;
             }
@@ -50,12 +51,27 @@ int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logg
     return ret;
 }
 
+void* picoquic_get_log_params(picoquic_quic_t* quic, picoquic_unified_logging_t* fns)
+{
+    void* params = NULL;
+    if (fns != NULL) {
+        for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+            if (quic->log_fns[i] == fns) {
+                params = quic->log_params[i];
+                break;
+            }
+        }
+    }
+    return params;
+}
+
 /* Close the quic level resource associated with logs */
 void picoquic_log_close_logs(picoquic_quic_t* quic)
 {
     for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
         if (quic->log_fns[i] != NULL) {
-            quic->log_fns[i]->log_quic_close(quic);
+            quic->log_fns[i]->log_quic_close(quic, quic->log_params[i]);
+            quic->log_params[i] = NULL;
         }
         else {
             break;
@@ -70,8 +86,7 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
     for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
         if (quic->log_fns[i] != NULL) {
             if (quic->log_fns[i]->log_quic_pdu != NULL) {
-
-                quic->log_fns[i]->log_quic_pdu(quic, receiving, current_time, cid64, addr_peer, addr_local, packet_length);
+                quic->log_fns[i]->log_quic_pdu(quic, quic->log_params[i], receiving, current_time, cid64, addr_peer, addr_local, packet_length);
             }
         }
         else {
@@ -117,7 +132,7 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
             if (quic->log_fns[i]->log_quic_app_message != NULL) {
                 va_list args;
                 va_start(args, fmt);
-                quic->log_fns[i]->log_quic_app_message(quic, cid, fmt, args);
+                quic->log_fns[i]->log_quic_app_message(quic, quic->log_params[i], cid, fmt, args);
             }
         }
         else {
@@ -278,7 +293,7 @@ void picoquic_log_new_connection(picoquic_cnx_t* cnx)
     for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
         if (cnx->quic->log_fns[i] != NULL) {
             /* TODO: change that API to initialize the context */
-            cnx->quic->log_fns[i]->log_new_connection(cnx, &cnx->log_ctx[i]);
+            cnx->quic->log_fns[i]->log_new_connection(cnx, cnx->quic->log_params[i], &cnx->log_ctx[i]);
         }
         else {
             break;
@@ -327,6 +342,18 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             }
 
             path_x->is_cc_data_updated = 0;
+        }
+    }
+}
+
+void picoquic_log_flush(picoquic_cnx_t* cnx)
+{
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL && cnx->quic->log_fns[i]->log_flush != NULL) {
+            cnx->quic->log_fns[i]->log_flush(cnx, cnx->log_ctx[i]);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
         }
     }
 }

@@ -1997,27 +1997,34 @@ int logger_test(void)
         ret = -1;
     }
     else {
+        /* Peeking inside the logging API to extract F_log, as the unit tests bypass the API */
+        FILE* F_log = (FILE*) quic->log_params[0];
         for (size_t i = 0; i < nb_test_skip_list; i++) {
-            picoquic_textlog_frames(quic->F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
+            picoquic_textlog_frames(F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
         for (size_t i = 0; i < nb_test_frame_error_list; i++) {
-            picoquic_textlog_frames(quic->F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
+            picoquic_textlog_frames(F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
         }
-        fprintf(quic->F_log, "\n");
+        fprintf(F_log, "\n");
         /* hack: set the parameter cnx->log_ctx[0], because the connection was not set 
          * properly, and because we are only logging with text_log */
-        cnx->log_ctx[0] = quic->F_log;
+        cnx->log_ctx[0] = F_log;
         picoquic_log_tls_ticket(cnx,
             log_test_ticket, (uint16_t) sizeof(log_test_ticket));
 
         picoquic_log_app_message(cnx, "%s.", "This is an app message test");
         picoquic_log_app_message(cnx, "This is app message test #%d, severity %d.", 1, 2);
 
-        fprintf(quic->F_log, "\n");
+        fprintf(F_log, "\n");
         logger_test_packets(cnx);
         logger_test_pdus(quic, cnx);
 
-        quic->F_log = picoquic_file_close(quic->F_log);
+        (void)picoquic_file_close(F_log);
+        /* Manually remove the reference to the text log in the QUIC context
+        * so as to not interfere with the next tests
+        */
+        quic->log_fns[0] = NULL;
+        quic->log_params[0] = NULL;
     }
 
     if (ret == 0) {
@@ -2039,15 +2046,19 @@ int logger_test(void)
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         char log_line[1024];
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context, -1);
+        FILE* F_log = NULL;
 
         if (picoquic_set_textlog(quic, log_packet_test_file) != 0) {
             DBG_PRINTF("failed to open file:%s\n", log_packet_test_file);
             ret = -1;
         }
         else {
-            ret &= fprintf(quic->F_log, "Log packet test #%d\n", (int)i);
-            picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
-            quic->F_log = picoquic_file_close(quic->F_log);
+            F_log = (FILE*)quic->log_params[0];
+            ret &= fprintf(F_log, "Log packet test #%d\n", (int)i);
+            picoquic_textlog_frames(F_log, 0, buffer, bytes_max);
+            F_log = picoquic_file_close(F_log);
+            quic->log_fns[0] = NULL;
+            quic->log_params[0] = NULL;
         }
 
         if ((F = picoquic_file_open(log_packet_test_file, "r")) == NULL) {
@@ -2081,13 +2092,15 @@ int logger_test(void)
         for (int sharp_end = 0; ret == 0 && sharp_end < 2; sharp_end++) {
             uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
             size_t bytes_max = 0;
+            FILE* F_log = NULL;
 
             if (picoquic_set_textlog(quic, log_error_test_file) != 0) {
                 DBG_PRINTF("failed to open file:%s\n", log_error_test_file);
                 ret = -1;
                 break;
             }
-            fprintf(quic->F_log, "Running_sum: %" PRIx64 "\n", running_sum);
+            F_log = (FILE*)quic->log_params[0];
+            fprintf(F_log, "Running_sum: %" PRIx64 "\n", running_sum);
             memcpy(buffer, test_frame_error_list[i].val, test_frame_error_list[i].len);
             bytes_max = test_frame_error_list[i].len;
             if (test_frame_error_list[i].must_be_last == 0 && sharp_end == 0) {
@@ -2096,9 +2109,12 @@ int logger_test(void)
                 bytes_max += sizeof(extra_bytes);
             }
 
-            picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
+            picoquic_textlog_frames(F_log, 0, buffer, bytes_max);
 
-            quic->F_log = picoquic_file_close(quic->F_log);
+
+            F_log = picoquic_file_close(F_log);
+            quic->log_fns[0] = NULL;
+            quic->log_params[0] = NULL;
             running_sum += picoquic_sum_text_file(log_error_test_file);
         }
     }
@@ -2106,25 +2122,26 @@ int logger_test(void)
     /* Do a minimal fuzz test */
     for (size_t i = 0; ret == 0 && i < 100; i++) {
         size_t bytes_max = format_random_packet(buffer, sizeof(buffer), &random_context, -1);
+        FILE* F_log = NULL;
 
         if (picoquic_set_textlog(quic, log_fuzz_test_file) != 0) {
             DBG_PRINTF("failed to open file:%s\n", log_fuzz_test_file);
             ret = PICOQUIC_ERROR_INVALID_FILE;
             break;
         }
-
-        ret &= (fprintf(quic->F_log, "Log fuzz test #%d, sum: %" PRIx64 "\n",
+        F_log = (FILE*)quic->log_params[0];
+        ret &= (fprintf(F_log, "Log fuzz test #%d, sum: %" PRIx64 "\n",
             (int)i, running_sum) > 0);
-        picoquic_textlog_frames(quic->F_log, 0, buffer, bytes_max);
+        picoquic_textlog_frames(F_log, 0, buffer, bytes_max);
 
         /* Attempt to log fuzzed packets, and hope nothing crashes */
         for (size_t j = 0; j < 100; j++) {
-            ret &= fprintf(quic->F_log, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
-            fflush(quic->F_log);
+            ret &= fprintf(F_log, "Log fuzz test #%d, packet %d\n", (int)i, (int)j);
+            fflush(F_log);
             skip_test_fuzz_packet(fuzz_buffer, buffer, bytes_max, &random_context);
-            picoquic_textlog_frames(quic->F_log, 0, fuzz_buffer, bytes_max);
+            picoquic_textlog_frames(F_log, 0, fuzz_buffer, bytes_max);
         }
-        quic->F_log = picoquic_file_close(quic->F_log);
+        F_log = picoquic_file_close(F_log);
         running_sum += picoquic_sum_text_file(log_fuzz_test_file);
     }
 
@@ -2137,7 +2154,7 @@ int logger_test(void)
 
 // Test of binary logs.
 
-void binlog_new_connection(picoquic_cnx_t* cnx, void** log_ctx);
+void binlog_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx);
 
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);

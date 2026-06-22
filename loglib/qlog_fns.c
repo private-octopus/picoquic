@@ -892,7 +892,7 @@ void qlog_fns_cc_dump(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_
 
 /* log the start of a connection */
 int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t length,
-    char * cid_name, size_t cid_name_size)
+    char * cid_name, size_t cid_name_size, char const * dir_name)
 {
     int ret = 0;
     int sprintf_ret = -1;
@@ -904,12 +904,12 @@ int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t lengt
     {
         if (cnx->quic->use_unique_log_names) {
             sprintf_ret = picoquic_sprintf(log_filename, length, NULL, "%s%s%s.%x.%s.qlog",
-                cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name, cnx->log_unique,
+                dir_name, PICOQUIC_FILE_SEPARATOR, cid_name, cnx->log_unique,
                 (cnx->client_mode) ? "client" : "server");
         }
         else {
             sprintf_ret = picoquic_sprintf(log_filename, length, NULL, "%s%s%s.%s.qlog",
-                cnx->quic->qlog_dir, PICOQUIC_FILE_SEPARATOR, cid_name,
+                dir_name, PICOQUIC_FILE_SEPARATOR, cid_name,
                 (cnx->client_mode) ? "client" : "server");
         }
 
@@ -942,14 +942,14 @@ void qlog_fns_start_connection_log(picoquic_cnx_t* cnx, void* log_ctx, char cons
     ctx->state = 1;
 }
 
-void qlog_fns_new_connection(picoquic_cnx_t* cnx, void** log_ctx)
+void qlog_fns_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx)
 {
     qlog_fns_context_t* ctx = NULL;
     char log_filename[512];
     char cid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
 
     /* Verify that we have enough resource */
-    if (cnx->quic->qlog_dir == NULL ||
+    if (log_param == NULL ||
         *log_ctx != NULL ||
         cnx->quic->current_number_of_open_logs >= cnx->quic->max_simultaneous_logs ||
         (ctx = (qlog_fns_context_t*)malloc(sizeof(qlog_fns_context_t))) == NULL) {
@@ -961,7 +961,7 @@ void qlog_fns_new_connection(picoquic_cnx_t* cnx, void** log_ctx)
     ctx->trace_flow_id = cnx->local_parameters.initial_max_path_id > 0;
     /* Try to create the log. */
     if (qlog_fns_set_file_name(cnx, log_filename, sizeof(log_filename),
-        cid_name, sizeof(cid_name)) != 0 ||
+        cid_name, sizeof(cid_name), (char const *) log_param) != 0 ||
         (ctx->f_txtlog = picoquic_file_open(log_filename, "w")) == NULL) {
         free(ctx);
         return;
@@ -989,11 +989,23 @@ void qlog_fns_close_connection(picoquic_cnx_t* cnx, void* log_ctx)
     free(ctx);
 }
 
-/* close resource allocated for logging in QUIC context */
-void qlog_fns_quic_close(picoquic_quic_t* quic)
+static void qlog_fns_flush(picoquic_cnx_t* cnx, void* log_ctx)
 {
-    /* nothing to do, since the connection close function will free the context */
-    (void)quic;
+    if (cnx != NULL && log_ctx != NULL) {
+        qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
+        fflush(ctx->f_txtlog);
+    }
+}
+
+
+/* close resource allocated for logging in QUIC context */
+void qlog_fns_quic_close(picoquic_quic_t* UNUSED(quic), void* log_param)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
+    /* Log_param points to the declaration of the qlog directory */
+    free(log_param);
 }
 
 picoquic_unified_logging_t qlog_fns = {
@@ -1020,11 +1032,19 @@ picoquic_unified_logging_t qlog_fns = {
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
 {
 #if 1
-    int ret = picoquic_register_log_functions(quic, &qlog_fns);
-
-    if (ret == 0) {
-        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
-        quic->qlog_dir = picoquic_string_duplicate(qlog_dir);
+    int ret = 0;
+    char* dup_dir = picoquic_string_duplicate(qlog_dir);
+    if (dup_dir == NULL) {
+        ret = -1;
+    } 
+    else {
+        void* params = picoquic_get_log_params(quic, &qlog_fns);
+        if (params != NULL) {
+            free(params);
+        }
+        if ((ret = picoquic_register_log_functions(quic, &qlog_fns, dup_dir)) != 0) {
+            free(dup_dir);
+        }
     }
     return ret;
 #else
