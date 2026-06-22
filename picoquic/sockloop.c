@@ -576,6 +576,7 @@ void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_l
         for (picoquic_cnx_t *cnx = quic->cnx_list; cnx != NULL; cnx = cnx->next_in_table) {
             if (cnx->is_flexicast_enabled && cnx->need_flow_update &&
                 cnx->nb_flows > 0) {
+                cnx->need_flow_update = 0;
                 for (int j = 0; j < cnx->nb_flows; j++) {
                     picoquic_fc_flow_t *flow = cnx->flows[j];
                     if (flow->path == NULL && cnx->nb_paths < cnx->nb_local_cnxid_lists) {
@@ -584,7 +585,7 @@ void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_l
                         cnx->path[path_index]->receive_only_fc_flow_path = 1;
                         flow->path = cnx->path[path_index];
                     }
-                    if (flow->path && flow->tree_joined == 0 &&
+                    if (flow->path && flow->state == picoquic_fc_cli_aware_unjoined &&
                         !picoquic_packet_loop_open_flexicast_socket(
                             flow,
                             flow->udp_port ==
@@ -601,9 +602,9 @@ void packet_loop_open_flexicast_sockets(picoquic_quic_t *quic, picoquic_packet_l
                     ) {
                         flow->s_ctx_i = *nb_sockets;
                         (*nb_sockets)++;
-                        flow->tree_joined = 1;
+                        flow->state = picoquic_fc_cli_aware_unjoined_socket_ready;
                     }
-                    if (flow->left) {
+                    if (flow->state == picoquic_fc_cli_left) {
                         picoquic_packet_loop_close_socket(&s_ctx[flow->s_ctx_i]);
                     }
                 }

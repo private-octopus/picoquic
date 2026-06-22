@@ -280,6 +280,24 @@ typedef enum {
     picoquic_packet_type_max
 } picoquic_packet_type_enum;
 
+typedef enum {
+    picoquic_fc_cli_unaware = 0,
+    picoquic_fc_cli_aware_unjoined,
+    picoquic_fc_cli_aware_unjoined_socket_ready,
+    picoquic_fc_cli_joined_no_key,
+    picoquic_fc_cli_joined_w_key,
+    picoquic_fc_cli_listening,
+    picoquic_fc_cli_leaving,
+    picoquic_fc_cli_left,
+    picoquic_fc_srv_unaware,
+    picoquic_fc_srv_aware_unjoined,
+    picoquic_fc_srv_joined_no_key,
+    picoquic_fc_srv_joined_w_key,
+    picoquic_fc_srv_listening,
+    picoquic_fc_srv_leaving,
+    picoquic_fc_srv_left,
+} picoquic_fc_state;
+
 /* Packet header structure.
  * This structure is used internally when parsing or
  * formatting the header of a Quic packet.
@@ -1286,12 +1304,7 @@ typedef struct st_picoquic_fc_flow_t {
     uint8_t* key;
     int s_ctx_i;
 
-    unsigned int tree_joined : 1;
-    unsigned int join_sent : 1;
-    unsigned int crypto_received : 1;
-    unsigned int listen_sent : 1;
-    unsigned int leave_required : 1;
-    unsigned int left : 1;
+    picoquic_fc_state state;
 
     picoquic_crypto_context_t crypto_context;
 } picoquic_fc_flow_t;
@@ -1699,9 +1712,9 @@ uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_pa
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time);
-uint8_t *picoquic_prepare_fc_state_frames(picoquic_cnx_t *cnx, picoquic_path_t *path_x,
+uint8_t *picoquic_manage_fc_cnx_frames(picoquic_cnx_t *cnx, picoquic_path_t *path_x,
     uint8_t *bytes_next, uint8_t *bytes_max, int *more_data, int *is_pure_ack,
-    int *is_challenge_padding_needed, uint64_t current_time,uint64_t *next_wake_time);
+    int *is_challenge_padding_needed, uint64_t current_time, uint64_t *next_wake_time);
 void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);

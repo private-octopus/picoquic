@@ -79,18 +79,14 @@ int picoquic_update_flow(picoquic_fc_flow_t *flow,
             flow->source_addr = new_flow->source_addr;
             flow->group_addr = new_flow->group_addr;
 
-            flow->tree_joined = 0;
+            flow->state = picoquic_fc_cli_aware_unjoined;
 
             cnx->need_flow_update = 1;
         }
     }
     else {
         memcpy(flow, new_flow, sizeof(picoquic_fc_flow_t));
-        flow->tree_joined = 0;
-        flow->join_sent = 0;
-        flow->crypto_received = 0;
-        flow->listen_sent = 0;
-        flow->leave_required = 0;
+        flow->state = picoquic_fc_cli_aware_unjoined;
 
         flow->self_sequence_number = 0;
         flow->packet_number = 0;
@@ -111,7 +107,7 @@ int picoquic_update_flow(picoquic_fc_flow_t *flow,
     return 0; 
 }
 
-uint8_t *picoquic_prepare_fc_state_frames(
+uint8_t *picoquic_manage_fc_cnx_frames(
     picoquic_cnx_t *cnx, picoquic_path_t *path_x, uint8_t *bytes_next,
     uint8_t *bytes_max, int *more_data, int *is_pure_ack,
     int *is_challenge_padding_needed, uint64_t current_time,
@@ -123,35 +119,62 @@ uint8_t *picoquic_prepare_fc_state_frames(
     uint8_t *prev_bytes = bytes_next;
 
     for (int i = 0; i < cnx->nb_flows; i++) {
-        if ((cnx->flows[i]->listen_sent || cnx->flows[i]->join_sent) && cnx->flows[i]->leave_required && !cnx->flows[i]->left) {
-            bytes_next = picoquic_format_fc_state_frame(
-                bytes_next, bytes_max, more_data, is_pure_ack, cnx->flows[i],
-                PICOQUIC_FC_ACTION_LEAVE);
-            if (bytes_next > prev_bytes) {
-                cnx->flows[i]->left = 1;
+        switch (cnx->flows[i]->state) {
+        case picoquic_fc_cli_unaware:
+            break;
+        case picoquic_fc_cli_aware_unjoined:
+            break;
+        case picoquic_fc_cli_aware_unjoined_socket_ready:
+            bytes_next = picoquic_format_fc_state_frame(bytes_next, bytes_max, more_data,
+                is_pure_ack, cnx->flows[i], PICOQUIC_FC_ACTION_JOIN);
+            if (prev_bytes > bytes_next) {
+                cnx->flows[i]->state = picoquic_fc_cli_joined_no_key;
                 prev_bytes = bytes_next;
             }
-        }
-        if (cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent == 0) {
-            bytes_next = picoquic_format_fc_state_frame(
-                bytes_next, bytes_max, more_data, is_pure_ack, cnx->flows[i],
-                PICOQUIC_FC_ACTION_JOIN);
-            if (bytes_next > prev_bytes) {
-                cnx->flows[i]->join_sent = 1;
+            break;
+        case picoquic_fc_cli_joined_no_key:
+            break;
+        case picoquic_fc_cli_joined_w_key:
+            bytes_next = picoquic_format_fc_state_frame(bytes_next, bytes_max, more_data,
+                is_pure_ack, cnx->flows[i], PICOQUIC_FC_ACTION_LISTEN);
+            if (prev_bytes > bytes_next) {
+                cnx->flows[i]->state = picoquic_fc_cli_listening;
                 prev_bytes = bytes_next;
             }
-        }
-        else if (cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent &&
-               cnx->flows[i]->crypto_received && !cnx->flows[i]->listen_sent) {
-            bytes_next = picoquic_format_fc_state_frame(
-                bytes_next, bytes_max, more_data, is_pure_ack, cnx->flows[i],
-                PICOQUIC_FC_ACTION_LISTEN);
-            if (bytes_next > prev_bytes) {
-                cnx->flows[i]->listen_sent = 1;
-                if (cnx->flows[i]->ack_delay_timer)
-                    cnx->ack_delay_remote = MIN(cnx->flows[i]->ack_delay_timer, cnx->ack_delay_remote);
+            break;
+        case picoquic_fc_cli_listening:
+            break;
+        case picoquic_fc_cli_leaving:
+            bytes_next = picoquic_format_fc_state_frame(bytes_next, bytes_max, more_data,
+                is_pure_ack, cnx->flows[i], PICOQUIC_FC_ACTION_LEAVE);
+            if (prev_bytes > bytes_next) {
+                cnx->flows[i]->state = picoquic_fc_cli_left;
+                cnx->need_flow_update = 1;
                 prev_bytes = bytes_next;
             }
+            break;
+        case picoquic_fc_cli_left:
+            break;
+        case picoquic_fc_srv_unaware:
+            bytes_next = picoquic_format_fc_announce_frame(bytes_next, bytes_max, more_data, is_pure_ack, cnx->flows[i]);
+            if (prev_bytes > bytes_next) {
+                cnx->flows[i]->state = picoquic_fc_srv_aware_unjoined;
+                prev_bytes = bytes_next;
+            }
+        case picoquic_fc_srv_aware_unjoined:
+            break;
+        case picoquic_fc_srv_joined_no_key:
+            bytes_next = picoquic_format_fc_key_frame(bytes_next, bytes_max, more_data, is_pure_ack, cnx->flows[i]);
+            if (prev_bytes > bytes_next) {
+                cnx->flows[i]->state = picoquic_fc_cli_joined_w_key;
+                prev_bytes = bytes_next;
+            }
+        case picoquic_fc_srv_joined_w_key:
+        case picoquic_fc_srv_listening:
+        case picoquic_fc_srv_leaving:
+        case picoquic_fc_srv_left:
+        default:
+            break;
         }
     }
     return bytes_next;
@@ -179,15 +202,13 @@ int picoquic_fc_state_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* byt
     else {
         switch (action) {
         case PICOQUIC_FC_ACTION_JOIN:
-            *no_need_to_repeat = cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent && !cnx->flows[i]->crypto_received &&
-                                !cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            *no_need_to_repeat = cnx->flows[i]->state != picoquic_fc_cli_aware_unjoined;
             break;
         case PICOQUIC_FC_ACTION_LEAVE:
-            *no_need_to_repeat = cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            *no_need_to_repeat = cnx->flows[i]->state != picoquic_fc_cli_leaving;
             break;
         case PICOQUIC_FC_ACTION_LISTEN:
-            *no_need_to_repeat = cnx->flows[i]->tree_joined && cnx->flows[i]->join_sent && cnx->flows[i]->crypto_received &&
-                                cnx->flows[i]->listen_sent && !cnx->flows[i]->leave_required && !cnx->flows[i]->left;
+            *no_need_to_repeat = cnx->flows[i]->state != picoquic_fc_cli_joined_w_key;
             break;
         default:
             *no_need_to_repeat = 0;
@@ -216,11 +237,11 @@ uint8_t* picoquic_format_fc_leave_state_frames(picoquic_cnx_t* cnx, uint8_t* byt
         uint8_t *prev_bytes = bytes;
         for (int i = 0; i < cnx->nb_flows; i++) {
             picoquic_fc_flow_t* flow = cnx->flows[i];
-            if ((flow->listen_sent || flow->join_sent) && !flow->left) {
-                flow->leave_required = 1;
+            if (picoquic_fc_cli_joined_no_key <= flow->state && flow->state <= picoquic_fc_cli_leaving) {
+                flow->state = picoquic_fc_cli_leaving;
                 bytes = picoquic_format_fc_state_frame(bytes, bytes_max, more_data, is_pure_ack, flow, 2);
                 if (bytes > prev_bytes) {
-                    cnx->flows[i]->left = 1;
+                    flow->state = picoquic_fc_cli_left;
                     prev_bytes = bytes;
                 }
             }

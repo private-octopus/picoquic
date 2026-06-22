@@ -2891,8 +2891,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
-        
-        bytes_next = picoquic_prepare_fc_state_frames(cnx, path_x,
+
+         bytes_next = picoquic_manage_fc_cnx_frames(cnx, path_x,
             bytes_next, bytes_max,
             &more_data, &is_pure_ack, &is_challenge_padding_needed,
             current_time, next_wake_time);
