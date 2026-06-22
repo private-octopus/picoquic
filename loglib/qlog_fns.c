@@ -1019,7 +1019,8 @@ picoquic_unified_logging_t qlog_fns = {
     qlog_fns_tls_ticket,
     qlog_fns_new_connection,
     qlog_fns_close_connection,
-    qlog_fns_cc_dump
+    qlog_fns_cc_dump,
+    qlog_fns_flush
 };
 
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)

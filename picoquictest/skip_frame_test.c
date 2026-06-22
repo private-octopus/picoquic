@@ -2142,6 +2142,8 @@ int logger_test(void)
             picoquic_textlog_frames(F_log, 0, fuzz_buffer, bytes_max);
         }
         F_log = picoquic_file_close(F_log);
+        quic->log_fns[0] = NULL;
+        quic->log_params[0] = NULL;
         running_sum += picoquic_sum_text_file(log_fuzz_test_file);
     }
 

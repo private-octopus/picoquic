@@ -2192,8 +2192,11 @@ void picoquic_textlog_picotls_ticket(FILE* F, picoquic_connection_id_t cnx_id,
  * so the call the log_app_message writes on both log file and binlog */
 void picoquic_binlog_message_v(picoquic_cnx_t* cnx, void* log_ctx, const char* fmt, va_list vargs);
 
-void picoquic_txtlog_message_v(picoquic_quic_t* quic, void* log_ctx, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
+void picoquic_txtlog_message_v(picoquic_quic_t* UNUSED(quic), void* log_ctx, const picoquic_connection_id_t* cid, const char* fmt, va_list vargs)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#endif
     FILE* F = (FILE*)log_ctx;
     textlog_prefix_initial_cid64(F, picoquic_val64_connection_id(*cid));
 
@@ -2220,11 +2223,12 @@ static void textlog_app_message(picoquic_cnx_t* cnx, void* log_ctx, const char* 
     }
 }
 
-static void textlog_quic_pdu(picoquic_quic_t* quic, void* log_param, int receiving, uint64_t current_time,
+static void textlog_quic_pdu(picoquic_quic_t* UNUSED(quic), void* log_param, int receiving, uint64_t current_time,
     uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* UNUSED(addr_local), size_t packet_length)
 {
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
     UNREFERENCED_PARAMETER(addr_local);
 #endif
     if (log_param != NULL) {
@@ -2360,9 +2364,12 @@ static void textlog_tls_ticket(picoquic_cnx_t* cnx, void* log_ctx, uint8_t* tick
     }
 }
 
-static void textlog_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx)
+static void textlog_new_connection(picoquic_cnx_t* UNUSED(cnx), void* log_param, void** log_ctx)
 {
-    * log_ctx = log_param;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+    *log_ctx = log_param;
 }
 
 static void textlog_close_connection(picoquic_cnx_t* UNUSED(cnx), void* UNUSED(log_ctx))
