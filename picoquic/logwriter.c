@@ -24,6 +24,7 @@
 */
 
 #include <stdarg.h>
+#include <stdlib.h>
 #include "picoquic_binlog.h"
 #include "bytestream.h"
 #ifdef _WINDOWS
