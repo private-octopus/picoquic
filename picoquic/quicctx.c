@@ -3271,21 +3271,22 @@ uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_rem
         * as failing, and thus scheduled for deletion after a time-out */
 
         if (cnx->is_multipath_enabled) {
-            int path_id = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
-            if (path_id >= 0) {
-                if (cnx->path[path_id]->first_tuple->p_remote_cnxid->sequence < not_before &&
-                    cnx->path[path_id]->first_tuple->p_remote_cnxid->cnx_id.id_len > 0 &&
-                    !cnx->path[path_id]->path_is_demoted) {
-                    ret = picoquic_renew_connection_id(cnx, path_id);
-                    if (ret != 0) {
-                        DBG_PRINTF("Renew CNXID returns %x\n", ret);
-                        if (path_id == 0) {
-                            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-                        }
-                        else {
-                            ret = 0;
-                            picoquic_demote_path(cnx, path_id, current_time, 0);
-                        }
+            int path_index = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
+            if (path_index >= 0 &&
+                cnx->path[path_index]->first_tuple != NULL &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid->sequence < not_before &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid->cnx_id.id_len > 0 &&
+                !cnx->path[path_index]->path_is_demoted) {
+                ret = picoquic_renew_connection_id(cnx, path_index);
+                if (ret != 0) {
+                    DBG_PRINTF("Renew CNXID returns %x\n", ret);
+                    if (path_index == 0) {
+                        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                    }
+                    else {
+                        ret = 0;
+                        picoquic_demote_path(cnx, path_index, current_time, 0);
                     }
                 }
             }

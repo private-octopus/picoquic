@@ -573,6 +573,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_break_both", multipath_break_both_test },
     { "multipath_qlog", multipath_qlog_test },
     { "multipath_tunnel", multipath_tunnel_test },
+    { "multipath_cid_retire", multipath_cid_retire_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "get_hash", get_hash_test },

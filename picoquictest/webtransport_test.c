@@ -94,6 +94,17 @@ static int picowt_baton_test_reset(wt_baton_ctx_t * baton_ctx, int* reset_needed
     return ret;
 }
 
+
+static int picowt_baton_test_bad_capsule(picoquic_cnx_t * cnx, uint64_t stream_id)
+{
+    int ret = 0;
+    uint8_t bad_capsule[] = { 0x00, 0x10, 0, 0xc0, 0, 0, 0, 0xba, 0xdc, 0xa9, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+    ret = picoquic_add_to_stream(cnx, stream_id, bad_capsule, sizeof(bad_capsule), 0);
+    return ret;
+}
+
+
 static int picowt_baton_test_one_ex(
     uint8_t test_id, const char* baton_path,
     uint64_t do_losses, uint64_t completion_target, const char* client_qlog_dir,
@@ -113,6 +124,7 @@ static int picowt_baton_test_one_ex(
     h3zero_callback_ctx_t* h3zero_cb = NULL;
     h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
+    int capsule_needed = (test_id = 10);
 
     initial_cid.id[3] = test_id;
 
@@ -226,6 +238,12 @@ static int picowt_baton_test_one_ex(
             ret = picowt_baton_test_reset(&baton_ctx, &reset_needed);
         }
 
+        if (ret == 0 && capsule_needed) {
+            /* Inject a bad capsule on the control stream */
+            ret = picowt_baton_test_bad_capsule(test_ctx->cnx_client, control_stream_ctx->stream_id);
+            capsule_needed = 0;
+        }
+
         if (ret == 0 && ++nb_trials > 100000) {
             DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
@@ -283,6 +301,16 @@ static int picowt_baton_test_one_ex(
             test_ctx->cnx_client->remote_error, test_ctx->cnx_client->local_error);
         ret = -1;
 
+    }
+    /* verify that the bad capsule triggered an error */
+    if (test_id == 10) {
+        if (ret == 0) {
+            DBG_PRINTF("Unexpected connection success for test: %d", test_id);
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
     }
 
     if (h3zero_cb != NULL)
@@ -385,6 +413,13 @@ int picowt_baton_wildcard_test(void)
     /* /baton is not a specific entry in wildcard_table; the '*' handler must catch it */
     return picowt_baton_test_one_ex(1, "/baton?baton=240", 0, 2000000, ".", ".",
         wildcard_table, 1);
+}
+
+int picowt_baton_overflow_test(void)
+{
+    int ret = picowt_baton_test_one(10, "/baton?count=8", 0, 5000000, ".", ".");
+
+    return ret;
 }
 
 static int picowt_noop_callback(picoquic_cnx_t* UNUSED(cnx),
