@@ -1491,6 +1491,13 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 /* check how much data there is to send */
                 picoquic_stream_data_callback(cnx, stream);
             }
+
+            if (stream->stream_data_tree.size > 128 &&
+                stream->stream_data_tree.size * 1536 > 6 * (stream->maxdata_local - stream->consumed_offset)) {
+                /* This simple check detects abusive scenarios, like sending lots of tiny out of
+                 * order packets */
+                 ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+            }
         }
     }
 
@@ -2409,6 +2416,11 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
             if (ret != 0) {
                 picoquic_connection_error(cnx, (int64_t)ret, picoquic_frame_type_crypto_hs);
                 bytes = NULL;
+            }
+            else if (stream->stream_data_tree.size > 128) {
+                /* The peer is sending lots of tiny packets, which is something attackers
+                * would do. */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_crypto_hs);
             }
         }
     }
