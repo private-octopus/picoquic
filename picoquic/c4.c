@@ -167,6 +167,7 @@ typedef struct st_c4_state_t {
     uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
+    uint64_t recent_rate;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
     int nb_eras_no_increase;
@@ -707,7 +708,14 @@ static void c4_exit_recovery(
                 c4_state->probe_level = 0;
             }
         }
+
+        if (c4_state->congestion_notified &&
+            c4_state->recent_rate > 0 &&
+            c4_state->nominal_rate > c4_state->recent_rate) {
+            c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+        }
     }
+    c4_state->recent_rate = 0;
     c4_growth_reset(c4_state);
     /* Reset the delay excess to avoid bounces of delay event */
     c4_state->recent_delay_excess = 0;
@@ -832,6 +840,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 
         rate_measurement = path_x->bandwidth_estimate;
         C4_LOGGER(path_x, rate_measurement, c4_state, ack_state, 0, 0);
+
+        if (rate_measurement > c4_state->recent_rate) {
+            c4_state->recent_rate = rate_measurement;
+        }
 
         /* Assessment of rate limited status */
         if (rate_measurement > c4_state->nominal_rate &&
@@ -970,6 +982,7 @@ static void c4_notify_congestion(
     }
     else
     {
+#if 0
         if (c4_state->alg_state != c4_pushing) {
             c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
             if (c_mode == c4_congestion_loss) {
@@ -981,6 +994,7 @@ static void c4_notify_congestion(
             }
             C4_LOGGER(path_x, 0, c4_state, NULL, beta, c_mode);
         }
+#endif
         c4_enter_recovery(path_x, c4_state, c_mode);
     }
 
