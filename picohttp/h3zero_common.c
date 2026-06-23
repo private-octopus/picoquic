@@ -2279,10 +2279,15 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 			}
 		}
 	}
+
 	if (capsule->is_length_known) {
 		if (capsule->capsule_length == 0) {
 			capsule->value_read = 0;
 			capsule->is_stored = 1;
+		}
+		else if (capsule->capsule_length > H3ZERO_MAX_FIELD_SECTION_SIZE) {
+			/* error, excessive size, probably some kind of attack. */
+			return NULL;
 		}
 		else if (capsule->capsule_buffer_size < capsule->capsule_length) {
 			uint8_t* capsule_buffer = (uint8_t*)malloc(capsule->capsule_length);

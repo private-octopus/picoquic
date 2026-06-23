@@ -2017,6 +2017,33 @@ int multipath_tunnel_test(void)
     return multipath_test_one(max_completion_microsec, multipath_test_tunnel);
 }
 
+/* CID retire */
+int multipath_cid_retire_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx;
+    picoquic_quic_t* quic;
+    struct sockaddr_storage peer = { 0 };
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        return -1;
+    }
+    cnx->local_parameters.initial_max_path_id = 1;
+    cnx->max_path_id_local = 2;
+    cnx->max_path_id_remote = 2;
+    cnx->is_multipath_enabled = 1;
+    (void) picoquic_create_path(cnx, 0,
+        NULL, (struct sockaddr*)&peer, 0, 1);
+    if (ret == 0) {
+        (void) picoquic_find_or_create_remote_cnxid_stash(cnx, 1, 1);
+        (void) picoquic_remove_not_before_cid(cnx, 1, 1, 0);
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return(ret);
+}
+
+
 /* 
  * TODO: Unit test of path selection.
  * The input to path selections include the state of the path,

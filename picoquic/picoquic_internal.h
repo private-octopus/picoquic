@@ -117,6 +117,8 @@ extern "C" {
 
 #define PICOQUIC_DEFAULT_HOLE_PERIOD 256
 
+#define PICOQUIC_MAX_LOG_FUNCTIONS 3
+
 /*
  * Types of frames.
  */
@@ -248,69 +250,6 @@ extern const picoquic_version_parameters_t picoquic_supported_versions[];
 extern const size_t picoquic_nb_supported_versions;
 
 int picoquic_get_version_index(uint32_t proposed_version);
-
-/* Quic defines 4 epochs, which are used for managing the
- * crypto contexts
- */
-#define PICOQUIC_NUMBER_OF_EPOCHS 4
-#define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
-
-typedef enum {
-    picoquic_epoch_initial = 0,
-    picoquic_epoch_0rtt = 1,
-    picoquic_epoch_handshake = 2,
-    picoquic_epoch_1rtt = 3
-} picoquic_epoch_enum;
-
-/*
-* Nominal packet types. These are the packet types used internally by the
-* implementation. The wire encoding depends on the version.
-*/
-typedef enum {
-    picoquic_packet_error = 0,
-    picoquic_packet_version_negotiation,
-    picoquic_packet_initial,
-    picoquic_packet_retry,
-    picoquic_packet_handshake,
-    picoquic_packet_0rtt_protected,
-    picoquic_packet_1rtt_protected,
-    picoquic_packet_type_max
-} picoquic_packet_type_enum;
-
-/* Packet header structure.
- * This structure is used internally when parsing or
- * formatting the header of a Quic packet.
- */
-
-typedef struct st_picoquic_packet_header_t {
-    picoquic_connection_id_t dest_cnx_id;
-    picoquic_connection_id_t srce_cnx_id;
-    uint32_t pn;
-    uint32_t vn;
-    size_t offset; /* offset to the first byte of the payload.*/
-    size_t pn_offset; /* offset to the first byte of the packet number */
-    picoquic_packet_type_enum ptype;
-    uint64_t pnmask; 
-    uint64_t pn64;
-    size_t payload_length;
-    int version_index;
-    picoquic_epoch_enum epoch;
-    picoquic_packet_context_enum pc;
-
-    unsigned int key_phase : 1;
-    unsigned int spin : 1;
-    unsigned int has_spin_bit : 1;
-    unsigned int has_reserved_bit_set : 1;
-    unsigned int has_loss_bits : 1;
-    unsigned int loss_bit_Q : 1;
-    unsigned int loss_bit_L : 1;
-    unsigned int quic_bit_is_zero : 1;
-
-    size_t token_length;
-    const uint8_t* token_bytes;
-    size_t pl_val;
-    struct st_picoquic_local_cnxid_t* l_cid;
-} picoquic_packet_header;
 
 /* There are two loss bits in the packet header. On is used
  * to report errors, the other to build an observable square
@@ -716,13 +655,8 @@ typedef struct st_picoquic_quic_t {
     picohash_table* qmux_socket_id_table;
 
     /* Logging APIS */
-    void* F_log;
-    char* binlog_dir;
-    char* qlog_dir;
-    picoquic_autoqlog_fn autoqlog_fn;
-    struct st_picoquic_unified_logging_t* text_log_fns;
-    struct st_picoquic_unified_logging_t* bin_log_fns;
-    struct st_picoquic_unified_logging_t* qlog_fns;
+    struct st_picoquic_unified_logging_t* log_fns[PICOQUIC_MAX_LOG_FUNCTIONS];
+    void* log_params[PICOQUIC_MAX_LOG_FUNCTIONS];
     picoquic_performance_log_fn perflog_fn;
     void* v_perflog_ctx;
 #ifdef BBRExperiment
@@ -1586,11 +1520,9 @@ typedef struct st_picoquic_cnx_t {
 
     /* Log handling */
     uint16_t log_unique;
-    FILE* f_binlog;
-    char* binlog_file_name;
     void (*memlog_call_back)(picoquic_cnx_t* cnx, picoquic_path_t* path, void* v_memlog, int op_code, uint64_t current_time);
     void *memlog_ctx;
-    void* qlog_ctx;
+    void* log_ctx[PICOQUIC_MAX_LOG_FUNCTIONS];
 } picoquic_cnx_t;
 
 typedef struct st_picoquic_packet_data_t {

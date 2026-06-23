@@ -29,19 +29,52 @@
 #endif
 #include "picoquic_unified_log.h"
 
+int picoquic_register_log_functions(picoquic_quic_t* quic, picoquic_unified_logging_t * fns, void * params)
+{
+    int ret = -1;
+    if (fns != NULL) {
+        for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+            if (quic->log_fns[i] == fns) {
+                /* Duplicate registration can happen, e.g., if parameters change */
+                ret = 0;
+                break;
+            }
+            if (quic->log_fns[i] == NULL) {
+                quic->log_fns[i] = fns;
+                quic->log_params[i] = params;
+                ret = 0;
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+void* picoquic_get_log_params(picoquic_quic_t* quic, picoquic_unified_logging_t* fns)
+{
+    void* params = NULL;
+    if (fns != NULL) {
+        for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+            if (quic->log_fns[i] == fns) {
+                params = quic->log_params[i];
+                break;
+            }
+        }
+    }
+    return params;
+}
+
 /* Close the quic level resource associated with logs */
 void picoquic_log_close_logs(picoquic_quic_t* quic)
 {
-    if (quic->text_log_fns != NULL) {
-        quic->text_log_fns->log_quic_close(quic);
-    }
-
-    if (quic->bin_log_fns != NULL) {
-        quic->bin_log_fns->log_quic_close(quic);
-    }
-
-    if (quic->qlog_fns != NULL) {
-        quic->qlog_fns->log_quic_close(quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (quic->log_fns[i] != NULL) {
+            quic->log_fns[i]->log_quic_close(quic, quic->log_params[i]);
+            quic->log_params[i] = NULL;
+        }
+        else {
+            break;
+        }
     }
 }
 
@@ -49,8 +82,15 @@ void picoquic_log_close_logs(picoquic_quic_t* quic)
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
 {
-    if (quic->F_log != NULL) {
-        quic->text_log_fns->log_quic_pdu(quic, receiving, current_time, cid64, addr_peer, addr_local, packet_length);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (quic->log_fns[i] != NULL) {
+            if (quic->log_fns[i]->log_quic_pdu != NULL) {
+                quic->log_fns[i]->log_quic_pdu(quic, quic->log_params[i], receiving, current_time, cid64, addr_peer, addr_local, packet_length);
+            }
+        }
+        else {
+            break;
+        }
     }
 }
 
@@ -59,51 +99,44 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
 void picoquic_log_app_message_v(picoquic_cnx_t* cnx, const char* fmt, va_list vargs)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_app_message(cnx, fmt, vargs);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        cnx->quic->bin_log_fns->log_app_message(cnx, fmt, vargs);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        cnx->quic->qlog_fns->log_app_message(cnx, fmt, vargs);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            cnx->quic->log_fns[i]->log_app_message(cnx, cnx->log_ctx[i], fmt, vargs);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
 void picoquic_log_app_message(picoquic_cnx_t* cnx, const char* fmt, ...)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    if (cnx->quic->F_log != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        cnx->quic->text_log_fns->log_app_message(cnx, fmt, args);
-        va_end(args);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        cnx->quic->bin_log_fns->log_app_message(cnx, fmt, args);
-        va_end(args);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        cnx->quic->qlog_fns->log_app_message(cnx, fmt, args);
-        va_end(args);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            va_list args;
+            va_start(args, fmt);
+            cnx->quic->log_fns[i]->log_app_message(cnx, cnx->log_ctx[i], fmt, args);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
 void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic_connection_id_t* cid, const char* fmt, ...)
 {
-    if (quic->F_log != NULL) {
-        va_list args;
-        va_start(args, fmt);
-        quic->text_log_fns->log_quic_app_message(quic, cid, fmt, args);
-        va_end(args);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (quic->log_fns[i] != NULL) {
+            if (quic->log_fns[i]->log_quic_app_message != NULL) {
+                va_list args;
+                va_start(args, fmt);
+                quic->log_fns[i]->log_quic_app_message(quic, quic->log_params[i], cid, fmt, args);
+            }
+        }
+        else {
+            break;
+        }
     }
 }
 
@@ -112,20 +145,14 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
     uint64_t unique_path_id, unsigned char ecn)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            cnx->quic->log_fns[i]->log_pdu(cnx, cnx->log_ctx[i], receiving, current_time, addr_peer, addr_local, packet_length,
                 unique_path_id, ecn);
         }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
-                unique_path_id, ecn);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_pdu(cnx, receiving, current_time, addr_peer, addr_local, packet_length,
-                unique_path_id, ecn);
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
         }
     }
 }
@@ -134,17 +161,15 @@ void picoquic_log_pdu(picoquic_cnx_t* cnx, int receiving, uint64_t current_time,
 void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t bytes_max)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_packet(cnx, path_x, receiving, current_time, ph, bytes, bytes_max);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (picoquic_cnx_is_still_logging(cnx)) {
+            if (cnx->log_ctx[i] != NULL) {
+                cnx->quic->log_fns[i]->log_packet(cnx, cnx->log_ctx[i], path_x, receiving, current_time, ph, bytes, bytes_max);
+            }
+            else if (cnx->quic->log_fns[i] == NULL) {
+                break;
+            }
         }
     }
 }
@@ -153,17 +178,15 @@ void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int recei
 void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size,
     int err, uint8_t* UNUSED(raw_data), uint64_t current_time)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_dropped_packet(cnx, path_x, ph, packet_size, err, current_time);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (picoquic_cnx_is_still_logging(cnx)) {
+            if (cnx->log_ctx[i] != NULL) {
+                cnx->quic->log_fns[i]->log_dropped_packet(cnx, cnx->log_ctx[i], path_x, ph, packet_size, err, current_time);
+            }
+            else if (cnx->quic->log_fns[i] == NULL) {
+                break;
+            }
         }
     }
 }
@@ -171,17 +194,15 @@ void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, s
 /* Report that packet was buffered waiting for decryption */
 void picoquic_log_buffered_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_type_enum ptype, uint64_t current_time)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_buffered_packet(cnx, path_x, ptype, current_time);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (picoquic_cnx_is_still_logging(cnx)) {
+            if (cnx->log_ctx[i] != NULL) {
+                cnx->quic->log_fns[i]->log_buffered_packet(cnx, cnx->log_ctx[i], path_x, ptype, current_time);
+            }
+            else if (cnx->quic->log_fns[i] == NULL) {
+                break;
+            }
         }
     }
 }
@@ -191,20 +212,16 @@ void picoquic_log_outgoing_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t current_time)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
-                send_buffer, send_length, current_time);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
-                send_buffer, send_length, current_time);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_outgoing_packet(cnx, path_x, bytes, sequence_number, pn_length, length,
-                send_buffer, send_length, current_time);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (picoquic_cnx_is_still_logging(cnx)) {
+            if (cnx->log_ctx[i] != NULL) {
+                cnx->quic->log_fns[i]->log_outgoing_packet(cnx, cnx->log_ctx[i], path_x, bytes, sequence_number, pn_length, length,
+                    send_buffer, send_length, current_time);
+            }
+            else if (cnx->quic->log_fns[i] == NULL) {
+                break;
+            }
         }
     }
 }
@@ -215,17 +232,14 @@ void picoquic_log_packet_lost(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_connection_id_t* dcid, size_t packet_size,
     uint64_t current_time)
 {
-    if (picoquic_cnx_is_still_logging(cnx)) {
-        if (cnx->quic->F_log != NULL) {
-            cnx->quic->text_log_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
-        }
-
-        if (cnx->f_binlog != NULL) {
-            cnx->quic->bin_log_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
-        }
-
-        if (cnx->qlog_ctx != NULL) {
-            cnx->quic->qlog_fns->log_packet_lost(cnx, path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (picoquic_cnx_is_still_logging(cnx)) {
+            if (cnx->log_ctx[i] != NULL) {
+                cnx->quic->log_fns[i]->log_packet_lost(cnx, cnx->log_ctx[i], path_x, ptype, sequence_number, trigger, dcid, packet_size, current_time);
+            }
+            else if (cnx->quic->log_fns[i] == NULL) {
+                break;
+            }
         }
     }
 }
@@ -235,16 +249,13 @@ void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        cnx->quic->bin_log_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        cnx->quic->qlog_fns->log_negotiated_alpn(cnx, is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            cnx->quic->log_fns[i]->log_negotiated_alpn(cnx, cnx->log_ctx[i], is_local, sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
@@ -252,63 +263,55 @@ void picoquic_log_negotiated_alpn(picoquic_cnx_t* cnx, int is_local,
 void picoquic_log_transport_extension(picoquic_cnx_t* cnx, int is_local,
     size_t param_length, uint8_t* params)
 {
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_transport_extension(cnx, is_local, param_length, params);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        cnx->quic->bin_log_fns->log_transport_extension(cnx, is_local, param_length, params);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        cnx->quic->qlog_fns->log_transport_extension(cnx, is_local, param_length, params);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            cnx->quic->log_fns[i]->log_transport_extension(cnx, cnx->log_ctx[i], is_local, param_length, params);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
 /* log TLS ticket */
 void picoquic_log_tls_ticket(picoquic_cnx_t* cnx, uint8_t* ticket, uint16_t ticket_length)
 {
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_picotls_ticket(cnx, ticket, ticket_length);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        cnx->quic->bin_log_fns->log_picotls_ticket(cnx, ticket, ticket_length);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        cnx->quic->qlog_fns->log_picotls_ticket(cnx, ticket, ticket_length);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            cnx->quic->log_fns[i]->log_picotls_ticket(cnx, cnx->log_ctx[i], ticket, ticket_length);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
 /* log the start of a connection */
 void picoquic_log_new_connection(picoquic_cnx_t* cnx)
 {
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_new_connection(cnx);
-    }
-
-    if (cnx->quic->bin_log_fns != NULL) {
-        cnx->quic->bin_log_fns->log_new_connection(cnx);
-    }
-
-    if (cnx->quic->qlog_fns != NULL) {
-        cnx->quic->qlog_fns->log_new_connection(cnx);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->quic->log_fns[i] != NULL) {
+            /* TODO: change that API to initialize the context */
+            cnx->quic->log_fns[i]->log_new_connection(cnx, cnx->quic->log_params[i], &cnx->log_ctx[i]);
+        }
+        else {
+            break;
+        }
     }
 }
+
 /* log the end of a connection */
 void picoquic_log_close_connection(picoquic_cnx_t* cnx)
 {
-    if (cnx->quic->F_log != NULL) {
-        cnx->quic->text_log_fns->log_close_connection(cnx);
-    }
-
-    if (cnx->f_binlog != NULL) {
-        cnx->quic->bin_log_fns->log_close_connection(cnx);
-    }
-
-    if (cnx->qlog_ctx != NULL) {
-        cnx->quic->qlog_fns->log_close_connection(cnx);
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL) {
+            /* TODO: pass connection context */
+            cnx->quic->log_fns[i]->log_close_connection(cnx, cnx->log_ctx[i]);
+            cnx->log_ctx[i] = NULL;
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
+        }
     }
 }
 
@@ -319,7 +322,7 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
         cnx->memlog_call_back(cnx, cnx->path[0], cnx->memlog_ctx, 0, current_time);
     }
 
-    if (picoquic_cnx_is_still_logging(cnx)) {
+    if (picoquic_cnx_is_still_logging(cnx) && cnx->quic->log_fns[0] != NULL) {
         picoquic_path_t* path_x;
         for (int path_index = 0; path_index < cnx->nb_paths; path_index++)
         {
@@ -328,18 +331,28 @@ void picoquic_log_cc_dump(picoquic_cnx_t* cnx, uint64_t current_time)
             if (!path_x->is_cc_data_updated) {
                 continue;
             }
-
-            if (cnx->quic->F_log != NULL) {
-                cnx->quic->text_log_fns->log_cc_dump(cnx, path_x, current_time);
-            }
-            if (cnx->f_binlog != NULL) {
-                cnx->quic->bin_log_fns->log_cc_dump(cnx, path_x, current_time);
-            }
-            if (cnx->qlog_ctx != NULL) {
-                cnx->quic->qlog_fns->log_cc_dump(cnx, path_x, current_time);
+            for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+                if (cnx->log_ctx[i] != NULL) {
+                    cnx->quic->log_fns[i]->log_cc_dump(cnx, cnx->log_ctx[i], path_x, current_time);
+                }
+                else if (cnx->quic->log_fns[i] == NULL) {
+                    break;
+                }
             }
 
             path_x->is_cc_data_updated = 0;
+        }
+    }
+}
+
+void picoquic_log_flush(picoquic_cnx_t* cnx)
+{
+    for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
+        if (cnx->log_ctx[i] != NULL && cnx->quic->log_fns[i]->log_flush != NULL) {
+            cnx->quic->log_fns[i]->log_flush(cnx, cnx->log_ctx[i]);
+        }
+        else if (cnx->quic->log_fns[i] == NULL) {
+            break;
         }
     }
 }
