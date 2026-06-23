@@ -2023,10 +2023,7 @@ int multipath_cid_retire_test(void)
     int ret = 0;
     picoquic_cnx_t* cnx;
     picoquic_quic_t* quic;
-    picoquic_packet_context_enum pc = 0;
     struct sockaddr_storage peer = { 0 };
-    int path_index = 0;
-    picoquic_remote_cnxid_stash_t* stash = NULL;
 
     if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
         return -1;
@@ -2035,10 +2032,10 @@ int multipath_cid_retire_test(void)
     cnx->max_path_id_local = 2;
     cnx->max_path_id_remote = 2;
     cnx->is_multipath_enabled = 1;
-    path_index = picoquic_create_path(cnx, 0,
+    (void) picoquic_create_path(cnx, 0,
         NULL, (struct sockaddr*)&peer, 0, 1);
     if (ret == 0) {
-        stash = picoquic_find_or_create_remote_cnxid_stash(cnx, 1, 1);
+        (void) picoquic_find_or_create_remote_cnxid_stash(cnx, 1, 1);
         (void) picoquic_remove_not_before_cid(cnx, 1, 1, 0);
     }
 
