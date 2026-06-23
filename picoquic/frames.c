@@ -1493,7 +1493,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             }
 
             if (stream->stream_data_tree.size > 128 &&
-                stream->stream_data_tree.size * 1536 > (stream->maxdata_local - stream->consumed_offset) * 6) {
+                stream->stream_data_tree.size * 1536 > (uint64_t)(stream->maxdata_local - stream->consumed_offset) * 6) {
                 /* This simple check detects abusive scenarios, like sending lots of tiny out of
                  * order packets */
                  ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
