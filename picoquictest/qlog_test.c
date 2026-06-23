@@ -74,9 +74,10 @@ int autoqlog_no_binlog(void)
 	if (ret == 0) {
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
-
+#if 0
 		picoquic_string_free(cnx->binlog_file_name);
 		cnx->binlog_file_name = picoquic_string_duplicate(AUTOQLOG_BAD_QLOG);
+#endif
 	}
 
 	picoquic_test_delete_minimal_cnx(&quic, &cnx);
@@ -122,7 +123,8 @@ int autoqlog_unique(void)
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
+		/* TODO: fix that, It assumes that binlog is the only method declared in context. */
+		binlog_new_connection(cnx, (void*)".", & cnx->log_ctx[0]);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}

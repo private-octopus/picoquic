@@ -1153,8 +1153,6 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Close the logs */
         picoquic_log_close_logs(quic);
 
-        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
         quic->tls_cert_root_file_name = picoquic_string_free(quic->tls_cert_root_file_name);
 
         if (quic->perflog_fn != NULL) {
@@ -1981,9 +1979,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     picoquic_reset_packet_context(cnx, &path_x->pkt_ctx);
     picoquic_reset_ack_context(&path_x->ack_ctx);
 
-    if (cnx->quic->F_log != NULL) {
-        fflush(cnx->quic->F_log);
-    }
+    picoquic_log_flush(cnx);
 
     /* if there are references to path in streams, remove them */
     stream = picoquic_first_stream(cnx);

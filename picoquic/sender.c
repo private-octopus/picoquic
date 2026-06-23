@@ -3798,13 +3798,7 @@ int picoquic_prepare_next_packet_ex(picoquic_quic_t* quic,
                     (int)cnx->path[0]->max_reorder_gap, (int)cnx->path[0]->max_spurious_rtt,
                     (cnx->nb_trains_sent > 0) ? ((double)cnx->nb_packets_sent / (double)cnx->nb_trains_sent) : 0.0);
 
-                if (quic->F_log != NULL) {
-                    fflush(quic->F_log);
-                }
-
-                if (cnx->f_binlog != NULL) {
-                    fflush(cnx->f_binlog);
-                }
+                picoquic_log_flush(cnx);
 
                 if (cnx->client_mode) {
                     /* Do not unilaterally delete the connection context, as it was set by the application */
