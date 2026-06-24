@@ -112,7 +112,11 @@
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
+#if 0
+#define C4_NB_CRUISE_BEFORE_PUSH 2
+#else
 #define C4_NB_CRUISE_BEFORE_PUSH 4
+#endif
 #define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
@@ -121,10 +125,20 @@
 #define C4_PROBE_LEVEL_MAX 3
 #define C4_PROBE_LEVEL_DEFAULT 1
 
+#define C4_ALPHA_PUSH_12_5 1152 /* 112.5 % */
+#define C4_ALPHA_PUSH_50_0 1536 /* 150.0% % */
+#define C4_ALPHA_PUSH_100_0 2048 /* 150.0% % */
+#define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
+
+#if 1
+uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
+    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
+};
+#else
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_1024, C4_ALPHA_PUSH_1024
 };
-
+#endif
 typedef enum {
     c4_initial = 0,
     c4_recovery,
@@ -153,6 +167,8 @@ typedef struct st_c4_state_t {
     uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
+    uint64_t recent_rate;
+    int recent_congestions;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
     int nb_eras_no_increase;
@@ -188,6 +204,10 @@ static void c4_enter_recovery(
     c4_congestion_t c_mode);
 
 static void c4_enter_cruise(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state);
+
+static void c4_enter_push(
     picoquic_path_t* path_x,
     c4_state_t* c4_state);
 
@@ -681,6 +701,7 @@ static void c4_exit_recovery(
         if (!c4_state->excess_ce_after_push) {
             c4_state->probe_level++;
         }
+        c4_state->recent_congestions = 0;
     }
     else {
         if (c4_state->push_was_not_limited) {
@@ -689,7 +710,20 @@ static void c4_exit_recovery(
                 c4_state->probe_level = 0;
             }
         }
+
+        if (c4_state->congestion_notified) {
+            c4_state->recent_congestions += 1;
+            if (c4_state->recent_congestions >= 2 &&
+                c4_state->recent_rate > 0 &&
+                c4_state->nominal_rate > c4_state->recent_rate) {
+                c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+            }
+        }
+        else {
+            c4_state->recent_congestions = 0;
+        }
     }
+    c4_state->recent_rate = 0;
     c4_growth_reset(c4_state);
     /* Reset the delay excess to avoid bounces of delay event */
     c4_state->recent_delay_excess = 0;
@@ -702,6 +736,9 @@ static void c4_exit_recovery(
 
     if (c4_state->probe_level > C4_PROBE_LEVEL_MAX) {
         c4_enter_initial(path_x, c4_state);
+    }
+    else if (c4_state->probe_level > C4_PROBE_LEVEL_DEFAULT) {
+        c4_enter_push(path_x, c4_state);
     }
     else {
         c4_enter_cruise(path_x, c4_state);
@@ -719,14 +756,15 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
 
-    if (c4_state->probe_level > C4_PROBE_LEVEL_DEFAULT) {
-        c4_state->nb_cruise_left_before_push = 0;
-    }
-    else {
+#if 0
+        if (c4_state->nb_cruise_left_before_push == 0) {
+            c4_state->nb_cruise_left_before_push = 1;
+        }
+#else
         if (c4_state->nb_cruise_left_before_push == 0) {
             c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
-        }     
-    }
+        }
+#endif
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
         /* When operating in a CPU limited environment, pacing is too
@@ -810,6 +848,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 
         rate_measurement = path_x->bandwidth_estimate;
         C4_LOGGER(path_x, rate_measurement, c4_state, ack_state, 0, 0);
+
+        if (rate_measurement > c4_state->recent_rate) {
+            c4_state->recent_rate = rate_measurement;
+        }
 
         /* Assessment of rate limited status */
         if (rate_measurement > c4_state->nominal_rate &&
