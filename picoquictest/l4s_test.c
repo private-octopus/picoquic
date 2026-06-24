@@ -163,7 +163,7 @@ int l4s_c4_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = c4_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 30, 3000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 32, 3000, 0, NULL);
 
     return ret;
 }
