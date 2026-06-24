@@ -168,6 +168,7 @@ typedef struct st_c4_state_t {
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
     uint64_t recent_rate;
+    int recent_congestions;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
     int nb_eras_no_increase;
@@ -700,6 +701,7 @@ static void c4_exit_recovery(
         if (!c4_state->excess_ce_after_push) {
             c4_state->probe_level++;
         }
+        c4_state->recent_congestions = 0;
     }
     else {
         if (c4_state->push_was_not_limited) {
@@ -709,10 +711,16 @@ static void c4_exit_recovery(
             }
         }
 
-        if (c4_state->congestion_notified &&
-            c4_state->recent_rate > 0 &&
-            c4_state->nominal_rate > c4_state->recent_rate) {
-            c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+        if (c4_state->congestion_notified) {
+            c4_state->recent_congestions += 1;
+            if (c4_state->recent_congestions >= 2 &&
+                c4_state->recent_rate > 0 &&
+                c4_state->nominal_rate > c4_state->recent_rate) {
+                c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+            }
+        }
+        else {
+            c4_state->recent_congestions = 0;
         }
     }
     c4_state->recent_rate = 0;
@@ -982,7 +990,6 @@ static void c4_notify_congestion(
     }
     else
     {
-#if 0
         if (c4_state->alg_state != c4_pushing) {
             c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
             if (c_mode == c4_congestion_loss) {
@@ -994,7 +1001,6 @@ static void c4_notify_congestion(
             }
             C4_LOGGER(path_x, 0, c4_state, NULL, beta, c_mode);
         }
-#endif
         c4_enter_recovery(path_x, c4_state, c_mode);
     }
 
