@@ -122,23 +122,22 @@
 #define C4_MAX_JITTER 250000
 #define C4_ECN_SHIFT_G 4 /* g = 1/2^4, gain parameter for alpha EWMA */
 
-#define C4_PROBE_LEVEL_MAX 3
+
 #define C4_PROBE_LEVEL_DEFAULT 1
 
 #define C4_ALPHA_PUSH_12_5 1152 /* 112.5 % */
+#define C4_ALPHA_PUSH_25 1256 /* 125 % */
 #define C4_ALPHA_PUSH_50_0 1536 /* 150.0% % */
-#define C4_ALPHA_PUSH_100_0 2048 /* 150.0% % */
-#define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
+#define C4_ALPHA_PUSH_100_0 2048 /* 200.0% % */
+#define C4_ALPHA_PUSH_200_0 3072 /* 300.0% % */
+#define C4_ALPHA_PUSH_56_25 1600 /* 56.25% -- 1.25*1.25 - 1 */
+#define C4_ALPHA_PUSH_125_0 2304 /* 125% -- 1.5*1.5 - 1 */
 
-#if 1
+#define C4_PROBE_LEVEL_MAX 3
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
-    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
+    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_25, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
 };
-#else
-uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
-    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_1024, C4_ALPHA_PUSH_1024
-};
-#endif
+
 typedef enum {
     c4_initial = 0,
     c4_recovery,
@@ -146,13 +145,18 @@ typedef enum {
     c4_pushing
 } c4_alg_state_t;
 
-
 typedef enum {
     c4_congestion_none = 0,
     c4_congestion_delay,
     c4_congestion_ecn,
     c4_congestion_loss
 } c4_congestion_t;
+
+typedef enum {
+    c4_growing_none = 0,
+    c4_growing_slow = 1,
+    c4_growing_fast = 2
+} c4_growing_t;
 
 typedef struct st_c4_state_t {
     c4_alg_state_t alg_state;
@@ -446,22 +450,34 @@ static void c4_apply_rate_and_cwin(
 /* Perform evaluation. Assess whether the previous era resulted
  * in a significant increase or not.
  */
-static int c4_growth_evaluate(c4_state_t* c4_state)
+static c4_growing_t c4_growth_evaluate(c4_state_t* c4_state)
 {
-    int is_growing = 0;
-    if (c4_state->push_alpha > C4_ALPHA_PUSH_LOW_1024) {
-        /* If the value of "push_alpha" was large enough, we can reasonably
-         * measure growth. */
-        uint64_t target_rate = (3*c4_state->push_rate_old +
-            MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
-        is_growing = (c4_state->nominal_rate > target_rate);
-    }
-    else {
-        /* If the value was not big enough, we have to make decision
-         * based on congestion signals.
-         */
-        is_growing = (c4_state->nominal_rate > c4_state->push_rate_old &&
-            !c4_state->congestion_notified);
+    c4_growing_t is_growing = c4_growing_none;
+    if (!c4_state->congestion_notified) {
+        if (c4_state->push_alpha > C4_ALPHA_PUSH_LOW_1024) {
+            /* If the value of "push_alpha" was large enough, we can reasonably
+                * measure growth. */
+            uint64_t target_rate = (3 * c4_state->push_rate_old +
+                MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
+            if (c4_state->nominal_rate > target_rate) {
+                uint64_t fast_rate = (c4_state->push_rate_old +
+                    3 * MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
+                if (c4_state->nominal_rate > fast_rate) {
+                    is_growing = c4_growing_fast;
+                }
+                else {
+                    is_growing = c4_growing_slow;
+                }
+            }
+        }
+        else {
+            /* If the value was not big enough, we have to make decision
+                * based on congestion signals.
+                */
+            if (c4_state->nominal_rate > c4_state->push_rate_old) {
+                is_growing = c4_growing_fast;
+            }
+        }
     }
     return is_growing;
 }
@@ -623,8 +639,8 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
         * nothing for several RTT, until the client asks for some data.
         * So we test that we have seen at least some data.
         */
-        int is_growing = c4_growth_evaluate(c4_state);
-        if (is_growing) {
+        c4_growing_t is_growing = c4_growth_evaluate(c4_state);
+        if (is_growing != c4_growing_none) {
             c4_state->nb_eras_no_increase = 0;
         }
         else if (c4_state->push_was_not_limited && c4_state->nominal_rate > 0) {
@@ -696,9 +712,10 @@ static void c4_exit_recovery(
     c4_state_t* c4_state)
 {
     /* Assess growth */
-    int is_growing = c4_growth_evaluate(c4_state);
-    if (is_growing) {
-        if (!c4_state->excess_ce_after_push) {
+    c4_growing_t is_growing = c4_growth_evaluate(c4_state);
+    if (is_growing != c4_growing_none) {
+        if (is_growing == c4_growing_fast &&
+            !c4_state->excess_ce_after_push) {
             c4_state->probe_level++;
         }
         c4_state->recent_congestions = 0;
