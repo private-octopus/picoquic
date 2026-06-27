@@ -6,7 +6,7 @@ Picoquic can produce [QLOG](https://datatracker.ietf.org/doc/draft-marx-qlog-eve
 
 The simple way to enable production of `qlog` is to set `qlog` for the QUIC context,
 by calling `picoquic_set_qlog()` before creating a connection.
-The command is defined in `loglib/picoquic_qlog.h` as:
+The command is defined in `picoquic/picoquic_qlog.h` as:
 
 ~~~
 int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
@@ -16,7 +16,7 @@ In this command, `qlog_dir` is the path to the directory where the qlog file wil
 
 ### Link on demand
 
-Generating `qlog` files requires a sizeable amount of contant and code. The implementation uses function
+Generating `qlog` files requires a sizeable amount of constants and code. The implementation uses function
 pointers, that are filled during the call to `picoquic_set_qlog`. The corresponding functions
 are linked (and included in the binary) if the application includes a call to `picoquic_set_qlog`.
 
