@@ -163,6 +163,7 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_crypto_provider_api.h
     picoquic/picoquic_internal.h
     picoquic/picoquic_logger.h
+    picoquic/picoquic_qlog.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
