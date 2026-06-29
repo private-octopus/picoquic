@@ -148,13 +148,18 @@ typedef enum {
     c4_pushing
 } c4_alg_state_t;
 
-
 typedef enum {
     c4_congestion_none = 0,
     c4_congestion_delay,
     c4_congestion_ecn,
     c4_congestion_loss
 } c4_congestion_t;
+
+typedef enum {
+    c4_growing_none = 0,
+    c4_growing_slow,
+    c4_growing_fast
+} c4_growing_t;
 
 typedef struct st_c4_state_t {
     c4_alg_state_t alg_state;
@@ -461,22 +466,28 @@ static void c4_apply_rate_and_cwin(
 /* Perform evaluation. Assess whether the previous era resulted
  * in a significant increase or not.
  */
-static int c4_growth_evaluate(c4_state_t* c4_state)
+static c4_growing_t c4_growth_evaluate(c4_state_t* c4_state)
 {
-    int is_growing = 0;
+    c4_growing_t is_growing = c4_growing_none;
     if (c4_state->push_alpha > C4_ALPHA_PUSH_LOW_1024) {
         /* If the value of "push_alpha" was large enough, we can reasonably
          * measure growth. */
         uint64_t target_rate = (3*c4_state->push_rate_old +
             MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
-        is_growing = (c4_state->nominal_rate > target_rate);
+        if (c4_state->nominal_rate >= target_rate) {
+            uint64_t higher_rate = (c4_state->push_rate_old +
+                3*MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
+            is_growing = (c4_state->nominal_rate > higher_rate) ? c4_growing_fast : c4_growing_slow;
+        }
     }
     else {
         /* If the value was not big enough, we have to make decision
          * based on congestion signals.
          */
-        is_growing = (c4_state->nominal_rate > c4_state->push_rate_old &&
-            !c4_state->congestion_notified);
+        if (c4_state->nominal_rate > c4_state->push_rate_old &&
+            !c4_state->congestion_notified) {
+            is_growing = c4_growing_fast;
+        }
     }
     return is_growing;
 }
@@ -638,8 +649,8 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
         * nothing for several RTT, until the client asks for some data.
         * So we test that we have seen at least some data.
         */
-        int is_growing = c4_growth_evaluate(c4_state);
-        if (is_growing) {
+        c4_growing_t is_growing = c4_growth_evaluate(c4_state);
+        if (is_growing != c4_growing_none) {
             c4_state->nb_eras_no_increase = 0;
         }
         else if (c4_state->push_was_not_limited && c4_state->nominal_rate > 0) {
@@ -814,6 +825,7 @@ static void c4_enter_pushing(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
+    c4_state->alpha_1024_previous = c4_state->alpha_1024_current;
     c4_state->alpha_1024_current = C4_ALPHA_PUSH_25;
     c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_state->alg_state = c4_pushing;
@@ -836,16 +848,12 @@ static void c4_on_pushing_rate_measurement(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-    if (c4_growth_evaluate(c4_state)) {
-        if (c4_state->nominal_rate > c4_state->push_limit) {
-            /* Nominal rate has more than doubled, entering initial */
-            c4_enter_initial(path_x, c4_state);
-        }
-        else {
-            /* reset the era */
-            c4_growth_reset(c4_state);
-            c4_era_reset(path_x, c4_state);
-        }
+    c4_growing_t is_growing = c4_growth_evaluate(c4_state);
+    if (is_growing == c4_growing_fast) {
+        /* reset the era */
+        c4_growth_reset(c4_state);
+        c4_era_reset(path_x, c4_state);
+        c4_state->nb_eras_no_increase = 0;
     }
 }
 
@@ -854,12 +862,20 @@ static void c4_on_pushing_era_end(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-    if (c4_growth_evaluate(c4_state)) {
+
+    c4_growing_t is_growing = c4_growth_evaluate(c4_state);
+    if (is_growing == c4_growing_fast) {
+        // c4_state->nb_eras_no_increase = 0;
         c4_growth_reset(c4_state);
         c4_era_reset(path_x, c4_state);
     }
     else {
+#if 1
+        if (c4_state->alpha_1024_previous >= C4_ALPHA_PUSH_25) {
+#else
+        c4_state->nb_eras_no_increase++;
         if (c4_state->nb_eras_no_increase > 1) {
+#endif
             /* Move to recovery */
             c4_enter_recovery(path_x, c4_state, c4_congestion_none);
         }
