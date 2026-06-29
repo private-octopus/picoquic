@@ -818,6 +818,7 @@ static void c4_enter_pushing(
     c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_state->alg_state = c4_pushing;
     c4_state->push_limit = 2 * c4_state->nominal_rate;
+    c4_state->nb_eras_no_increase = 0;
     c4_growth_reset(c4_state);
     c4_era_reset(path_x, c4_state);
 }
@@ -858,8 +859,10 @@ static void c4_on_pushing_era_end(
         c4_era_reset(path_x, c4_state);
     }
     else {
-        /* Move to recovery */
-        c4_enter_recovery(path_x, c4_state, c4_congestion_none);
+        if (c4_state->nb_eras_no_increase > 1) {
+            /* Move to recovery */
+            c4_enter_recovery(path_x, c4_state, c4_congestion_none);
+        }
     }
 }
 
