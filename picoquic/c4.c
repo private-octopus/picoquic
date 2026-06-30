@@ -76,24 +76,8 @@
 * - RTT min
  */
 
- /* The probe level is used to set the probing rate during the "push" phase.
+ /* The probe level was used to set the probing rate during the "push" phase.
  *
- * The probe level is set to 1 when entering the initial phase.
- *
- * It is computed by an adaptive mechanism:
- *
- * - increase the level by 1 if the previous push was successful
- * - decrease the level by 1 if the previous push was not successful, down to level 1.
- * - set the level to zero if the push generated heavy packet loss or CE marks.
- *
- * The probe level is at most 3. An increase above 3 is equivalent to a decision
- * to reenter the initial phase.
- *
- * Probing rate and number of cruising cycles are function of the level:
- *  - Level 0: push rate 3,125%, 4 cycles before push
- *  - Level 1: push rate 6.25%, 4 cycles before push
- *  - Level 2: push rate 25%, 4 cycles before push
- *  - Level 3: push rate 25%, 1 cycle before push
  */
 
 #define C4_WITH_LOGGING
@@ -145,7 +129,8 @@ typedef enum {
     c4_recovery,
     c4_cruising,
     c4_probing,
-    c4_pushing
+    c4_pushing,
+    c4_resuming
 } c4_alg_state_t;
 
 typedef enum {
@@ -179,6 +164,7 @@ typedef struct st_c4_state_t {
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
     int nb_eras_no_increase;
+    int nb_era_resuming;
     uint64_t push_rate_old;
     uint64_t push_alpha;
     uint64_t push_limit;
@@ -228,6 +214,18 @@ static void c4_on_pushing_rate_measurement(
     c4_state_t* c4_state);
 
 static void c4_on_pushing_era_end(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state);
+
+static void c4_enter_resuming(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state);
+
+static void c4_on_resuming_ack(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state);
+
+static void c4_on_resuming_era_end(
     picoquic_path_t* path_x,
     c4_state_t* c4_state);
 
@@ -423,16 +421,12 @@ static void c4_apply_rate_and_cwin(
                 }
             }
         }
-        /* Initial special case: seed cwin */
-        if (c4_state->use_seed_cwin && c4_state->seed_cwin > target_cwin) {
-            /* Match half the difference between seed and computed CWIN */
-            target_cwin = (c4_state->seed_cwin + target_cwin) / 2;
-            c4_state->seed_rate = PICOQUIC_RATE_FROM_BYTES(c4_state->seed_cwin, path_x->smoothed_rtt);
-            if (c4_state->seed_rate > pacing_rate) {
-                pacing_rate = c4_state->seed_rate;
-            }
-        }
         c4_state->initial_cwnd = target_cwin;
+    }
+    else if (c4_state->alg_state == c4_resuming) {
+        /* Initial special case: seed cwin */
+        target_cwin = c4_state->seed_cwin;
+        pacing_rate = c4_state->seed_rate;
     }
     else {
         uint64_t delta_rtt_target = C4_RTT_MARGIN_DELAY;
@@ -570,11 +564,17 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_enter_initial(path_x, c4_state);
 }
 
-void c4_seed_cwin(c4_state_t* c4_state, uint64_t bytes_in_flight)
+void c4_seed_cwin(picoquic_path_t * path_x, c4_state_t* c4_state, uint64_t bytes_in_flight)
 {
     if (c4_state->alg_state == c4_initial) {
         c4_state->use_seed_cwin = 1;
         c4_state->seed_cwin = bytes_in_flight;
+        c4_state->seed_rate = PICOQUIC_RATE_FROM_BYTES(bytes_in_flight, path_x->smoothed_rtt);
+        if (c4_state->nominal_max_rtt < path_x->smoothed_rtt) {
+            c4_state->nominal_max_rtt = path_x->smoothed_rtt;
+            c4_state->delay_threshold = c4_delay_threshold(c4_state);
+        }
+        c4_enter_resuming(path_x, c4_state);
     }
 }
 
@@ -724,7 +724,7 @@ static void c4_exit_recovery(
     /* Assess growth */
     int is_growing = c4_growth_evaluate(c4_state);
     if (is_growing) {
-        if (!c4_state->excess_ce_after_push) {
+        if (!c4_state->excess_ce_after_push && c4_state->nb_era_resuming == 0) {
             c4_state->probe_level++;
         }
         c4_state->recent_congestions = 0;
@@ -750,6 +750,7 @@ static void c4_exit_recovery(
             c4_state->recent_congestions = 0;
         }
     }
+    c4_state->nb_era_resuming = 0;
     c4_state->recent_rate = 0;
     c4_growth_reset(c4_state);
     /* Reset the delay excess to avoid bounces of delay event */
@@ -820,7 +821,18 @@ static void c4_enter_probing(
 }
 
 /* Enter pushing.
-* the push rate will always be 25% for now. */
+* the push rate will always be 25% for now.
+* After entering the pushing state, we cannot expect rate increases during
+* the first. RTT, as the previous state was always "recovery". After that
+* first RTT, we monitor rate increases. If at the end of an RTT the rate
+* has not increased, we will exit pushing.
+* 
+* TODO: should there be a point at which C4 moves from pushing to "initial"?
+* TODO: we notice that at least one RTT has passed by tracking "alpha
+* previous", which initially will be the recovery level of alpha,
+* and which will only be updated if we notice a "fast" growth,
+* i.e., over 25% of nominal rate". That works, but may be a bit convoluted.
+*/
 static void c4_enter_pushing(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -835,15 +847,6 @@ static void c4_enter_pushing(
     c4_era_reset(path_x, c4_state);
 }
 
-/* check the pushing rate.
-* we do this on each rate measurment, and also on the
-* expiry of the current era. 
-* If the rate increased, we reset the era to last another RTT.
-* If the rate did not increase, we wait for the end of the era;
-* if the rate did not increase then, we exit the pushing.
-* (Check: do we need to do like BBR, count 3 RTT?)
-*/
-
 static void c4_on_pushing_rate_measurement(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -856,7 +859,6 @@ static void c4_on_pushing_rate_measurement(
         c4_state->nb_eras_no_increase = 0;
     }
 }
-
 
 static void c4_on_pushing_era_end(
     picoquic_path_t* path_x,
@@ -882,6 +884,63 @@ static void c4_on_pushing_era_end(
     }
 }
 
+/* Handling of careful resume.
+* The application can set a "seed CWIN" and a "seed rate" based on
+* remembered values. When that happens, we can move to the "resuming"
+* phase. During that phase, the pacing rate is always set to the
+* "seed rate", and the path CWIN is always set to the "seed cwin".
+* 
+* We need to keep sending at the seed rate for one full RTT before we
+* can start receiving measurements, and the final validation of the
+* rate will only happen one RTT after that. We handle that by counting
+* the number of eras in the "resuming" state, and exiting to recovery
+* if the number of eras exceeds 2.
+* 
+* TODO: we may consider exiting directly to cruising mode if the
+* nominal_rate is within 97% (16/17th) of the target. This will
+* avoid the slowdown caused by recovery.
+* 
+* The evaluation would fail if the endpoint is not sending at the
+* specified rate during the resuming phase. We protect against that
+* by resetting the beginning of the era on receiving acknowledgements
+* if the number of bytes in transit is not at least 16/17th of the
+* seed window.
+*/
+static void c4_enter_resuming(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    c4_state->alpha_1024_previous = c4_state->alpha_1024_current;
+    c4_state->alpha_1024_current = C4_ALPHA_PUSH_200_0; /* Pro forma */
+    c4_state->nb_era_resuming = 0;
+    c4_state->alg_state = c4_resuming;
+    c4_growth_reset(c4_state);
+    c4_era_reset(path_x, c4_state);
+}
+
+static void c4_on_resuming_ack(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    uint64_t bytes_in_flight = path_x->bytes_in_transit;
+    bytes_in_flight += (bytes_in_flight / 16);
+    if (bytes_in_flight < c4_state->seed_cwin) {
+        c4_state->era_sequence = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
+    }
+}
+
+static void c4_on_resuming_era_end(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    c4_state->nb_era_resuming++;
+    if (c4_state->nb_era_resuming >= 2) {
+        c4_enter_recovery(path_x, c4_state, c4_congestion_none);
+    }
+    else {
+        c4_era_reset(path_x, c4_state);
+    }
+}
 
 /* handle of RTT */
 void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
@@ -969,6 +1028,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         c4_initial_handle_ack(path_x, c4_state, ack_state);
     }
     else {
+        if (c4_state->alg_state == c4_resuming) {
+            c4_on_resuming_ack(path_x, c4_state);
+        }
         if (c4_era_check(path_x, c4_state)) {
             /* Update max rtt and running min rtt */
             c4_update_min_max_rtt(path_x, c4_state);
@@ -1010,6 +1072,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                     break;
                 case c4_pushing:
                     c4_on_pushing_era_end(path_x, c4_state);
+                    break;
+                case c4_resuming:
+                    c4_on_resuming_era_end(path_x, c4_state);
                     break;
                 default:
                     c4_era_reset(path_x, c4_state);
@@ -1240,7 +1305,8 @@ void c4_notify(
             c4_reset(c4_state, path_x, c4_state->option_string);
             break;
         case picoquic_congestion_notification_seed_cwin:
-            c4_seed_cwin(c4_state, ack_state->nb_bytes_acknowledged);
+            c4_seed_cwin(path_x, c4_state, ack_state->nb_bytes_acknowledged);
+            c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         default:
             /* ignore */
