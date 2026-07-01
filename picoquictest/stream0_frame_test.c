@@ -1306,6 +1306,7 @@ int stream_singleton_one(uint64_t stream_id, int repeat, size_t first, uint8_t *
                         (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
                         100 + i, 0, simulated_time);
                 }
+                picoquic_stream_data_node_recycle(decrypted_data);
             }
             if (ret == 0) {
                 if (ctx.nb_data_callback != nb_data_callback_expected) {
