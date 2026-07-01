@@ -1341,7 +1341,7 @@ int stream_singleton_test(void)
 
     for (int repeat = 1;ret == 0 &&  repeat < 3; repeat++) {
         for (size_t first = 0; ret == 0 && first < 6; first += 5) {
-            if (stream_singleton_one(6, repeat, first, ref, 211) != 0) {
+            if (stream_singleton_one(stream_id, repeat, first, ref, 211) != 0) {
                 ret = -1;
             }
         }
