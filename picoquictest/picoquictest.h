@@ -423,6 +423,7 @@ int bad_cnxid_test(void);
 int stream_splay_test(void);
 int stream_output_test(void);
 int stream_rank_test(void);
+int stream_singleton_test(void);
 int provide_stream_buffer_test(void);
 int not_before_cnxid_test(void);
 int send_stream_blocked_test(void);

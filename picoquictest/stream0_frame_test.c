@@ -1198,3 +1198,153 @@ int provide_stream_buffer_test(void)
     }
     return ret;
 }
+
+/* There have been report of picoquic sending two successive FIN notices
+* for the same stream. The report indicates a stream passed in two frames
+* the first one data and the second one FIN, carried in the same
+* packet. That packet was repeated at a short interval.
+*/
+
+typedef struct st_stream_singleton_ctx_t {
+    uint64_t target_stream_id;
+    int nb_data_callback;
+    int nb_fin_received;
+    size_t len_received;
+    uint8_t data[PICOQUIC_MAX_PACKET_SIZE];
+} stream_singleton_ctx_t;
+
+static int stream_singleton_test_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(v_stream_ctx);
+#endif
+    stream_singleton_ctx_t* ctx = (stream_singleton_ctx_t*)callback_ctx;
+    if (stream_id == ctx->target_stream_id &&
+        (fin_or_event == picoquic_callback_stream_data ||
+            fin_or_event == picoquic_callback_stream_fin)) {
+        if (fin_or_event == picoquic_callback_stream_data) {
+            ctx->nb_data_callback++;
+        }
+        if (fin_or_event == picoquic_callback_stream_fin) {
+            ctx->nb_fin_received++;
+        }
+        if (length > 0) {
+            size_t available = ((ctx->len_received + length) <= PICOQUIC_MAX_PACKET_SIZE) ? length :
+                (ctx->len_received < PICOQUIC_MAX_PACKET_SIZE) ? PICOQUIC_MAX_PACKET_SIZE - ctx->len_received : 0;
+            if (available > 0) {
+                memcpy(&ctx->data[ctx->len_received], bytes, available);
+            }
+            ctx->len_received += length;
+        }
+    }
+    return 0;
+}
+
+uint8_t * stream_singleton_format(uint8_t * bytes, uint8_t * bytes_max, uint64_t stream_id, uint8_t* ref, size_t ref_length, size_t first)
+{
+    if (first > 0) {
+        uint8_t* bytes0 = bytes;
+        if ((bytes = picoquic_format_stream_frame_header(bytes, bytes_max, stream_id, 0)) != NULL &&
+            (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, first, ref)) != NULL){
+            *bytes0 |= 2;
+        }
+    }
+    if (bytes != NULL) {
+        uint8_t* bytes0 = bytes;
+        if ((bytes = picoquic_format_stream_frame_header(bytes, bytes_max, stream_id, first)) != NULL &&
+            (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, ref_length - first, ref + first)) != NULL) {
+            *bytes0 |= 2;
+            *bytes0 |= 1;
+        }
+    }
+    return bytes;
+}
+
+int stream_singleton_one(uint64_t stream_id, int repeat, size_t first, uint8_t * ref, size_t ref_length)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = 0;
+    stream_singleton_ctx_t ctx = { 0 };
+    int nb_data_callback_expected = (first == 0) ? 0 : 1;
+
+    ctx.target_stream_id = stream_id;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_callback(cnx, stream_singleton_test_callback, &ctx);
+        cnx->client_mode = 0;
+
+        for (int i = 0; ret == 0 && i < repeat; i++) {
+            picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
+            if (decrypted_data == NULL) {
+                ret = -1;
+            }
+            else {
+                uint8_t* bytes = (uint8_t*)decrypted_data->data + 13;
+                uint8_t* bytes_max = NULL;
+                decrypted_data->bytes = decrypted_data->data;
+
+                memset((uint8_t*)decrypted_data->bytes, 0, 13);
+                if ((bytes_max = stream_singleton_format((uint8_t*)bytes, (uint8_t*)decrypted_data->data + PICOQUIC_MAX_PACKET_SIZE, stream_id, ref, ref_length, first)) == NULL) {
+                    ret = -1;
+                }
+                else {
+                    decrypted_data->length = bytes_max - decrypted_data->bytes;
+                    decrypted_data->offset = 13;
+                    ret = picoquic_decode_frames(cnx, cnx->path[0],
+                        bytes, (size_t)(bytes_max-bytes),
+                        decrypted_data,
+                        picoquic_epoch_1rtt,
+                        (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
+                        (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
+                        100 + i, 0, simulated_time);
+                }
+            }
+            if (ret == 0) {
+                if (ctx.nb_data_callback != nb_data_callback_expected) {
+                    ret = -1;
+                }
+                else if (ctx.nb_fin_received != 1) {
+                    ret = -1;
+                }
+                else if (ctx.len_received != ref_length) {
+                    ret = -1;
+                }
+                else if (memcmp(ref, ctx.data, ref_length) != 0) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int stream_singleton_test(void)
+{
+    int ret = 0;
+    uint8_t ref[256];
+    uint64_t stream_id = 6;
+
+    for (int i = 0; i < 256; i++) {
+        ref[i] = i;
+    }
+
+    for (int repeat = 1;ret == 0 &&  repeat < 3; repeat++) {
+        for (size_t first = 0; ret == 0 && first < 6; first += 5) {
+            if (stream_singleton_one(6, repeat, first, ref, 211) != 0) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}

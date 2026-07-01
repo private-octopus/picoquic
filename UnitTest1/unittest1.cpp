@@ -832,6 +832,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_singleton)
+        {
+            int ret = stream_singleton_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(provide_stream_buffer)
         {
             int ret = provide_stream_buffer_test();
