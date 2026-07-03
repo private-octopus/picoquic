@@ -744,6 +744,7 @@ static void c4_exit_recovery(
                 c4_state->recent_rate > 0 &&
                 c4_state->nominal_rate > c4_state->recent_rate) {
                 c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+                c4_state->recent_rate = 0;
             }
         }
         else {
