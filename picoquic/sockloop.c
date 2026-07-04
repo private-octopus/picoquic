@@ -2396,6 +2396,8 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     size_t send_length = 0;
     size_t send_msg_size = 0;
     size_t send_buffer_size = param->socket_buffer_size;
+    size_t send_batch_max = (param->send_batch_max == 0) ?
+        PICOQUIC_PACKET_LOOP_SEND_MAX : param->send_batch_max;
     size_t* send_msg_ptr = NULL;
     int bytes_recv;
     picoquic_connection_id_t log_cid;
@@ -2698,7 +2700,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             * packets may be adding in the receive queue.
              */
             /* TODO: isolate the UDP sending logic in a function. */
-            while (ret == 0 && nb_packets_sent < PICOQUIC_PACKET_LOOP_SEND_MAX) {
+            while (ret == 0 && nb_packets_sent < send_batch_max) {
                 struct sockaddr_storage peer_addr;
                 struct sockaddr_storage local_addr = { 0 };
                 int if_index = 0;

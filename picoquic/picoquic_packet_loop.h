@@ -33,7 +33,9 @@ extern "C" {
 
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 4
 #define PICOQUIC_PACKET_LOOP_RECV_MAX 10
+#ifndef PICOQUIC_PACKET_LOOP_SEND_MAX
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
+#endif
 #define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
 
 typedef struct st_picoquic_socket_ctx_t {
@@ -204,6 +206,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int prefer_extra_socket;
     int simulate_eio;
     size_t send_length_max;
+    size_t send_batch_max; /* 0: use PICOQUIC_PACKET_LOOP_SEND_MAX */
 } picoquic_packet_loop_param_t;
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
@@ -491,4 +494,3 @@ void picoquic_packet_loop_abandon_socket(
 }
 #endif
 #endif /* PICOQUIC_PACKET_LOOP_H */
-
