@@ -85,7 +85,7 @@ The `param` argument contains data to parameterize the packet loop:
   `picoquic_prepare_next_packet_ex`. This is used in debugging,
   to verify that the `UDP_GSO` implementation is functional.
 
-* `send_batch_max`: if specified, the maximum number of packets sent in
+`send_batch_max`: if specified, the maximum number of calls to `sendmsg()` in
   one packet loop iteration. If left to 0, the packet loop uses
   `PICOQUIC_PACKET_LOOP_SEND_MAX`.
 
