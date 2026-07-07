@@ -115,6 +115,8 @@
 #define C4_ALPHA_PUSH_100_0 2048 /* 150.0% % */
 #define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
 
+#define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
+
 #if 1
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
@@ -420,9 +422,12 @@ static void c4_apply_rate_and_cwin(
         }
         /* Initial special case: bandwidth discovery */
         if (c4_state->nb_packets_in_startup > 0) {
+            if (pacing_rate < C4_INITIAL_PACING) {
+                pacing_rate = C4_INITIAL_PACING;
+            }
             if (path_x->peak_bandwidth_estimate > pacing_rate) {
                 uint64_t min_win;
-                pacing_rate = (pacing_rate + path_x->peak_bandwidth_estimate) / 2;
+                pacing_rate = (pacing_rate + path_x->peak_bandwidth_estimate)/2;
                 min_win = PICOQUIC_BYTES_FROM_RATE(path_x->smoothed_rtt, path_x->peak_bandwidth_estimate) / 2;
                 if (min_win > target_cwin) {
                     target_cwin = min_win;
