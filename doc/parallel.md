@@ -79,6 +79,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int prefer_extra_socket;
     int simulate_eio;
     size_t send_length_max;
+    size_t send_batch_max;
 } picoquic_packet_loop_param_t;
 ```
 
