@@ -115,6 +115,8 @@
 #define C4_ALPHA_PUSH_100_0 2048 /* 150.0% % */
 #define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
 
+#define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
+
 #if 1
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
@@ -159,12 +161,20 @@ typedef struct st_c4_state_t {
     uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
-    uint64_t recent_rate;
+    uint64_t recent_maximum_rate;
     int recent_congestions;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
+    /* TODO: the probe level was removed from the specification.
+    * The corresponding code could not be removed, because the
+    * probe level is used to detect rapid growth, which is
+    * critical in some scenario. Rapid growth should be handled
+    * inside the pushing state instead. */
     int nb_eras_no_increase;
     int nb_era_resuming;
+    /* TODO: measure the number of eras in pushing state, to ensure the
+     * code only exits after at least 2 eras.
+     */
     uint64_t push_rate_old;
     uint64_t push_alpha;
     uint64_t push_limit;
@@ -412,9 +422,12 @@ static void c4_apply_rate_and_cwin(
         }
         /* Initial special case: bandwidth discovery */
         if (c4_state->nb_packets_in_startup > 0) {
+            if (pacing_rate < C4_INITIAL_PACING) {
+                pacing_rate = C4_INITIAL_PACING;
+            }
             if (path_x->peak_bandwidth_estimate > pacing_rate) {
                 uint64_t min_win;
-                pacing_rate = (pacing_rate + path_x->peak_bandwidth_estimate) / 2;
+                pacing_rate = (pacing_rate + path_x->peak_bandwidth_estimate)/2;
                 min_win = PICOQUIC_BYTES_FROM_RATE(path_x->smoothed_rtt, path_x->peak_bandwidth_estimate) / 2;
                 if (min_win > target_cwin) {
                     target_cwin = min_win;
@@ -741,9 +754,9 @@ static void c4_exit_recovery(
         if (c4_state->congestion_notified) {
             c4_state->recent_congestions += 1;
             if (c4_state->recent_congestions >= 2 &&
-                c4_state->recent_rate > 0 &&
-                c4_state->nominal_rate > c4_state->recent_rate) {
-                c4_state->nominal_rate = c4_state->recent_rate; // (1 * c4_state->nominal_rate + c4_state->recent_rate) / 2;
+                c4_state->recent_maximum_rate > 0 &&
+                c4_state->nominal_rate > c4_state->recent_maximum_rate) {
+                c4_state->nominal_rate = c4_state->recent_maximum_rate;
             }
         }
         else {
@@ -751,7 +764,7 @@ static void c4_exit_recovery(
         }
     }
     c4_state->nb_era_resuming = 0;
-    c4_state->recent_rate = 0;
+    c4_state->recent_maximum_rate = 0;
     c4_growth_reset(c4_state);
     /* Reset the delay excess to avoid bounces of delay event */
     c4_state->recent_delay_excess = 0;
@@ -763,6 +776,9 @@ static void c4_exit_recovery(
     c4_state->ecn_alpha = 0;
 
     if (c4_state->probe_level > C4_PROBE_LEVEL_MAX) {
+        /* This test appears fires in the "c4_wifi_bad_bbr" test case.
+        * Suppressing it makes C4 less performant in these conditions.
+         */
         c4_enter_initial(path_x, c4_state);
     }
     else if (c4_state->probe_level > C4_PROBE_LEVEL_DEFAULT) {
@@ -1001,8 +1017,8 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         rate_measurement = path_x->bandwidth_estimate;
         C4_LOGGER(path_x, rate_measurement, c4_state, ack_state, 0, 0);
 
-        if (rate_measurement > c4_state->recent_rate) {
-            c4_state->recent_rate = rate_measurement;
+        if (rate_measurement > c4_state->recent_maximum_rate) {
+            c4_state->recent_maximum_rate = rate_measurement;
         }
 
         /* Assessment of rate limited status */
