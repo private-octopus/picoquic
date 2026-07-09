@@ -1053,9 +1053,10 @@ int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
     else {
         void* params = picoquic_get_log_params(quic, &qlog_fns);
         if (params != NULL) {
-            free(params);
+            free(dup_dir);
+            ret = -1;
         }
-        if ((ret = picoquic_register_log_functions(quic, &qlog_fns, dup_dir)) != 0) {
+        else if ((ret = picoquic_register_log_functions(quic, &qlog_fns, dup_dir)) != 0) {
             free(dup_dir);
         }
     }
