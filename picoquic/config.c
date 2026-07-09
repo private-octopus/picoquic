@@ -27,14 +27,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
-#if 0
-#include "picoquic_binlog.h"
-#include "picoquic_qlog.h"
-#include "picoquic_logger.h"
-#include "picoquic_unified_log.h"
-#endif
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
