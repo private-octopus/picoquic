@@ -1105,19 +1105,6 @@ picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
             DBG_PRINTF("%s", "Could not create QMUX context.");
         }
         else {
-#if 0
-            if (config->bin_dir != NULL) {
-                picoquic_set_binlog(qmux, config->bin_dir);
-            }
-
-            if (config->qlog_dir != NULL) {
-                picoquic_set_qlog(qmux, config->qlog_dir);
-            }
-
-            if (config->log_file != NULL) {
-                picoquic_set_textlog(qmux, config->log_file);
-            }
-#endif
             picoquic_set_log_level(qmux, config->use_long_log);
 
 
