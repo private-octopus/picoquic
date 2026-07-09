@@ -26,7 +26,7 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_packet_loop.h"
 #include "picosocks.h"
 #include "picoqmux.h"

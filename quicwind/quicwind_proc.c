@@ -11,14 +11,13 @@
 #include <iphlpapi.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <ws2tcpip.h>
 #include "picoquic.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "democlient.h"
 #include "quicwind.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_cubic.h"
 
 #ifndef SOCKET_TYPE
@@ -28,12 +27,9 @@
 #define socklen_t int
 #endif
 
-#include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picosocks.h"
 #include "picoquic_utils.h"
-#include "h3zero.h"
-#include "democlient.h"
 #include "picoquic_packet_loop.h"
 
 static const char* ticket_store_filename = "demo_ticket_store.bin";

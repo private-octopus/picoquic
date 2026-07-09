@@ -31,12 +31,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 
 #include "picotls.h"
