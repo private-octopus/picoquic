@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.50.1
+        VERSION 1.1.50.2
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -150,6 +150,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picoquictest_dualq.h
      picoquic/picoquic_fastcc.h
      picoquic/picoquic_prague.h
+     picoquic/picoquic_qlog.h
      picoquic/c4.h
      picoquic/siphash.h)
 

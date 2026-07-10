@@ -659,6 +659,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         quic->default_callback_ctx = default_callback_ctx;
         quic->default_congestion_alg = PICOQUIC_DEFAULT_CONGESTION_ALGORITHM;
         quic->default_alpn = picoquic_string_duplicate(default_alpn);
+        quic->tls_cert_root_file_name = picoquic_string_duplicate(cert_root_file_name);
         quic->cnx_id_callback_fn = cnx_id_callback;
         quic->cnx_id_callback_ctx = cnx_id_callback_ctx;
         quic->p_simulated_time = p_simulated_time;
@@ -1147,16 +1148,12 @@ void picoquic_free(picoquic_quic_t* quic)
         /* Delete the picotls context */
         if (quic->tls_master_ctx != NULL) {
             picoquic_master_tlscontext_free(quic);
-
-            free(quic->tls_master_ctx);
-            quic->tls_master_ctx = NULL;
         }
 
         /* Close the logs */
         picoquic_log_close_logs(quic);
 
-        quic->binlog_dir = picoquic_string_free(quic->binlog_dir);
-        quic->qlog_dir = picoquic_string_free(quic->qlog_dir);
+        quic->tls_cert_root_file_name = picoquic_string_free(quic->tls_cert_root_file_name);
 
         if (quic->perflog_fn != NULL) {
             (void)(quic->perflog_fn)(quic, NULL, 1);
@@ -1982,9 +1979,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     picoquic_reset_packet_context(cnx, &path_x->pkt_ctx);
     picoquic_reset_ack_context(&path_x->ack_ctx);
 
-    if (cnx->quic->F_log != NULL) {
-        fflush(cnx->quic->F_log);
-    }
+    picoquic_log_flush(cnx);
 
     /* if there are references to path in streams, remove them */
     stream = picoquic_first_stream(cnx);
@@ -3276,21 +3271,22 @@ uint64_t picoquic_remove_not_before_from_stash(picoquic_cnx_t* cnx, picoquic_rem
         * as failing, and thus scheduled for deletion after a time-out */
 
         if (cnx->is_multipath_enabled) {
-            int path_id = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
-            if (path_id >= 0) {
-                if (cnx->path[path_id]->first_tuple->p_remote_cnxid->sequence < not_before &&
-                    cnx->path[path_id]->first_tuple->p_remote_cnxid->cnx_id.id_len > 0 &&
-                    !cnx->path[path_id]->path_is_demoted) {
-                    ret = picoquic_renew_connection_id(cnx, path_id);
-                    if (ret != 0) {
-                        DBG_PRINTF("Renew CNXID returns %x\n", ret);
-                        if (path_id == 0) {
-                            ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
-                        }
-                        else {
-                            ret = 0;
-                            picoquic_demote_path(cnx, path_id, current_time, 0);
-                        }
+            int path_index = picoquic_find_path_by_unique_id(cnx, cnxid_stash->unique_path_id);
+            if (path_index >= 0 &&
+                cnx->path[path_index]->first_tuple != NULL &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid->sequence < not_before &&
+                cnx->path[path_index]->first_tuple->p_remote_cnxid->cnx_id.id_len > 0 &&
+                !cnx->path[path_index]->path_is_demoted) {
+                ret = picoquic_renew_connection_id(cnx, path_index);
+                if (ret != 0) {
+                    DBG_PRINTF("Renew CNXID returns %x\n", ret);
+                    if (path_index == 0) {
+                        ret = PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION;
+                    }
+                    else {
+                        ret = 0;
+                        picoquic_demote_path(cnx, path_index, current_time, 0);
                     }
                 }
             }
