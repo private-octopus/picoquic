@@ -42,7 +42,7 @@
 #include "picoquictest.h"
 typedef const struct st_ptls_cipher_suite_t ptls_cipher_suite_t;
 #include "picoquic_crypto_provider_api.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_logger.h"
 
  /* ech_config_test:

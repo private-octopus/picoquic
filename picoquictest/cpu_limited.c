@@ -26,9 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "autoqlog.h"
-#include "logreader.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"

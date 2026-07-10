@@ -25,11 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "logreader.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
+#include "picoquic_qlog.h"
 #include "picoquic_bbr.h"
-#include "qlog.h"
 
 /* Flow control test:
 * 

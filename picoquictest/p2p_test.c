@@ -25,9 +25,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 
 static test_api_stream_desc_t test_scenario_address_discovery[] = {
     { 4, 0, 257, 100000 }

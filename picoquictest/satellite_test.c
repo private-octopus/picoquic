@@ -30,12 +30,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
@@ -155,10 +150,10 @@ static int satellite_test_one(picoquic_congestion_algorithm_t* ccalgo, size_t da
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
         /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client, test_ctx->qclient->log_params[0], &test_ctx->cnx_client->log_ctx[0]);
+        // binlog_new_connection(test_ctx->cnx_client, test_ctx->qclient->log_params[0], &test_ctx->cnx_client->log_ctx[0]);
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,

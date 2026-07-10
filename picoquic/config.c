@@ -27,12 +27,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
-#include "picoquic_binlog.h"
-#include "picoquic_qlog.h"
-#include "picoquic_logger.h"
-#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
@@ -956,17 +953,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
          /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
-        if (config->bin_dir != NULL) {
-            picoquic_set_binlog(quic, config->bin_dir);
-        }
-
-        if (config->qlog_dir != NULL) {
-            picoquic_set_qlog(quic, config->qlog_dir);
-        }
-
-        if (config->log_file != NULL) {
-            picoquic_set_textlog(quic, config->log_file);
-        }
+        /* Do not handle creation of log contexts at this level, as that
+         * would force linkage of log functions. */
 
         picoquic_set_log_level(quic, config->use_long_log);
 
@@ -1117,18 +1105,6 @@ picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
             DBG_PRINTF("%s", "Could not create QMUX context.");
         }
         else {
-            if (config->bin_dir != NULL) {
-                picoquic_set_binlog(qmux, config->bin_dir);
-            }
-
-            if (config->qlog_dir != NULL) {
-                picoquic_set_qlog(qmux, config->qlog_dir);
-            }
-
-            if (config->log_file != NULL) {
-                picoquic_set_textlog(qmux, config->log_file);
-            }
-
             picoquic_set_log_level(qmux, config->use_long_log);
 
 

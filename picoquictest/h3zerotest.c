@@ -42,8 +42,7 @@
 #include "picotls.h"
 #include "tls_api.h"
 #endif
-#include "autoqlog.h"
-#include "picoquic_binlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_bbr.h"
 
 /*

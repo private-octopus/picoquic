@@ -30,10 +30,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 
 /* Wait until handshake key is ready */
 int tester_wait_handshake_key(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
