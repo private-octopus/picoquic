@@ -5367,7 +5367,7 @@ int certificate_test_one(char const * sni, char const * cert_name, char const* s
         }
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, cert_store_name);
         }
 
         if (ret != 0) {
