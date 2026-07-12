@@ -5335,7 +5335,21 @@ int pn_enc_1rtt_test(void)
     return ret;
 }
 
-int bad_certificate_test(void)
+/*Test that if the server presents a bad certificate, the connection fails.
+* There should be multiple version of the test:
+* - Certificate is malformed.
+* - Certificate is not signed by a trusted CA.
+* - Certificate is expired.
+* - Certificate is not valid for the SNI.
+* - Server key does not match the key in the certificate.
+* The variants should have the following input:
+* - Malformed certifcate: server_bad_cert.pem
+* - Not signed by trusted CA: present alternate cert store
+* - Expired certificate: present expired cert (can we?)
+* - Not valid for SNI: start connection with different SNI
+* - Bad server key: use alternate server key.
+*/
+int certificate_test_one(char const * sni, char const * cert_name, char const* server_key_name, char const* cert_store_name)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -5343,13 +5357,13 @@ int bad_certificate_test(void)
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, 0, sni, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, cert_name);
 
         if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, server_key_name);
         }
 
         if (ret == 0) {
@@ -5408,6 +5422,27 @@ int bad_certificate_test(void)
 
     return ret;
 }
+
+int cert_bad_cert_test(void)
+{
+    return certificate_test_one(PICOQUIC_TEST_SNI, PICOQUIC_TEST_FILE_SERVER_BAD_CERT, PICOQUIC_TEST_FILE_SERVER_KEY, PICOQUIC_TEST_FILE_CERT_STORE);
+}
+
+int cert_invalid_test(void)
+{
+    return certificate_test_one(PICOQUIC_TEST_SNI, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA, PICOQUIC_TEST_FILE_SERVER_KEY, PICOQUIC_TEST_FILE_CERT_STORE);
+}
+
+int cert_bad_name_test(void)
+{
+    return certificate_test_one("not-the-expected-sni.com", PICOQUIC_TEST_FILE_SERVER_CERT, PICOQUIC_TEST_FILE_SERVER_KEY, PICOQUIC_TEST_FILE_CERT_STORE);
+}
+
+int cert_bad_key_test(void)
+{
+    return certificate_test_one(PICOQUIC_TEST_SNI, PICOQUIC_TEST_FILE_SERVER_BAD_CERT, PICOQUIC_TEST_FILE_SERVER_KEY_ECDSA, PICOQUIC_TEST_FILE_CERT_STORE);
+}
+
 
 /*
 * Test setting the verify certificate callback.

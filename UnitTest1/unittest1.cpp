@@ -1399,9 +1399,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(bad_certificate)
+        TEST_METHOD(cert_bad_cert)
         {
-            int ret = bad_certificate_test();
+            int ret = cert_bad_cert_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_invalid_cert)
+        {
+            int ret = cert_invalid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_bad_name)
+        {
+            int ret = cert_bad_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_bad_key)
+        {
+            int ret = cert_bad_key_test();
 
             Assert::AreEqual(ret, 0);
         }
