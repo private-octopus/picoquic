@@ -59,7 +59,7 @@ jobs:
             cd build
             make picoquic_ct
             ./picoquic_ct -S .. mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
-                          mbedtls_retrieve_pubkey mbedtls_sign_verify \
+                          mbedtls_retrieve_pubkey mbedtls_sign_verify bad_certificate \
                           minicrypto_is_last mbedtls && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
             exit 1
