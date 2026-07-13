@@ -60,7 +60,7 @@ jobs:
             make picoquic_ct
             ./picoquic_ct -S .. mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
                           mbedtls_retrieve_pubkey mbedtls_sign_verify \
-                          cert_verify_bad_cert cert_verify_bad_sni cert_verify_invalid_cert \
+                          cert_verify_bad_cert cert_verify_bad_sni cert_verify_invalid \
                           cert_verify_null cert_verify_null_sni cert_verify_rsa \
                           minicrypto_is_last mbedtls && QUICRESULT=$?
             if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
