@@ -451,8 +451,14 @@ int ptls_mbedtls_get_public_key_info(const unsigned char* pk_raw, size_t pk_raw_
         */
         if (oid_length == sizeof(ptls_mbedtls_oid_rsa_key) &&
             memcmp(pk_raw + oid_index, ptls_mbedtls_oid_rsa_key, sizeof(ptls_mbedtls_oid_rsa_key)) == 0) {
-            /* We recognized RSA */
+            /* We recognized RSA. The TLS peer may pick either PKCS1v15 or
+            * PSS padding, with any hash, so the key policy must allow
+            * both -- otherwise psa_verify_message() fails with
+            * PSA_ERROR_NOT_PERMITTED. */
             psa_set_key_type(attributes, PSA_KEY_TYPE_RSA_PUBLIC_KEY);
+            psa_set_key_usage_flags(attributes, PSA_KEY_USAGE_VERIFY_MESSAGE);
+            psa_set_key_algorithm(attributes, PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_ANY_HASH));
+            psa_set_key_enrollment_algorithm(attributes, PSA_ALG_RSA_PSS(PSA_ALG_ANY_HASH));
             if (*key_length > 0 && pk_raw[*key_index] == 0) {
                 (*key_index)++;
                 (*key_length)--;
@@ -460,8 +466,11 @@ int ptls_mbedtls_get_public_key_info(const unsigned char* pk_raw, size_t pk_raw_
         }
         else if (oid_length == sizeof(ptls_mbedtls_oid_ec_key) &&
             memcmp(pk_raw + oid_index, ptls_mbedtls_oid_ec_key, sizeof(ptls_mbedtls_oid_ec_key)) == 0) {
-            /* We recognized ECDSA */
+            /* We recognized ECDSA. The hash used depends on the curve
+            * negotiated for the signature scheme, so allow any hash. */
             psa_set_key_type(attributes, PSA_KEY_TYPE_ECC_PUBLIC_KEY(PSA_ECC_FAMILY_SECP_R1));
+            psa_set_key_usage_flags(attributes, PSA_KEY_USAGE_VERIFY_MESSAGE);
+            psa_set_key_algorithm(attributes, PSA_ALG_ECDSA(PSA_ALG_ANY_HASH));
             if (*key_length > 0 && pk_raw[*key_index] == 0) {
                 (*key_index)++;
                 (*key_length)--;
@@ -496,10 +505,12 @@ int ptls_mbedtls_set_schemes_from_key_params(psa_algorithm_t key_algo, size_t ke
 {
     int ret = 0;
 
-    switch (key_algo) {
-    case PSA_ALG_RSA_PKCS1V15_SIGN_RAW:
+    if (PSA_ALG_IS_RSA_PKCS1V15_SIGN(key_algo) || PSA_ALG_IS_RSA_PSS(key_algo)) {
         *schemes = rsa_signature_schemes;
-        break;
+        return ret;
+    }
+
+    switch (key_algo) {
     case PSA_ALG_DETERMINISTIC_ECDSA(PSA_ALG_SHA_256):
         *schemes = secp256r1_signature_schemes;
         break;
@@ -571,6 +582,10 @@ int ptls_mbedtls_set_available_schemes(ptls_mbedtls_sign_certificate_t *signer)
 * a convenience API.
 */
 
+/* Forward declaration: maps a TLS SignatureScheme to the exact PSA algorithm
+* (padding + hash), defined further down and shared with the verify path. */
+psa_algorithm_t mbedtls_get_psa_alg_from_tls_number(uint16_t tls_algo);
+
 int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, ptls_async_job_t **async,
     uint16_t *selected_algorithm, ptls_buffer_t *outbuf, ptls_iovec_t input,
     const uint16_t *algorithms, size_t num_algorithms)
@@ -602,18 +617,29 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, p
             }
         }
         if (ret == 0) {
-            psa_algorithm_t sign_algo = psa_get_key_algorithm(&self->attributes);
+            int is_rsa = (psa_get_key_type(&self->attributes) == PSA_KEY_TYPE_RSA_KEY_PAIR);
+            /* RSA keys carry a wildcard policy (any hash, PKCS1v15 or PSS),
+            * because the padding and hash are picked per handshake by the
+            * negotiated scheme -- so psa_sign_hash() needs the concrete
+            * algorithm derived from that scheme, matching what the peer
+            * will use to verify. EC keys keep the key's own deterministic-
+            * ECDSA algorithm: the (r,s) signature it produces verifies
+            * correctly under plain ECDSA regardless of how the nonce was
+            * derived, and the key policy only permits that one algorithm. */
+            psa_algorithm_t sign_algo = is_rsa ?
+                mbedtls_get_psa_alg_from_tls_number(*selected_algorithm) :
+                psa_get_key_algorithm(&self->attributes);
             size_t nb_bits = psa_get_key_bits(&self->attributes);
             size_t nb_bytes = (nb_bits + 7) / 8;
             if (nb_bits == 0) {
-                if (sign_algo == PSA_ALG_RSA_PKCS1V15_SIGN_RAW) {
+                if (is_rsa) {
                     /* assume at most 4096 bit key */
                     nb_bytes = 512;
                 } else {
                     /* Max size assumed, secp521r1 */
                     nb_bytes = 124;
                 }
-            } else if (sign_algo != PSA_ALG_RSA_PKCS1V15_SIGN_RAW) {
+            } else if (!is_rsa) {
                 nb_bytes *= 2;
             }
             if ((ret = ptls_buffer_reserve(outbuf, nb_bytes)) == 0) {
@@ -704,8 +730,13 @@ int ptls_mbedtls_rsa_get_key_bits(const unsigned char *key_value, size_t key_len
 void ptls_mbedtls_set_rsa_key_attributes(ptls_mbedtls_sign_certificate_t *signer, const unsigned char *key_value, size_t key_length)
 {
     size_t nb_bits = 0;
+    /* The negotiated TLS signature scheme picks the padding (PKCS1v15 or PSS)
+    * and the hash on a per-handshake basis, so the key policy must allow
+    * both, with any hash -- the actual algorithm passed to psa_sign_hash()
+    * is the concrete one derived from the selected scheme. */
     psa_set_key_usage_flags(&signer->attributes, PSA_KEY_USAGE_SIGN_HASH);
-    psa_set_key_algorithm(&signer->attributes, PSA_ALG_RSA_PKCS1V15_SIGN_RAW);
+    psa_set_key_algorithm(&signer->attributes, PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_ANY_HASH));
+    psa_set_key_enrollment_algorithm(&signer->attributes, PSA_ALG_RSA_PSS(PSA_ALG_ANY_HASH));
     psa_set_key_type(&signer->attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
     if (ptls_mbedtls_rsa_get_key_bits(key_value, key_length, &nb_bits) == 0) {
         psa_set_key_bits(&signer->attributes, nb_bits);
