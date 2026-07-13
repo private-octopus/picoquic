@@ -561,6 +561,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(handshake_pool_exhausted)
+        {
+            int ret = handshake_pool_exhausted_test();
+
+            Assert::AreEqual(ret, 0);     
+        }
+
 #if 0
         /* The TLS API connect test is only useful when debugging issues step by step */
         TEST_METHOD(tls_api_connect)
