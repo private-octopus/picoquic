@@ -126,6 +126,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_connect", tls_api_connect_test },
 #endif
     { "tls_api", tls_api_test },
+    { "handshake_uaf_pool_exhausted", handshake_uaf_pool_exhausted_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "tls_exporter", tls_exporter_test },
     { "null_sni", null_sni_test },
