@@ -1077,37 +1077,38 @@ int mbedtls_verify_sign(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls
     if (message_verify_ctx == NULL) {
         ret = PTLS_ERROR_LIBRARY;
     }
-    else if (data.base != NULL) {
+    else if (data.base == NULL) {
         /* Picotls will call verify_sign with data.base == NULL when it
         * only wants to clear the memory. This is not an error condition. */
-
+    }
+    else {
         /* Find the PSA_ALG for the signature scheme */
         alg = mbedtls_get_psa_alg_from_tls_number(algo);
 
         if (alg == PSA_ALG_NONE) {
             ret = PTLS_ALERT_ILLEGAL_PARAMETER;
         }
-    }
-    else {
-        psa_status_t status = psa_verify_message(message_verify_ctx->key_id, alg, data.base, data.len, signature.base, signature.len);
+        else {
+            psa_status_t status = psa_verify_message(message_verify_ctx->key_id, alg, data.base, data.len, signature.base, signature.len);
 
-        if (status != PSA_SUCCESS) {
-            switch (status) {
-            case PSA_ERROR_NOT_PERMITTED: /* The key does not have the PSA_KEY_USAGE_SIGN_MESSAGE flag, or it does not permit the requested algorithm. */
-                ret = PTLS_ERROR_INCOMPATIBLE_KEY;
-                break;
-            case PSA_ERROR_INVALID_SIGNATURE: /* The calculation was performed successfully, but the passed signature is not a valid signature. */
-                ret = PTLS_ALERT_DECRYPT_ERROR;
-                break;
-            case PSA_ERROR_NOT_SUPPORTED:
-                ret = PTLS_ALERT_ILLEGAL_PARAMETER;
-                break;
-            case PSA_ERROR_INSUFFICIENT_MEMORY:
-                ret = PTLS_ERROR_NO_MEMORY;
-                break;
-            default:
-                ret = PTLS_ERROR_LIBRARY;
-                break;
+            if (status != PSA_SUCCESS) {
+                switch (status) {
+                case PSA_ERROR_NOT_PERMITTED: /* The key does not have the PSA_KEY_USAGE_SIGN_MESSAGE flag, or the algorithm does not match the key type -- e.g. the certificate's key type does not match the signature algorithm actually used. */
+                    ret = PTLS_ALERT_HANDSHAKE_FAILURE;
+                    break;
+                case PSA_ERROR_INVALID_SIGNATURE: /* The calculation was performed successfully, but the passed signature is not a valid signature. */
+                    ret = PTLS_ALERT_DECRYPT_ERROR;
+                    break;
+                case PSA_ERROR_NOT_SUPPORTED:
+                    ret = PTLS_ALERT_ILLEGAL_PARAMETER;
+                    break;
+                case PSA_ERROR_INSUFFICIENT_MEMORY:
+                    ret = PTLS_ERROR_NO_MEMORY;
+                    break;
+                default:
+                    ret = PTLS_ERROR_LIBRARY;
+                    break;
+                }
             }
         }
     }
