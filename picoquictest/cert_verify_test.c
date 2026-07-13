@@ -248,3 +248,12 @@ int cert_verify_null_sni_test(void)
         CERT_VERIFY_TEST_CA, NULL);
     return ret;
 }
+
+/* Invalid certificate: issued for ECDSA key, but the server uses an RSA key. Verification should fail.
+ */
+int cert_verify_invalid_test(void)
+{
+    int ret = cert_verify_test_one(0, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
+    return ret;
+}

@@ -1399,12 +1399,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_bad_certificate)
-        {
-            int ret = bad_certificate_test();
-
-            Assert::AreEqual(ret, 0);
-        }
 
         TEST_METHOD(client_cert_callback)
         {
@@ -2899,6 +2893,13 @@ namespace UnitTest1
 
         TEST_METHOD(cert_verify_rsa) {
             int ret = cert_verify_rsa_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_invalid)
+        {
+            int ret = cert_verify_invalid_test();
 
             Assert::AreEqual(ret, 0);
         }
