@@ -585,6 +585,18 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks by default */
     unsigned int use_predictable_random : 1; /* For logging tests */
+    /* Set by add_chunk_node() when it splices a "received_data" node directly into a
+     * stream reassembly tree (zero-copy path) instead of copying its content into a
+     * fresh node. Ownership then belongs to the tree, which may consume and
+     * recycle/free the node before picoquic_incoming_segment() regains control -- that
+     * function must consult this flag, never decrypted_data->bytes (which may by then
+     * point to freed memory), to decide whether it still owns the node.
+     * picoquic_incoming_segment() can be called reentrantly (e.g. picomask decapsulating
+     * a DATAGRAM frame and re-injecting it via a nested picoquic_incoming_packet_ex()
+     * call on the same quic context), so every entry to that function must save this
+     * flag and restore it on exit, the same way a callee saves a register it clobbers --
+     * never just reset it to 0 and drop the previous value on the floor. */
+    unsigned int input_segment_node_taken : 1;
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -618,19 +630,6 @@ typedef struct st_picoquic_quic_t {
     int nb_data_nodes_in_pool;
     int nb_data_nodes_allocated;
     int nb_data_nodes_allocated_max;
-
-    /* Set by add_chunk_node() when it splices the "received_data" node passed down
-     * from picoquic_incoming_segment() directly into a stream reassembly tree
-     * (zero-copy path), instead of copying its content into a fresh node. Once that
-     * happens, ownership of the node moves to the tree, which may consume and
-     * recycle/free it before picoquic_incoming_segment() regains control. That
-     * function must consult this flag -- never decrypted_data->bytes, which may by
-     * then point to freed memory -- to decide whether it still owns the node.
-     * Valid only for the duration of a single picoquic_incoming_segment() call;
-     * reset at its start, consumed at its end. Safe as a per-quic transient because
-     * segments are processed one at a time, never concurrently or reentrantly
-     * (same pattern as cnx_in_progress below). */
-    int input_segment_data_node_taken;
 
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;

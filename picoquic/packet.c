@@ -2103,16 +2103,19 @@ int picoquic_incoming_segment(
     int path_is_not_allocated = 0;
     uint8_t* bytes = NULL;
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
+    /* This function can be called reentrantly -- e.g. picomask decapsulating a
+     * DATAGRAM frame and re-injecting it via a nested picoquic_incoming_packet_ex()
+     * call on the same quic context, from deep within this same call's own frame
+     * decoding below. quic->input_segment_node_taken must therefore be saved here
+     * and restored before returning, exactly like a callee-saved register: a nested
+     * call's own use of the flag must not corrupt the state this call needs once
+     * control returns to it. */
+    unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
 
     if (decrypted_data == NULL) {
         return -1;
     }
-    /* Frame processing below may splice "decrypted_data" directly into a stream
-     * reassembly tree (zero-copy) and then, still within this call, consume and
-     * recycle/free it. quic->input_segment_data_node_taken is how that gets
-     * reported back, since decrypted_data itself may no longer be valid memory
-     * by the time this function is ready to check. */
-    quic->input_segment_data_node_taken = 0;
+    quic->input_segment_node_taken = 0;
 
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, raw_bytes, length, packet_length, addr_from,
@@ -2394,9 +2397,10 @@ int picoquic_incoming_segment(
         ret = -1;
     }
 
-    if (decrypted_data != NULL && !quic->input_segment_data_node_taken) {
+    if (decrypted_data != NULL && quic->input_segment_node_taken == 0) {
         picoquic_stream_data_node_recycle(decrypted_data);
     }
+    quic->input_segment_node_taken = saved_input_segment_node_taken;
 
     return ret;
 }
