@@ -1328,10 +1328,14 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
         }
     }
     else {
-        /* The pointer "bytes" is inside the received data packet. */
+        /* The pointer "bytes" is inside the received data packet.
+        * update the pointers and length, and set the input_segment_node_taken flag
+        * to mark ownership by the data tree.
+         */
         node->bytes = bytes;
         node->offset = offset;
         node->length = length;
+        quic->input_segment_node_taken = 1;
     }
 
     if (node != NULL){
