@@ -3688,9 +3688,11 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                             (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                             cnx->callback_ctx, NULL);
                     }
-                    ret = picoquic_skip_frame(&p->bytes[byte_index],
-                        p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                    byte_index += frame_length;
+                    if (ret == 0) {
+                        ret = picoquic_skip_frame(&p->bytes[byte_index],
+                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                        byte_index += frame_length;
+                    }
                     break;
                 }
                 else {
