@@ -329,7 +329,7 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_reset_stream);
     }
-    if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
+    else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
         /* Not finding the stream is only an error if the stream
          * was expected to be present, or created on demand. If the
          * stream was already created and then deleted, there is no harm.
@@ -344,7 +344,6 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR,
             picoquic_frame_type_reset_stream);
         bytes = NULL;
-
     }
     else if (picoquic_flow_control_check_stream_offset(cnx, stream, final_offset) != 0) {
         bytes = NULL;  // error already signaled
