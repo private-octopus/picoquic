@@ -3019,7 +3019,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             path_i++;
         }
         if (path_i == packet_data->nb_path_ack) {
-            if (path_i > PICOQUIC_NB_PATH_TARGET) {
+            if (path_i >= PICOQUIC_NB_PATH_TARGET) {
                 /* Too many ACKs in this packet -- do not update path status. */
                 return;
             }
