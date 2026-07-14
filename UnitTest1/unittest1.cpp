@@ -2240,6 +2240,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_at_end)
+        {
+            int ret = reset_at_end_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(reset_loop)
         {
             int ret = reset_loop_test();

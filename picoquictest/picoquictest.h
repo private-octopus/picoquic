@@ -308,6 +308,7 @@ int reset_extra_stop_test(void);
 int reset_need_max_test(void);
 int reset_need_reset_test(void);
 int reset_need_stop_test(void);
+int reset_at_end_test(void);
 int reset_loop_test(void);
 int reset_stream_at_basic_test(void);
 int reset_stream_at_limit_test(void);
