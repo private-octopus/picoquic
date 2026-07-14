@@ -1358,7 +1358,7 @@ void picoquic_unregister_net_secret(picoquic_cnx_t* cnx)
     if (cnx->registered_secret_addr.ss_family != 0) {
         picohash_delete_key(cnx->quic->table_cnx_by_secret, cnx, 0);
         memset(&cnx->registered_secret_addr, 0, sizeof(struct sockaddr_storage));
-        memset(&cnx->registered_reset_secret, 0, sizeof(PICOQUIC_RESET_SECRET_SIZE));
+        memset(&cnx->registered_reset_secret, 0, PICOQUIC_RESET_SECRET_SIZE);
     }
 }
 
