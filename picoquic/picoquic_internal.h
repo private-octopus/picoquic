@@ -619,6 +619,19 @@ typedef struct st_picoquic_quic_t {
     int nb_data_nodes_allocated;
     int nb_data_nodes_allocated_max;
 
+    /* Set by add_chunk_node() when it splices the "received_data" node passed down
+     * from picoquic_incoming_segment() directly into a stream reassembly tree
+     * (zero-copy path), instead of copying its content into a fresh node. Once that
+     * happens, ownership of the node moves to the tree, which may consume and
+     * recycle/free it before picoquic_incoming_segment() regains control. That
+     * function must consult this flag -- never decrypted_data->bytes, which may by
+     * then point to freed memory -- to decide whether it still owns the node.
+     * Valid only for the duration of a single picoquic_incoming_segment() call;
+     * reset at its start, consumed at its end. Safe as a per-quic transient because
+     * segments are processed one at a time, never concurrently or reentrantly
+     * (same pattern as cnx_in_progress below). */
+    int input_segment_data_node_taken;
+
     picoquic_connection_id_cb_fn cnx_id_callback_fn;
     void* cnx_id_callback_ctx;
 

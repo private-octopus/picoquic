@@ -2319,7 +2319,7 @@ int tls_api_test(void)
  * packet.c:2390 while processing the client's very first Initial
  * packet.
  */
-int handshake_uaf_pool_exhausted_test(void)
+int tls_handshake_pool_exhausted_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;

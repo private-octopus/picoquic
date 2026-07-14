@@ -2107,6 +2107,13 @@ int picoquic_incoming_segment(
     if (decrypted_data == NULL) {
         return -1;
     }
+    /* Frame processing below may splice "decrypted_data" directly into a stream
+     * reassembly tree (zero-copy) and then, still within this call, consume and
+     * recycle/free it. quic->input_segment_data_node_taken is how that gets
+     * reported back, since decrypted_data itself may no longer be valid memory
+     * by the time this function is ready to check. */
+    quic->input_segment_data_node_taken = 0;
+
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, raw_bytes, length, packet_length, addr_from,
         current_time, decrypted_data, &ph, &cnx, consumed, &new_context_created);
@@ -2387,7 +2394,7 @@ int picoquic_incoming_segment(
         ret = -1;
     }
 
-    if (decrypted_data != NULL && decrypted_data->bytes == NULL) {
+    if (decrypted_data != NULL && !quic->input_segment_data_node_taken) {
         picoquic_stream_data_node_recycle(decrypted_data);
     }
 

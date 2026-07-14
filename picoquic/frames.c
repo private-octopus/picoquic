@@ -1328,10 +1328,14 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
         }
     }
     else {
-        /* The pointer "bytes" is inside the received data packet. */
+        /* The pointer "bytes" is inside the received data packet. Ownership of
+         * "received_data" moves to the tree: it may be consumed and recycled/freed
+         * before control returns to picoquic_incoming_segment(), so that function
+         * must not touch it again except through this flag. */
         node->bytes = bytes;
         node->offset = offset;
         node->length = length;
+        quic->input_segment_data_node_taken = 1;
     }
 
     if (node != NULL){

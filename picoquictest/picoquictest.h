@@ -66,7 +66,7 @@ int ackfrq_short_test(void);
 int tls_api_connect_test(void);
 #endif
 int tls_api_test(void);
-int handshake_uaf_pool_exhausted_test(void);
+int tls_handshake_pool_exhausted_test(void);
 int tls_api_inject_hs_ack_test(void);
 int tls_exporter_test(void);
 int tls_api_silence_test(void);
