@@ -715,6 +715,13 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                     picoquic_tuple_t* old_tuple = path_x->first_tuple;
                     /* We need to replace the first tuple by this tuple. */
                     picoquic_set_first_tuple(path_x, tuple);
+                    /* We deliberately mark the path as verified in the case of NAT Traversal.
+                    * This is a tradeoff. If this genually is a NAT traversal, continuing to 
+                    * use the old path for 1 RTT before the challenge result is received leads
+                    * to losing 1 RTT worth of packets. If this is a spoofed address, we will be
+                    * able to recover upon receiving the challenge response from the old address,
+                    * and the new address will be demoted.
+                    */
                     tuple->challenge_verified = 1;
                     /* set a challenge on the old tuple to recover from spoofed addresses */
                     picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
