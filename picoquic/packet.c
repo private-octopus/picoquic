@@ -2103,13 +2103,7 @@ int picoquic_incoming_segment(
     int path_is_not_allocated = 0;
     uint8_t* bytes = NULL;
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
-    /* This function can be called reentrantly -- e.g. picomask decapsulating a
-     * DATAGRAM frame and re-injecting it via a nested picoquic_incoming_packet_ex()
-     * call on the same quic context, from deep within this same call's own frame
-     * decoding below. quic->input_segment_node_taken must therefore be saved here
-     * and restored before returning, exactly like a callee-saved register: a nested
-     * call's own use of the flag must not corrupt the state this call needs once
-     * control returns to it. */
+    /* saving the value of the input_segment_node_taken, to ensure reentrency. */
     unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
 
     if (decrypted_data == NULL) {
