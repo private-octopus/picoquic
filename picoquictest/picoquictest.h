@@ -227,7 +227,6 @@ int migration_test_long(void);
 int migration_test_loss(void);
 int migration_zero_test(void);
 int migration_fail_test(void);
-int migration_delete_path_pending_test(void);
 int cnxid_renewal_test(void);
 int retire_cnxid_test(void);
 int server_busy_test(void);

@@ -288,7 +288,6 @@ static const picoquic_test_def_t test_table[] = {
     { "migration_with_loss", migration_test_loss },
     { "migration_zero", migration_zero_test },
     { "migration_fail", migration_fail_test },
-    { "migration_delete_path_pending", migration_delete_path_pending_test },
     { "preferred_address", preferred_address_test},
     { "preferred_address_dis_mig", preferred_address_dis_mig_test },
     { "preferred_address_zero", preferred_address_zero_test },

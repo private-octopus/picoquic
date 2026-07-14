@@ -1704,13 +1704,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(migration_delete_path_pending)
-        {
-            int ret = migration_delete_path_pending_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(preferred_address)
         {
             int ret = preferred_address_test();

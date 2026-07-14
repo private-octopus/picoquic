@@ -3480,6 +3480,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
         }
         else {
             *odcid = picoquic_null_connection_id;
+            ret = -1;
         }
     }
 
