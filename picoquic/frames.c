@@ -3963,7 +3963,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             ecn_ack_path->ecn_ect1_total_remote += delta_ect1;
             ecn_ack_path->ecn_ce_total_remote += delta_ce;
         }
-        if (delta_ce > 0) {
+        if (delta_ce > 0 && cnx->congestion_alg != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = pc;
             ack_state.lost_packet_number = largest_in_path;
