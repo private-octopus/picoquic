@@ -741,7 +741,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         }
     }
     *p_path_id = path_id;
-    cnx->path[path_id]->last_packet_received_at = current_time;
+    if (path_id >= 0) {
+        cnx->path[path_id]->last_packet_received_at = current_time;
+    }
 
     return ret;
 }
