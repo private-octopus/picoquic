@@ -70,7 +70,7 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
 
         stored->ip_addr_client = (uint8_t*)next_p;
         if (ip_addr_client == NULL || ip_addr_client_length == 0) {
-            stored->ip_addr_length = 0;
+            stored->ip_addr_client_length = 0;
         }
         else {
             if (ip_addr_client_length > PICOQUIC_STORED_IP_MAX) {
