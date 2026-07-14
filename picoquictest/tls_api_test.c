@@ -2291,35 +2291,11 @@ int tls_api_test(void)
 }
 
 /*
- * Reproduces the use-after-free flagged by the 2026-07-13 audit
- * (picoquic/packet.c:2390, interacting with tls_api.c:3101-3106 and
- * frames.c/add_chunk_node's zero-copy splice, streams.c:48-58).
- *
- * picoquic_incoming_segment() allocates a decrypted_data node per
- * segment and, once the ordinary handshake CRYPTO frame has been
- * processed, decides whether to recycle that node by checking
- * decrypted_data->bytes == NULL. But for a single-CRYPTO-frame Initial
- * packet, add_chunk_node() already spliced that very node into the
- * stream reassembly tree (zero-copy path), and
- * picoquic_tls_stream_process() consumes and recycles it SYNCHRONOUSLY,
- * within the same call -- via picosplay_delete_hint() ->
- * picoquic_stream_data_node_recycle(), which never clears ->bytes. The
- * later read at packet.c:2390 is therefore a read of an already
- * recycled node.
- *
- * That recycle is silently masked as long as the shared per-quic node
- * pool has room: the node is only pushed onto quic->p_first_data_node,
- * still-valid memory. It becomes a real heap-use-after-free once the
- * pool (cap PICOQUIC_MAX_PACKETS_IN_POOL = 8192, shared across all
- * connections) is full, which is routine steady state for a busy,
- * long-running server. This test fast-forwards to that steady state by
- * setting nb_data_nodes_in_pool to the cap before the handshake starts,
- * then runs one entirely ordinary connection. Expected result under
- * AddressSanitizer/Valgrind: heap-use-after-free reported at
- * packet.c:2390 while processing the client's very first Initial
- * packet.
+* test handling of data nodes used in TLS when the pool is
+* nearing exhaustion. This was designed first to reproduce a
+* possible use after free issue.
  */
-int handshake_pool_exhausted_test(void)
+int tls_handshake_pool_exhausted_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;

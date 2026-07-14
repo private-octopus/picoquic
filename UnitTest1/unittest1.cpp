@@ -561,9 +561,9 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
-        TEST_METHOD(handshake_pool_exhausted)
+        TEST_METHOD(tls_handshake_pool_exhausted)
         {
-            int ret = handshake_pool_exhausted_test();
+            int ret = tls_handshake_pool_exhausted_test();
 
             Assert::AreEqual(ret, 0);     
         }
