@@ -471,3 +471,92 @@ int ech_no_ech_test(void)
     spec.try_twice = 1;
     return ech_e2e_test_one(&spec);
 }
+
+/* ech_bad_config_test:
+ *
+ * Verify that bad configurations such as empty files or blank files are
+ * properly rejected.
+ */
+static int ech_write_bad_config_file(char const* file_name, int all_whitespace)
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open(file_name, "w");
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        if (all_whitespace) {
+            fprintf(F, "   \n\t \n   \n");
+        }
+        /* else: leave the file completely empty */
+        F = picoquic_file_close(F);
+    }
+    return ret;
+}
+
+static int ech_bad_config_test_one(int all_whitespace)
+{
+    int ret = 0;
+    char const* bad_config_file = "ech_bad_config_test.txt";
+    ptls_buffer_t config_buf;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t initial_cid = { {0xec, 0xba, 0xd0, 0, 0, 0, 0, 0}, 8 };
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = ech_write_bad_config_file(bad_config_file, all_whitespace);
+
+    /* Step 1: deterministic, no sanitizer required. picoquic_ech_read_config
+     * must not report success while config_buf.off is still 0. */
+    if (ret == 0) {
+        ptls_buffer_init(&config_buf, "", 0);
+        ret = picoquic_ech_read_config(&config_buf, bad_config_file);
+        if (ret == 0 && config_buf.off == 0) {
+            DBG_PRINTF("%s", "picoquic_ech_read_config reported success for an empty/whitespace config");
+            ret = -1;
+        }
+        else if (ret != 0) {
+            ret = 0; /* correctly rejected: this is the fixed behavior we want */
+        }
+        else {
+            DBG_PRINTF("Unexpected: got %zu decoded bytes from a bad config file", config_buf.off);
+            ret = -1;
+        }
+        ptls_buffer_dispose(&config_buf);
+    }
+
+    /* Step 2: the real startup entry point, exercising the unchecked
+     * config.base[7]/[8] read in ech_init_opener_callback(). Run under
+     * ASan / valgrind memcheck for a conclusive result -- a clean return
+     * code alone does not prove the out-of-bounds read didn't happen. */
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+    }
+    if (ret == 0) {
+        int ech_ret = picoquic_ech_configure_quic_ctx(test_ctx->qserver, "no_such_private_key.pem", bad_config_file);
+        if (ech_ret == 0) {
+            DBG_PRINTF("%s", "picoquic_ech_configure_quic_ctx succeeded from a bad config file");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int ech_bad_config_empty_test(void)
+{
+    return ech_bad_config_test_one(0);
+}
+
+int ech_bad_config_whitespace_test(void)
+{
+    return ech_bad_config_test_one(1);
+}

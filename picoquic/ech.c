@@ -116,8 +116,15 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
             ret = PTLS_ERROR_INCORRECT_BASE64;
         }
         F=picoquic_file_close(F);
+
         if (ret == 0) {
-            DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
+            if (config->off == 0) {
+                DBG_PRINTF("Empty config after reading %s", config_file_name);
+                ret = -1;
+            }
+            else {
+                DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
+            }
         }
     }
     return ret;
