@@ -1704,6 +1704,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_delete_path_pending)
+        {
+            int ret = migration_delete_path_pending_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(preferred_address)
         {
             int ret = preferred_address_test();
@@ -3358,6 +3365,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_cid_retire) {
             int ret = multipath_cid_retire_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_abandon_pending) {
+            int ret = multipath_abandon_pending_test();
 
             Assert::AreEqual(ret, 0);
         }
