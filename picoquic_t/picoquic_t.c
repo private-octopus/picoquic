@@ -590,6 +590,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ech_no_ech", ech_no_ech_test },
     { "ech_bad_config_empty", ech_bad_config_empty_test },
     { "ech_bad_config_whitespace", ech_bad_config_whitespace_test },
+    { "ech_bad_config_too_short", ech_bad_config_too_short_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },

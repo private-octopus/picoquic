@@ -122,6 +122,10 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
                 DBG_PRINTF("Empty config after reading %s", config_file_name);
                 ret = -1;
             }
+            else if (config->off < 9) {
+                DBG_PRINTF("Config too short after reading %s", config_file_name);
+                ret = -1;
+            }
             else {
                 DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
             }

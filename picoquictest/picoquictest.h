@@ -605,6 +605,7 @@ int ech_grease_test(void);
 int ech_no_ech_test(void);
 int ech_bad_config_empty_test(void);
 int ech_bad_config_whitespace_test(void);
+int ech_bad_config_too_short_test(void);
 int getter_test(void);
 int grease_quic_bit_test(void);
 int grease_quic_bit_one_way_test(void);

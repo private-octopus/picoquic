@@ -477,7 +477,7 @@ int ech_no_ech_test(void)
  * Verify that bad configurations such as empty files or blank files are
  * properly rejected.
  */
-static int ech_write_bad_config_file(char const* file_name, int all_whitespace)
+static int ech_write_bad_config_file(char const* file_name, int all_whitespace, int too_short)
 {
     int ret = 0;
     FILE* F = picoquic_file_open(file_name, "w");
@@ -488,13 +488,16 @@ static int ech_write_bad_config_file(char const* file_name, int all_whitespace)
         if (all_whitespace) {
             fprintf(F, "   \n\t \n   \n");
         }
+        else if (too_short) {
+            fprintf(F, "abcdabcd\n");
+        }
         /* else: leave the file completely empty */
         F = picoquic_file_close(F);
     }
     return ret;
 }
 
-static int ech_bad_config_test_one(int all_whitespace)
+static int ech_bad_config_test_one(int all_whitespace, int too_short)
 {
     int ret = 0;
     char const* bad_config_file = "ech_bad_config_test.txt";
@@ -507,7 +510,7 @@ static int ech_bad_config_test_one(int all_whitespace)
         picoquic_tls_api_init();
     }
 
-    ret = ech_write_bad_config_file(bad_config_file, all_whitespace);
+    ret = ech_write_bad_config_file(bad_config_file, all_whitespace, too_short);
 
     /* Step 1: deterministic, no sanitizer required. picoquic_ech_read_config
      * must not report success while config_buf.off is still 0. */
@@ -553,10 +556,15 @@ static int ech_bad_config_test_one(int all_whitespace)
 
 int ech_bad_config_empty_test(void)
 {
-    return ech_bad_config_test_one(0);
+    return ech_bad_config_test_one(0, 0);
 }
 
 int ech_bad_config_whitespace_test(void)
 {
-    return ech_bad_config_test_one(1);
+    return ech_bad_config_test_one(1, 0);
+}
+
+int ech_bad_config_too_short_test(void)
+{
+    return ech_bad_config_test_one(0, 1);
 }
