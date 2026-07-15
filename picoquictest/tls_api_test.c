@@ -2290,6 +2290,43 @@ int tls_api_test(void)
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
 }
 
+/*
+* test handling of data nodes used in TLS when the pool is
+* nearing exhaustion. This was designed first to reproduce a
+* possible use after free issue.
+ */
+int tls_handshake_pool_exhausted_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Could not create the QUIC test contexts\n");
+    }
+
+    if (ret == 0) {
+        /* Simulate the steady state of a busy, long-running server: the
+         * shared decrypted-data node pool is already at capacity, so
+         * picoquic_stream_data_node_recycle() takes the free() branch
+         * instead of pushing the node back on the freelist. */
+        test_ctx->qserver->nb_data_nodes_in_pool = PICOQUIC_MAX_PACKETS_IN_POOL;
+
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+
+        if (ret != 0) {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 int tls_api_inject_hs_ack_test(void)
 {
     uint64_t simulated_time = 0;

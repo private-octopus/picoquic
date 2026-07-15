@@ -1139,11 +1139,8 @@ int picoquic_tls_collected_extensions_cb(ptls_t* UNUSED(tls), ptls_handshake_pro
             /* Retrieve the transport parameters */
             ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
                 slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
-            /* For now, override the value in case of default */
-            ret = 0;
-
             /* In server mode, only compose the extensions if properly received from client */
-            if (ctx->client_mode == 0) {
+            if (ret == 0 && ctx->client_mode == 0) {
                 picoquic_tls_set_extensions(ctx->cnx, ctx);
             }
         }
@@ -3122,7 +3119,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
                 case picoquic_state_client_handshake_start:
                     if (ptls_handshake_is_complete(ctx->tls)) {
                         if (cnx->remote_parameters_received == 0) {
-
 #ifdef _DEBUG
                             DBG_PRINTF("%s", "Connection error - no transport parameter received.\n");
 #endif
@@ -3484,6 +3480,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
         }
         else {
             *odcid = picoquic_null_connection_id;
+            ret = -1;
         }
     }
 

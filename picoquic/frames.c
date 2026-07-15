@@ -329,7 +329,7 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_reset_stream);
     }
-    if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
+    else if ((stream = picoquic_find_or_create_stream(cnx, stream_id, 1)) == NULL) {
         /* Not finding the stream is only an error if the stream
          * was expected to be present, or created on demand. If the
          * stream was already created and then deleted, there is no harm.
@@ -344,7 +344,6 @@ const uint8_t * picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uin
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FINAL_OFFSET_ERROR,
             picoquic_frame_type_reset_stream);
         bytes = NULL;
-
     }
     else if (picoquic_flow_control_check_stream_offset(cnx, stream, final_offset) != 0) {
         bytes = NULL;  // error already signaled
@@ -1328,10 +1327,14 @@ static int add_chunk_node(picoquic_quic_t * quic, picosplay_tree_t* tree, uint64
         }
     }
     else {
-        /* The pointer "bytes" is inside the received data packet. */
+        /* The pointer "bytes" is inside the received data packet.
+        * update the pointers and length, and set the input_segment_node_taken flag
+        * to mark ownership by the data tree.
+         */
         node->bytes = bytes;
         node->offset = offset;
         node->length = length;
+        quic->input_segment_node_taken = 1;
     }
 
     if (node != NULL){
@@ -3016,7 +3019,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
             path_i++;
         }
         if (path_i == packet_data->nb_path_ack) {
-            if (path_i > PICOQUIC_NB_PATH_TARGET) {
+            if (path_i >= PICOQUIC_NB_PATH_TARGET) {
                 /* Too many ACKs in this packet -- do not update path status. */
                 return;
             }
@@ -3681,7 +3684,9 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                         content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
                             &frame_id, &content_length);
 
-                        ret = (cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
+                        /* Do the callback but ignore its return code, because we always want to process
+                        * the frames that remain in the packet */
+                        (void)(cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
                             (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                             cnx->callback_ctx, NULL);
                     }
@@ -3960,7 +3965,7 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
             ecn_ack_path->ecn_ect1_total_remote += delta_ect1;
             ecn_ack_path->ecn_ce_total_remote += delta_ce;
         }
-        if (delta_ce > 0) {
+        if (delta_ce > 0 && cnx->congestion_alg != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = pc;
             ack_state.lost_packet_number = largest_in_path;
@@ -5029,6 +5034,7 @@ const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const u
     else if (!IS_BIDIR_STREAM_ID(stream_id) && IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_STREAM_STATE_ERROR,
             picoquic_frame_type_stream_data_blocked);
+        bytes = NULL;
     }
     return bytes;
 }

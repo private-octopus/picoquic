@@ -2033,7 +2033,6 @@ int multipath_cid_retire_test(void)
     return(ret);
 }
 
-
 /* 
  * TODO: Unit test of path selection.
  * The input to path selections include the state of the path,

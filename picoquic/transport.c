@@ -784,10 +784,18 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
                     else {
-                        cnx->remote_parameters.active_connection_id_limit = (uint32_t)
-                            picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                        if (cnx->remote_parameters.active_connection_id_limit < 2) {
+                        uint64_t limit = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                        if (limit < 2) {
                             ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
+                        }
+                        else {
+                            if (limit > 0x7fffffff) {
+                                /* Practical limits are small values, tied to the number of supported paths 
+                                * and migrations. There is no harm clamping the limit to 0x7fffffff, avoiding
+                                * downstream issues like misunderstanding the value as negative. */
+                                limit = 0x7fffffff;
+                            }
+                            cnx->remote_parameters.active_connection_id_limit = (uint32_t)limit;
                         }
                     }
                     break;

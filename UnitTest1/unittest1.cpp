@@ -561,6 +561,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(tls_handshake_pool_exhausted)
+        {
+            int ret = tls_handshake_pool_exhausted_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 #if 0
         /* The TLS API connect test is only useful when debugging issues step by step */
         TEST_METHOD(tls_api_connect)
@@ -2233,6 +2240,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_at_end)
+        {
+            int ret = reset_at_end_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(reset_loop)
         {
             int ret = reset_loop_test();
@@ -3727,6 +3741,25 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(ech_bad_config_empty) {
+            int ret = ech_bad_config_empty_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_whitespace) {
+            int ret = ech_bad_config_whitespace_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_too_short) {
+            int ret = ech_bad_config_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(getter) {
             int ret = getter_test();
 

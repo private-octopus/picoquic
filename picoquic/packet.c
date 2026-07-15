@@ -2103,10 +2103,14 @@ int picoquic_incoming_segment(
     int path_is_not_allocated = 0;
     uint8_t* bytes = NULL;
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
+    /* saving the value of the input_segment_node_taken, to ensure reentrency. */
+    unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
 
     if (decrypted_data == NULL) {
         return -1;
     }
+    quic->input_segment_node_taken = 0;
+
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, raw_bytes, length, packet_length, addr_from,
         current_time, decrypted_data, &ph, &cnx, consumed, &new_context_created);
@@ -2274,9 +2278,6 @@ int picoquic_incoming_segment(
                 if (ph.has_reserved_bit_set) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                 }
-                else if (ph.has_reserved_bit_set) {
-                    ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
-                }
                 else if (cnx->client_mode)
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, decrypted_data, addr_to, if_index_to, &ph, current_time);
@@ -2357,6 +2358,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
         ret == PICOQUIC_ERROR_DUPLICATE ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+        ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
         ret == PICOQUIC_ERROR_REDIRECTED) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
@@ -2366,6 +2368,7 @@ int picoquic_incoming_segment(
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
             ret == PICOQUIC_ERROR_RETRY ||
             ret == PICOQUIC_ERROR_SERVER_BUSY ||
+            ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
             ret == PICOQUIC_ERROR_REDIRECTED) {
             ret = 0;
         }
@@ -2387,9 +2390,10 @@ int picoquic_incoming_segment(
         ret = -1;
     }
 
-    if (decrypted_data != NULL && decrypted_data->bytes == NULL) {
+    if (decrypted_data != NULL && quic->input_segment_node_taken == 0) {
         picoquic_stream_data_node_recycle(decrypted_data);
     }
+    quic->input_segment_node_taken = saved_input_segment_node_taken;
 
     return ret;
 }
