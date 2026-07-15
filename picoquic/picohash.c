@@ -34,30 +34,33 @@ picohash_table* picohash_create_ex(size_t nb_bin,
     const uint8_t* hash_seed)
 {
     static const uint8_t null_seed[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    picohash_table* t = (picohash_table*)malloc(sizeof(picohash_table));
-    size_t items_length = sizeof(picohash_item*) * nb_bin;
-    if (t != NULL) {
-        if ((items_length / sizeof(picohash_item*)) == nb_bin) {
-            t->hash_bin = (picohash_item**)malloc(sizeof(picohash_item*) * nb_bin);
+    picohash_table* t = NULL;
+    if (nb_bin > 0) {
+        size_t items_length = sizeof(picohash_item*) * nb_bin;
+        t = (picohash_table*)malloc(sizeof(picohash_table));
+        if (t != NULL) {
+            if ((items_length / sizeof(picohash_item*)) == nb_bin) {
+                t->hash_bin = (picohash_item**)malloc(sizeof(picohash_item*) * nb_bin);
 
-            if (t->hash_bin == NULL) {
+                if (t->hash_bin == NULL) {
+                    free(t);
+                    t = NULL;
+                }
+                else {
+                    (void)memset(t->hash_bin, 0, sizeof(picohash_item*) * nb_bin);
+                    t->nb_bin = nb_bin;
+                    t->count = 0;
+                    t->picohash_hash = picohash_hash;
+                    t->picohash_compare = picohash_compare;
+                    t->picohash_key_to_item = picohash_key_to_item;
+                    t->hash_seed = (hash_seed == NULL) ? null_seed : hash_seed;
+                }
+            }
+            else {
+                /* Multiplication overflowed. */
                 free(t);
                 t = NULL;
             }
-            else {
-                (void)memset(t->hash_bin, 0, sizeof(picohash_item*) * nb_bin);
-                t->nb_bin = nb_bin;
-                t->count = 0;
-                t->picohash_hash = picohash_hash;
-                t->picohash_compare = picohash_compare;
-                t->picohash_key_to_item = picohash_key_to_item;
-                t->hash_seed = (hash_seed == NULL) ? null_seed : hash_seed;
-            }
-        }
-        else {
-            /* Multiplication overflowed. */
-            free(t);
-            t = NULL;
         }
     }
 
