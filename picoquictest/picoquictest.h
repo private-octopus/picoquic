@@ -592,7 +592,6 @@ int multipath_break_both_test(void);
 int multipath_qlog_test(void);
 int multipath_tunnel_test(void);
 int multipath_cid_retire_test(void);
-int multipath_abandon_pending_test(void);
 int token_reuse_api_test(void);
 int get_hash_test(void);
 int get_tls_errors_test(void);
