@@ -3684,15 +3684,15 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                         content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
                             &frame_id, &content_length);
 
-                        ret = (cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
+                        /* Do the callback but ignore its return code, because we always want to process
+                        * the frames that remain in the packet */
+                        (void)(cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
                             (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
                             cnx->callback_ctx, NULL);
                     }
-                    if (ret == 0) {
-                        ret = picoquic_skip_frame(&p->bytes[byte_index],
-                            p->length - byte_index, &frame_length, &frame_is_pure_ack);
-                        byte_index += frame_length;
-                    }
+                    ret = picoquic_skip_frame(&p->bytes[byte_index],
+                        p->length - byte_index, &frame_length, &frame_is_pure_ack);
+                    byte_index += frame_length;
                     break;
                 }
                 else {
