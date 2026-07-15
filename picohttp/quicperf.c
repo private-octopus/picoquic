@@ -497,7 +497,7 @@ size_t quicperf_parse_request_header(picoquic_cnx_t * cnx, quicperf_stream_ctx_t
         }
     }
     /* If this is a media header, parse the next 8 bytes */
-    while (stream_ctx->is_media && stream_ctx->nb_post_bytes < 16) {
+    while (stream_ctx->is_media && stream_ctx->nb_post_bytes < 16 && byte_index < length) {
         uint8_t b = bytes[byte_index++];
         if (stream_ctx->nb_post_bytes == 8) {
             stream_ctx->priority = b;
