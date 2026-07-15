@@ -648,6 +648,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
             picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, path_x->first_tuple);
         }
+        else {
+            /* If we cannot create a new path, return an error.
+             */
+            path_id = -1;
+            ret = PICOQUIC_ERROR_PATH_ID_INVALID;
+        }
     }
     else
     {
@@ -748,7 +754,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         }
     }
     *p_path_id = path_id;
-    if (path_id >= 0) {
+    if (path_id >= 0 && ret == 0) {
         cnx->path[path_id]->last_packet_received_at = current_time;
     }
 

@@ -2358,6 +2358,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
         ret == PICOQUIC_ERROR_DUPLICATE ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+        ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
         ret == PICOQUIC_ERROR_REDIRECTED) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
@@ -2367,6 +2368,7 @@ int picoquic_incoming_segment(
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
             ret == PICOQUIC_ERROR_RETRY ||
             ret == PICOQUIC_ERROR_SERVER_BUSY ||
+            ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
             ret == PICOQUIC_ERROR_REDIRECTED) {
             ret = 0;
         }
