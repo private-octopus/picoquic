@@ -563,7 +563,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             const uint8_t* queries = path + query_offset;
             size_t queries_length = path_length - query_offset;
 
-            if (h3zero_query_parameter_number(queries, queries_length, "version", 5, &baton_ctx->version, 0) != 0 ||
+            if (h3zero_query_parameter_number(queries, queries_length, "version", 7, &baton_ctx->version, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "baton", 5, &baton_ctx->initial_baton, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "count", 5, &baton_ctx->nb_lanes, 1) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "inject", 6, &baton_ctx->inject_error, 0) != 0) {
