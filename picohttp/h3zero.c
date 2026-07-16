@@ -375,7 +375,7 @@ int h3zero_parse_status(uint8_t * content, size_t content_length)
     int val = 0;
 
     for (size_t i = 0; i < content_length; i++) {
-        if (content[i] >= '0' && content[i] <= '9') {
+        if (content[i] >= '0' && content[i] <= '9' && val < 100000000) {
             val *= 10;
             val += content[i] - '0';
         }
