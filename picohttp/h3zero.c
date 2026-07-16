@@ -596,12 +596,13 @@ int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int i
             name_length = nb_decoded;
         }
     }
-
-    for (int i = 0; interesting_header_name[i] != NULL; i++) {
-        if (strlen(interesting_header_name[i]) == name_length &&
-            picoquic_strncasecmp(interesting_header_name[i], (const char*)name, name_length) == 0) {
-            val = interesting_header[i];
-            break;
+    if (name_length > 0) {
+        for (int i = 0; interesting_header_name[i] != NULL; i++) {
+            if (strlen(interesting_header_name[i]) == name_length &&
+                picoquic_strncasecmp(interesting_header_name[i], (const char*)name, name_length) == 0) {
+                val = interesting_header[i];
+                break;
+            }
         }
     }
 
