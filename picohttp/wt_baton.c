@@ -389,7 +389,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             if (receive_id == SIZE_MAX) {
                 if (receive_available == SIZE_MAX) {
                     /* unexpected incoming stream */
-                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64 ", expected %" PRIu64,
+                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64,
                         stream_ctx->stream_id);
                     ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Data on wrong stream!");
                 }
