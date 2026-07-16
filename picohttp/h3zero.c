@@ -1892,7 +1892,7 @@ int hzero_qpack_huffman_decode(uint8_t* bytes, uint8_t* bytes_max, uint8_t* deco
         else
         {
             /* input is too long */
-            was_all_ones = 1;
+            was_all_ones = 0;
             break;
         }
     }
