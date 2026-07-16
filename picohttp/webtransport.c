@@ -280,16 +280,22 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
 
     while (a != NULL && *a != 0) {
         /* isolate the next available */
+        int overflowed = 0;
         candidate_length = 0;
 
         while (*a == ' ' || *a == '\t') {
             a++;
         }
-        while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t' && candidate_length < 254) {
+        while (*a != ',' && *a != 0 && *a != ' ' && *a != '\t') {
             /* Skip quotes - HTTP structured fields use quoted strings */
             if (*a != '"') {
-                candidate[candidate_length] = *a;
-                candidate_length++;
+                if (candidate_length >= 254) {
+                    overflowed = 1;
+                }
+                else {
+                    candidate[candidate_length] = *a;
+                    candidate_length++;
+                }
             }
             a++;
         }
@@ -303,7 +309,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
         else if (*a != 0) {
             a = NULL;
         }
-        if (candidate_length > 0) {
+        if (candidate_length > 0 && !overflowed) {
             /* check whether there is a match*/
             size_t os = 0;
             while (os + candidate_length <= s_len) {
