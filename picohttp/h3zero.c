@@ -427,132 +427,141 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
         bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x7F, &v_length);
     }
     if (bytes != NULL) {
-        if (bytes + v_length > bytes_max) {
+        if (v_length > (size_t)(bytes_max - bytes)) {
             bytes = NULL;
-        } else {
-            if (is_huffman && hzero_qpack_huffman_decode(
-                bytes, bytes + v_length, deHuff, sizeof(deHuff), &decoded_length) == 0)
-            {
-                decoded = deHuff;
+        }
+        else {
+            if (is_huffman) {
+                if (hzero_qpack_huffman_decode(
+                    bytes, bytes + v_length, deHuff, sizeof(deHuff), &decoded_length) == 0)
+                {
+                    decoded = deHuff;
+                }
+                else {
+                    /* this is an error case, should be treated as such. */
+                    bytes = NULL;
+                }
             }
             else {
                 decoded = bytes;
-                decoded_length = (size_t) v_length;
+                decoded_length = (size_t)v_length;
             }
 
-            switch (header) {
-            case http_pseudo_header_method:
-                if (parts->method != h3zero_method_none) {
-                    /* Duplicate method! */
-                    bytes = 0;
-                }
-                else {
-                    parts->method = h3zero_get_method_by_name(decoded, decoded_length);
-                }
-                break;
-            case http_header_content_type:
-                if (parts->content_type != h3zero_content_type_none) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    parts->content_type = h3zero_get_content_type_by_name(decoded, decoded_length);
-                }
-                break;
-            case http_pseudo_header_status:
-                if (parts->status != 0) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    /* TODO: decimal to binary */
-                    parts->status = h3zero_parse_status(decoded, decoded_length);
-                }
-                break;
-            case http_pseudo_header_path:
-                if (parts->path != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->path, &parts->path_length);
-                }
-                break;
-            case http_pseudo_header_authority:
-                if (parts->authority != NULL) {
-                    /* Duplicate authority! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->authority, &parts->authority_length);
-                }
-                break;
-            case http_header_origin:
-                if (parts->origin != NULL) {
-                    /* Duplicate origin! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->origin, &parts->origin_length);
-                }
-                break;
-            case http_header_range:
-                if (parts->range != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->range, &parts->range_length);
-                }
-                break;
-            case http_pseudo_header_protocol:
-                if (parts->protocol != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->protocol, &parts->protocol_length);
-                }
-                break;
-
-            case http_header_wt_available_protocols:
-                if (parts->wt_available_protocols != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->wt_available_protocols, &parts->wt_available_protocols_length);
-                }
-                break;
-
-            case http_header_wt_protocol:
-                if (parts->wt_protocol != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->wt_protocol, &parts->wt_protocol_length);
-                    /* WT-Protocol is a Structured Header String — strip surrounding quotes */
-                    if (parts->wt_protocol != NULL && parts->wt_protocol_length >= 2 &&
-                        parts->wt_protocol[0] == '"' &&
-                        parts->wt_protocol[parts->wt_protocol_length - 1] == '"') {
-                        uint8_t* p = (uint8_t*)parts->wt_protocol;
-                        parts->wt_protocol_length -= 2;
-                        memmove(p, p + 1, parts->wt_protocol_length);
-                        p[parts->wt_protocol_length] = 0;
+            if (bytes != NULL) {
+                switch (header) {
+                case http_pseudo_header_method:
+                    if (parts->method != h3zero_method_none) {
+                        /* Duplicate method! */
+                        bytes = 0;
                     }
-                }
-                break;
+                    else {
+                        parts->method = h3zero_get_method_by_name(decoded, decoded_length);
+                    }
+                    break;
+                case http_header_content_type:
+                    if (parts->content_type != h3zero_content_type_none) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        parts->content_type = h3zero_get_content_type_by_name(decoded, decoded_length);
+                    }
+                    break;
+                case http_pseudo_header_status:
+                    if (parts->status != 0) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        /* TODO: decimal to binary */
+                        parts->status = h3zero_parse_status(decoded, decoded_length);
+                    }
+                    break;
+                case http_pseudo_header_path:
+                    if (parts->path != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->path, &parts->path_length);
+                    }
+                    break;
+                case http_pseudo_header_authority:
+                    if (parts->authority != NULL) {
+                        /* Duplicate authority! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->authority, &parts->authority_length);
+                    }
+                    break;
+                case http_header_origin:
+                    if (parts->origin != NULL) {
+                        /* Duplicate origin! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->origin, &parts->origin_length);
+                    }
+                    break;
+                case http_header_range:
+                    if (parts->range != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->range, &parts->range_length);
+                    }
+                    break;
+                case http_pseudo_header_protocol:
+                    if (parts->protocol != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->protocol, &parts->protocol_length);
+                    }
+                    break;
 
-            default:
-                break;
+                case http_header_wt_available_protocols:
+                    if (parts->wt_available_protocols != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->wt_available_protocols, &parts->wt_available_protocols_length);
+                    }
+                    break;
+
+                case http_header_wt_protocol:
+                    if (parts->wt_protocol != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->wt_protocol, &parts->wt_protocol_length);
+                        /* WT-Protocol is a Structured Header String — strip surrounding quotes */
+                        if (parts->wt_protocol != NULL && parts->wt_protocol_length >= 2 &&
+                            parts->wt_protocol[0] == '"' &&
+                            parts->wt_protocol[parts->wt_protocol_length - 1] == '"') {
+                            uint8_t* p = (uint8_t*)parts->wt_protocol;
+                            parts->wt_protocol_length -= 2;
+                            memmove(p, p + 1, parts->wt_protocol_length);
+                            p[parts->wt_protocol_length] = 0;
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
+                }
             }
 
             if (bytes != NULL) {
