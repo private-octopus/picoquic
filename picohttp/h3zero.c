@@ -1249,7 +1249,12 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 24)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8)&0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1,
+    /* ENABLE_WEBTRANSPORT, draft 2-6 */
+    ((h3zero_settings_enable_webtransport >> 24) & 0xff) | 0x80,
+    (uint8_t)((h3zero_settings_enable_webtransport >> 16) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport >> 8) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport) & 0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
