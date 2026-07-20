@@ -1220,7 +1220,7 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    0x20, /* Length of setting frame content */
+    0x25, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
     (uint8_t)h3zero_setting_max_field_section_size, 0x80, 0x01, 0, 0, /* var int type ( < 64), the var in value 0x10000 */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
