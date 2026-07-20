@@ -1220,7 +1220,7 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    0x20, /* Length of setting frame content */
+    0x25, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
     (uint8_t)h3zero_setting_max_field_section_size, 0x80, 0x01, 0, 0, /* var int type ( < 64), the var in value 0x10000 */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
@@ -1249,7 +1249,12 @@ static uint8_t const h3zero_default_setting_frame_val[] = {
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 24)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8)&0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1,
+    /* ENABLE_WEBTRANSPORT, draft 2-6 */
+    ((h3zero_settings_enable_webtransport >> 24) & 0xff) | 0x80,
+    (uint8_t)((h3zero_settings_enable_webtransport >> 16) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport >> 8) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport) & 0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
