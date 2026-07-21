@@ -369,3 +369,70 @@ int flow_control_test(void)
 
 	return fctest_one(&spec);
 }
+
+/*
+ * Minimal reproducer for picoquic_open_flow_control() becoming a silent no-op
+ * after picoquic_set_max_data_control() enables bounded connection flow control.
+ */
+
+int flow_control_open_max_test(void)
+{
+	int ret = 0;
+	struct sockaddr_in peer;
+	picoquic_quic_t* quic = NULL;
+
+	memset(&peer, 0, sizeof(peer));
+	peer.sin_family = AF_INET;
+	peer.sin_port = htons(4433);
+	peer.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+	quic = picoquic_create(
+		1, NULL, NULL, NULL, "repro", NULL, NULL, NULL, NULL, NULL,
+		0, NULL, NULL, NULL, 0);
+
+	if (quic == NULL) {
+		DBG_PRINTF("%s", "picoquic_create failed");
+		ret = -1;
+	}
+	else {
+		picoquic_set_max_data_control(quic, 65536);
+		picoquic_cnx_t* cnx = picoquic_create_cnx(
+			quic, picoquic_null_connection_id, picoquic_null_connection_id,
+			(const struct sockaddr*)&peer, 0, 0, "server.example", "repro", 1);
+		if (cnx == NULL) {
+			DBG_PRINTF("%s", "picoquic_create_cnx failed");
+			ret = -1;
+		}
+		else {
+			picoquic_stream_head_t* stream = NULL;
+			cnx->cnx_state = picoquic_state_ready;
+			if ((stream = picoquic_create_stream(cnx, 0)) == NULL) {
+				DBG_PRINTF("%s", "picoquic_create_stream failed");
+				ret = -1;
+			}
+			else {
+				const picoquic_misc_frame_header_t* frame = NULL;
+
+				stream->consumed_offset = 1024;
+				stream->maxdata_local = 1024;
+
+				if ((ret = picoquic_open_flow_control(cnx, 0, 1024)) != 0) {
+					DBG_PRINTF("picoquic_open_flow_control returned %d", ret);
+				}
+				else if ((frame = cnx->first_misc_frame) == NULL) {
+					DBG_PRINTF("%s", "BUG: returned success but queued no MAX_STREAM_DATA frame");
+					ret = -1;
+				}
+				else {
+					const uint8_t* encoded = (const uint8_t*)(frame)+sizeof(picoquic_misc_frame_header_t);
+					if (frame->length == 0 || encoded[0] != picoquic_frame_type_max_stream_data) {
+						DBG_PRINTF("%s", "BUG: returned success but first queued frame is not MAX_STREAM_DATA");
+						ret = -1;
+					}
+				}
+			}
+		}
+		picoquic_free(quic);
+	}
+	return ret;
+}
