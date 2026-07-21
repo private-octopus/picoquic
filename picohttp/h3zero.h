@@ -249,6 +249,7 @@ typedef struct st_h3zero_settings_t {
     unsigned int enable_connect_protocol : 1;
     unsigned int h3_datagram : 1;
     unsigned int settings_received : 1;
+    unsigned int web_transport_legacy : 1;
 } h3zero_settings_t;
 
 extern uint8_t const * h3zero_default_setting_frame;

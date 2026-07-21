@@ -1132,9 +1132,38 @@ h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path) {
 	return h3zero_content_type_text_plain;
 }
 
+/* In theory, there is exactly one accepted protocol for each
+* path over which we accept an extended connect request, but in practice
+* there are two versions of the "web transport" protocol: "webtransport"
+* in the old drafts and "webtransport-h3" in the recent drafts. We expect the
+* old drafts to coexist with the new ones for some time, so we need to
+* be lenient and treat both versions as equivalent.
+ */
+
+int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zero_stream_ctx_t* stream_ctx)
+{
+	int ret = 0;
+
+	if (item->connect_protocol != NULL &&
+		(stream_ctx->ps.stream_state.header.protocol == NULL ||
+			stream_ctx->ps.stream_state.header.protocol_length != item->connect_protocol_length ||
+			memcmp(stream_ctx->ps.stream_state.header.protocol,
+				item->connect_protocol, item->connect_protocol_length) != 0)) {
+		size_t old_length = strlen(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD);
+		if (stream_ctx->ps.stream_state.header.protocol_length < old_length ||
+			item->connect_protocol_length < old_length ||
+			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
+				item->connect_protocol, old_length) != 0 ||
+			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
+				stream_ctx->ps.stream_state.header.protocol, old_length) != 0) {
+			ret = -1;
+		}
+	}
+	return ret;
+}
+
 /* Processing of the request frame.
 * This function is called  after verifying that a request was received */
-
 int h3zero_process_request_frame(
 	picoquic_cnx_t* cnx,
 	h3zero_stream_ctx_t * stream_ctx,
@@ -1216,10 +1245,7 @@ int h3zero_process_request_frame(
 					(void)snprintf(error_code, sizeof(error_code), "%03d", item->connect_error_status);
 				}
 				if (item->connect_protocol != NULL &&
-					(stream_ctx->ps.stream_state.header.protocol == NULL ||
-					stream_ctx->ps.stream_state.header.protocol_length != item->connect_protocol_length ||
-					memcmp(stream_ctx->ps.stream_state.header.protocol,
-						item->connect_protocol, item->connect_protocol_length) != 0)) {
+					h3zero_check_connect_protocol(item, stream_ctx) != 0) {
 					picoquic_log_app_message(cnx, "Unsupported CONNECT protocol on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
 					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, error_code, H3ZERO_USER_AGENT_STRING);
 				}
