@@ -1150,12 +1150,12 @@ int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zer
 			memcmp(stream_ctx->ps.stream_state.header.protocol,
 				item->connect_protocol, item->connect_protocol_length) != 0)) {
 		size_t old_length = strlen(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD);
-		if (stream_ctx->ps.stream_state.header.protocol_length != old_length ||
+		if (stream_ctx->ps.stream_state.header.protocol_length < old_length ||
 			item->connect_protocol_length < old_length ||
 			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
-				item->connect_protocol, item->connect_protocol_length) != 0 ||
+				item->connect_protocol, old_length) != 0 ||
 			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
-				stream_ctx->ps.stream_state.header.protocol, item->connect_protocol_length) != 0) {
+				stream_ctx->ps.stream_state.header.protocol, old_length) != 0) {
 			ret = -1;
 		}
 	}
