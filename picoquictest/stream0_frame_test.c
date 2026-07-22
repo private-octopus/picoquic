@@ -20,6 +20,7 @@
 */
 
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 
@@ -714,6 +715,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
     int ret = 0;
     picoquic_stream_head_t * stream;
     size_t nb_found = 0;
+    size_t nb_back = 0;
 
     /* test order and value of output list */
     stream = cnx->output_streams.first_output_stream;
@@ -726,7 +728,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
             break;
         }
         else if (nb_found >= nb_output) {
-            if (nb_found < nb_output) {
+            if (nb_found > nb_output) {
                 DBG_PRINTF("Stream[%d] is not NULL\n", (int)nb_found);
                 ret = -1;
             }
@@ -740,6 +742,33 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
             nb_found++;
         }
     }
+    /* Test in the reverse direction */
+    stream = cnx->output_streams.last_output_stream;
+    while (ret == 0) {
+        if (stream == NULL) {
+            if (nb_back < nb_output) {
+                DBG_PRINTF("Stream[%d] is NULL\n", (int)nb_back);
+                ret = -1;
+            }
+            break;
+        }
+        else if (nb_back >= nb_output) {
+            if (nb_back > nb_output) {
+                DBG_PRINTF("Back Stream[%d] is not NULL\n", (int)nb_back);
+                ret = -1;
+            }
+        }
+        else if (stream->stream_id != output[nb_output - nb_back - 1]) {
+            DBG_PRINTF("Stream[%d].stream_id = %d, expected %d\n", (int)nb_found, (int)stream->stream_id, (int)output[nb_output - nb_back]);
+            ret = -1;
+        }
+        else {
+            stream = stream->previous_output_stream;
+            nb_back++;
+        }
+    }
+
+
 
     return ret;
 }
@@ -939,8 +968,6 @@ int stream_output_test(void)
                 }
             }
 
-
-
             /* Reset the priorities to an odd number, and set the last time sent. */
             if (ret == 0) {
                 simulated_time = 1000;
@@ -977,6 +1004,49 @@ int stream_output_test(void)
 
                         picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
                         ret = stream_output_test_list(cnx, sizeof(output4) / sizeof(uint64_t), output4);
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* systematic test of reordering with even priorities */
+                size_t nb_streams = 0;
+                uint64_t ordered_list[16];
+                simulated_time = 3000;
+                /* reset priorities for all streams and compute the original order */
+                for (int i = 0; i < 7; i++) {
+                    stream = picoquic_find_stream(cnx, values[i]);
+                    if (stream == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* force the stream to be marked inactive, so as to reset its ranking in the output list*/
+                        picoquic_mark_active_stream(cnx, values[i], 0, NULL);
+                        /* reset priorities and mark active so as to add to output list */
+                        stream->last_time_data_sent = simulated_time + i;
+                        picoquic_set_stream_priority(cnx, values[i], 8);
+                        picoquic_mark_active_stream(cnx, values[i], 1, NULL);
+                        ordered_list[nb_streams] = stream->stream_id;
+                        nb_streams++;
+                    }
+                }
+                simulated_time += 100;
+                /* Do a series of simulated send in which we send data from the first
+                * stream, causing it to be reordered */
+                for (size_t i = 0; ret == 0 && i < nb_streams; i++) {
+                    stream = picoquic_find_ready_stream_path(cnx, NULL, 0);
+                    if (stream == NULL || stream->stream_id != ordered_list[0]) {
+                        /* this is unexpected */
+                        ret = -1;
+                    }
+                    else {
+                        uint64_t old_time_sent = stream->last_time_data_sent;
+                        simulated_time += 100;
+                        stream->last_time_data_sent = simulated_time;
+                        memmove(&ordered_list[0], &ordered_list[1], sizeof(uint64_t) * (nb_streams - 1));
+                        ordered_list[nb_streams - 1] = stream->stream_id;
+                        picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
+                        ret = stream_output_test_list(cnx, nb_streams, ordered_list);
                     }
                 }
             }
