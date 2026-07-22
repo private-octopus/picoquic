@@ -1033,8 +1033,7 @@ int stream_output_test(void)
                 simulated_time += 100;
                 /* Do a series of simulated send in which we send data from the first
                 * stream, causing it to be reordered */
-                for (int i = 0; ret == 0 && i < nb_streams; i++) {
-                    uint64_t stream_id = ordered_list[0];
+                for (size_t i = 0; ret == 0 && i < nb_streams; i++) {
                     stream = picoquic_find_ready_stream_path(cnx, NULL, 0);
                     if (stream == NULL || stream->stream_id != ordered_list[0]) {
                         /* this is unexpected */
