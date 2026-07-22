@@ -628,7 +628,7 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 {
     if (stream->is_output_stream == 0)
     {
-        /* To not insert if the stream cannot be written to */
+        /* Do not insert if the stream cannot be written to */
         if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
             if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
                 return;
@@ -1017,14 +1017,16 @@ void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_str
         picoquic_remove_output_stream(cnx, stream);
     }
     else if ((stream->stream_priority & 1) == 0 && stream->last_time_data_sent != old_time_sent) {
-        /* TODO: should consider update in place */
-        picoquic_stream_head_t* previous = stream->previous_output_stream;
+        /* Find the next position. */
+        picoquic_stream_head_t* new_previous = stream->previous_output_stream;
         picoquic_stream_head_t* next = stream->next_output_stream;
+
         while (next != NULL && picoquic_compare_stream_priority(stream, next) > 0) {
-            previous = next;
+            new_previous = next;
             next = next->next_output_stream;
         }
-        if (previous != stream->previous_output_stream) {
+        /* Reinsert after "previous", but only if it has changed */
+        if (new_previous != stream->previous_output_stream) {
             /* Remove from current position */
             if (stream->previous_output_stream == NULL) {
                 cnx->output_streams.first_output_stream = stream->next_output_stream;
@@ -1038,10 +1040,17 @@ void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_str
             else {
                 stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
             }
-            /* Insert after previous -- by construction, previous cannot be NULL */
-            stream->previous_output_stream = previous;
-            stream->next_output_stream = previous->next_output_stream;
-            previous->next_output_stream = stream;
+            /* Insert after new previous, which by construction cannot be null */
+            if (new_previous->next_output_stream == NULL) {
+                stream->next_output_stream = NULL;
+                cnx->output_streams.last_output_stream = stream;
+            }
+            else {
+                stream->next_output_stream = new_previous->next_output_stream;
+                new_previous->next_output_stream->previous_output_stream = stream;
+            }
+            new_previous->next_output_stream = stream;
+            stream->previous_output_stream = new_previous;
         }
     }
 }
