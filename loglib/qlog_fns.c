@@ -746,6 +746,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_disable_migration:
             case picoquic_tp_enable_time_stamp:
             case picoquic_tp_grease_quic_bit:
+            case picoquic_tp_is_scone_supported:
                 qlog_fns_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), bytes, extension_length);
                 break;
             case picoquic_tp_version_negotiation:

@@ -1160,6 +1160,9 @@ typedef struct st_picoquic_path_t {
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
 
+    /* Support for scone */
+    uint64_t next_scone_time;
+
     /* Debug MP */
     int lost_after_delivered;
     int responder;

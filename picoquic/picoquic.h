@@ -258,6 +258,7 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
 #define picoquic_tp_qmux_max_record_size 0x0571c59429cd0845ull /* per draft-ietf-quic-qmux-01 */
+#define picoquic_tp_is_scone_supported 0x219e
 
 /* Packet contexts */
 typedef enum {
@@ -466,6 +467,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
+    int is_scone_supported; /* 1: want to receive scone, default : 0 */
 } picoquic_tp_t;
 
 /*
