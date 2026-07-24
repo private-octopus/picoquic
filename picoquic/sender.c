@@ -3613,9 +3613,20 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 cnx->cnx_state < picoquic_state_client_almost_ready &&
                 coalesced_packet_size > 0 &&
                 coalesced_packet_size < PICOQUIC_ENFORCED_INITIAL_MTU) {
-                /* This is bad */
+                /* Padding is needed */
                 size_t padding = packet_max - coalesced_packet_size;
+#if 1
+                if (cnx->local_parameters.is_scone_supported && path_x == cnx->path[0] &&
+                    tuple == path_x->first_tuple) {
+                    /* do padding per scone */
+                    picoquic_scone_padding(packet_buffer + coalesced_packet_size, padding);
+                }
+                else {
+                    memset(packet_buffer + coalesced_packet_size, 0, padding);
+                }
+#else
                 picoquic_public_random(packet_buffer + coalesced_packet_size, padding);
+#endif
                 coalesced_packet_size += padding;
             }
 

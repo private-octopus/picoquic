@@ -2203,6 +2203,12 @@ typedef struct st_picomask_fns_t {
 } picomask_fns_t;
 
 /*
+* Support for Scone
+*/
+void picoquic_scone_padding(uint8_t * bytes, size_t length);
+int picoquic_scone_incoming(picoquic_quic_t* quic, picoquic_cnx_t** pcnx, uint8_t first_byte, picoquic_packet_header* ph, const uint8_t* bytes, const uint8_t* bytes_max);
+
+/*
 * Multi-threading debugging support.
 * By compiling with the macro PICOQUIC_WITH_THREAD_CHECK, the code will check that
 * the thread calling a picoquic API is the same the same as the socket loop

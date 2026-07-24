@@ -121,6 +121,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
+    picoquic/scone.c
     picoquic/sender.c
     picoquic/sim_link.c
     picoquic/siphash.c
