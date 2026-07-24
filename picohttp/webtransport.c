@@ -815,7 +815,20 @@ void picowt_deregister(picoquic_cnx_t* cnx,
             }
         }
     }
-    /* Then deregister the control stream */
+    /* Then deregister the control stream itself. Clear its callback
+     * references too, the same way the loop above does for the other
+     * streams of the session: the control stream's node stays in the
+     * H3 stream tree, and h3zero_callback() falls back to finding it
+     * there (h3zero_find_stream) whenever picoquic has no app stream
+     * context for the stream ID. If path_callback were left set here,
+     * any frame arriving for this stream after this point -- e.g. a
+     * RESET_STREAM immediately following the STOP_SENDING that led to
+     * this deregistration -- would re-invoke the application callback
+     * with path_callback_ctx pointing at memory the caller is about to
+     * free (see issue #2165). */
+    control_stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
+    control_stream_ctx->path_callback = NULL;
+    control_stream_ctx->path_callback_ctx = NULL;
     if (!control_stream_ctx->ps.stream_state.is_fin_sent) {
         picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, NULL, 0, 1);
         control_stream_ctx->ps.stream_state.is_fin_sent = 1;

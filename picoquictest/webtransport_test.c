@@ -121,8 +121,9 @@ static int picowt_baton_test_one_ex(
     h3zero_callback_ctx_t* h3zero_cb = NULL;
     h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
-    int capsule_needed = (test_id = 10);
+    int capsule_needed = (test_id == 10);
     int stop_then_reset_needed = (test_id == 11);
+    int stop_reset_sent_trial = -1;
 
     initial_cid.id[3] = test_id;
 
@@ -237,27 +238,28 @@ static int picowt_baton_test_one_ex(
         }
 
         if (ret == 0 && baton_ctx.nb_turns > 2 && stop_then_reset_needed) {
-            /* Queue STOP_SENDING and RESET_STREAM for the control stream back
-             * to back, with no intervening call to tls_api_one_sim_round.
-             * Both calls only append a "misc frame" to the connection's
-             * pending-frame queue (picoquic_queue_misc_frame); nothing is
-             * actually sent until the next packet is formed. Because both
-             * frames are pending together, picoquic_format_misc_frames_in_context
-             * (picoquic/frames.c) will coalesce them into the SAME outgoing
-             * packet/datagram, in that order. That matters: per the reported
-             * bug, the server's frame-decode loop keeps processing subsequent
-             * frames in a datagram even after an earlier frame in it caused a
-             * connection error, so both frames must share a datagram for the
-             * use-after-free to trigger -- STOP_SENDING frees the server's
-             * wt_baton_ctx (wt_baton_stream_stop -> h3zero_delete_stream_prefix
-             * -> deregister -> wt_baton_unlink_context -> free()), and the
-             * RESET_STREAM decoded right after it in the same packet then
-             * invokes wt_baton_stream_reset() with a dangling path_app_ctx. */
+            /* Queue STOP_SENDING and RESET_STREAM "almost simultaneously" to reproduce
+             * potential issues when deleting the web transport context. */
             ret = picoquic_stop_sending(test_ctx->cnx_client, control_stream_ctx->stream_id, 0);
             if (ret == 0) {
                 ret = picowt_reset_stream(test_ctx->cnx_client, control_stream_ctx, 54321);
             }
             stop_then_reset_needed = 0;
+            stop_reset_sent_trial = nb_trials;
+        }
+
+        if (ret == 0 && stop_reset_sent_trial >= 0 && nb_trials > stop_reset_sent_trial + 16) {
+            /* The server only tears down its WT session state on receiving
+             * STOP_SENDING/RESET_STREAM for the control stream; unlike the
+             * client side (see wt_baton_stream_stop/wt_baton_stream_reset),
+             * it does not close the whole connection just because one WT
+             * session ended abruptly. So nothing will end this connection
+             * on its own once the probe above has run its course -- close
+             * it explicitly so the test can conclude. What's under test is
+             * whether the probe corrupts memory (checked by ASan/valgrind)
+             * or forces an unexpected error close (checked below). */
+            ret = picoquic_close(test_ctx->cnx_client, 0);
+            stop_reset_sent_trial = -1;
         }
 
         if (ret == 0 && capsule_needed) {

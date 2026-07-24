@@ -2039,7 +2039,7 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 				}
 				else {
 					/* If a file is open on a client, close and do the accounting. */
-					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+					(void)h3zero_client_close_stream(cnx, ctx, stream_ctx);
 					if (IS_BIDIR_STREAM_ID(stream_id)) {
 						picoquic_reset_stream(cnx, stream_id, 0);
 					}
