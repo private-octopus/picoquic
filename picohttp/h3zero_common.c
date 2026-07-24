@@ -968,6 +968,11 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 	h3zero_delete_all_stream_prefixes(cnx, ctx);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
+	if (cnx != NULL) {
+		/* cnx may not be disconnected yet. Make sure to remove the
+		* callback context that was just freed. */
+		picoquic_set_callback(cnx, NULL, NULL);
+	}
 }
 
 /* The picoquic callback bundles DATA and FIN. 
@@ -1566,9 +1571,15 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 						}
 					}
 					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
-						ret = stream_ctx->path_callback(cnx, bytes, available_data, 
-							(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
-							stream_ctx, stream_ctx->path_callback_ctx);
+						if (stream_ctx->path_callback != NULL) {
+							/* path_callback is NULL if the web transport session that
+							 * owned this stream was already torn down (see
+							 * picowt_deregister); in that case there is nothing left
+							 * to deliver this data to, so just drop it. */
+							ret = stream_ctx->path_callback(cnx, bytes, available_data,
+								(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
+								stream_ctx, stream_ctx->path_callback_ctx);
+						}
 					}
 					else
 					{
@@ -2039,7 +2050,7 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 				}
 				else {
 					/* If a file is open on a client, close and do the accounting. */
-					ret = h3zero_client_close_stream(cnx, ctx, stream_ctx);
+					(void)h3zero_client_close_stream(cnx, ctx, stream_ctx);
 					if (IS_BIDIR_STREAM_ID(stream_id)) {
 						picoquic_reset_stream(cnx, stream_id, 0);
 					}
@@ -2063,7 +2074,6 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			else {
 				picoquic_log_app_message(cnx, "Clearing context on connection close (%d)", fin_or_event);
 				h3zero_callback_delete_context(cnx, ctx);
-				picoquic_set_callback(cnx, NULL, NULL);
 			}
 			break;
 		case picoquic_callback_version_negotiation:

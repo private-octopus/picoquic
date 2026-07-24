@@ -3826,6 +3826,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_stop_reset) {
+            int ret = picowt_baton_stop_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_bad_params) {
+            int ret = picowt_baton_bad_params_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_wildcard) {
             int ret = picowt_baton_wildcard_test();
 

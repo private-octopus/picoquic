@@ -621,14 +621,13 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
             if (ret != 0) {
-                if (stream_ctx != NULL) {
-                    stream_ctx->path_callback = NULL;
-                    stream_ctx->path_callback_ctx = NULL;
-                    if (h3_ctx != NULL) {
-                        h3zero_delete_stream_prefix(cnx, h3_ctx, stream_ctx->stream_id);
-                    }
+                /* wt_baton_ctx_init, above, may already have declared the
+                 * control stream prefix with baton_ctx as its context. If
+                 * so, unwinding that registration frees baton_ctx via our
+                 * own deregister callback -- see picowt_abort_registration. */
+                if (picowt_abort_registration(cnx, h3_ctx, stream_ctx)) {
+                    free(baton_ctx);
                 }
-                free(baton_ctx);
             }
         }
         return ret;
