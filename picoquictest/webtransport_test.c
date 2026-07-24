@@ -121,7 +121,9 @@ static int picowt_baton_test_one_ex(
     h3zero_callback_ctx_t* h3zero_cb = NULL;
     h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
-    int capsule_needed = (test_id = 10);
+    int capsule_needed = (test_id == 10);
+    int stop_then_reset_needed = (test_id == 11);
+    int stop_reset_sent_trial = -1;
 
     initial_cid.id[3] = test_id;
 
@@ -235,6 +237,31 @@ static int picowt_baton_test_one_ex(
             ret = picowt_baton_test_reset(&baton_ctx, &reset_needed);
         }
 
+        if (ret == 0 && baton_ctx.nb_turns > 2 && stop_then_reset_needed) {
+            /* Queue STOP_SENDING and RESET_STREAM "almost simultaneously" to reproduce
+             * potential issues when deleting the web transport context. */
+            ret = picoquic_stop_sending(test_ctx->cnx_client, control_stream_ctx->stream_id, 0);
+            if (ret == 0) {
+                ret = picowt_reset_stream(test_ctx->cnx_client, control_stream_ctx, 54321);
+            }
+            stop_then_reset_needed = 0;
+            stop_reset_sent_trial = nb_trials;
+        }
+
+        if (ret == 0 && stop_reset_sent_trial >= 0 && nb_trials > stop_reset_sent_trial + 16) {
+            /* The server only tears down its WT session state on receiving
+             * STOP_SENDING/RESET_STREAM for the control stream; unlike the
+             * client side (see wt_baton_stream_stop/wt_baton_stream_reset),
+             * it does not close the whole connection just because one WT
+             * session ended abruptly. So nothing will end this connection
+             * on its own once the probe above has run its course -- close
+             * it explicitly so the test can conclude. What's under test is
+             * whether the probe corrupts memory (checked by ASan/valgrind)
+             * or forces an unexpected error close (checked below). */
+            ret = picoquic_close(test_ctx->cnx_client, 0);
+            stop_reset_sent_trial = -1;
+        }
+
         if (ret == 0 && capsule_needed) {
             /* Inject a bad capsule on the control stream */
             ret = picowt_baton_test_bad_capsule(test_ctx->cnx_client, control_stream_ctx->stream_id);
@@ -261,6 +288,16 @@ static int picowt_baton_test_one_ex(
         else if (test_id == 9 && baton_ctx.baton_state == wt_baton_state_closed) {
             DBG_PRINTF("Baton reset test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
+        }
+        else if (test_id == 11) {
+            /* This test probes a use-after-free/double-free in the server's
+             * wt_baton_ctx_t when STOP_SENDING is followed by RESET_STREAM
+             * on the same stream. If the bug is present, the process should
+             * crash, or ASan/valgrind should flag heap corruption, before
+             * this point is ever reached. Reaching here cleanly just means
+             * the bug wasn't tickled by this timing -- rerun under ASan. */
+            DBG_PRINTF("Stop+reset use-after-free probe completed after %d turns, state %d",
+                baton_ctx.nb_turns, baton_ctx.baton_state);
         }
         else {
             DBG_PRINTF("Baton test fails after %d turns, state %d",
@@ -299,8 +336,11 @@ static int picowt_baton_test_one_ex(
         ret = -1;
 
     }
-    /* verify that the bad capsule triggered an error */
-    if (test_id == 10) {
+    /* verify that the bad capsule triggered an error, and symmetrically,
+     * that the bad connect params (test 12) also triggered an error --
+     * either way, a nonzero ret at this point is the expected outcome,
+     * and an unexpectedly clean ret == 0 is the actual failure. */
+    if (test_id == 10 || test_id == 12) {
         if (ret == 0) {
             DBG_PRINTF("Unexpected connection success for test: %d", test_id);
             ret = -1;
@@ -391,6 +431,21 @@ int picowt_baton_krome_test(void)
 int picowt_baton_reset_test(void)
 {
     int ret = picowt_baton_test_one(9, "/baton?count=8", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_stop_reset_test(void)
+{
+    int ret = picowt_baton_test_one(11, "/baton?count=8", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_bad_params_test(void)
+{
+    /* Check that a connect attempt with bad parameters is processed properly. */
+    int ret = picowt_baton_test_one(12, "/baton?version=1", 0, 2000000, ".", ".");
 
     return ret;
 }

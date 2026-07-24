@@ -620,7 +620,8 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 
     if (ret != 0) {
         picowt_clear_pending_connect(ctx, stream_ctx);
-        h3zero_delete_stream_prefix(cnx, ctx, stream_ctx->stream_id);
+        /* Unwind any prefix registration done above. */
+        (void)picowt_abort_registration(cnx, ctx, stream_ctx);
     }
 
     return ret;
@@ -783,6 +784,29 @@ void picowt_release_capsule(picowt_capsule_t* capsule)
     capsule->error_msg_len = 0;
 }
 
+/* Unwind a partially completed accept/connect setup after a fatal error,
+ * undoing any stream prefix registration done so far.
+ */
+int picowt_abort_registration(picoquic_cnx_t* cnx,
+    h3zero_callback_ctx_t* h3_ctx,
+    h3zero_stream_ctx_t* stream_ctx)
+{
+    int must_free_context = 1;
+
+    if (stream_ctx != NULL) {
+        must_free_context = (h3_ctx == NULL ||
+            h3zero_find_stream_prefix(h3_ctx, stream_ctx->stream_id) == NULL);
+
+        stream_ctx->path_callback = NULL;
+        stream_ctx->path_callback_ctx = NULL;
+        if (h3_ctx != NULL) {
+            h3zero_delete_stream_prefix(cnx, h3_ctx, stream_ctx->stream_id);
+        }
+    }
+
+    return must_free_context;
+}
+
 void picowt_deregister(picoquic_cnx_t* cnx,
     h3zero_callback_ctx_t* h3_ctx,
     h3zero_stream_ctx_t* control_stream_ctx)
@@ -815,7 +839,11 @@ void picowt_deregister(picoquic_cnx_t* cnx,
             }
         }
     }
-    /* Then deregister the control stream */
+    /* Then deregister the control stream itself. Clear its callback
+     * references too, because the callback context has been freed. */
+    control_stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
+    control_stream_ctx->path_callback = NULL;
+    control_stream_ctx->path_callback_ctx = NULL;
     if (!control_stream_ctx->ps.stream_state.is_fin_sent) {
         picoquic_add_to_stream(cnx, control_stream_ctx->stream_id, NULL, 0, 1);
         control_stream_ctx->ps.stream_state.is_fin_sent = 1;
