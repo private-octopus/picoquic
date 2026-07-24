@@ -122,6 +122,9 @@ static int picowt_baton_test_one_ex(
     h3zero_stream_ctx_t* control_stream_ctx = NULL;
     int reset_needed = (test_id == 9);
     int capsule_needed = (test_id = 10);
+    int stop_then_reset_needed = (test_id == 11);
+    int stop_sent = 0;
+    int stop_sent_trial = -1;
 
     initial_cid.id[3] = test_id;
 
@@ -235,6 +238,28 @@ static int picowt_baton_test_one_ex(
             ret = picowt_baton_test_reset(&baton_ctx, &reset_needed);
         }
 
+        if (ret == 0 && baton_ctx.nb_turns > 2 && stop_then_reset_needed) {
+            if (!stop_sent) {
+                /* Client asks the server to stop sending on the control stream.
+                 * On the server, this frees wt_baton_ctx via:
+                 * wt_baton_stream_stop -> h3zero_delete_stream_prefix ->
+                 * (deregister callback) -> wt_baton_unlink_context -> free(). */
+                ret = picoquic_stop_sending(test_ctx->cnx_client, control_stream_ctx->stream_id, 0);
+                stop_sent = 1;
+                stop_sent_trial = nb_trials;
+            }
+            else if (stop_sent_trial >= 0 && nb_trials > stop_sent_trial + 8) {
+                /* Client then resets its own sending side of the same stream.
+                 * If the STOP_SENDING above has already been processed by the
+                 * server, this RESET_STREAM reaches wt_baton_stream_reset()
+                 * with a path_app_ctx pointing at freed memory: use-after-free
+                 * (and a second, likely bogus, h3zero_delete_stream_prefix
+                 * call/free). Run under ASan or valgrind to observe it. */
+                ret = picowt_reset_stream(test_ctx->cnx_client, control_stream_ctx, 54321);
+                stop_then_reset_needed = 0;
+            }
+        }
+
         if (ret == 0 && capsule_needed) {
             /* Inject a bad capsule on the control stream */
             ret = picowt_baton_test_bad_capsule(test_ctx->cnx_client, control_stream_ctx->stream_id);
@@ -261,6 +286,16 @@ static int picowt_baton_test_one_ex(
         else if (test_id == 9 && baton_ctx.baton_state == wt_baton_state_closed) {
             DBG_PRINTF("Baton reset test succeeds after %d turns, %d datagrams sent, %d received",
                 baton_ctx.nb_turns, baton_ctx.nb_datagrams_sent, baton_ctx.nb_datagrams_received);
+        }
+        else if (test_id == 11) {
+            /* This test probes a use-after-free/double-free in the server's
+             * wt_baton_ctx_t when STOP_SENDING is followed by RESET_STREAM
+             * on the same stream. If the bug is present, the process should
+             * crash, or ASan/valgrind should flag heap corruption, before
+             * this point is ever reached. Reaching here cleanly just means
+             * the bug wasn't tickled by this timing -- rerun under ASan. */
+            DBG_PRINTF("Stop+reset use-after-free probe completed after %d turns, state %d",
+                baton_ctx.nb_turns, baton_ctx.baton_state);
         }
         else {
             DBG_PRINTF("Baton test fails after %d turns, state %d",
@@ -391,6 +426,13 @@ int picowt_baton_krome_test(void)
 int picowt_baton_reset_test(void)
 {
     int ret = picowt_baton_test_one(9, "/baton?count=8", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_stop_reset_test(void)
+{
+    int ret = picowt_baton_test_one(11, "/baton?count=8", 0, 5000000, ".", ".");
 
     return ret;
 }

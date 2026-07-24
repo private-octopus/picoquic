@@ -675,6 +675,7 @@ int picowt_baton_wrong_test(void);
 int picowt_baton_uri_test(void);
 int picowt_baton_krome_test(void);
 int picowt_baton_reset_test(void);
+int picowt_baton_stop_reset_test(void);
 int picowt_baton_wildcard_test(void);
 int picowt_baton_overflow_test(void);
 int picowt_drain_test(void);
