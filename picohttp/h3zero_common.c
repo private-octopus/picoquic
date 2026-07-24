@@ -969,14 +969,8 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
 	if (cnx != NULL) {
-		/* cnx may not be disconnected yet -- e.g. a caller tearing its
-		 * app down without going through a clean protocol-level close.
-		 * If it isn't, picoquic_delete_cnx will later call
-		 * picoquic_connection_disconnect(), which invokes
-		 * cnx->callback_fn(cnx, ..., picoquic_callback_close,
-		 * cnx->callback_ctx, ...) as long as cnx->callback_fn is still
-		 * set, using the ctx pointer just freed above. Detach cnx from
-		 * it now so that can't happen. */
+		/* cnx may not be disconnected yet. Make sure to remove the
+		* callback context that was just freed. */
 		picoquic_set_callback(cnx, NULL, NULL);
 	}
 }

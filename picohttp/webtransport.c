@@ -620,13 +620,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 
     if (ret != 0) {
         picowt_clear_pending_connect(ctx, stream_ctx);
-        /* Unwind any prefix registration done above. This may fire wt_ctx's
-         * own deregister callback -- see picowt_abort_registration. This
-         * function never allocated wt_ctx, so the caller owns it either
-         * way and we don't need to act on the return value here, but this
-         * still correctly skips deleting a prefix that was never declared,
-         * and clears stream_ctx's callback references so a stale wt_ctx
-         * pointer can't be dispatched to later if the caller releases it. */
+        /* Unwind any prefix registration done above. */
         (void)picowt_abort_registration(cnx, ctx, stream_ctx);
     }
 
@@ -790,27 +784,8 @@ void picowt_release_capsule(picowt_capsule_t* capsule)
     capsule->error_msg_len = 0;
 }
 
-/* Unwind a partially completed accept/connect setup after a fatal error.
- *
- * Web transport "accept" (server) or "connect" (client) handlers typically
- * declare a stream prefix for their control stream early in their setup,
- * associating it via h3zero_declare_stream_prefix with the callback and
- * application context that will run the session. If a later step in that
- * same setup fails, the caller needs to unwind: clear the stream's callback
- * references, and remove the prefix if one was declared.
- *
- * Removing a declared prefix (h3zero_delete_stream_prefix) synchronously
- * fires the application's own picohttp_callback_deregister callback, which
- * is expected to release the application context that was passed to
- * h3zero_declare_stream_prefix -- the same context the failed setup
- * function allocated. If the caller were to *also* free that context after
- * calling this function, that would be a double free.
- *
- * This function tells the caller whether that already happened: it returns
- * 1 if no prefix was found (nothing was deregistered, so the caller still
- * owns freeing its own context), or 0 if a prefix was found and removed
- * (the deregister callback already ran, so the caller must NOT free the
- * context itself).
+/* Unwind a partially completed accept/connect setup after a fatal error,
+ * undoing any stream prefix registration done so far.
  */
 int picowt_abort_registration(picoquic_cnx_t* cnx,
     h3zero_callback_ctx_t* h3_ctx,
@@ -865,16 +840,7 @@ void picowt_deregister(picoquic_cnx_t* cnx,
         }
     }
     /* Then deregister the control stream itself. Clear its callback
-     * references too, the same way the loop above does for the other
-     * streams of the session: the control stream's node stays in the
-     * H3 stream tree, and h3zero_callback() falls back to finding it
-     * there (h3zero_find_stream) whenever picoquic has no app stream
-     * context for the stream ID. If path_callback were left set here,
-     * any frame arriving for this stream after this point -- e.g. a
-     * RESET_STREAM immediately following the STOP_SENDING that led to
-     * this deregistration -- would re-invoke the application callback
-     * with path_callback_ctx pointing at memory the caller is about to
-     * free (see issue #2165). */
+     * references too, because the callback context has been freed. */
     control_stream_ctx->ps.stream_state.control_stream_id = UINT64_MAX;
     control_stream_ctx->path_callback = NULL;
     control_stream_ctx->path_callback_ctx = NULL;
