@@ -336,8 +336,11 @@ static int picowt_baton_test_one_ex(
         ret = -1;
 
     }
-    /* verify that the bad capsule triggered an error */
-    if (test_id == 10) {
+    /* verify that the bad capsule triggered an error, and symmetrically,
+     * that the bad connect params (test 12) also triggered an error --
+     * either way, a nonzero ret at this point is the expected outcome,
+     * and an unexpectedly clean ret == 0 is the actual failure. */
+    if (test_id == 10 || test_id == 12) {
         if (ret == 0) {
             DBG_PRINTF("Unexpected connection success for test: %d", test_id);
             ret = -1;
@@ -435,6 +438,14 @@ int picowt_baton_reset_test(void)
 int picowt_baton_stop_reset_test(void)
 {
     int ret = picowt_baton_test_one(11, "/baton?count=8", 0, 5000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_bad_params_test(void)
+{
+    /* Check that a connect attempt with bad parameters is processed properly. */
+    int ret = picowt_baton_test_one(12, "/baton?version=1", 0, 2000000, ".", ".");
 
     return ret;
 }
