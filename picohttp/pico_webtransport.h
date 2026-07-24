@@ -88,6 +88,19 @@ extern "C" {
 
     void picowt_deregister(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
 
+    /* Unwind a partially completed accept/connect setup after a fatal error,
+     * undoing any stream prefix registration done so far. If a prefix had
+     * already been declared for stream_ctx (typically via
+     * h3zero_declare_stream_prefix during the application's own context
+     * init), this fires the application's deregister callback as a side
+     * effect, which is expected to free the application context. Returns 1
+     * if the caller must still free its own application context itself, or
+     * 0 if the deregister callback already did so -- freeing it again in
+     * that case would be a double free. See wt_baton_accept in wt_baton.c
+     * for an example of use.
+     */
+    int picowt_abort_registration(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* stream_ctx);
+
     /**
     * Create local stream: when a stream is created locally. 
     * Send the stream header. Associate the stream with a per_stream
