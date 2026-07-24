@@ -1566,9 +1566,15 @@ int h3zero_process_h3_client_data(picoquic_cnx_t* cnx,
 						}
 					}
 					if (stream_ctx->is_h3 && stream_ctx->is_upgraded) {
-						ret = stream_ctx->path_callback(cnx, bytes, available_data, 
-							(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
-							stream_ctx, stream_ctx->path_callback_ctx);
+						if (stream_ctx->path_callback != NULL) {
+							/* path_callback is NULL if the web transport session that
+							 * owned this stream was already torn down (see
+							 * picowt_deregister); in that case there is nothing left
+							 * to deliver this data to, so just drop it. */
+							ret = stream_ctx->path_callback(cnx, bytes, available_data,
+								(is_fin)?picohttp_callback_post_fin: picohttp_callback_post_data,
+								stream_ctx, stream_ctx->path_callback_ctx);
+						}
 					}
 					else
 					{
