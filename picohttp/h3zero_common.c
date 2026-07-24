@@ -968,6 +968,17 @@ void h3zero_callback_delete_context(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* 
 	h3zero_delete_all_stream_prefixes(cnx, ctx);
 	picosplay_empty_tree(&ctx->h3_stream_tree);
 	free(ctx);
+	if (cnx != NULL) {
+		/* cnx may not be disconnected yet -- e.g. a caller tearing its
+		 * app down without going through a clean protocol-level close.
+		 * If it isn't, picoquic_delete_cnx will later call
+		 * picoquic_connection_disconnect(), which invokes
+		 * cnx->callback_fn(cnx, ..., picoquic_callback_close,
+		 * cnx->callback_ctx, ...) as long as cnx->callback_fn is still
+		 * set, using the ctx pointer just freed above. Detach cnx from
+		 * it now so that can't happen. */
+		picoquic_set_callback(cnx, NULL, NULL);
+	}
 }
 
 /* The picoquic callback bundles DATA and FIN. 
@@ -2069,7 +2080,6 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			else {
 				picoquic_log_app_message(cnx, "Clearing context on connection close (%d)", fin_or_event);
 				h3zero_callback_delete_context(cnx, ctx);
-				picoquic_set_callback(cnx, NULL, NULL);
 			}
 			break;
 		case picoquic_callback_version_negotiation:
