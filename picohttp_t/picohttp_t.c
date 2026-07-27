@@ -117,6 +117,7 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_parse", quicperf_parse_test },
     { "quicperf_batch", quicperf_batch_test },
     { "quicperf_datagram", quicperf_datagram_test },
+    { "quicperf_datagram_multiflow", quicperf_datagram_multiflow_test },
     { "quicperf_media", quicperf_media_test },
     { "quicperf_ungrouped", quicperf_ungrouped_test },
     { "quicperf_group_remainder", quicperf_group_remainder_test },

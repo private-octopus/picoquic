@@ -609,6 +609,23 @@ int quicperf_datagram_test(void)
     return quicperf_e2e_test(0xda, datagram_scenario, 6000000, 1, &datagram_target);
 }
 
+int quicperf_datagram_multiflow_test(void)
+{
+    /* Four parallel datagram flows, each sending frames large enough that
+     * only one comfortably fits per packet at a time. This used to trigger a
+     * bug in picoquic_prepare_stream_and_datagrams (streams.c). */
+    char const* datagram_multiflow_scenario =
+        "=a:d250:p2:S:n200:1300;=b:d250:p2:S:n200:1300;=c:d250:p2:S:n200:1300;=d:d250:p2:S:n200:1300;";
+    quicperf_test_target_t datagram_multiflow_target[4] = {
+        { 200, 200, 0, 0, 0, 0 },
+        { 200, 200, 0, 0, 0, 0 },
+        { 200, 200, 0, 0, 0, 0 },
+        { 200, 200, 0, 0, 0, 0 }
+    };
+
+    return quicperf_e2e_test(0x1c, datagram_multiflow_scenario, 3000000, 4, datagram_multiflow_target);
+}
+
 int quicperf_media_test(void)
 {
     char const* media_scenario = "=v1:s30:n150:2000:G30:I20000;";

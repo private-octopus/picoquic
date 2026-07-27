@@ -684,6 +684,7 @@ int picowt_tp_test(void);
 int quicperf_parse_test(void);
 int quicperf_batch_test(void);
 int quicperf_datagram_test(void);
+int quicperf_datagram_multiflow_test(void);
 int quicperf_media_test(void);
 int quicperf_ungrouped_test(void);
 int quicperf_group_remainder_test(void);
