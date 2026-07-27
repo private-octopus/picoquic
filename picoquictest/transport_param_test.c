@@ -89,7 +89,7 @@ static picoquic_tp_t transport_param_test3 = {
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
