@@ -82,6 +82,7 @@ typedef enum {
     picoquic_option_FLOW_CONTROL_MAX,
     picoquic_option_Preferred_V4,
     picoquic_option_Preferred_V6,
+    picoquic_option_SCONE,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -157,6 +158,7 @@ typedef struct st_picoquic_quic_config_t {
     char const* preferred_address_v4;
     char const* preferred_address_v6;
     char const* qmux_string;
+    int is_scone_supported;
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);

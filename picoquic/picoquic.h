@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.51.0"
+#define PICOQUIC_VERSION "1.1.52.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -114,6 +114,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PADDING_PACKET (PICOQUIC_ERROR_CLASS + 70)
 #define PICOQUIC_ERROR_PACKET_TOO_BIG (PICOQUIC_ERROR_CLASS + 71)
 #define PICOQUIC_ERROR_OFFSET_TOO_BIG (PICOQUIC_ERROR_CLASS + 72)
+#define PICOQUIC_NO_ERROR_SCONE_ADVICE (PICOQUIC_ERROR_CLASS + 73)
 /*
  * Protocol errors defined in the QUIC spec
  */
@@ -420,9 +421,10 @@ typedef enum {
     picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
     picoquic_callback_app_wakeup, /* wakeup timer set by application has expired */
     picoquic_callback_next_path_allowed, /* There are enough path_id and connection ID available for the next path */
-    picoquic_callback_stream_released /* Stream fully retired: bytes=NULL, len=0,
+    picoquic_callback_stream_released, /* Stream fully retired: bytes=NULL, len=0,
                                        * stream_ctx = the app_stream_ctx the app set;
                                        * picoquic will not call back with this stream_ctx again. */
+    picoquic_callback_scone_indication /* Received a scone indication of the long term incoming rate */
 } picoquic_call_back_event_t;
 
 typedef struct st_picoquic_tp_preferred_address_t {
@@ -469,6 +471,7 @@ typedef struct st_picoquic_tp_t {
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
     int is_scone_supported; /* 1: want to receive scone, default : 0 */
+    int is_scone_indicator_sent; /* The scone indicator is only sent once, to avoid choking on firewalls */
 } picoquic_tp_t;
 
 /*

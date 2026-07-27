@@ -2746,6 +2746,49 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(scone_basic) {
+            int ret = scone_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_client) {
+            int ret = scone_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss) {
+            int ret = scone_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss_client) {
+            int ret = scone_loss_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss_server) {
+            int ret = scone_loss_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_none) {
+            int ret = scone_none_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_server) {
+            int ret = scone_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+
         TEST_METHOD(stream_ack) {
             int ret = stream_ack_test();
 

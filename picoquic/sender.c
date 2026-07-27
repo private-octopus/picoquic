@@ -3574,6 +3574,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                             send_buffer, send_buffer_max, send_length,
                             &next_wake_time);
                     }
+                    else if (coalesced_packet_size == 0 &&
+                        picoquic_scone_ready_to_send(cnx, path_x, current_time)) {
+                        ret = picoquic_scone_prepare(cnx, path_x, packet, current_time,
+                            packet_buffer, available, &segment_length, &next_wake_time, &is_initial_sent);
+                    }
                     else {
                         ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
                             packet_buffer + coalesced_packet_size, available, &segment_length, &next_wake_time, &is_initial_sent);
@@ -3615,18 +3620,16 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 coalesced_packet_size < PICOQUIC_ENFORCED_INITIAL_MTU) {
                 /* Padding is needed */
                 size_t padding = packet_max - coalesced_packet_size;
-#if 1
-                if (cnx->local_parameters.is_scone_supported && path_x == cnx->path[0] &&
-                    tuple == path_x->first_tuple) {
+
+                if (cnx->local_parameters.is_scone_supported &&
+                    path_x == cnx->path[0] && tuple == path_x->first_tuple) {
                     /* do padding per scone */
-                    picoquic_scone_padding(packet_buffer + coalesced_packet_size, padding);
+                    picoquic_scone_padding(cnx, packet_buffer + coalesced_packet_size, padding);
                 }
                 else {
                     memset(packet_buffer + coalesced_packet_size, 0, padding);
                 }
-#else
-                picoquic_public_random(packet_buffer + coalesced_packet_size, padding);
-#endif
+
                 coalesced_packet_size += padding;
             }
 
