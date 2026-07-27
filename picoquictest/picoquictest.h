@@ -692,6 +692,9 @@ int quicperf_chain_test(void);
 int quicperf_print_report_test(void);
 int quicperf_multi_test(void);
 int quicperf_overflow_test(void);
+int quicperf_multipath_race_test(void);
+int quicperf_multipath_race_delayed_test(void);
+int quicperf_multipath_settled_test(void);
 int cplusplustest(void);
 int error_name_test(void);
 

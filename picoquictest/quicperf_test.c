@@ -421,8 +421,31 @@ typedef struct st_quicperf_test_target_t {
     uint64_t min_delay;
 } quicperf_test_target_t;
 
+/* Multipath probe timing, used to explore the race reported between
+ * second-path setup and the quicperf scenario start (both are triggered
+ * off the same "almost ready" condition, from independent code paths,
+ * with no ordering guarantee between them in the field).
+ *
+ * - quicperf_mp_probe_immediate: retry the probe starting at the first
+ *   opportunity (cnx_state >= almost_ready), exactly like picoquicdemo's
+ *   client_create_additional_path. Tightest possible race against
+ *   quicperf's own almost_ready-triggered scenario start.
+ * - quicperf_mp_probe_delayed: wait probe_delay_us after almost_ready
+ *   before the first attempt, giving quicperf's scenario a head start.
+ * - quicperf_mp_probe_settled: fully validate the second path
+ *   (wait_multipath_ready) before anything else is allowed to contend
+ *   with it. This is what every existing multipath test does; it is the
+ *   negative control and is expected to always succeed.
+ */
+typedef enum {
+    quicperf_mp_probe_immediate = 0,
+    quicperf_mp_probe_delayed,
+    quicperf_mp_probe_settled
+} quicperf_mp_probe_timing_t;
 
-int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion_target, size_t nb_targets, quicperf_test_target_t * targets)
+static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t completion_target,
+    size_t nb_targets, quicperf_test_target_t* targets,
+    int use_multipath, quicperf_mp_probe_timing_t probe_timing, uint64_t probe_delay_us)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -479,12 +502,108 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
         // picoquic_set_alpn_select_fn(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, quicperf_callback, NULL);
         picoquic_set_callback(test_ctx->cnx_client, quicperf_callback, quicperf_ctx);
+
+        if (ret == 0 && use_multipath) {
+            /* Register the second pair of simulated links, and negotiate the
+             * multipath transport parameter on both sides, before the
+             * handshake starts. */
+            picoquic_tp_t server_parameters;
+
+            ret = multipath_test_add_links(test_ctx, 0);
+            if (ret == 0) {
+                multipath_init_params(&server_parameters, 0);
+                picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+                test_ctx->cnx_client->local_parameters.initial_max_path_id = 2;
+            }
+        }
+
         if (ret == 0) {
             ret = picoquic_start_client_cnx(test_ctx->cnx_client);
         }
     }
 
-    if (ret == 0) {
+    if (ret == 0 && use_multipath && probe_timing != quicperf_mp_probe_settled) {
+        /* Step the simulation manually so the probe for the second path can
+         * be issued right as (or shortly after) the client reaches
+         * almost_ready -- the same condition that triggers quicperf's own
+         * scenario start (see quicperf_callback, case
+         * picoquic_callback_almost_ready). This is deliberately NOT
+         * synchronized with quicperf's start: the two are independent in
+         * the field (picoquicdemo's packet-loop callback vs. the
+         * connection callback), and we want the harness to reproduce that
+         * lack of synchronization rather than paper over it. */
+        int probe_pending = 1;
+        uint64_t probe_ready_time = 0;
+
+        time_out = simulated_time + 4000000;
+
+        while (ret == 0 && probe_pending &&
+            test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+            if (ret == -1) {
+                break;
+            }
+
+            if (test_ctx->cnx_client->cnx_state >= picoquic_state_client_almost_ready) {
+                if (probe_timing == quicperf_mp_probe_delayed) {
+                    if (probe_ready_time == 0) {
+                        probe_ready_time = simulated_time + probe_delay_us;
+                    }
+                    if (simulated_time < probe_ready_time) {
+                        continue;
+                    }
+                }
+
+                {
+                    int probe_ret = picoquic_probe_new_path(test_ctx->cnx_client,
+                        (struct sockaddr*)&test_ctx->server_addr,
+                        (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+
+                    if (probe_ret == 0) {
+                        probe_pending = 0;
+                    }
+                    else if (probe_ret != PICOQUIC_ERROR_PATH_ID_BLOCKED &&
+                        probe_ret != PICOQUIC_ERROR_PATH_CID_BLOCKED &&
+                        probe_ret != PICOQUIC_ERROR_PATH_NOT_READY) {
+                        DBG_PRINTF("Probe new path failed, ret = 0x%x", probe_ret);
+                        ret = probe_ret;
+                    }
+                    /* else: transient, retry on a later round. */
+                }
+            }
+            if (++nb_trials > 100000) {
+                ret = -1;
+                break;
+            }
+        }
+        if (ret == 0 && probe_pending) {
+            DBG_PRINTF("%s", "Could not issue the multipath probe before disconnection");
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = wait_client_connection_ready(test_ctx, &simulated_time);
+        }
+    }
+    else if (ret == 0 && use_multipath) {
+        /* quicperf_mp_probe_settled: negative control. Let the handshake
+         * complete (quicperf's scenario has already auto-started, at the
+         * latest by the time the connection is fully ready), then only
+         * probe and fully validate the second path before doing anything
+         * else -- exactly like every other multipath test. */
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        if (ret == 0) {
+            ret = wait_client_connection_ready(test_ctx, &simulated_time);
+        }
+        if (ret == 0) {
+            ret = picoquic_probe_new_path(test_ctx->cnx_client,
+                (struct sockaddr*)&test_ctx->server_addr,
+                (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+        }
+        if (ret == 0) {
+            ret = wait_multipath_ready(test_ctx, &simulated_time);
+        }
+    }
+    else if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
 
@@ -577,6 +696,20 @@ int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion
     }
 
     return ret;
+}
+
+int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion_target, size_t nb_targets, quicperf_test_target_t * targets)
+{
+    return quicperf_e2e_test_ex(test_id, scenario, completion_target, nb_targets, targets,
+        0, quicperf_mp_probe_immediate, 0);
+}
+
+int quicperf_e2e_test_multipath(uint8_t test_id, char const* scenario, uint64_t completion_target,
+    size_t nb_targets, quicperf_test_target_t* targets,
+    quicperf_mp_probe_timing_t probe_timing, uint64_t probe_delay_us)
+{
+    return quicperf_e2e_test_ex(test_id, scenario, completion_target, nb_targets, targets,
+        1, probe_timing, probe_delay_us);
 }
 
 int quicperf_batch_test(void)
@@ -833,4 +966,53 @@ int quicperf_overflow_test(void)
     };
 
     return quicperf_e2e_test(0xf1, overflow_scenario, 6000000, 4, overflow_target);
+}
+
+/* Multipath race reproduction.
+ *
+ * A field report described quicperf over a multipath connection (picoquicdemo
+ * client started with -M and an alt-path config) stalling right after the
+ * handshake completes, about half the time: second-path setup appeared to
+ * race the quicperf scenario start, both endpoints settled into 10s polling,
+ * and no application data ever flowed.
+ *
+ * quicperf's own scenario start and the earliest legal moment to probe a new
+ * path are both gated on the same condition -- cnx_state reaching
+ * picoquic_state_client_almost_ready -- but from two independent code paths
+ * with no ordering guarantee between them (see quicperf_callback vs.
+ * picoquicdemo's client_loop_cb / picoquic_check_new_path_allowed). These
+ * tests use a single small batch scenario: if the connection stalls at all,
+ * no data flows regardless of scenario type, so a minimal transfer is enough
+ * to detect it. The existing 10-second no-interaction check inside
+ * quicperf_e2e_test_ex already fails the test if the stall reproduces --
+ * matching the field report's own "10 s polling" symptom -- so no extra
+ * detection logic is required.
+ */
+static char const* quicperf_mp_scenario = "=b1:1000:100000;";
+static quicperf_test_target_t quicperf_mp_target = { 0, 0, 0, 0, 0, 0 };
+
+int quicperf_multipath_race_test(void)
+{
+    /* Tightest race: retry the probe starting at the first round where
+     * cnx_state >= almost_ready, exactly like picoquicdemo does. */
+    return quicperf_e2e_test_multipath(0x1d, quicperf_mp_scenario, 5000000, 1, &quicperf_mp_target,
+        quicperf_mp_probe_immediate, 0);
+}
+
+int quicperf_multipath_race_delayed_test(void)
+{
+    /* Give quicperf's scenario a 10ms head start before the first probe
+     * attempt, to see whether the race window is that wide. */
+    return quicperf_e2e_test_multipath(0x1e, quicperf_mp_scenario, 5000000, 1, &quicperf_mp_target,
+        quicperf_mp_probe_delayed, 10000);
+}
+
+int quicperf_multipath_settled_test(void)
+{
+    /* Negative control: fully validate the second path (as every other
+     * multipath test does) before anything else is allowed to contend with
+     * it. This should always succeed; if it doesn't, the bug isn't about
+     * ordering. */
+    return quicperf_e2e_test_multipath(0x1f, quicperf_mp_scenario, 5000000, 1, &quicperf_mp_target,
+        quicperf_mp_probe_settled, 0);
 }

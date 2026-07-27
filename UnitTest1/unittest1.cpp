@@ -3945,6 +3945,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_multipath_settled) {
+            int ret = quicperf_multipath_settled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race) {
+            int ret = quicperf_multipath_race_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race_delayed) {
+            int ret = quicperf_multipath_race_delayed_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(grease_quic_bit_one_way) {
             int ret = grease_quic_bit_one_way_test();
 

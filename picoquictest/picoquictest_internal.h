@@ -369,6 +369,12 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
 int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t timeout_value);
 
+/* Shared multipath test helpers, defined in multipath_test.c */
+int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop);
+void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time);
+
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,
     int path_target, int wait_for_ready);
