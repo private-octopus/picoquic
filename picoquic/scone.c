@@ -215,7 +215,7 @@ void picoquic_scone_report(picoquic_cnx_t * cnx, int path_index)
     if (cnx->quic->scone_indication != 0 && path_index >= 0) {
         picoquic_path_t* path_x = cnx->path[path_index];
         if (cnx->callback_fn != NULL){
-            (void)cnx->callback_fn(path_x->cnx, cnx->quic->scone_indication, NULL, path_x->unique_path_id, picoquic_callback_scone_indication,
+            (void)cnx->callback_fn(path_x->cnx, cnx->quic->scone_indication, NULL, (size_t)path_x->unique_path_id, picoquic_callback_scone_indication,
                 cnx->callback_ctx, NULL);
         }
         path_x->scone_advice_last = path_x->cnx->quic->scone_indication;
