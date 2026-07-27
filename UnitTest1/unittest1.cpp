@@ -3903,6 +3903,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_ungrouped) {
+            int ret = quicperf_ungrouped_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_group_remainder) {
+            int ret = quicperf_group_remainder_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_multi) {
             int ret = quicperf_multi_test();
 

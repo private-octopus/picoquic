@@ -624,6 +624,45 @@ int quicperf_media_test(void)
     return quicperf_e2e_test(0x1a,media_scenario, 6000000, 1, &media_target);
 }
 
+int quicperf_ungrouped_test(void)
+{
+    /* Media stream with no "G" (group size) parameter: the whole stream is
+     * a single ungrouped batch of frames. This used to cause the client to
+     * request a second, spurious round of the same nb_frames after the
+     * first one completed, doubling the number of frames actually sent. */
+    char const* ungrouped_scenario = "=v1:s30:p2:S:n80:18000;";
+    quicperf_test_target_t ungrouped_target = {
+        80, /* nb_frames_received_min */
+        80, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0x18, ungrouped_scenario, 4000000, 1, &ungrouped_target);
+}
+
+int quicperf_group_remainder_test(void)
+{
+    /* Media stream where "G" (group size) does not evenly divide "n" (nb_frames):
+     * group 0 sends 60 frames, and the trailing remainder group sends the
+     * last 20. Exercises the "group_size * (group_id + 1) > nb_frames" remainder
+     * computation in quicperf_request_media_stream_from_scenario, as well as the
+     * deactivation check in quicperf_activate_next_group after the remainder group. */
+    char const* group_remainder_scenario = "=v1:s30:p2:S:n80:18000:G60;";
+    quicperf_test_target_t group_remainder_target = {
+        80, /* nb_frames_received_min */
+        80, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0x19, group_remainder_scenario, 4000000, 1, &group_remainder_target);
+}
+
 int quicperf_multi_test(void)
 {
     char const* multi_scenario = "=a1:d50:p2:S:n250:80; \
