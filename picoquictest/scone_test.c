@@ -154,8 +154,6 @@ int scone_e2e_test_one(uint8_t test_id, scone_e2e_test_t * spec)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
-    test_api_stream_desc_t* scenario = test_scenario_scone;
-    size_t scenario_size = sizeof(test_scenario_scone);
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x5c, 0x0e, 0, 0, 0, 0, 0, 0}, 8 };
     int ret;
