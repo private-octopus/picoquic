@@ -120,6 +120,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_media", quicperf_media_test },
     { "quicperf_ungrouped", quicperf_ungrouped_test },
     { "quicperf_group_remainder", quicperf_group_remainder_test },
+    { "quicperf_chain", quicperf_chain_test },
+    { "quicperf_print_report", quicperf_print_report_test },
     { "quicperf_multi", quicperf_multi_test },
     { "quicperf_overflow", quicperf_overflow_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },

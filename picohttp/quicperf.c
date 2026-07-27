@@ -1649,7 +1649,7 @@ int quicperf_print_report(FILE* F, quicperf_ctx_t* quicperf_ctx)
                 report->min_delays, average_delay, report->max_delays) <= 0;
         }
         if (ret == 0) {
-            ret |= fprintf(F, ".\n");
+            ret |= fprintf(F, ".\n") <= 0;
         }
     }
 

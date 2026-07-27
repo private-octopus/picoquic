@@ -3915,6 +3915,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_chain) {
+            int ret = quicperf_chain_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_print_report) {
+            int ret = quicperf_print_report_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_multi) {
             int ret = quicperf_multi_test();
 

@@ -663,6 +663,82 @@ int quicperf_group_remainder_test(void)
     return quicperf_e2e_test(0x19, group_remainder_scenario, 4000000, 1, &group_remainder_target);
 }
 
+int quicperf_chain_test(void)
+{
+    /* Scenario "b" names scenario "a" as its "previous stream", so "b" should
+     * only start after "a" has completed. */
+    char const* chain_scenario = "=a:s30:p2:S:n60:18000;=b:=a:s30:p2:S:n60:18000;";
+    quicperf_test_target_t chain_target[2] = {
+        {
+            60, /* nb_frames_received_min */
+            60, /* nb_frames_received_max */
+            0, 0, 0, 0
+        },
+        {
+            60, /* nb_frames_received_min */
+            60, /* nb_frames_received_max */
+            0, 0, 0, 0
+        }
+    };
+
+    return quicperf_e2e_test(0x1b, chain_scenario, 6000000, 2, chain_target);
+}
+
+int quicperf_print_report_test(void)
+{
+    /* quicperf_print_report used to stop after printing the first non-batch
+     * scenario: the loop guard is "ret == 0", but the final fprintf(F, ".\n")
+     * was OR'ed into ret without the "<= 0" check used by the other fprintf
+     * calls in the same loop. fprintf returns the number of bytes written
+     * (2, for ".\n") on success, so ret became nonzero right after the first
+     * scenario printed successfully, silently dropping every later scenario
+     * from the report -- e.g. a chained stream that both ran and completed
+     * correctly would never show up in the printed output. */
+    int ret = 0;
+    char const* chain_scenario = "=a:s30:p2:S:n60:18000;=b:=a:s30:p2:S:n60:18000;";
+    char const* file_name = "quicperf_print_report_test.tmp";
+    quicperf_ctx_t* ctx = quicperf_create_ctx(chain_scenario, NULL);
+    FILE* F = NULL;
+
+    if (ctx == NULL) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < ctx->nb_scenarios; i++) {
+        ctx->reports[i].nb_frames_received = ctx->scenarios[i].nb_frames;
+    }
+
+    F = picoquic_file_open(file_name, "w+");
+    if (F == NULL) {
+        quicperf_delete_ctx(ctx);
+        return -1;
+    }
+
+    (void)quicperf_print_report(F, ctx);
+
+    {
+        char line[256];
+        int nb_lines_found = 0;
+
+        rewind(F);
+        while (fgets(line, sizeof(line), F) != NULL) {
+            if (strstr(line, "Quicperf scenario") != NULL) {
+                nb_lines_found++;
+            }
+        }
+        if (nb_lines_found != (int)ctx->nb_scenarios) {
+            DBG_PRINTF("Expected %zu report lines, got %d", ctx->nb_scenarios, nb_lines_found);
+            ret = -1;
+        }
+    }
+
+    (void)picoquic_file_close(F);
+    (void)remove(file_name);
+    quicperf_delete_ctx(ctx);
+
+    return ret;
+}
+
 int quicperf_multi_test(void)
 {
     char const* multi_scenario = "=a1:d50:p2:S:n250:80; \
