@@ -32,7 +32,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef _WINDOWS
+#if defined(_WINDOWS) && defined(_WINDOWS64)
 /* Temporary diagnostic: on an unhandled exception (e.g. access violation),
  * print a symbolized stack trace before the process dies. This is much
  * faster than reaching for an external debugger when a test crashes. */
@@ -298,7 +298,7 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
-#ifdef _WINDOWS
+#if defined(_WINDOWS) && defined(_WINDOWS64)
     SetUnhandledExceptionFilter(picohttp_t_crash_handler);
 #endif
     int nb_test_tried = 0;
