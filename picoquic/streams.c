@@ -630,7 +630,22 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
     {
         /* Do not insert if the stream cannot be written to */
         if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-            if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+            uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
+                cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote;
+            if (stream->stream_id > remote_limit) {
+                /* The application marked this stream active (or queued data on it),
+                 * but the peer has not yet granted enough stream credit: the stream
+                 * ID is beyond the current MAX_STREAMS(_UNI) limit. The stream will
+                 * stay out of the send schedule -- and prepare_to_send will not be
+                 * called for it -- until a STREAMS_BLOCKED frame prompts the peer to
+                 * raise the limit. Log this explicitly, since otherwise the only way
+                 * to notice is to cross-reference the stream ID against the
+                 * MAX_STREAMS history in a packet trace. */
+                picoquic_log_app_message(cnx,
+                    "Stream %" PRIu64 " not scheduled: exceeds remote %s stream limit %" PRIu64,
+                    stream->stream_id,
+                    (IS_BIDIR_STREAM_ID(stream->stream_id)) ? "bidir" : "unidir",
+                    remote_limit);
                 return;
             }
         }
@@ -771,7 +786,23 @@ int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_hea
             */
             if (stream->sent_offset == 0) {
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                    if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                    uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
+                        cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote;
+                    if (stream->stream_id > remote_limit) {
+                        /* This is the path actually taken when an application calls
+                         * picoquic_mark_active_stream() on a stream ID beyond the
+                         * peer's currently granted MAX_STREAMS(_UNI) limit: the
+                         * stream is active, but the peer has not yet granted enough
+                         * stream credit. prepare_to_send will not be called for it
+                         * until a STREAMS_BLOCKED frame prompts the peer to raise
+                         * the limit. Log this explicitly, since otherwise the only
+                         * way to notice is to cross-reference the stream ID against
+                         * the MAX_STREAMS history in a packet trace. */
+                        picoquic_log_app_message(cnx,
+                            "Stream %" PRIu64 " not scheduled: exceeds remote %s stream limit %" PRIu64,
+                            stream->stream_id,
+                            (IS_BIDIR_STREAM_ID(stream->stream_id)) ? "bidir" : "unidir",
+                            remote_limit);
                         has_data = 0;
                     }
                 }
