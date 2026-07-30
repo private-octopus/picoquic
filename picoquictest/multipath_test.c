@@ -30,7 +30,7 @@
 #include "picoquic_unified_log.h"
 
 /* Add the additional links for multipath scenario */
-static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
+int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
 {
     int ret = 0;
     /* Initialize the second client address */

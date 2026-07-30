@@ -1282,6 +1282,7 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
     int stream_tried_and_failed = 0;
     int more_data_this_round = 0;
     int is_first_round = 1;
+    uint8_t* bytes_start = bytes_next;
 
     while (bytes_next + 8 < bytes_max && *ret == 0) {
         /* Find the highest priority level for which there is something to send, then
@@ -1323,7 +1324,8 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
         if (datagram_present &&
             cnx->datagram_priority == current_priority &&
             (cnx->datagram_priority < stream_priority || datagram_first)) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+                is_first_in_packet && bytes_next == bytes_start,
                 &more_data_this_round, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
@@ -1375,7 +1377,8 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
             cnx->datagram_priority == current_priority &&
             cnx->datagram_priority <= stream_priority &&
             !datagram_first) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+                is_first_in_packet && bytes_next == bytes_start,
                 more_data, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
