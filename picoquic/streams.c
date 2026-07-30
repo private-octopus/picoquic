@@ -1014,9 +1014,19 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             has_data = picoquic_find_ready_stream_has_data(cnx, stream);
 
             /* implement affinity scheduling. TODO: get this out of the search loop. */
-            if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
-                /* Only consider the streams that meet path affinity requirements */
-                has_data = 0;
+            if (has_data && path_x != NULL) {
+                if (stream->affinity_path != path_x && stream->affinity_path != NULL) {
+                    /* Only consider the streams that meet path affinity requirements */
+                    has_data = 0;
+                }
+                else if (path_x->path_is_backup && stream->affinity_path != path_x) {
+                    /* A backup path is only usable here because some stream has been
+                     * explicitly pinned to it (see picoquic_sort_available_paths /
+                     * picoquic_verify_path_available). Do not let unpinned streams
+                     * piggyback on that packet just because there happens to be room --
+                     * the whole point of "backup" is that ordinary traffic stays off it. */
+                    has_data = 0;
+                }
             }
 
             if (has_data) {

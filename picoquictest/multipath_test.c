@@ -238,6 +238,16 @@ static test_api_stream_desc_t test_scenario_multipath[] = {
     { 8, 4, 257, 1000000 }
 };
 
+/* Same total data as test_scenario_multipath, but stream 8 does not depend on
+ * stream 4 completing first: both are ready in parallel from the start. Used
+ * to verify that pinning stream 4's affinity to a backup path does not let
+ * stream 8 (unpinned) piggyback onto that path too.
+ */
+static test_api_stream_desc_t test_scenario_multipath_af_backup[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 }
+};
+
 static test_api_stream_desc_t test_scenario_multipath_long[] = {
     { 4, 0, 257, 1000000 },
     { 8, 0, 257, 1000000 },
@@ -927,6 +937,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0) {
         if (test_id == multipath_test_sat_plus || test_id == multipath_test_perf) {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_long, sizeof(test_scenario_multipath_long));
+        } else if (test_id == multipath_test_stream_af_backup) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_af_backup, sizeof(test_scenario_multipath_af_backup));
         } else {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
         }
@@ -1264,6 +1276,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         else if (test_ctx->cnx_server->path[1]->delivered < 900000) {
             DBG_PRINTF("Not enough data delivered on backup-but-affinity server path 1 (%" PRIu64 ").\n",
+                test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered > 1100000) {
+            /* Stream 4 (affinity-pinned) carries ~1MB. Stream 8 is NOT pinned and should
+             * stay off the backup path entirely -- if it leaked onto path 1 too, delivered
+             * would be closer to 2MB than 1MB. */
+            DBG_PRINTF("Too much data delivered on backup-but-affinity server path 1 (%" PRIu64 "), non-affinity stream may have leaked onto it.\n",
                 test_ctx->cnx_server->path[1]->delivered);
             ret = -1;
         }
