@@ -233,6 +233,20 @@ int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
                     stream->is_active = 1;
                     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
                     picoquic_update_output_stream(cnx, stream);
+                    picoquic_log_app_message(cnx,
+                        "Stream %" PRIu64 " marked active: wake time forced to now, is_output_stream=%d",
+                        stream_id, stream->is_output_stream);
+                }
+                else {
+                    /* The stream was already marked active: this call is a no-op.
+                     * Since the wake time is only forced to "now" on the 0->1
+                     * transition above, an application that relies on repeated
+                     * calls to picoquic_mark_active_stream to signal "more data
+                     * is ready" (rather than clearing is_active via is_still_active=0
+                     * between calls) will not get a fresh callback from this call. */
+                    picoquic_log_app_message(cnx,
+                        "Stream %" PRIu64 " mark active: already active, no-op (no wake update)",
+                        stream_id);
                 }
             }
             else {

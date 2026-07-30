@@ -434,6 +434,7 @@ int fastcc_jitter_test(void);
 int flow_control_test(void);
 int flow_control_open_max_test(void);
 int stream_uni_blocked_test(void);
+int stream_uni_reactivate_test(void);
 int bbr_test(void);
 int bbr_jitter_test(void);
 int bbr_long_test(void);

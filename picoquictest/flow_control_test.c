@@ -31,7 +31,7 @@
 #include "picoquic_utils.h"
 
 /* Flow control test:
-* 
+*
 * Simulate a data receiver that can only process data slowly, and must
 * buffer whatever excess data is delivered. The test verifies that the
 * amount of data that the application must queue does not exceed a
@@ -177,7 +177,7 @@ int fctest_callback(picoquic_cnx_t* cnx,
 		switch (fin_or_event) {
 		case picoquic_callback_stream_data:
 		case picoquic_callback_stream_fin:
-			/* data arrival on stream x. 
+			/* data arrival on stream x.
 			* On server: Simulate dequeuing based on the receiver rate,
 			* then increase queue by provided amount. Monitor maximum
 			* queue length. Mark complete if stream fin.
@@ -314,7 +314,7 @@ int fctest_one(fctest_spec_t* spec)
 		if (fctest_ctx.fin_received || fctest_ctx.is_closed || fctest_ctx.error_detected) {
 			break;
 		}
-		
+
 		if (was_active) {
 			nb_inactive = 0;
 		}
@@ -664,6 +664,187 @@ int stream_uni_blocked_test(void)
 				ret = -1;
 			}
 		}
+	}
+
+	return ret;
+}
+
+/*
+ * Reproduces a field report more precisely: transport parameters are
+ * generous on both the per-stream byte limit (65535) and the stream count
+ * limit (5120), ruling out both of the flow-control mechanisms exercised
+ * above. The client opens a single local unidirectional stream, sends an
+ * initial chunk of data (matching the reported 517 bytes) with
+ * is_still_active = 0, and later -- from outside any callback, the way an
+ * application reacting to new data becoming available would -- calls
+ * picoquic_mark_active_stream() again on the SAME stream to send more.
+ * The question this answers: does prepare_to_send fire the second time?
+ */
+
+typedef struct st_uni_reactivate_ctx_t {
+	uint64_t stream_id;
+	int nb_prepare_calls;
+	int is_closed;
+	int error_detected;
+} uni_reactivate_ctx_t;
+
+static int uni_reactivate_prepare_to_send(uni_reactivate_ctx_t* ctx, uint8_t* context, size_t space)
+{
+	uint8_t* buffer;
+	size_t to_send;
+	int is_fin = (ctx->nb_prepare_calls > 0);
+
+	to_send = is_fin ? 8 : 517;
+	if (to_send > space) {
+		to_send = space;
+	}
+
+	buffer = picoquic_provide_stream_data_buffer(context, to_send, is_fin, 0);
+	if (buffer == NULL) {
+		return -1;
+	}
+	memset(buffer, 'a', to_send);
+	ctx->nb_prepare_calls++;
+	return 0;
+}
+
+static int uni_reactivate_callback(picoquic_cnx_t* cnx,
+	uint64_t stream_id, uint8_t* bytes, size_t length,
+	picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+{
+	int ret = 0;
+	uni_reactivate_ctx_t* ctx = (uni_reactivate_ctx_t*)callback_ctx;
+	(void)v_stream_ctx;
+
+	if (ctx == NULL) {
+		return -1;
+	}
+
+	switch (fin_or_event) {
+	case picoquic_callback_stream_data:
+	case picoquic_callback_stream_fin:
+		/* Server: passively receive. */
+		break;
+	case picoquic_callback_prepare_to_send:
+		if (cnx->client_mode && stream_id == ctx->stream_id) {
+			ret = uni_reactivate_prepare_to_send(ctx, bytes, length);
+		}
+		else {
+			ret = -1;
+		}
+		break;
+	case picoquic_callback_almost_ready:
+	case picoquic_callback_ready:
+		if (cnx->client_mode && ctx->stream_id == 0) {
+			ctx->stream_id = picoquic_get_next_local_stream_id(cnx, 1);
+			ret = picoquic_mark_active_stream(cnx, ctx->stream_id, 1, NULL);
+		}
+		break;
+	case picoquic_callback_close:
+	case picoquic_callback_application_close:
+		ctx->is_closed = 1;
+		break;
+	default:
+		break;
+	}
+
+	if (ret != 0) {
+		ctx->error_detected = 1;
+	}
+
+	return ret;
+}
+
+int stream_uni_reactivate_test(void)
+{
+	int ret = 0;
+	uint64_t simulated_time = 0;
+	uint64_t loss_mask = 0;
+	int nb_trials = 0;
+	int was_active = 0;
+	picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+	uni_reactivate_ctx_t ctx;
+	picoquic_tp_t server_parameters;
+	picoquic_connection_id_t initial_cid = { { 0xb1, 0x0d, 0, 0, 0, 0, 0, 0 }, 8 };
+
+	memset(&ctx, 0, sizeof(ctx));
+
+	ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+		PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+	if (ret == 0 && test_ctx == NULL) {
+		ret = -1;
+	}
+
+	if (ret == 0) {
+		/* Match the transport parameters from the field report: generous
+		 * limits, so neither per-stream nor stream-count flow control is
+		 * anywhere close to being the blocker. */
+		memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+		picoquic_init_transport_parameters(&server_parameters);
+		server_parameters.initial_max_stream_data_bidi_local = 2097152;
+		server_parameters.initial_max_data = 31457280;
+		server_parameters.initial_max_stream_id_bidir = 5120;
+		server_parameters.initial_max_stream_id_unidir = 5120;
+		server_parameters.initial_max_stream_data_bidi_remote = 65635;
+		server_parameters.initial_max_stream_data_uni = 65535;
+		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+
+		picoquic_set_qlog(test_ctx->qclient, ".");
+
+		picoquic_set_default_callback(test_ctx->qserver, uni_reactivate_callback, &ctx);
+		picoquic_set_callback(test_ctx->cnx_client, uni_reactivate_callback, &ctx);
+
+		ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+	}
+
+	if (ret == 0) {
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+	}
+
+	/* Let the first chunk go out. */
+	if (ret == 0) {
+		ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 500000);
+	}
+
+	if (ret == 0 && ctx.nb_prepare_calls < 1) {
+		DBG_PRINTF("%s", "First write on the unidirectional stream never happened");
+		ret = -1;
+	}
+
+	/* Simulate the application deciding, later, that it has more data --
+	 * re-arm the stream the same way picoquic_mark_active_stream() would
+	 * be called from application code reacting to a new data event. */
+	if (ret == 0) {
+		ret = picoquic_mark_active_stream(test_ctx->cnx_client, ctx.stream_id, 1, NULL);
+		if (ret != 0) {
+			DBG_PRINTF("Second mark_active_stream(%" PRIu64 ") returned %d", ctx.stream_id, ret);
+		}
+	}
+
+	while (ret == 0 && ctx.nb_prepare_calls < 2 && !ctx.error_detected &&
+		picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
+		ret = tls_api_one_sim_round(test_ctx, &simulated_time, simulated_time + 1000000, &was_active);
+		if (was_active) {
+			nb_trials = 0;
+		}
+		else if (++nb_trials > 256) {
+			break;
+		}
+	}
+
+	if (ret == 0 && ctx.nb_prepare_calls < 2) {
+		DBG_PRINTF("%s", "Second write on the unidirectional stream never happened -- reproduces the field report");
+		ret = -1;
+	}
+
+	if (ret == 0 && ctx.error_detected) {
+		ret = -1;
+	}
+
+	if (test_ctx != NULL) {
+		tls_api_delete_ctx(test_ctx);
+		test_ctx = NULL;
 	}
 
 	return ret;

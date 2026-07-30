@@ -2494,6 +2494,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_uni_reactivate)
+        {
+            int ret = stream_uni_reactivate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr)
         {
             int ret = bbr_test();
