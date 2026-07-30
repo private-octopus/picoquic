@@ -329,6 +329,7 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
     int nb_available = 0;
     uint64_t best_available_retransmit = UINT64_MAX;
     uint64_t best_backup_retransmit = UINT64_MAX;
+    picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
 
     *min_retransmit = 0;
 
@@ -340,8 +341,13 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
             if (cnx->congestion_alg != NULL && path_x->congestion_alg_state == NULL) {
                 cnx->congestion_alg->alg_init(path_x, cnx->congestion_alg_option_string, current_time);
             }
-            /* track the available paths */
-            if (path_x->path_is_backup) {
+            /* track the available paths. A backup path that the next ready stream is
+             * explicitly pinned to (picoquic_set_stream_path_affinity) is treated as
+             * available here, not backup: affinity is a deliberate per-stream override,
+             * and letting it fall into the backup bucket means it would only ever be
+             * picked via the retransmit-count promotion below, never because the stream
+             * is waiting on it. */
+            if (path_x->path_is_backup && !(next_stream != NULL && next_stream->affinity_path == path_x)) {
                 if (backup_index < 0 || path_x->nb_retransmit < best_backup_retransmit) {
                     best_backup_retransmit = path_x->nb_retransmit;
                     backup_index = path_index;
@@ -396,8 +402,17 @@ void picoquic_sort_available_paths(picoquic_cnx_t* cnx, uint64_t current_time, u
         picoquic_path_t* path_x = cnx->path[path_index];
         /* Clear the nominal ack path flag from all path -- it will be reset to the low RTT path later */
         path_x->is_nominal_ack_path = 0;
-        /* Only continue processing if the path is available */
-        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
+        /* Only continue processing if the path is available. A path marked backup is
+         * normally excluded here -- backup paths are otherwise only promoted based on
+         * relative retransmit counts (see picoquic_verify_path_available), never because
+         * a stream is waiting on them. But a stream that has been explicitly pinned to
+         * this path via picoquic_set_stream_path_affinity is asking for that path
+         * specifically, even if it is on backup duty for everything else, so let it
+         * compete normally below instead of stalling forever. */
+        if (!path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
+            continue;
+        }
+        if (path_x->path_is_backup && !(next_stream != NULL && next_stream->affinity_path == path_x)) {
             continue;
         }
         /* This path is a candidate for min rtt */

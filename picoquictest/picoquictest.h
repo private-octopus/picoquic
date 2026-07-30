@@ -587,6 +587,7 @@ int multipath_stream_af_test(void);
 int multipath_datagram_test(void);
 int multipath_dg_af_test(void);
 int multipath_backup_test(void);
+int multipath_stream_af_backup_test(void);
 int multipath_standup_test(void);
 int multipath_discovery_test(void);
 int multipath_keep_alive_test(void);
