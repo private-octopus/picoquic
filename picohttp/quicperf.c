@@ -723,7 +723,9 @@ int quicperf_init_streams_from_scenario(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx
                     else {
                         stream_ctx = quicperf_request_media_stream_from_scenario(cnx, ctx, &ctx->scenarios[i], rep_number, 0, current_time);
 
-                        if (stream_ctx != NULL && rep_number == 0) {
+                        if (stream_ctx != NULL && rep_number == 0 &&
+                            ctx->scenarios[i].group_size >= 1 &&
+                            ctx->scenarios[i].group_size < ctx->scenarios[i].nb_frames) {
                             quicperf_stream_report_t* report = &ctx->reports[i];
                             report->is_activated = 1;
                             report->next_group_id = 1;
@@ -1647,7 +1649,7 @@ int quicperf_print_report(FILE* F, quicperf_ctx_t* quicperf_ctx)
                 report->min_delays, average_delay, report->max_delays) <= 0;
         }
         if (ret == 0) {
-            ret |= fprintf(F, ".\n");
+            ret |= fprintf(F, ".\n") <= 0;
         }
     }
 

@@ -3897,8 +3897,38 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_datagram_multiflow) {
+            int ret = quicperf_datagram_multiflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_media) {
             int ret = quicperf_media_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_ungrouped) {
+            int ret = quicperf_ungrouped_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_group_remainder) {
+            int ret = quicperf_group_remainder_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_chain) {
+            int ret = quicperf_chain_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_print_report) {
+            int ret = quicperf_print_report_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3911,6 +3941,24 @@ namespace UnitTest1
 
         TEST_METHOD(quicperf_overflow) {
             int ret = quicperf_overflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_settled) {
+            int ret = quicperf_multipath_settled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race) {
+            int ret = quicperf_multipath_race_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race_delayed) {
+            int ret = quicperf_multipath_race_delayed_test();
 
             Assert::AreEqual(ret, 0);
         }

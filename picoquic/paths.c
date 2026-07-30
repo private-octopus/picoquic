@@ -517,6 +517,15 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
             (void)picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id, PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time);
         }
+        else if (path_index > 0 && cnx->cnx_state < picoquic_state_ready) {
+            /* Do not try to send packets on paths different from path[0] if
+             * the connection is not fully established. At this point, the
+             * other paths are not guaranteed to be fully established, and
+             * there is a significant rsik of causing crashes when trying
+             * to use them.
+             */
+            continue;
+        }
         else if ((*next_tuple = picoquic_check_path_control_needed(cnx, cnx->path[path_index], current_time, next_wake_time)) != NULL) {
             *next_path = cnx->path[path_index];
             (*next_path)->challenger++;
