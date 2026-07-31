@@ -21,12 +21,82 @@
 #ifdef _WINDOWS
 #include "getopt.h"
 #endif
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+/* Temporary diagnostic: on an unhandled exception (e.g. access violation),
+ * print a symbolized stack trace before the process dies. This is much
+ * faster than reaching for an external debugger when a test crashes. */
+static LONG WINAPI picoquic_t_crash_handler(EXCEPTION_POINTERS* ex)
+{
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+    CONTEXT context_record = *ex->ContextRecord;
+    STACKFRAME64 frame = { 0 };
+    DWORD machine_type = IMAGE_FILE_MACHINE_AMD64;
+
+    fprintf(stderr, "\n*** CRASH: exception code 0x%08lx at address %p ***\n",
+        ex->ExceptionRecord->ExceptionCode, ex->ExceptionRecord->ExceptionAddress);
+
+    SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+    SymInitialize(process, NULL, TRUE);
+
+    frame.AddrPC.Offset = context_record.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context_record.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context_record.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+
+    for (int i = 0; i < 32; i++) {
+        if (!StackWalk64(machine_type, process, thread, &frame, &context_record,
+            NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) {
+            break;
+        }
+
+        char symbol_buffer[sizeof(SYMBOL_INFO) + 256] = { 0 };
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)symbol_buffer;
+        DWORD64 displacement64 = 0;
+        DWORD displacement32 = 0;
+        IMAGEHLP_LINE64 line = { 0 };
+
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = 255;
+        line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+        if (SymFromAddr(process, frame.AddrPC.Offset, &displacement64, symbol)) {
+            if (SymGetLineFromAddr64(process, frame.AddrPC.Offset, &displacement32, &line)) {
+                fprintf(stderr, "  #%d %s + 0x%llx  (%s:%lu)\n", i, symbol->Name,
+                    (unsigned long long)displacement64, line.FileName, line.LineNumber);
+            }
+            else {
+                fprintf(stderr, "  #%d %s + 0x%llx  (no line info)\n", i, symbol->Name,
+                    (unsigned long long)displacement64);
+            }
+        }
+        else {
+            fprintf(stderr, "  #%d 0x%p  (no symbol)\n", i, (void*)frame.AddrPC.Offset);
+        }
+    }
+    fflush(stderr);
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
 
 void picoquic_tls_api_unload(void);
 
@@ -691,6 +761,9 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+    SetUnhandledExceptionFilter(picoquic_t_crash_handler);
+#endif
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;
