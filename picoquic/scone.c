@@ -167,14 +167,17 @@ void picoquic_scone_padding(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length)
         }
     }
     else if (cnx->client_mode &&
-        !cnx->is_scone_indicator_sent) {
+        cnx->cnx_state < picoquic_state_client_handshake_start &&
+        cnx->path[0]->nb_retransmit == 0) {
         /* keeping it simple for now */
         memset(bytes, 0, length - 2);
         bytes += length - 2;
         bytes[0] = (SCONE_INDICATOR>>8)&0xff;
         bytes[1] = SCONE_INDICATOR & 0xff;
-        cnx->is_scone_indicator_sent = 1;
-        picoquic_log_app_message(cnx, "Scone indicator sent");
+        if (!cnx->is_scone_indicator_sent) {
+            cnx->is_scone_indicator_sent = 1;
+            picoquic_log_app_message(cnx, "Scone indicator sent");
+        }
     }
     else {
         memset(bytes, 0, length);

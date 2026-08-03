@@ -3523,6 +3523,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         {
             /* Create a new packet, which may include several segments */
             int is_initial_sent = 0;
+            int scone_indicator_size = (cnx->client_mode &&
+                cnx->local_parameters.is_scone_supported &&
+                path_x == cnx->path[0] &&
+                tuple == path_x->first_tuple &&
+                cnx->cnx_state < picoquic_state_client_handshake_start) ? 2 : 0;
             size_t packet_max = send_buffer_max - *send_length;
             uint8_t* packet_buffer = send_buffer + *send_length;
 
@@ -3560,6 +3565,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                         available = packet_max - coalesced_packet_size;
                     }
                 }
+
+                available -= scone_indicator_size;
 
                 packet = picoquic_create_packet(cnx->quic);
 
@@ -3621,8 +3628,7 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 /* Padding is needed */
                 size_t padding = packet_max - coalesced_packet_size;
 
-                if (cnx->local_parameters.is_scone_supported &&
-                    path_x == cnx->path[0] && tuple == path_x->first_tuple) {
+                if (scone_indicator_size > 0) {
                     /* do padding per scone */
                     picoquic_scone_padding(cnx, packet_buffer + coalesced_packet_size, padding);
                 }
