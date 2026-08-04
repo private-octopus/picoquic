@@ -666,6 +666,9 @@ typedef struct st_picoquic_quic_t {
     picoquic_cnx_t* qmux_pending_last;
     picohash_table* qmux_socket_id_table;
 
+    /* Support for scone */
+    uint64_t scone_indication; /* indicated rate in bits/second */
+
     /* Logging APIS */
     struct st_picoquic_unified_logging_t* log_fns[PICOQUIC_MAX_LOG_FUNCTIONS];
     void* log_params[PICOQUIC_MAX_LOG_FUNCTIONS];
@@ -1160,6 +1163,10 @@ typedef struct st_picoquic_path_t {
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
 
+    /* Support for scone */
+    uint64_t scone_next_send_time;
+    uint64_t scone_advice_last; /* last indicated rate in bits/second */
+
     /* Debug MP */
     int lost_after_delivered;
     int responder;
@@ -1293,6 +1300,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
     unsigned int is_qmux_cleartext : 1; /* This QMux connection is not encrypted */
     unsigned int is_qmux_tls_ready : 1; /* TLS handshake of QMux connection not complete */
+    unsigned int is_scone_indicator_sent : 1; /* Keep track, give up on Scone indicator after 1 trial */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1784,6 +1792,9 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx);
 void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    uint64_t* next_wake_time, int* is_initial_sent);
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
@@ -2199,6 +2210,26 @@ typedef struct st_picomask_fns_t {
 
 } picomask_fns_t;
 
+/*
+* Support for Scone, see https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/
+* We pick as base delay the smallest prime number of microseconds larger than 19 seconds.
+* We will add a random delay between 0 and 3 seconds, resulting in at least 3 SCONE
+* packets sent in a 67 seconds interval.
+*/
+#define SCONE_DELAY 19000013
+#define SCONE_DELAY_RANDOM 3000000
+#define SCONE_INDICATOR 0xc813
+#define SCONE_VERSION_BASE 0x6f7dc0fd
+#define SCONE_DELAY 19000013
+#define SCONE_DELAY_RANDOM 3000000
+#define SCONE_INDICATOR 0xc813
+
+void picoquic_scone_padding(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
+int picoquic_scone_incoming(picoquic_quic_t* quic,  picoquic_packet_header* ph, const uint8_t* bytes_start, const uint8_t* bytes_max);
+void picoquic_scone_report(picoquic_cnx_t* cnx, int path_index);
+int picoquic_scone_ready_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+int picoquic_scone_prepare(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* packet_buffer, size_t available, size_t* segment_length, uint64_t* next_wake_time, int* is_initial_sent);
 /*
 * Multi-threading debugging support.
 * By compiling with the macro PICOQUIC_WITH_THREAD_CHECK, the code will check that

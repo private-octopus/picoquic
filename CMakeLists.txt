@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.51.1
+        VERSION 1.1.52.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -121,6 +121,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
+    picoquic/scone.c
     picoquic/sender.c
     picoquic/sim_link.c
     picoquic/siphash.c
@@ -234,6 +235,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
+    picoquictest/scone_test.c
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c

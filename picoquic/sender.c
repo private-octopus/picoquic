@@ -3523,6 +3523,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
         {
             /* Create a new packet, which may include several segments */
             int is_initial_sent = 0;
+            int scone_indicator_size = (cnx->client_mode &&
+                cnx->local_parameters.is_scone_supported &&
+                path_x == cnx->path[0] &&
+                tuple == path_x->first_tuple &&
+                cnx->cnx_state < picoquic_state_client_handshake_start) ? 2 : 0;
             size_t packet_max = send_buffer_max - *send_length;
             uint8_t* packet_buffer = send_buffer + *send_length;
 
@@ -3561,6 +3566,8 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                     }
                 }
 
+                available -= scone_indicator_size;
+
                 packet = picoquic_create_packet(cnx->quic);
 
                 if (packet == NULL) {
@@ -3573,6 +3580,11 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                             packet, current_time, 
                             send_buffer, send_buffer_max, send_length,
                             &next_wake_time);
+                    }
+                    else if (coalesced_packet_size == 0 &&
+                        picoquic_scone_ready_to_send(cnx, path_x, current_time)) {
+                        ret = picoquic_scone_prepare(cnx, path_x, packet, current_time,
+                            packet_buffer, available, &segment_length, &next_wake_time, &is_initial_sent);
                     }
                     else {
                         ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
@@ -3613,9 +3625,17 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 cnx->cnx_state < picoquic_state_client_almost_ready &&
                 coalesced_packet_size > 0 &&
                 coalesced_packet_size < PICOQUIC_ENFORCED_INITIAL_MTU) {
-                /* This is bad */
+                /* Padding is needed */
                 size_t padding = packet_max - coalesced_packet_size;
-                picoquic_public_random(packet_buffer + coalesced_packet_size, padding);
+
+                if (scone_indicator_size > 0) {
+                    /* do padding per scone */
+                    picoquic_scone_padding(cnx, packet_buffer + coalesced_packet_size, padding);
+                }
+                else {
+                    memset(packet_buffer + coalesced_packet_size, 0, padding);
+                }
+
                 coalesced_packet_size += padding;
             }
 

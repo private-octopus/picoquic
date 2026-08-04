@@ -181,6 +181,7 @@
     <ClCompile Include="picohash.c" />
     <ClCompile Include="register_all_cc_algorithms.c" />
     <ClCompile Include="sacks.c" />
+    <ClCompile Include="scone.c" />
     <ClCompile Include="sender.c" />
     <ClCompile Include="bbr.c" />
     <ClCompile Include="sim_link.c" />

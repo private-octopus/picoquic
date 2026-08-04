@@ -51,4 +51,5 @@ Picoquic options:
   -4 ip[:port]    Preferred address for v4 connections.
   -6 ipv6[:port]  Preferred address for v6 connections.
   -Y tcp-port     Use QMUX in addition to QUIC
+  -5              Enable support for SCONE
   -h              This help message

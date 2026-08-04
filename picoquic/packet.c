@@ -229,10 +229,15 @@ int picoquic_parse_long_packet_header(
     else if (ph->vn != 0) {
         ph->version_index = picoquic_get_version_index(ph->vn);
         if (ph->version_index < 0) {
-            DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
-            ph->ptype = picoquic_packet_error;
-            ph->pc = 0;
-            ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            if (picoquic_scone_incoming(quic, ph, bytes_start, bytes_max) != 0) {
+                DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+                ph->ptype = picoquic_packet_error;
+                ph->pc = 0;
+                ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            }
+            else {
+                ret = PICOQUIC_NO_ERROR_SCONE_ADVICE;
+            }
         }
     }
     
@@ -241,7 +246,6 @@ int picoquic_parse_long_packet_header(
         (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL)) {
         ret = -1;
     }
-
     if (ret == 0) {
         ph->offset = bytes - bytes_start;
 
@@ -317,6 +321,7 @@ int picoquic_parse_long_packet_header(
                 ph->epoch = picoquic_epoch_handshake;
                 break;
             case picoquic_packet_retry: /* Retry */
+            case picoquic_packet_scone: /* SCONE */
             default:
                 /* No default branch in this statement, because there are only 4 possible types
                  * parsed in picoquic_parse_long_packet_type */
@@ -1977,6 +1982,10 @@ int picoquic_incoming_1rtt(
         else if (ret == 0) {
             picoquic_path_t* path_x = cnx->path[path_id];
 
+
+            /* Check and report SCONE advice */
+            picoquic_scone_report(cnx, path_id);
+
             path_x->first_tuple->if_index = if_index_to;
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
@@ -2179,6 +2188,7 @@ int picoquic_incoming_segment(
         }
 
         if (ret == 0) {
+            picoquic_scone_ready_to_send(cnx, (path_id < 0) ? NULL : cnx->path[path_id], current_time);
             picoquic_log_packet(cnx, (path_id < 0)?NULL:cnx->path[path_id], 1, current_time, &ph, bytes, *consumed);
         }
         else if (is_buffered) {
@@ -2329,6 +2339,10 @@ int picoquic_incoming_segment(
             cnx->path[0]->retransmit_timer = current_time -
                 cnx->pkt_ctx[picoquic_packet_context_initial].pending_first->send_time;
         }
+    }
+    else if (ret == PICOQUIC_NO_ERROR_SCONE_ADVICE) {
+        *consumed = ph.offset;
+        ret = 0;
     }
 
     if (ret == 0) {

@@ -746,6 +746,9 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
         return ret;
     }
+    else if (fin_or_event == picoquic_callback_scone_indication) {
+        return 0;
+    }
 
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
@@ -1778,7 +1781,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                             picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
                             picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
                             packet->ecn_mark = test_ctx->packet_ecn_default;
-#if 1
+
                             if (test_ctx->ecn_support) {
                                 if (next_action == sim_action_server_departure) {
                                     if (test_ctx->qserver->default_congestion_alg != NULL) {
@@ -1791,12 +1794,13 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                                     }
                                 }
                             }
-#endif
+
                             packet->length = send_length - size_sent;
                             if (packet->length > segment_size) {
                                 packet->length = segment_size;
                             }
                             memcpy(packet->bytes, send_buffer, packet->length);
+
                             picoquictest_sim_link_submit(target_link, packet, *simulated_time);
                             size_sent += segment_size;
                             send_buffer += segment_size;
@@ -11708,8 +11712,8 @@ int aegis_initial_aes_test(void)
     void* pn_enc_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
         &simulated_time, NULL, NULL, 0, 1, 0);
-
     if (ret == 0 && test_ctx == NULL) {
+
         ret = -1;
     }
 

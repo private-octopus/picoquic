@@ -474,6 +474,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 picoquic_tp_address_discovery,
                 (uint64_t)(cnx->local_parameters.address_discovery_mode - 1));
         }
+
+        if (cnx->local_parameters.is_scone_supported > 0 && bytes != NULL) {
+            bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_is_scone_supported);
+        }
     }
 
     if (cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
@@ -547,6 +551,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.initial_max_path_id = 0;
     cnx->remote_parameters.address_discovery_mode = 0;
     cnx->remote_parameters.is_reset_stream_at_enabled = 0;
+    cnx->remote_parameters.is_scone_supported = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -790,7 +795,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                         else {
                             if (limit > 0x7fffffff) {
-                                /* Practical limits are small values, tied to the number of supported paths 
+                                /* Practical limits are small values, tied to the number of supported paths
                                 * and migrations. There is no harm clamping the limit to 0x7fffffff, avoiding
                                 * downstream issues like misunderstanding the value as negative. */
                                 limit = 0x7fffffff;
@@ -951,6 +956,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->qmux_remote_max_record_size = max_record_size;
                             }
                         }
+                    }
+                    break;
+                case picoquic_tp_is_scone_supported:
+                    if (extension_length != 0) {
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Scone Supported TP");
+                    }
+                    else {
+                        cnx->remote_parameters.is_scone_supported = 1;
                     }
                     break;
                 default:

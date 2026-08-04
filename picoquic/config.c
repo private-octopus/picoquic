@@ -107,6 +107,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
     { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
     { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
+    { picoquic_option_SCONE, '5', "scone", 0, "", "Enable support for SCONE" },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -543,6 +544,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         break;
     case picoquic_option_QMUX:
         ret = config_set_string_param(&config->qmux_string, params, nb_params, 0);
+        break;
+    case picoquic_option_SCONE:
+        config->is_scone_supported = 1;
         break;
     case picoquic_option_HELP:
         ret = -1;
@@ -1018,6 +1022,10 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (ret == 0 && config->flow_control_max > 0)
         {
             picoquic_set_max_data_control(quic, config->flow_control_max);
+        }
+
+        if (ret == 0 && config->is_scone_supported) {
+            quic->default_tp.is_scone_supported = 1;
         }
 
         if (ret != 0) {

@@ -74,42 +74,42 @@
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0, 1
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1, 0
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 2, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 2, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,22 +117,23 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1,
-    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
 #define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
 #define ADDRESS_DISCOVERY_TP 0xc0, 0, 0, 0, 0x9f, 0x81, 0xa1, 0x76
+#define SCONE_SUPPORTED_TP 0x61, 0x9e
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
@@ -143,7 +144,8 @@ uint8_t client_param1[] = {
     picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
     picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    ADDRESS_DISCOVERY_TP, 1, 2, 
+    ADDRESS_DISCOVERY_TP, 1, 2,
+    SCONE_SUPPORTED_TP, 0
 };
 
 uint8_t client_param2[] = {
@@ -265,7 +267,8 @@ uint8_t client_param11[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     /* Add same grease value that the server will generate */
     0x40, 0x59, 2, 0x42, 0x03,
-    ADDRESS_DISCOVERY_TP, 1, 2
+    ADDRESS_DISCOVERY_TP, 1, 2,
+    SCONE_SUPPORTED_TP, 0
 };
 
 uint8_t client_param12[] = {
@@ -412,6 +415,15 @@ uint8_t client_param_err14[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
+/* Error 15, is_cone_supported is not 0 bytes.*/
+uint8_t client_param_err15[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    SCONE_SUPPORTED_TP, 1, 0
+};
+
 typedef struct st_transport_param_error_test_t {
     int mode;
     uint8_t * target;
@@ -432,7 +444,8 @@ static transport_param_error_test_t transport_param_error_case[] = {
     { 0, client_param_err11, sizeof(client_param_err11), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err12, sizeof(client_param_err12), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err13, sizeof(client_param_err13), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err14, sizeof(client_param_err14), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
+    { 0, client_param_err14, sizeof(client_param_err14), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err15, sizeof(client_param_err15), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
 };
 
 static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);
@@ -548,7 +561,12 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
         DBG_PRINTF("is_reset_stream_at_enabled: got %" PRIu64 ", expected%" PRIu64 "\n",
             param->is_reset_stream_at_enabled, ref->is_reset_stream_at_enabled);
         ret = -1;
-        }
+    }
+    else if (param->is_scone_supported != ref->is_scone_supported) {
+        DBG_PRINTF("is_scone_supported: got %d, expected%d\n",
+            param->is_scone_supported, ref->is_scone_supported);
+        ret = -1;
+    }
 
     return ret;
 }
