@@ -1845,7 +1845,7 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
 
                 if ((cnx->callback_fn)(cnx, stream->stream_id, (uint8_t*)&stream_data_context, allowed_space, picoquic_callback_prepare_to_send, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     /* something went wrong */
-                    picoquic_log_app_message(cnx, "Prepare to send returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                    picoquic_log_app_message(cnx, "Prepare to send on stream %" PRIu64 " returns error 0x%x", stream->stream_id, PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                     *ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0,
                         "Prepare to send callback");
                     bytes = bytes0; /* CHECK: SHOULD THIS BE NULL ? */
@@ -1854,6 +1854,8 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                     /* The application did not send any data */
                     bytes = bytes0;
                     stream->is_active = stream_data_context.is_still_active;
+
+                    picoquic_log_app_message(cnx, "Prepare to send on stream %" PRIu64 " returns without any data sent.", stream->stream_id);
                 }
                 else
                 {

@@ -2487,6 +2487,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_uni_blocked)
+        {
+            int ret = stream_uni_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_uni_reactivate)
+        {
+            int ret = stream_uni_reactivate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr)
         {
             int ret = bbr_test();
@@ -3317,6 +3331,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_backup) {
             int ret = multipath_backup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_stream_af_backup) {
+            int ret = multipath_stream_af_backup_test();
 
             Assert::AreEqual(ret, 0);
         }

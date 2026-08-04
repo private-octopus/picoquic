@@ -238,6 +238,16 @@ static test_api_stream_desc_t test_scenario_multipath[] = {
     { 8, 4, 257, 1000000 }
 };
 
+/* Same total data as test_scenario_multipath, but stream 8 does not depend on
+ * stream 4 completing first: both are ready in parallel from the start. Used
+ * to verify that pinning stream 4's affinity to a backup path does not let
+ * stream 8 (unpinned) piggyback onto that path too.
+ */
+static test_api_stream_desc_t test_scenario_multipath_af_backup[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 }
+};
+
 static test_api_stream_desc_t test_scenario_multipath_long[] = {
     { 4, 0, 257, 1000000 },
     { 8, 0, 257, 1000000 },
@@ -460,6 +470,7 @@ typedef enum {
     multipath_test_datagram,
     multipath_test_dg_af,
     multipath_test_backup,
+    multipath_test_stream_af_backup,
     multipath_test_standup,
     multipath_test_tunnel,
     multipath_test_fail,
@@ -926,6 +937,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0) {
         if (test_id == multipath_test_sat_plus || test_id == multipath_test_perf) {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_long, sizeof(test_scenario_multipath_long));
+        } else if (test_id == multipath_test_stream_af_backup) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_af_backup, sizeof(test_scenario_multipath_af_backup));
         } else {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
         }
@@ -973,6 +986,17 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         else if (test_id == multipath_test_backup ||
             test_id == multipath_test_standup) {
             ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
+        }
+        else if (test_id == multipath_test_stream_af_backup) {
+            /* Path 1 is marked backup, but stream 4's affinity is pinned to it anyway.
+             * Affinity should win: the stream's data must still go out on path 1. */
+            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
+            if (ret == 0) {
+                ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 1);
+            }
+            if (ret != 0) {
+                DBG_PRINTF("Cannot set backup path and stream affinity, ret = %d", ret);
+            }
         }
     }
 
@@ -1236,6 +1260,31 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
         else if (test_ctx->cnx_server->path[1]->delivered > 50000) {
             DBG_PRINTF("Too much data delivered on server path 1 (%" PRIu64 ").\n", test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
+    }
+
+    /* In the stream-affinity-on-backup-path scenario, verify that the path
+     * is indeed marked backup, but that stream 4's affinity still routed its
+     * data there -- i.e. affinity overrides the backup exclusion instead of
+     * the stream stalling forever.
+     */
+    if (ret == 0 && test_id == multipath_test_stream_af_backup) {
+        if (!test_ctx->cnx_server->path[1]->path_is_backup) {
+            DBG_PRINTF("Backup not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_backup);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered < 900000) {
+            DBG_PRINTF("Not enough data delivered on backup-but-affinity server path 1 (%" PRIu64 ").\n",
+                test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered > 1100000) {
+            /* Stream 4 (affinity-pinned) carries ~1MB. Stream 8 is NOT pinned and should
+             * stay off the backup path entirely -- if it leaked onto path 1 too, delivered
+             * would be closer to 2MB than 1MB. */
+            DBG_PRINTF("Too much data delivered on backup-but-affinity server path 1 (%" PRIu64 "), non-affinity stream may have leaked onto it.\n",
+                test_ctx->cnx_server->path[1]->delivered);
             ret = -1;
         }
     }
@@ -1504,6 +1553,13 @@ int multipath_backup_test(void)
     uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_backup);
+}
+
+int multipath_stream_af_backup_test(void)
+{
+    uint64_t max_completion_microsec = 3500000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_stream_af_backup);
 }
 
 int multipath_standup_test(void)

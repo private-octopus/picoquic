@@ -20,6 +20,8 @@
 */
 #ifdef _WINDOWS
 #include "getopt.h"
+#endif
+#if defined(_WINDOWS) && defined(_WINDOWS64)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <dbghelp.h>
