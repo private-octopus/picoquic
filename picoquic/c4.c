@@ -761,6 +761,10 @@ static void c4_exit_recovery(
         }
         else {
             c4_state->recent_congestions = 0;
+            if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
+                c4_state->push_was_not_limited) {
+                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
+            }
         }
     }
     c4_state->nb_era_resuming = 0;
