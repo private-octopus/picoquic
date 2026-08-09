@@ -116,6 +116,7 @@
 #define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
 
 #define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
+#define C4_ALPHA_DRAINING 896 /* 75 % */
 
 #if 1
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
@@ -198,6 +199,7 @@ typedef struct st_c4_state_t {
     unsigned int use_seed_cwin : 1;
     unsigned int initial_after_jitter : 1;
     unsigned int excess_ce_after_push : 1;
+    unsigned int is_drain_required : 1;
     /* Handling of options. */
     char const* option_string;
 } c4_state_t;
@@ -603,6 +605,7 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->nb_eras_no_increase = 0;
         c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
+        c4_state->is_drain_required = 1;
         c4_enter_recovery(path_x, c4_state, c4_congestion_none);
     }
 }
@@ -720,7 +723,7 @@ static void c4_enter_recovery(
         c4_state->excess_ce_after_push = (c_mode != c4_congestion_ecn) ? 0 : 1;
         c4_state->alg_state = c4_recovery;
         c4_era_reset(path_x, c4_state);
-        c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+        c4_state->alpha_1024_current = (c4_state->is_drain_required)? C4_ALPHA_DRAINING:C4_ALPHA_RECOVER_1024;
     }
 }
 
@@ -736,6 +739,9 @@ static void c4_exit_recovery(
 {
     /* Assess growth */
     int is_growing = c4_growth_evaluate(c4_state);
+
+    c4_state->is_drain_required = 0;
+
     if (is_growing) {
         if (!c4_state->excess_ce_after_push && c4_state->nb_era_resuming == 0) {
             c4_state->probe_level++;
@@ -746,9 +752,11 @@ static void c4_exit_recovery(
         /* TODO: this is obsolete, we should remove the cascade code. */
         if (c4_state->push_was_not_limited) {
             c4_state->probe_level = 1;
+#if 1
             if (c4_state->excess_ce_after_push) {
                 c4_state->probe_level = 0;
             }
+#endif
         }
 
         if (c4_state->congestion_notified) {
@@ -757,6 +765,7 @@ static void c4_exit_recovery(
                 c4_state->recent_maximum_rate > 0 &&
                 c4_state->nominal_rate > c4_state->recent_maximum_rate) {
                 c4_state->nominal_rate = c4_state->recent_maximum_rate;
+                c4_state->is_drain_required = 1;
             }
         }
         else {
@@ -764,6 +773,7 @@ static void c4_exit_recovery(
             if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
                 c4_state->push_was_not_limited) {
                 c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
+                c4_state->is_drain_required = 1;
             }
         }
     }
@@ -971,6 +981,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
     if (path_x->rtt_sample < c4_state->era_min_rtt) {
         c4_state->era_min_rtt = path_x->rtt_sample;
+        c4_state->is_drain_required = 1;
     }
     if (c4_state->alpha_1024_previous <= C4_ALPHA_NEUTRAL_1024) {
         /* Update the running min RTT, as the max RTT computation depends on it. */
@@ -993,6 +1004,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
         else {
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
+            c4_state->is_drain_required = 1;
         }
         /* Recompute the delay threshold as the max RTT was updated. */
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
