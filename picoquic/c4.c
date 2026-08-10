@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "cc_common.h"
+#include "tls_api.h"
 
 /* C4 algorithm is a work in progress. We start with some simple principles:
 * - Track delays, but this expose issue when competing with Cubic
@@ -197,7 +198,6 @@ typedef struct st_c4_state_t {
     unsigned int congestion_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
-    unsigned int initial_after_jitter : 1;
     unsigned int excess_ce_after_push : 1;
     unsigned int is_drain_required : 1;
     /* Handling of options. */
@@ -540,6 +540,9 @@ static void c4_era_reset(
 
 static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
+#if 0
+    c4_state->initial_after_jitter = 1;
+#endif
     c4_state->alg_state = c4_initial;
     c4_state->initial_cwnd = path_x->cwin;
     c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
@@ -765,7 +768,7 @@ static void c4_exit_recovery(
                 c4_state->recent_maximum_rate > 0 &&
                 c4_state->nominal_rate > c4_state->recent_maximum_rate) {
                 c4_state->nominal_rate = c4_state->recent_maximum_rate;
-                c4_state->is_drain_required = 1;
+                c4_state->recent_congestions = 0;
             }
         }
         else {
@@ -773,7 +776,6 @@ static void c4_exit_recovery(
             if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
                 c4_state->push_was_not_limited) {
                 c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
-                c4_state->is_drain_required = 1;
             }
         }
     }
@@ -814,15 +816,10 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
 
-#if 0
-        if (c4_state->nb_cruise_left_before_push == 0) {
-            c4_state->nb_cruise_left_before_push = 1;
-        }
-#else
-        if (c4_state->nb_cruise_left_before_push == 0) {
-            c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
-        }
-#endif
+    if (c4_state->nb_cruise_left_before_push == 0) {
+        c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
+    }
+
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
         /* When operating in a CPU limited environment, pacing is too
@@ -894,7 +891,6 @@ static void c4_on_pushing_era_end(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-
     c4_growing_t is_growing = c4_growth_evaluate(c4_state);
     if (is_growing == c4_growing_fast) {
         // c4_state->nb_eras_no_increase = 0;
@@ -983,6 +979,10 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
         c4_state->era_min_rtt = path_x->rtt_sample;
         c4_state->is_drain_required = 1;
     }
+
+    /* TODO: some of that logic might be located at the end of the RTT cycle, or the end of the era.
+    */
+
     if (c4_state->alpha_1024_previous <= C4_ALPHA_NEUTRAL_1024) {
         /* Update the running min RTT, as the max RTT computation depends on it. */
         if (c4_state->era_min_rtt < c4_state->running_min_rtt) {
@@ -1002,6 +1002,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
             c4_state->nominal_max_rtt = corrected_max;
         }
         else {
+            /* TODO: move this specific bit to the exit recovery function. */
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
             c4_state->is_drain_required = 1;
@@ -1043,6 +1044,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             c4_state->push_was_not_limited = 1;
             c4_state->nominal_rate = rate_measurement;
             c4_state->delay_threshold = c4_delay_threshold(c4_state);
+            c4_state->is_drain_required = 0;
         }
         else {
             /* The ACK rate did not grow, but that's not a proof.
@@ -1075,11 +1077,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             * do that if the RTT is low (lower than 50ms) or if the data rate is high enough
             * (higher than 1Mbps, i.e., 8Mbps). And we only do that once per connection.
             */
-            if (!c4_state->initial_after_jitter &&
-                c4_state->nominal_max_rtt > 50000 &&
+            if (c4_state->nominal_max_rtt > 50000 &&
                 c4_state->nominal_rate < 1000000 &&
                 5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt) {
-                c4_state->initial_after_jitter = 1;
                 c4_enter_initial(path_x, c4_state);
             }
             else
