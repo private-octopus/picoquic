@@ -25,60 +25,8 @@
 #include "cc_common.h"
 #include "tls_api.h"
 
-/* C4 algorithm is a work in progress. We start with some simple principles:
-* - Track delays, but this expose issue when competing with Cubic
-* - Compete with Cubic: fallback to BBRv1, best of last 6 epochs, ignore delays, losses.
-* - Stopping the compete mode? When the delay becomes acceptable?
-* - App limited mode: freeze the parameters? Do probe on search?
-* - Probing mode: probe for one RTT, recover for one RTT, assess after recover.
-* - Probing interval: Fibonacci sequence, up to 16 or 17? 1, 1, 2, 3, 5, 8, 13
-* - Tuning the interval: no bw increase => larger, bw increase => sooner, how soon?
-* - stopping the compete mode: ECN? ECN as signal that the bottleneck is actively managed.
-* - compete with self? Maybe introduce some random behavior.
-* Principles were later revised to track data rate and max RTT.
- */
-
-/* States of C4:
-* 
-* Initial.   Similar to Hystart for now, as a place holder.
-* Recovery.  After an event, freeze the parameters for one RTT. This is the time
-*            to measure whether a previous push was a success.
-* Cruising.  For N intervals. Be ready to notice congestion, or change in conditions.
-*            We should define N as x*log(cwin / cwin_min), so connections sending
-*            lots of data wait a bit longer, which should improve fairness.
-*            Question: is this "N intervals" or "some amount of data sent"?
-*            the latter is better for the fairness issue.
-* probing.   For one RTT. Transmit at higher rate, to probe the network, then
-*            move to "cruising". Higher rate should be 25% higher, to probe
-*            without creating big queues.
-* Slowdown.  Periodic slowdown to 1/2 the nominal CWIN, in order to reset
-*            the min delay.
-* Checking:  Post slowdown. use nominal CWND until the min CWND is
-*            verified.
-* 
-* Transitions:
-*            initial to recovery -- similar to hystart for now.
-*            recovery to initial -- if measurements show increase in data rate compared to era.
-*            recovery to cruising -- at the end of period.
-*            cruising, probing to recovery -- if excess delay, loss or ECN
-*            probing to recovery -- at end of period.
-*            to slowdown..
-* 
-* 
-* State variables:
-* - CWIN. Main control variable.
-* - Sequence number of first packet sent in epoch. Epoch ends when this is acknowledged.
-* - Observed data rate. Measured at the end of epoch N, reflects setting at epoch N-1.
-* - Average rate of EC marking
-* - Average rate of Packet loss
-* - Average rate of excess delay
-* - Number of cruising bytes sent.
-* - Cruising bytes target before transition to push
-* - RTT min
- */
-
- /* The probe level was used to set the probing rate during the "push" phase.
- *
+/* C4 algorithm is a work in progress.
+* See the specification: https://datatracker.ietf.org/doc/draft-huitema-ccwg-c4-spec/
  */
 
 #define C4_WITH_LOGGING
