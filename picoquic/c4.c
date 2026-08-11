@@ -97,11 +97,7 @@
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
-#if 1
 #define C4_NB_CRUISE_BEFORE_PUSH 2
-#else
-#define C4_NB_CRUISE_BEFORE_PUSH 4
-#endif
 #define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
@@ -119,15 +115,10 @@
 #define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
 #define C4_ALPHA_DRAINING 896 /* 75 % */
 
-#if 1
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
 };
-#else
-uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
-    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_1024, C4_ALPHA_PUSH_1024
-};
-#endif
+
 typedef enum {
     c4_initial = 0,
     c4_recovery,
@@ -540,9 +531,6 @@ static void c4_era_reset(
 
 static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
-#if 0
-    c4_state->initial_after_jitter = 1;
-#endif
     c4_state->alg_state = c4_initial;
     c4_state->initial_cwnd = path_x->cwin;
     c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
@@ -755,11 +743,9 @@ static void c4_exit_recovery(
         /* TODO: this is obsolete, we should remove the cascade code. */
         if (c4_state->push_was_not_limited) {
             c4_state->probe_level = 1;
-#if 1
             if (c4_state->excess_ce_after_push) {
                 c4_state->probe_level = 0;
             }
-#endif
         }
 
         if (c4_state->congestion_notified) {
@@ -898,12 +884,7 @@ static void c4_on_pushing_era_end(
         c4_era_reset(path_x, c4_state);
     }
     else {
-#if 1
         if (c4_state->alpha_1024_previous >= C4_ALPHA_PUSH_25) {
-#else
-        c4_state->nb_eras_no_increase++;
-        if (c4_state->nb_eras_no_increase > 1) {
-#endif
             /* Move to recovery */
             c4_enter_recovery(path_x, c4_state, c4_congestion_none);
         }
@@ -1075,7 +1056,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             * However, reentering Initial is a bit of a hack. It is OK in the high jitter or
             * competition secnarios, but it can backfire and cause congestion and losses. So we don't
             * do that if the RTT is low (lower than 50ms) or if the data rate is high enough
-            * (higher than 1Mbps, i.e., 8Mbps). And we only do that once per connection.
+            * (higher than 1Mbps, i.e., 8Mbps).
             */
             if (c4_state->nominal_max_rtt > 50000 &&
                 c4_state->nominal_rate < 1000000 &&
