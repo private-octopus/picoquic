@@ -518,7 +518,7 @@ static ptls_cipher_algorithm_t* picoquic_get_header_protection_cipher(ptls_ciphe
         else
 #endif
         {
-            hp_cipher = cipher->aead->ctr_cipher;
+            hp_cipher = cipher->aead->ecb_cipher;
         }
     }
 
@@ -1536,7 +1536,9 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     else if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey,
         hp_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size),
         PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), prefix_label)) == 0) {
-        if ((*v_pn_enc = ptls_cipher_new(hp_cipher, is_enc, pnekey)) == NULL) {
+        /* RFC 9001 Section 5.4.3: Header Protection always uses AES-ECB encrypt,
+         * regardless of the packet direction (send or receive). */
+        if ((*v_pn_enc = ptls_cipher_new(hp_cipher, 1, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
     }
@@ -2803,13 +2805,19 @@ void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_k
 
 size_t picoquic_pn_iv_size(void *pn_enc)
 {
-    return ((ptls_cipher_context_t *)pn_enc)->algo->iv_size;
+    /* AES-ECB has no IV; return AES block size (the HP sample length). */
+    (void)pn_enc;
+    return 16;
 }
 
 void picoquic_pn_encrypt(void *pn_enc, const void * iv, void *output, const void *input, size_t len)
 {
-    ptls_cipher_init((ptls_cipher_context_t *) pn_enc, iv);
-    ptls_cipher_encrypt((ptls_cipher_context_t *) pn_enc, output, input, len);
+    /* RFC 9001 Section 5.4.3: mask = AES-ECB(hp_key, sample).
+     * The "iv" parameter carries the 16-byte sample to encrypt. */
+    (void)input;
+    uint8_t mask[16];
+    ptls_cipher_encrypt((ptls_cipher_context_t *)pn_enc, mask, iv, 16);
+    memcpy(output, mask, len);
 }
 
 /* Utility functions, so applications do not have to load picotls.h */
