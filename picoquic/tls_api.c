@@ -1524,6 +1524,7 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     uint8_t pnekey[PTLS_MAX_SECRET_SIZE];
     ptls_cipher_algorithm_t* hp_cipher = picoquic_get_header_protection_cipher(cipher);
     int ret = 0;
+    (void)is_enc;
 
     if (*v_pn_enc != NULL) {
         ptls_cipher_free((ptls_cipher_context_t *)*v_pn_enc);
@@ -1536,7 +1537,9 @@ static int picoquic_set_pn_enc_from_secret(void ** v_pn_enc, ptls_cipher_suite_t
     else if ((ret = ptls_hkdf_expand_label(cipher->hash, pnekey,
         hp_cipher->key_size, ptls_iovec_init(secret, cipher->hash->digest_size),
         PICOQUIC_LABEL_HP, ptls_iovec_init(NULL, 0), prefix_label)) == 0) {
-        if ((*v_pn_enc = ptls_cipher_new(hp_cipher, is_enc, pnekey)) == NULL) {
+        /* RFC 9001 Section 5.4.3: Header Protection always uses AES-ECB encrypt,
+         * regardless of the packet direction (send or receive). */
+        if ((*v_pn_enc = ptls_cipher_new(hp_cipher, 1, pnekey)) == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
     }
