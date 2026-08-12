@@ -4713,14 +4713,14 @@ int picoquic_check_max_streams_frame_needs_repeat(picoquic_cnx_t* cnx, const uin
     else {
         if (bytes[0] == picoquic_frame_type_max_streams_bidir) {
             if (max_stream_rank <= cnx->max_stream_id_bidir_rank_acked ||
-                cnx->max_stream_id_bidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 0)) {
+                cnx->max_stream_id_bidir_local > STREAM_ID_FROM_RANK(max_stream_rank, !cnx->client_mode, 0)) {
                 /* Streams bidir already increased or already acked  */
                 *no_need_to_repeat = 1;
             }
         }
         else {
             if (max_stream_rank <= cnx->max_stream_id_unidir_rank_acked ||
-                cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, cnx->client_mode, 1)) {
+                cnx->max_stream_id_unidir_local > STREAM_ID_FROM_RANK(max_stream_rank, !cnx->client_mode, 1)) {
                 /* Streams unidir already increased or acked */
                 *no_need_to_repeat = 1;
             }
