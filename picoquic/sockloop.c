@@ -447,8 +447,38 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
                 opt_ret = getsockopt(s_ctx->fd, SOL_SOCKET, last_op, (char*)&so_errbuf, &opt_len);
                 DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
                     last_op_name, param->socket_buffer_size, sock_error, so_errbuf, opt_ret);
+#ifdef __FreeBSD__
+                DBG_PRINTF("- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
+#endif
                 ret = -1;
             }
+#ifdef __linux__
+            else {
+                /* On Linux, setsockopt(SO_SNDBUF/SO_RCVBUF) will silently succeed
+                 * even when the requested buffer exceeds snet.core.wmem_max or
+                 * net.core.rmem_max, with the kernel silently clamping the value.
+                 *
+                 * Read back the set value to verify what we asked for was what we got.
+                 *
+                 * The requested value is doubled in the kernel for overhead, so account
+                 * for that during our check as well. */
+                int so_verify = 0;
+
+                opt_len = sizeof(int);
+                if (getsockopt(s_ctx->fd, SOL_SOCKET, SO_SNDBUF, (char*)&so_verify, &opt_len) == 0 &&
+                    so_verify / 2 < param->socket_buffer_size) {
+                    DBG_PRINTF("SO_SNDBUF silently capped by kernel: requested %d, effective %d (check net.core.wmem_max)",
+                        param->socket_buffer_size, so_verify / 2);
+                }
+
+                opt_len = sizeof(int);
+                if (getsockopt(s_ctx->fd, SOL_SOCKET, SO_RCVBUF, (char*)&so_verify, &opt_len) == 0 &&
+                    so_verify / 2 < param->socket_buffer_size) {
+                    DBG_PRINTF("SO_RCVBUF silently capped by kernel: requested %d, effective %d (check net.core.rmem_max)",
+                        param->socket_buffer_size, so_verify / 2);
+                }
+            }
+#endif /* __linux__ */
         }
 #endif
 
