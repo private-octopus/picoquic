@@ -1235,10 +1235,10 @@ int picoqmux_start_client_cnx(picoquic_cnx_t* cnx)
          * and remote parameters may have been initialized to the initial value
          * of the previous session. Apply these new parameters. */
         cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
-        cnx->max_stream_id_bidir_remote =
-            STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
-        cnx->max_stream_id_unidir_remote =
-            STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+        cnx->max_streams_bidir_remote =
+            cnx->remote_parameters.initial_max_stream_id_bidir;
+        cnx->max_streams_unidir_remote =
+            cnx->remote_parameters.initial_max_stream_id_unidir;
         cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_data;
         cnx->max_stream_data_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
 

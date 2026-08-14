@@ -3400,10 +3400,10 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
             cnx->remote_parameters.initial_max_stream_id_unidir = 64;
         }
 
-        cnx->max_stream_id_bidir_remote = STREAM_ID_FROM_RANK(
-            cnx->remote_parameters.initial_max_stream_id_bidir, cnx->client_mode, 0);
-        cnx->max_stream_id_unidir_remote = STREAM_ID_FROM_RANK(
-            cnx->remote_parameters.initial_max_stream_id_unidir, cnx->client_mode, 1);
+        cnx->max_streams_bidir_remote = 
+            cnx->remote_parameters.initial_max_stream_id_bidir;
+        cnx->max_streams_unidir_remote = 
+            cnx->remote_parameters.initial_max_stream_id_unidir;
 
         if (test->is_data_blocked) {
             cnx->remote_parameters.initial_max_stream_data_bidi_local = 0;

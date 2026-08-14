@@ -981,8 +981,8 @@ int quic_client(const char* ip_address_text, int server_port,
                 picoquic_set_desired_version(cnx_client, config->desired_version);
             }
 
-            fprintf(stdout, "Max stream id bidir remote before start = %d (%d)\n",
-                (int)cnx_client->max_stream_id_bidir_remote,
+            fprintf(stdout, "Max streams bidir remote before start = %d (%d)\n",
+                (int)cnx_client->max_streams_bidir_remote,
                 (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
 
             if (config->ech_target != NULL) {
@@ -999,8 +999,8 @@ int quic_client(const char* ip_address_text, int server_port,
                     picoquic_supported_versions[cnx_client->version_index].version,
                     (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
 
-                fprintf(stdout, "Max stream id bidir remote after start = %d (%d)\n",
-                    (int)cnx_client->max_stream_id_bidir_remote,
+                fprintf(stdout, "Max streams bidir remote after start = %d (%d)\n",
+                    (int)cnx_client->max_streams_bidir_remote,
                     (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
             }
 
@@ -1008,8 +1008,8 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (picoquic_is_0rtt_available(cnx_client) && (config->proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
                     loop_cb.zero_rtt_available = 1;
 
-                    fprintf(stdout, "Max stream id bidir remote after 0rtt = %d (%d)\n",
-                        (int)cnx_client->max_stream_id_bidir_remote,
+                    fprintf(stdout, "Max streams bidir remote after 0rtt = %d (%d)\n",
+                        (int)cnx_client->max_streams_bidir_remote,
                         (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
 
                     /* Queue a simple frame to perform 0-RTT test */

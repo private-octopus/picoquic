@@ -645,8 +645,8 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
         /* Do not insert if the stream cannot be written to */
         if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
             uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
-                cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote;
-            if (stream->stream_id > remote_limit) {
+                cnx->max_streams_bidir_remote : cnx->max_streams_unidir_remote;
+            if (STREAM_RANK_FROM_ID(stream->stream_id) > remote_limit) {
                 /* The application marked this stream active (or queued data on it),
                  * but the peer has not yet granted enough stream credit: the stream
                  * ID is beyond the current MAX_STREAMS(_UNI) limit. The stream will
@@ -801,8 +801,8 @@ int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_hea
             if (stream->sent_offset == 0) {
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
                     uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
-                        cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote;
-                    if (stream->stream_id > remote_limit) {
+                        cnx->max_streams_bidir_remote : cnx->max_streams_unidir_remote;
+                    if (STREAM_RANK_FROM_ID(stream->stream_id) > remote_limit) {
                         /* This is the path actually taken when an application calls
                          * picoquic_mark_active_stream() on a stream ID beyond the
                          * peer's currently granted MAX_STREAMS(_UNI) limit: the
@@ -845,13 +845,14 @@ void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
-    uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
+    uint64_t old_rank = old_limit;
     uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, cnx->client_mode, !is_bidir);
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id);
 
     while (stream) {
-        if (stream->stream_id > old_limit) {
-            if (stream->stream_id > new_limit) {
+        uint64_t new_rank = STREAM_RANK_FROM_ID(stream->stream_id);
+        if (new_rank > old_limit) {
+            if (new_rank > new_limit) {
                 break;
             }
             if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir) {
@@ -879,13 +880,13 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
-                is_output_stream = stream->stream_id <= cnx->max_stream_id_bidir_remote;
+                is_output_stream = (STREAM_RANK_FROM_ID(stream->stream_id) <= cnx->max_streams_bidir_remote);
 
             }
             else {
                 stream->maxdata_local = 0;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
-                is_output_stream = stream->stream_id <= cnx->max_stream_id_unidir_remote;
+                is_output_stream = (STREAM_RANK_FROM_ID(stream->stream_id) <= cnx->max_streams_unidir_remote);
             }
         }
         else {

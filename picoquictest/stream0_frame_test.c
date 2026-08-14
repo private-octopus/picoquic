@@ -910,8 +910,8 @@ int stream_output_test(void)
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_bidi_local = PICOQUIC_DEFAULT_0RTT_WINDOW;
-            cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
-            cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
+            cnx->max_streams_bidir_remote = (cnx->client_mode) ? 2 : 0;
+            cnx->max_streams_unidir_remote = (cnx->client_mode) ? 3 : 0;
 
             cnx->high_priority_stream_id = 1;
 
@@ -925,9 +925,9 @@ int stream_output_test(void)
 
             if (ret == 0) {
                 /* Relax the max stream id value and test order again */
-                uint64_t old_limit = cnx->max_stream_id_bidir_remote;
-                cnx->max_stream_id_bidir_remote = 8;
-                picoquic_add_output_streams(cnx, old_limit, 8, 1);
+                uint64_t old_limit = cnx->max_streams_bidir_remote;
+                cnx->max_streams_bidir_remote = 3;
+                picoquic_add_output_streams(cnx, old_limit, 3, 1);
                 ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
             }
 
