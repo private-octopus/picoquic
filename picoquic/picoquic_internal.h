@@ -1462,14 +1462,14 @@ typedef struct st_picoquic_cnx_t {
     uint64_t maxdata_remote; /* Highest value received from the peer */
     uint64_t max_stream_data_local;
     uint64_t max_stream_data_remote;
-    uint64_t max_stream_id_bidir_local; /* Highest value sent to the peer */
-    uint64_t max_stream_id_bidir_rank_acked; /* Highest rank value acked by the peer */
-    uint64_t max_stream_id_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
-    uint64_t max_stream_id_bidir_remote; /* Highest value received from the peer */
-    uint64_t max_stream_id_unidir_local; /* Highest value sent to the peer */
-    uint64_t max_stream_id_unidir_rank_acked; /* Highest rank value acked by the peer */
-    uint64_t max_stream_id_unidir_local_computed;  /* Value computed from stream FIN but not yet sent */
-    uint64_t max_stream_id_unidir_remote; /* Highest value received from the peer */
+    uint64_t max_streams_bidir_local; /* Highest value sent to the peer */
+    uint64_t max_streams_bidir_acked; /* Highest rank value acked by the peer */
+    uint64_t max_streams_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
+    uint64_t max_streams_bidir_remote; /* Highest value received from the peer */
+    uint64_t max_streams_unidir_local; /* Highest value sent to the peer */
+    uint64_t max_streams_unidir_acked; /* Highest rank value acked by the peer */
+    uint64_t max_streams_unidir_local_computed;  /* Value computed from stream FIN but not yet sent */
+    uint64_t max_streams_unidir_remote; /* Highest value received from the peer */
 
     /* Queue for frames waiting to be sent */
     picoquic_misc_frame_header_t* first_misc_frame;
