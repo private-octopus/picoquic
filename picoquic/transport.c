@@ -638,7 +638,7 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     uint64_t old_limit = cnx->max_streams_bidir_remote;
                     cnx->remote_parameters.initial_max_stream_id_bidir =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (cnx->remote_parameters.initial_max_stream_id_bidir >= (1ull << 60)) {
+                    if (cnx->remote_parameters.initial_max_stream_id_bidir > (1ull << 60)) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max streams bidir");
                     }
                     else {
