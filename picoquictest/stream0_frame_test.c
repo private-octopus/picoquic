@@ -1117,6 +1117,73 @@ int stream_rank_test(void)
     return ret;
 }
 
+/* Verify that the final peer-initiated stream allowed by the advertised
+ * stream count is accepted. */
+int stream_id_limit_test(void)
+{
+    const uint64_t max_stream_rank = 2;
+    const uint64_t final_peer_unidir_stream_id = 7;
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_in peer_addr = { 0 };
+
+    peer_addr.sin_family = AF_INET;
+    quic = picoquic_create(1, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+    else if (picoquic_set_default_tp_value(quic,
+        picoquic_tp_initial_max_streams_uni, max_stream_rank) != 0) {
+        DBG_PRINTF("%s", "Cannot set initial unidirectional stream limit\n");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_cnx(quic,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&peer_addr, 0, 0, NULL, NULL, 1);
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create client connection\n");
+            ret = -1;
+        }
+        else if (cnx->max_streams_unidir_local != max_stream_rank) {
+            DBG_PRINTF("Expected local max unidirectional stream rank %" PRIu64
+                ", got %" PRIu64 "\n", max_stream_rank, cnx->max_streams_unidir_local);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_stream_head_t* stream = picoquic_create_missing_streams(
+            cnx, final_peer_unidir_stream_id, 1);
+
+        if (stream == NULL) {
+            DBG_PRINTF("Expected peer stream %" PRIu64 " at limit %" PRIu64
+                ", got error 0x%" PRIx64 "\n", final_peer_unidir_stream_id,
+                max_stream_rank, cnx->local_error);
+            ret = -1;
+        }
+        else if (stream->stream_id != final_peer_unidir_stream_id || cnx->local_error != 0) {
+            DBG_PRINTF("Expected peer stream %" PRIu64 " without error, got stream %" PRIu64
+                " and error 0x%" PRIx64 "\n", final_peer_unidir_stream_id,
+                stream->stream_id, cnx->local_error);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_delete_cnx(cnx);
+    }
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
 /* Unit test of "picoquic_provide_stream_data_buffer"
  */
 
