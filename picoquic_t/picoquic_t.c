@@ -236,6 +236,7 @@ static const picoquic_test_def_t test_table[] = {
     { "vn_compat", vn_compat_test },
     { "transport_param_default", transport_param_default_test },
     { "stream_rank", stream_rank_test },
+    { "stream_id_limit", stream_id_limit_test },
     { "provide_stream_buffer", provide_stream_buffer_test },
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
