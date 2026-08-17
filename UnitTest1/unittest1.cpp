@@ -839,6 +839,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_id_limit)
+        {
+            int ret = stream_id_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(provide_stream_buffer)
         {
             int ret = provide_stream_buffer_test();
