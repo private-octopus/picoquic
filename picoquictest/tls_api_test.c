@@ -14020,7 +14020,7 @@ int tls_key_exchange_list_test(void)
     }
     for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
         if (!key_exchange_is_in_target(picoquic_key_exchanges[i]->id)) {
-            DBG_PRINTF("Expected group %s to not be available, but it is.", key_exchange_target_groups[i].name);
+            DBG_PRINTF("Expected group %s to not be available, but it is.", picoquic_key_exchanges[i]->name);
             ret = -1;
         }
     }
