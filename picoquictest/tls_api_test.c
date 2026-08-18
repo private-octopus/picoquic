@@ -46,7 +46,7 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
-#ifndef PTLS_WITHOUT_OPENSSL
+#if !defined(PTLS_WITHOUT_OPENSSL) && !defined(_APPLE)
 #include "picotls/openssl.h"
 #endif
 
@@ -13946,6 +13946,13 @@ int af_undef_test(void)
     return ret;
 }
 
+#ifdef _APPLE
+int tls_key_exchange_list_test(void)
+{
+    DBG_PRINTF("%s", "Not running the key exchange test on Apple devices.");
+    return 0;
+}
+#else
 /*
 * Verify that all expected key exchange algorithms are available
 */
@@ -14024,3 +14031,4 @@ int tls_key_exchange_list_test(void)
     }
     return ret;
 }
+#endif
