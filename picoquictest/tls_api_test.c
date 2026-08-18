@@ -13945,7 +13945,7 @@ int af_undef_test(void)
 /*
 * Verify that all expected key exchange algorithms are available
 */
-#ifdef _APPLE_
+#ifdef __APPLE__
 int tls_key_exchange_list_test(void)
 {
     return 1;
