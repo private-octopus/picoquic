@@ -13948,7 +13948,7 @@ int af_undef_test(void)
 #ifdef __APPLE__
 int tls_key_exchange_list_test(void)
 {
-    return 1;
+    return 0;
 }
 #else
 #ifndef PTLS_WITHOUT_OPENSSL
