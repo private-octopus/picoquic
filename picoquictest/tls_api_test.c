@@ -13941,3 +13941,97 @@ int af_undef_test(void)
 
     return ret;
 }
+
+/* test whether the specified key exchange is supported, and if it is force a
+* connection to use it and test that the exchange succeeds.
+*/
+
+int tls_is_key_exchange_supported(uint16_t id)
+{
+    int ret = 0;
+
+    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        if (picoquic_key_exchanges[i]->id == id) {
+            ret = 1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int tls_key_exchange_test_one(uint16_t key_exchange_id)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t icid = { { 0xce, 0xea, 0, 0, 0, 0, 0, 0 }, 8 };
+
+    icid.id[2] = (uint8_t)((key_exchange_id >> 8) & 0xff);
+    icid.id[3] = (uint8_t)(key_exchange_id & 0xff);
+
+    /* create a test context with default settings */
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI,
+        PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* test whether the list of key exchanges includes x25519mlkem */
+    if (ret == 0 && !tls_is_key_exchange_supported(key_exchange_id)) {
+        /* This platform does not support the algorithm. Stop the test. */
+        if (test_ctx != NULL) {
+            tls_api_delete_ctx(test_ctx);
+        }
+        DBG_PRINTF("Algorithm not supported: %d", key_exchange_id);
+        return 0;
+    }
+
+    if (ret == 0) {
+        /* Free the client connection before creating a new one with the
+         * proper settings. */
+        if (test_ctx->cnx_client != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+        /* Reset the context to use the preferred ID.
+        */
+        ret = picoquic_set_key_exchange(test_ctx->qclient, key_exchange_id);
+    }
+
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, icid,
+            picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0, 0,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    
+    if (ret == 0) {
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI,
+            PICOQUIC_TEST_ALPN, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int tls_x25519_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519));
+}
+
+int tls_x25519mlkem_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519MLKEM768));
+}

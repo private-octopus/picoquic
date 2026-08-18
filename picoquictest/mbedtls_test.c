@@ -1228,9 +1228,14 @@ int mbedtls_configure_test(void)
         ret = -1;
     }
 
-    if (picoquic_key_exchange_secp256r1[0] != &ptls_mbedtls_secp256r1) {
-        DBG_PRINTF("%s", "key_exchange_secp256r1 does not match");
-        ret = -1;
+    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        if (picoquic_key_exchanges[i]->id == PTLS_GROUP_SECP256R1) {
+            if (picoquic_key_exchanges[i] != &ptls_mbedtls_secp256r1) {
+                DBG_PRINTF("%s", "key_exchange_secp256r1 does not match");
+                ret = -1;
+            }
+            break;
+        }
     }
 
     for (int i = 0; i < PICOQUIC_KEY_EXCHANGES_NB_MAX; i++) {

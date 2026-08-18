@@ -874,6 +874,20 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(tls_x25519)
+        {
+            int ret = tls_x25519_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_x25519mlkem)
+        {
+            int ret = tls_x25519mlkem_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_wrong_alpn)
 		{
 			int ret = tls_api_wrong_alpn_test();
