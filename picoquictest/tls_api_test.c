@@ -13942,50 +13942,11 @@ int af_undef_test(void)
     return ret;
 }
 
-/*
-* Verify that all expected key exchange algorithms are available
+/* test whether the specified key exchange is supported, and if it is force a
+* connection to use it and test that the exchange succeeds.
 */
-#ifdef __APPLE__
-int tls_key_exchange_list_test(void)
-{
-    return 0;
-}
-#else
-#ifndef PTLS_WITHOUT_OPENSSL
-#include "picotls/openssl.h"
-#endif
 
-typedef struct st_key_exchange_group_list_t {
-    uint16_t id;
-    char const* name;
-} key_exchange_group_list_test_t;
-
-key_exchange_group_list_test_t key_exchange_target_groups[] = {
-    /* None of the loaders tries to load SECP384R1, SECP521R1,
-    * or X448, so we wontverify their availability! */
-    /* {PTLS_GROUP_SECP384R1, PTLS_GROUP_NAME_SECP384R1}, */
-    /* {PTLS_GROUP_SECP521R1, PTLS_GROUP_NAME_SECP521R1}, */
-    /* { PTLS_GROUP_X448, PTLS_GROUP_NAME_X448 } */
-    /* Only openssl provides PQC at this point */
-#ifndef PTLS_WITHOUT_OPENSSL
-#if defined(PICOQUIC_WITH_ALL_PQC_ALGORITHMS) && PTLS_OPENSSL_HAVE_MLKEM
-    {  PTLS_GROUP_SECP256R1MLKEM768, PTLS_GROUP_NAME_SECP256R1MLKEM768 },
-    { PTLS_GROUP_SECP384R1MLKEM1024, PTLS_GROUP_NAME_SECP384R1MLKEM1024 },
-    { PTLS_GROUP_MLKEM512, PTLS_GROUP_NAME_MLKEM512 },
-    { PTLS_GROUP_MLKEM768, PTLS_GROUP_NAME_MLKEM768 },
-    { PTLS_GROUP_MLKEM1024, PTLS_GROUP_NAME_MLKEM1024 },
-#endif
-#if PTLS_OPENSSL_HAVE_X25519MLKEM768
-    { PTLS_GROUP_X25519MLKEM768, PTLS_GROUP_NAME_X25519MLKEM768 },
-#endif
-#endif
-    /* SECP256R1 and X25519 are defined in minicrypto, which is always loaded. */
-    { PTLS_GROUP_SECP256R1, PTLS_GROUP_NAME_SECP256R1 },
-    { PTLS_GROUP_X25519, PTLS_GROUP_NAME_X25519},
-    { 0, NULL }
-};
-
-int key_exchange_is_in_keyex(uint16_t id)
+int tls_is_key_exchange_supported(uint16_t id)
 {
     int ret = 0;
 
@@ -13998,36 +13959,79 @@ int key_exchange_is_in_keyex(uint16_t id)
     return ret;
 }
 
-int key_exchange_is_in_target(uint16_t id)
+int tls_key_exchange_test_one(uint16_t key_exchange_id)
 {
-    int ret = 0;
-    for (int i = 0; key_exchange_target_groups[i].id != 0; i++) {
-        if (picoquic_key_exchanges[i]->id == id) {
-            ret = 1;
-            break;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t icid = { { 0xce, 0xea, 0, 0, 0, 0, 0, 0 }, 8 };
+
+    icid.id[2] = (uint8_t)((key_exchange_id >> 8) & 0xff);
+    icid.id[3] = (uint8_t)(key_exchange_id & 0xff);
+
+    /* create a test context with default settings */
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI,
+        PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* test whether the list of key exchanges includes x25519mlkem */
+    if (ret == 0 && !tls_is_key_exchange_supported(key_exchange_id)) {
+        /* This platform does not support the algorithm. Stop the test. */
+        if (test_ctx != NULL) {
+            tls_api_delete_ctx(test_ctx);
         }
+        DBG_PRINTF("Algorithm not supported: %d", key_exchange_id);
+        return 0;
     }
-    return ret;
-}
 
-int tls_key_exchange_list_test(void)
-{
-    int ret = 0;
+    if (ret == 0) {
+        /* Free the client connection before creating a new one with the
+         * proper settings. */
+        if (test_ctx->cnx_client != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+        /* Reset the context to use the preferred ID.
+        */
+        ret = picoquic_set_key_exchange(test_ctx->qclient, key_exchange_id);
+    }
 
-    picoquic_tls_api_init();
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, icid,
+            picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0, 0,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
 
-    for (int i = 0; key_exchange_target_groups[i].id != 0; i++) {
-        if (!key_exchange_is_in_keyex(key_exchange_target_groups[i].id)) {
-            DBG_PRINTF("Expected group %s to be available, but it is not.", key_exchange_target_groups[i].name);
+        if (test_ctx->cnx_client == NULL) {
             ret = -1;
         }
     }
-    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
-        if (!key_exchange_is_in_target(picoquic_key_exchanges[i]->id)) {
-            DBG_PRINTF("Expected group %s to not be available, but it is.", picoquic_key_exchanges[i]->name);
-            ret = -1;
-        }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
     }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    
+    if (ret == 0) {
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI,
+            PICOQUIC_TEST_ALPN, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
     return ret;
 }
-#endif
+
+int tls_x25519_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519));
+}
+
+int tls_x25519mlkem_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519MLKEM768));
+}
