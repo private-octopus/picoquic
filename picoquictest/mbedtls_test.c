@@ -1229,7 +1229,7 @@ int mbedtls_configure_test(void)
     }
 
     for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
-        if (picoquic_key_exchanges[i].id == PTLS_GROUP_SECP256R1) {
+        if (picoquic_key_exchanges[i]->id == PTLS_GROUP_SECP256R1) {
             if (picoquic_key_exchanges[i] != &ptls_mbedtls_secp256r1) {
                 DBG_PRINTF("%s", "key_exchange_secp256r1 does not match");
                 ret = -1;
