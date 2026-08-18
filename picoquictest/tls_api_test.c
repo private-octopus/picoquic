@@ -46,12 +46,6 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
-/*
-#if !defined(PTLS_WITHOUT_OPENSSL) && !defined(_APPLE)
-#include "picotls/openssl.h"
-#endif
-*/
-
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
@@ -13951,6 +13945,16 @@ int af_undef_test(void)
 /*
 * Verify that all expected key exchange algorithms are available
 */
+#ifdef _APPLE_
+int tls_key_exchange_list_test(void)
+{
+    return 1;
+}
+#else
+#ifndef PTLS_WITHOUT_OPENSSL
+#include "picotls/openssl.h"
+#endif
+
 typedef struct st_key_exchange_group_list_t {
     uint16_t id;
     char const* name;
@@ -14026,3 +14030,4 @@ int tls_key_exchange_list_test(void)
     }
     return ret;
 }
+#endif
