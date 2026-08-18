@@ -46,9 +46,11 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
+/*
 #if !defined(PTLS_WITHOUT_OPENSSL) && !defined(_APPLE)
 #include "picotls/openssl.h"
 #endif
+*/
 
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -13946,13 +13948,6 @@ int af_undef_test(void)
     return ret;
 }
 
-#ifdef _APPLE
-int tls_key_exchange_list_test(void)
-{
-    DBG_PRINTF("%s", "Not running the key exchange test on Apple devices.");
-    return 0;
-}
-#else
 /*
 * Verify that all expected key exchange algorithms are available
 */
@@ -14031,4 +14026,3 @@ int tls_key_exchange_list_test(void)
     }
     return ret;
 }
-#endif
