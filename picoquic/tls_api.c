@@ -200,7 +200,6 @@ static void picoquic_tls_api_zero(void)
 {
     memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
     memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
-    memset((void*)picoquic_key_exchange_secp256r1, 0, sizeof(picoquic_key_exchange_secp256r1));
 
     picoquic_set_private_key_from_file_fn = NULL;
     picoquic_dispose_sign_certificate_fn = NULL;
@@ -299,11 +298,6 @@ void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key
             picoquic_key_exchanges[i] = key_exchange;
             break;
         }
-    }
-
-    if (key_exchange->id == PICOQUIC_GROUP_SECP256R1) {
-        /* Replace the lower priority provider if present! */
-        picoquic_key_exchange_secp256r1[0] = key_exchange;
     }
 }
 
