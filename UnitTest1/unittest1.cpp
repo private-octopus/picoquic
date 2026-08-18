@@ -874,6 +874,13 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(tls_key_exchange_list)
+        {
+            int ret = tls_key_exchange_list_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_wrong_alpn)
 		{
 			int ret = tls_api_wrong_alpn_test();

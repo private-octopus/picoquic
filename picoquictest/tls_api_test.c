@@ -46,6 +46,10 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
+#ifndef PTLS_WITHOUT_OPENSSL
+#include "picotls/openssl.h"
+#endif
+
 static const uint8_t test_ticket_encrypt_key[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
@@ -13939,5 +13943,84 @@ int af_undef_test(void)
         test_ctx = NULL;
     }
 
+    return ret;
+}
+
+/*
+* Verify that all expected key exchange algorithms are available
+*/
+typedef struct st_key_exchange_group_list_t {
+    uint16_t id;
+    char const* name;
+} key_exchange_group_list_test_t;
+
+key_exchange_group_list_test_t key_exchange_target_groups[] = {
+    /* None of the loaders tries to load SECP384R1, SECP521R1,
+    * or X448, so we wontverify their availability! */
+    /* {PTLS_GROUP_SECP384R1, PTLS_GROUP_NAME_SECP384R1}, */
+    /* {PTLS_GROUP_SECP521R1, PTLS_GROUP_NAME_SECP521R1}, */
+    /* { PTLS_GROUP_X448, PTLS_GROUP_NAME_X448 } */
+    /* Only openssl provides PQC at this point */
+#ifndef PTLS_WITHOUT_OPENSSL
+#if defined(PICOQUIC_WITH_ALL_PQC_ALGORITHMS) && PTLS_OPENSSL_HAVE_MLKEM
+    {  PTLS_GROUP_SECP256R1MLKEM768, PTLS_GROUP_NAME_SECP256R1MLKEM768 },
+    { PTLS_GROUP_SECP384R1MLKEM1024, PTLS_GROUP_NAME_SECP384R1MLKEM1024 },
+    { PTLS_GROUP_MLKEM512, PTLS_GROUP_NAME_MLKEM512 },
+    { PTLS_GROUP_MLKEM768, PTLS_GROUP_NAME_MLKEM768 },
+    { PTLS_GROUP_MLKEM1024, PTLS_GROUP_NAME_MLKEM1024 },
+#endif
+#if PTLS_OPENSSL_HAVE_X25519MLKEM768
+    { PTLS_GROUP_X25519MLKEM768, PTLS_GROUP_NAME_X25519MLKEM768 },
+#endif
+#endif
+    /* SECP256R1 and X25519 are defined in minicrypto, which is always loaded. */
+    { PTLS_GROUP_SECP256R1, PTLS_GROUP_NAME_SECP256R1 },
+    { PTLS_GROUP_X25519, PTLS_GROUP_NAME_X25519},
+    { 0, NULL }
+};
+
+int key_exchange_is_in_keyex(uint16_t id)
+{
+    int ret = 0;
+
+    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        if (picoquic_key_exchanges[i]->id == id) {
+            ret = 1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int key_exchange_is_in_target(uint16_t id)
+{
+    int ret = 0;
+    for (int i = 0; key_exchange_target_groups[i].id != 0; i++) {
+        if (picoquic_key_exchanges[i]->id == id) {
+            ret = 1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int tls_key_exchange_list_test(void)
+{
+    int ret = 0;
+
+    picoquic_tls_api_init();
+
+    for (int i = 0; key_exchange_target_groups[i].id != 0; i++) {
+        if (!key_exchange_is_in_keyex(key_exchange_target_groups[i].id)) {
+            DBG_PRINTF("Expected group %s to be available, but it is not.", key_exchange_target_groups[i].name);
+            ret = -1;
+        }
+    }
+    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        if (!key_exchange_is_in_target(picoquic_key_exchanges[i]->id)) {
+            DBG_PRINTF("Expected group %s to not be available, but it is.", key_exchange_target_groups[i].name);
+            ret = -1;
+        }
+    }
     return ret;
 }

@@ -84,6 +84,7 @@ int test_version_negotiation_spoof(void);
 int transport_param_test(void);
 int tls_api_sni_test(void);
 int tls_api_alpn_test(void);
+int tls_key_exchange_list_test(void);
 int tls_api_wrong_alpn_test(void);
 int tls_api_oneway_stream_test(void);
 int tls_api_q_and_r_stream_test(void);

@@ -444,6 +444,20 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_chacha20poly1305sha256);
         picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_x25519sha256);
 #endif
+
+#ifdef PICOQUIC_WITH_ALL_PQC_ALGORITHMS
+#if PTLS_OPENSSL_HAVE_MLKEM
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem512);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem768);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem1024);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1mlkem768);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_secp384r1mlkem1024);
+#endif
+#endif 
+#if PTLS_OPENSSL_HAVE_X25519MLKEM768
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519mlkem768);
+#endif
+
 #ifdef PTLS_HAVE_AEGIS
         picoquic_register_ciphersuite(&ptls_openssl_aegis256sha512, 1);
         picoquic_register_ciphersuite(&ptls_openssl_aegis128lsha256, 1);

@@ -241,6 +241,7 @@ static const picoquic_test_def_t test_table[] = {
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
     { "tls_api_alpn", tls_api_alpn_test },
+    { "tls_key_exchange_list", tls_key_exchange_list_test },
     { "tls_api_wrong_alpn", tls_api_wrong_alpn_test },
     { "tls_api_oneway_stream", tls_api_oneway_stream_test },
     { "tls_api_q_and_r_stream", tls_api_q_and_r_stream_test },
