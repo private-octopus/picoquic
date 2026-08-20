@@ -94,6 +94,7 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t nominal_max_rtt; /* Estimate of queue-free max RTT */
     uint64_t initial_cwnd; /* CWND value used during Initial phase */
+    uint64_t initial_last_time; /* time of exit from last initial */
     uint64_t running_min_rtt; /* Rough estimate of min RTT, for buffer estimation */
     uint64_t alpha_1024_current;
     uint64_t alpha_1024_previous;
@@ -375,7 +376,6 @@ static void c4_apply_rate_and_cwin(
                 }
             }
         }
-        c4_state->initial_cwnd = target_cwin;
     }
     else if (c4_state->alg_state == c4_resuming) {
         /* Initial special case: seed cwin */
@@ -480,7 +480,14 @@ static void c4_era_reset(
 static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
     c4_state->alg_state = c4_initial;
-    c4_state->initial_cwnd = path_x->cwin;
+    c4_state->nominal_max_rtt = path_x->smoothed_rtt;
+    if (c4_state->nominal_rate > 0) {
+        c4_state->initial_cwnd = PICOQUIC_BYTES_FROM_RATE(c4_state->nominal_max_rtt, c4_state->nominal_rate);
+    }
+    else {
+        c4_state->initial_cwnd = path_x->cwin;
+    }
+    c4_state->initial_last_time = 0;
     c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
@@ -674,10 +681,14 @@ static void c4_enter_recovery(
 
 static void c4_exit_recovery(
     picoquic_path_t* path_x,
-    c4_state_t* c4_state)
+    c4_state_t* c4_state, uint64_t current_time)
 {
     /* Assess growth */
     int is_growing = c4_growth_evaluate(c4_state);
+
+    if (c4_state->initial_last_time == 0) {
+        c4_state->initial_last_time = current_time;
+    }
 
     c4_state->is_drain_required = 0;
 
@@ -953,7 +964,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
 
 /* Handle data ack event.
  */
-void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state)
+void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
     uint64_t previous_rate = c4_state->nominal_rate;
     uint64_t rate_measurement = 0;
@@ -1008,15 +1019,16 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             */
             if (c4_state->nominal_max_rtt > 50000 &&
                 c4_state->nominal_rate < 1000000 &&
-                5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt) {
+                5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt &&
+                c4_state->initial_last_time > 0 &&
+                current_time > c4_state->initial_last_time + 1000000) {
                 c4_enter_initial(path_x, c4_state);
             }
-            else
-            {
+            else {
                 /* Manage the transition to the next state */
                 switch (c4_state->alg_state) {
                 case c4_recovery:
-                    c4_exit_recovery(path_x, c4_state);
+                    c4_exit_recovery(path_x, c4_state, current_time);
                     break;
                 case c4_cruising:
                     if (c4_state->nb_cruise_left_before_push > 0) {
@@ -1193,7 +1205,7 @@ void c4_notify(
     picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_per_ack_state_t * ack_state,
-    uint64_t UNUSED(current_time))
+    uint64_t current_time)
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
@@ -1205,7 +1217,7 @@ void c4_notify(
     if (c4_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            c4_handle_ack(path_x, c4_state, ack_state);
+            c4_handle_ack(path_x, c4_state, ack_state, current_time);
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_ecn_ec:
@@ -1217,7 +1229,6 @@ void c4_notify(
                     if (c4_state->recent_delay_excess > 0
                         && c4_state->nb_eras_no_increase > 1
                         && c4_state->push_rate_old >= c4_state->nominal_rate) {
-
                         c4_exit_initial(path_x, c4_state);
                     }
                 }
