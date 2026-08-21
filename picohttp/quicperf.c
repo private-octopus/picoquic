@@ -1131,9 +1131,6 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                     }
                     if (!stream_ctx->is_closed) {
                         stream_ctx->is_closed = 1;
-                        if (ctx->is_client) {
-                            quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
-                        }
                     }
                 }
             }
