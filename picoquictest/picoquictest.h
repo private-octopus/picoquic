@@ -700,6 +700,8 @@ int quicperf_ungrouped_test(void);
 int quicperf_group_remainder_test(void);
 int quicperf_datagram_vs_group_test(void);
 int quicperf_server_timer_wakeup_test(void);
+int quicperf_receive_media_overrun_test(void);
+int quicperf_server_timer_leak_test(void);
 int quicperf_chain_test(void);
 int quicperf_print_report_test(void);
 int quicperf_multi_test(void);

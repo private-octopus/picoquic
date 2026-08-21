@@ -3996,6 +3996,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_receive_media_overrun) {
+            int ret = quicperf_receive_media_overrun_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_server_timer_leak) {
+            int ret = quicperf_server_timer_leak_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_chain) {
             int ret = quicperf_chain_test();
 
