@@ -813,6 +813,98 @@ int quicperf_group_remainder_test(void)
     return quicperf_e2e_test(0x19, group_remainder_scenario, 4000000, 1, &group_remainder_target);
 }
 
+int quicperf_datagram_vs_group_test(void)
+{
+    /* Realistic regression scenario for a bug that caused the simulation
+     * to stall in scenarios mixing audio datagrams and vvideo streams:
+     * a1 + vlow + vmid, as in c4_media_wb. This scenario did not actually reproduce the
+     * bug, but the test provides additional coverage. */
+    char const* scenario = "=a1:d50:p2:S:n250:80;=vlow:s30:p4:S:n150:3750:G30:I37500;=vmid:s30:p6:S:n150:6250:G30:I62500:D250000;";
+    quicperf_test_target_t targets[3] = {
+        { 250, 250, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0 }
+    };
+
+    return quicperf_e2e_test(0x1e, scenario, 8000000, 3, targets);
+}
+
+/* Internal quicperf.c functions, not part of the public quicperf.h API,
+ * needed to drive quicperf_server_timer directly for the test below. */
+quicperf_stream_ctx_t* quicperf_create_stream_ctx(quicperf_ctx_t* ctx, uint64_t stream_id);
+int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t current_time);
+
+int quicperf_server_timer_wakeup_test(void)
+{
+    /* Deterministic repro of a bug that caused the simulation
+     * to stall in scenarios mixing audio datagrams and vvideo streams: given a
+     * datagram stream due at t=1000 and a still-pacing non-datagram stream
+     * due later at t=2000, the timer should schedule the next wakeup at the
+     * minimum (1000), but the non-datagram branch overwrote it unconditionally. */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t* ctx = NULL;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        DBG_PRINTF("%s", "No server connection after handshake");
+        ret = -1;
+    }
+
+    if (ret == 0 && (ctx = quicperf_create_ctx(NULL, NULL)) == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        quicperf_stream_ctx_t* datagram_ctx = quicperf_create_stream_ctx(ctx, 0);
+        quicperf_stream_ctx_t* video_ctx = quicperf_create_stream_ctx(ctx, 4);
+
+        if (datagram_ctx == NULL || video_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Datagram stream due at t=1000. */
+            datagram_ctx->is_datagram = 1;
+            datagram_ctx->nb_frames = 250;
+            datagram_ctx->nb_frames_sent = 10;
+            datagram_ctx->frequency = 50;
+            datagram_ctx->next_frame_time = 1000;
+
+            /* Non-datagram stream, resting between frames, due at t=2000. */
+            video_ctx->is_datagram = 0;
+            video_ctx->is_activated = 0;
+            video_ctx->next_frame_time = 2000;
+
+            /* current_time = 100: neither is due yet. */
+            ret = quicperf_server_timer(test_ctx->cnx_server, ctx, 100);
+
+            if (ret == 0 && ctx->stream_wakeup_time != 1000) {
+                DBG_PRINTF("Wrong wakeup time: expected 1000 (datagram), got %" PRIu64 " -- clobbered by video's next_frame_time",
+                    ctx->stream_wakeup_time);
+                ret = -1;
+            }
+        }
+    }
+
+    if (ctx != NULL) {
+        quicperf_delete_ctx(ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int quicperf_chain_test(void)
 {
     /* Scenario "b" names scenario "a" as its "previous stream", so "b" should

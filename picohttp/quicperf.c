@@ -1456,7 +1456,7 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                         ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
                         stream_ctx->is_activated = 1;
                     }
-                    else {
+                    else if (stream_ctx->next_frame_time < next_wakeup_time) {
                         next_wakeup_time = stream_ctx->next_frame_time;
                     }
                 }
