@@ -1128,7 +1128,12 @@ void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicp
                     if (!stream_ctx->is_stopped) {
                         picoquic_stop_sending(cnx, stream_ctx->stream_id, QUICPERF_ERROR_DELAY_TOO_HIGH);
                         stream_ctx->is_stopped = 1;
+                    }
+                    if (!stream_ctx->is_closed) {
                         stream_ctx->is_closed = 1;
+                        if (ctx->is_client) {
+                            quicperf_terminate_and_delete_stream(cnx, ctx, stream_ctx);
+                        }
                     }
                 }
             }
