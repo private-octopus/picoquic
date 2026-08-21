@@ -813,6 +813,229 @@ int quicperf_group_remainder_test(void)
     return quicperf_e2e_test(0x19, group_remainder_scenario, 4000000, 1, &group_remainder_target);
 }
 
+int quicperf_datagram_vs_group_test(void)
+{
+    /* Realistic regression scenario for a bug that caused the simulation
+     * to stall in scenarios mixing audio datagrams and vvideo streams:
+     * a1 + vlow + vmid, as in c4_media_wb. This scenario did not actually reproduce the
+     * bug, but the test provides additional coverage. */
+    char const* scenario = "=a1:d50:p2:S:n250:80;=vlow:s30:p4:S:n150:3750:G30:I37500;=vmid:s30:p6:S:n150:6250:G30:I62500:D250000;";
+    quicperf_test_target_t targets[3] = {
+        { 250, 250, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0 }
+    };
+
+    return quicperf_e2e_test(0x1e, scenario, 8000000, 3, targets);
+}
+
+/* Internal quicperf.c functions, not part of the public quicperf.h API,
+ * needed to drive quicperf_server_timer directly for the test below. */
+quicperf_stream_ctx_t* quicperf_create_stream_ctx(quicperf_ctx_t* ctx, uint64_t stream_id);
+int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t current_time);
+
+int quicperf_server_timer_wakeup_test(void)
+{
+    /* Deterministic repro of a bug that caused the simulation
+     * to stall in scenarios mixing audio datagrams and vvideo streams: given a
+     * datagram stream due at t=1000 and a still-pacing non-datagram stream
+     * due later at t=2000, the timer should schedule the next wakeup at the
+     * minimum (1000), but the non-datagram branch overwrote it unconditionally. */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t* ctx = NULL;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        DBG_PRINTF("%s", "No server connection after handshake");
+        ret = -1;
+    }
+
+    if (ret == 0 && (ctx = quicperf_create_ctx(NULL, NULL)) == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        quicperf_stream_ctx_t* datagram_ctx = quicperf_create_stream_ctx(ctx, 0);
+        quicperf_stream_ctx_t* video_ctx = quicperf_create_stream_ctx(ctx, 4);
+
+        if (datagram_ctx == NULL || video_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Datagram stream due at t=1000. */
+            datagram_ctx->is_datagram = 1;
+            datagram_ctx->nb_frames = 250;
+            datagram_ctx->nb_frames_sent = 10;
+            datagram_ctx->frequency = 50;
+            datagram_ctx->next_frame_time = 1000;
+
+            /* Non-datagram stream, resting between frames, due at t=2000. */
+            video_ctx->is_datagram = 0;
+            video_ctx->is_activated = 0;
+            video_ctx->next_frame_time = 2000;
+
+            /* current_time = 100: neither is due yet. */
+            ret = quicperf_server_timer(test_ctx->cnx_server, ctx, 100);
+
+            if (ret == 0 && ctx->stream_wakeup_time != 1000) {
+                DBG_PRINTF("Wrong wakeup time: expected 1000 (datagram), got %" PRIu64 " -- clobbered by video's next_frame_time",
+                    ctx->stream_wakeup_time);
+                ret = -1;
+            }
+        }
+    }
+
+    if (ctx != NULL) {
+        quicperf_delete_ctx(ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+/* Internal quicperf.c function, not part of the public quicperf.h API,
+ * needed to drive quicperf_receive_media_data directly for the test below. */
+void quicperf_receive_media_data(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, quicperf_stream_ctx_t* stream_ctx,
+    uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event);
+
+int quicperf_receive_media_overrun_test(void)
+{
+    /* Verify that quicperf_receive_media_data does stop parsing
+     * frames once nb_frames_received reaches nb_frames. A well-behaved peer
+     * never does this, but the client cannot rely on that over the network. */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t* ctx = NULL;
+    char const* scenario = "=x:s30:n2:10;";
+    uint8_t bytes[30];
+
+    memset(bytes, 0, sizeof(bytes));
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && (ctx = quicperf_create_ctx(scenario, NULL)) == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        quicperf_stream_ctx_t* stream_ctx = quicperf_create_stream_ctx(ctx, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx->stream_desc_index = 0;
+            stream_ctx->nb_frames = 2;
+            stream_ctx->frame_size = 10;
+            stream_ctx->first_frame_size = 10;
+
+            /* 30 bytes = 3 frames' worth, but only 2 frames were declared. */
+            quicperf_receive_media_data(test_ctx->cnx_client, ctx, stream_ctx,
+                bytes, sizeof(bytes), picoquic_callback_stream_data);
+
+            if (stream_ctx->nb_frames_received != 2) {
+                DBG_PRINTF("Expected 2 frames received, got %" PRIu64 " -- extra bytes past the last frame were counted",
+                    stream_ctx->nb_frames_received);
+                ret = -1;
+            }
+        }
+    }
+
+    if (ctx != NULL) {
+        quicperf_delete_ctx(ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+/* Internal quicperf.c function, not part of the public quicperf.h API,
+ * needed to check tree membership for the test below. */
+quicperf_stream_ctx_t* quicperf_find_stream_ctx(quicperf_ctx_t* ctx, uint64_t stream_id);
+
+int quicperf_server_timer_leak_test(void)
+{
+    /* Verfiy that quicperf_server_timer deletes all the streams that
+    * for which is_closed is set, and not just the first one. The current call
+    * graph only calls this function when exactly one stream needs to be 
+    * closed, but the graph could change in the future and we want to
+    * be robust. */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t* ctx = NULL;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        DBG_PRINTF("%s", "No server connection after handshake");
+        ret = -1;
+    }
+
+    if (ret == 0 && (ctx = quicperf_create_ctx(NULL, NULL)) == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        quicperf_stream_ctx_t* ctx_a = quicperf_create_stream_ctx(ctx, 0);
+        quicperf_stream_ctx_t* ctx_b = quicperf_create_stream_ctx(ctx, 4);
+
+        if (ctx_a == NULL || ctx_b == NULL) {
+            ret = -1;
+        }
+        else {
+            ctx_a->is_closed = 1;
+            ctx_b->is_closed = 1;
+
+            ret = quicperf_server_timer(test_ctx->cnx_server, ctx, 100);
+
+            if (ret == 0 &&
+                (quicperf_find_stream_ctx(ctx, 0) != NULL || quicperf_find_stream_ctx(ctx, 4) != NULL)) {
+                DBG_PRINTF("%s", "One closed stream context leaked: only the last one found was deleted");
+                ret = -1;
+            }
+        }
+    }
+
+    if (ctx != NULL) {
+        quicperf_delete_ctx(ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int quicperf_chain_test(void)
 {
     /* Scenario "b" names scenario "a" as its "previous stream", so "b" should
