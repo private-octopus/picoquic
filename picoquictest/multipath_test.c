@@ -1580,6 +1580,226 @@ int multipath_abandon_last_test(void)
     return ret;
 }
 
+/* Verify that receiving a PATH_ABANDON frame for the last remaining path
+ * closes the connection, instead of marking the path demoted while still
+ * using it for every subsequent packet.
+ */
+int multipath_abandon_last_by_peer_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection, with a single path on each side */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 1) {
+        DBG_PRINTF("Expected 1 path on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* Simulate the peer sending a PATH_ABANDON frame for path 0, the
+     * client's only path. Build just the frame payload -- path ID and
+     * reason -- since picoquic_decode_path_abandon_frame() expects the
+     * frame type to already be consumed by the caller. */
+    if (ret == 0) {
+        uint8_t frame_bytes[16];
+        uint8_t* bytes_max = frame_bytes + sizeof(frame_bytes);
+        uint8_t* bytes_next = picoquic_frames_varint_encode(frame_bytes, bytes_max, 0);
+
+        bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, PICOQUIC_TRANSPORT_APPLICATION_ABANDON);
+
+        if (bytes_next == NULL ||
+            picoquic_decode_path_abandon_frame(frame_bytes, bytes_next, test_ctx->cnx_client, simulated_time) == NULL) {
+            DBG_PRINTF("%s", "Could not build or decode the injected PATH_ABANDON frame.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->cnx_state < picoquic_state_disconnecting) {
+        DBG_PRINTF("Client cnx_state is %d after losing its only path to a peer abandon; the connection should be closing.",
+            test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+typedef struct st_multipath_close_test_ctx_t {
+    int close_received;
+} multipath_close_test_ctx_t;
+
+static int multipath_close_test_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+    if (fin_or_event == picoquic_callback_close) {
+        ((multipath_close_test_ctx_t*)callback_ctx)->close_received = 1;
+    }
+    return 0;
+}
+
+/* Verify that when the only path of a connection cannot be validated, the
+ * connection is closed locally -- there is no peer to send a CONNECTION_CLOSE
+ * to, so this mirrors the abrupt local close already used for idle timeout
+ * (picoquic_check_idle_timer), not the protocol-level close used when the
+ * peer itself asks to abandon the last path.
+ *
+ * The test also checks that the code path that discovers the failure --
+ * preparing a packet -- runs to completion without crashing, that it
+ * notifies the application via picoquic_callback_close, and that calling
+ * it again afterwards, as the application's event loop naturally would,
+ * remains safe.
+ */
+int multipath_last_path_validation_fails_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    multipath_close_test_ctx_t close_ctx = { 0 };
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection, with a single path on each side */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 1) {
+        DBG_PRINTF("Expected 1 path on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* From this point on, watch for the close callback instead of running
+     * the default test scenario. */
+    if (ret == 0) {
+        picoquic_set_callback(test_ctx->cnx_client, multipath_close_test_callback, &close_ctx);
+
+        /* Simulate exhausted PATH_CHALLENGE retries on the client's only
+         * path: this is the state picoquic_prepare_tuple_challenge_frames()
+         * (paths.c) reaches on its own after PICOQUIC_CHALLENGE_REPEAT_MAX
+         * unanswered challenges. */
+        test_ctx->cnx_client->path[0]->first_tuple->challenge_failed = 1;
+    }
+
+    /* Preparing a packet is exactly the call chain of the reported crash
+     * (picoquic_prepare_packet_ex -> ... -> picoquic_handle_send_paths ->
+     * picoquic_select_next_path_tuple). It must run to completion, without
+     * touching a path or tuple that no longer makes sense once the
+     * connection is closed mid-call. */
+    if (ret == 0) {
+        size_t send_length = 0;
+        size_t send_msg_size = 0;
+        struct sockaddr_storage addr_to = { 0 };
+        struct sockaddr_storage addr_from = { 0 };
+        int if_index = 0;
+        int prepare_ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
+            test_ctx->send_buffer, test_ctx->send_buffer_size, &send_length,
+            &addr_to, &addr_from, &if_index, &send_msg_size);
+
+        if (prepare_ret != PICOQUIC_ERROR_DISCONNECTED) {
+            DBG_PRINTF("First prepare_packet after last-path validation failure returned %d, expected PICOQUIC_ERROR_DISCONNECTED.",
+                prepare_ret);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        DBG_PRINTF("Client cnx_state is %d after its only path failed validation; the connection should be disconnected.",
+            test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0 && !close_ctx.close_received) {
+        DBG_PRINTF("%s", "The application was not notified with picoquic_callback_close.");
+        ret = -1;
+    }
+
+    /* The application's event loop will keep calling into the connection
+     * after it learns about the close, e.g. because other connections
+     * still need service. That must also stay safe. */
+    if (ret == 0) {
+        size_t send_length = 0;
+        size_t send_msg_size = 0;
+        struct sockaddr_storage addr_to = { 0 };
+        struct sockaddr_storage addr_from = { 0 };
+        int if_index = 0;
+        int prepare_ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time + 1000,
+            test_ctx->send_buffer, test_ctx->send_buffer_size, &send_length,
+            &addr_to, &addr_from, &if_index, &send_msg_size);
+
+        if (prepare_ret != PICOQUIC_ERROR_DISCONNECTED || send_length != 0) {
+            DBG_PRINTF("Second prepare_packet after disconnection returned %d, send_length %zu.",
+                prepare_ret, send_length);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 /* Test that after breaking path 0 we can establish a new path on the
 * same link when it comes back up.
  */

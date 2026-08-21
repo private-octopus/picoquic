@@ -5693,9 +5693,21 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
         if (path_index >= 0) {
             if (!cnx->path[path_index]->path_is_demoted) {
-                /* The peer is asking to abandon an existing path */
-                cnx->path[path_index]->path_abandon_received = 1;
-                picoquic_demote_path(cnx, path_index, current_time, 0);
+                if (picoquic_nb_paths_not_demoted(cnx) <= 1) {
+                    /* The peer is asking us to abandon our only remaining
+                     * path. There would be nothing left to carry on the
+                     * connection, so close it instead of demoting the path
+                     * -- the peer is reachable (it just sent this frame),
+                     * so a proper close, with a reason phrase to help
+                     * debugging, is possible here. */
+                    picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_APPLICATION_ABANDON,
+                        picoquic_frame_type_path_abandon, "last path was abandoned by peer");
+                }
+                else {
+                    /* The peer is asking to abandon an existing path */
+                    cnx->path[path_index]->path_abandon_received = 1;
+                    picoquic_demote_path(cnx, path_index, current_time, 0);
+                }
             }
             else if (!cnx->path[path_index]->path_abandon_received) {
                 cnx->path[path_index]->path_abandon_received = 1;

@@ -530,7 +530,16 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
             continue;
         }
         else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
-            (void)picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id, PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time);
+            if (picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id,
+                PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time) == PICOQUIC_ERROR_PATH_LAST_REMAINING) {
+                /* This was the only path left, and it just failed validation.
+                 * There is no other path to fall back on, and very likely no
+                 * way to reach the peer either: close locally, the way the
+                 * idle timer does, instead of trying to deliver a
+                 * CONNECTION_CLOSE that has nowhere to go. */
+                cnx->local_error = PICOQUIC_ERROR_PATH_LAST_REMAINING;
+                picoquic_connection_disconnect(cnx);
+            }
         }
         else if (path_index > 0 && cnx->cnx_state < picoquic_state_ready) {
             /* Do not try to send packets on paths different from path[0] if
