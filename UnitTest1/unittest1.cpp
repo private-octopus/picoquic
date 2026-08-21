@@ -3331,6 +3331,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_abandon_last) {
+            int ret = multipath_abandon_last_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_back0) {
             int ret = multipath_back0_test();
 
