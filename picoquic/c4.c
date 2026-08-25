@@ -23,61 +23,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "cc_common.h"
+#include "tls_api.h"
 
-/* C4 algorithm is a work in progress. We start with some simple principles:
-* - Track delays, but this expose issue when competing with Cubic
-* - Compete with Cubic: fallback to BBRv1, best of last 6 epochs, ignore delays, losses.
-* - Stopping the compete mode? When the delay becomes acceptable?
-* - App limited mode: freeze the parameters? Do probe on search?
-* - Probing mode: probe for one RTT, recover for one RTT, assess after recover.
-* - Probing interval: Fibonacci sequence, up to 16 or 17? 1, 1, 2, 3, 5, 8, 13
-* - Tuning the interval: no bw increase => larger, bw increase => sooner, how soon?
-* - stopping the compete mode: ECN? ECN as signal that the bottleneck is actively managed.
-* - compete with self? Maybe introduce some random behavior.
-* Principles were later revised to track data rate and max RTT.
- */
-
-/* States of C4:
-* 
-* Initial.   Similar to Hystart for now, as a place holder.
-* Recovery.  After an event, freeze the parameters for one RTT. This is the time
-*            to measure whether a previous push was a success.
-* Cruising.  For N intervals. Be ready to notice congestion, or change in conditions.
-*            We should define N as x*log(cwin / cwin_min), so connections sending
-*            lots of data wait a bit longer, which should improve fairness.
-*            Question: is this "N intervals" or "some amount of data sent"?
-*            the latter is better for the fairness issue.
-* probing.   For one RTT. Transmit at higher rate, to probe the network, then
-*            move to "cruising". Higher rate should be 25% higher, to probe
-*            without creating big queues.
-* Slowdown.  Periodic slowdown to 1/2 the nominal CWIN, in order to reset
-*            the min delay.
-* Checking:  Post slowdown. use nominal CWND until the min CWND is
-*            verified.
-* 
-* Transitions:
-*            initial to recovery -- similar to hystart for now.
-*            recovery to initial -- if measurements show increase in data rate compared to era.
-*            recovery to cruising -- at the end of period.
-*            cruising, probing to recovery -- if excess delay, loss or ECN
-*            probing to recovery -- at end of period.
-*            to slowdown..
-* 
-* 
-* State variables:
-* - CWIN. Main control variable.
-* - Sequence number of first packet sent in epoch. Epoch ends when this is acknowledged.
-* - Observed data rate. Measured at the end of epoch N, reflects setting at epoch N-1.
-* - Average rate of EC marking
-* - Average rate of Packet loss
-* - Average rate of excess delay
-* - Number of cruising bytes sent.
-* - Cruising bytes target before transition to push
-* - RTT min
- */
-
- /* The probe level was used to set the probing rate during the "push" phase.
- *
+/* C4 algorithm is a work in progress.
+* See the specification: https://datatracker.ietf.org/doc/draft-huitema-ccwg-c4-spec/
  */
 
 #define C4_WITH_LOGGING
@@ -96,11 +45,7 @@
 #define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
-#if 1
 #define C4_NB_CRUISE_BEFORE_PUSH 2
-#else
-#define C4_NB_CRUISE_BEFORE_PUSH 4
-#endif
 #define C4_RTT_MARGIN_DELAY 15000
 #define C4_MAX_RTT_MIN 1000
 #define C4_MAX_JITTER 250000
@@ -116,16 +61,12 @@
 #define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
 
 #define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
+#define C4_ALPHA_DRAINING 896 /* 75 % */
 
-#if 1
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
 };
-#else
-uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
-    C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_1024, C4_ALPHA_PUSH_1024
-};
-#endif
+
 typedef enum {
     c4_initial = 0,
     c4_recovery,
@@ -153,6 +94,7 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t nominal_max_rtt; /* Estimate of queue-free max RTT */
     uint64_t initial_cwnd; /* CWND value used during Initial phase */
+    uint64_t initial_last_time; /* time of exit from last initial */
     uint64_t running_min_rtt; /* Rough estimate of min RTT, for buffer estimation */
     uint64_t alpha_1024_current;
     uint64_t alpha_1024_previous;
@@ -196,8 +138,8 @@ typedef struct st_c4_state_t {
     unsigned int congestion_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
-    unsigned int initial_after_jitter : 1;
     unsigned int excess_ce_after_push : 1;
+    unsigned int is_drain_required : 1;
     /* Handling of options. */
     char const* option_string;
 } c4_state_t;
@@ -434,7 +376,6 @@ static void c4_apply_rate_and_cwin(
                 }
             }
         }
-        c4_state->initial_cwnd = target_cwin;
     }
     else if (c4_state->alg_state == c4_resuming) {
         /* Initial special case: seed cwin */
@@ -539,7 +480,14 @@ static void c4_era_reset(
 static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
     c4_state->alg_state = c4_initial;
-    c4_state->initial_cwnd = path_x->cwin;
+    c4_state->nominal_max_rtt = path_x->smoothed_rtt;
+    if (c4_state->nominal_rate > 0) {
+        c4_state->initial_cwnd = PICOQUIC_BYTES_FROM_RATE(c4_state->nominal_max_rtt, c4_state->nominal_rate);
+    }
+    else {
+        c4_state->initial_cwnd = path_x->cwin;
+    }
+    c4_state->initial_last_time = 0;
     c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
@@ -603,6 +551,7 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->nb_eras_no_increase = 0;
         c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
+        c4_state->is_drain_required = 1;
         c4_enter_recovery(path_x, c4_state, c4_congestion_none);
     }
 }
@@ -720,7 +669,7 @@ static void c4_enter_recovery(
         c4_state->excess_ce_after_push = (c_mode != c4_congestion_ecn) ? 0 : 1;
         c4_state->alg_state = c4_recovery;
         c4_era_reset(path_x, c4_state);
-        c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+        c4_state->alpha_1024_current = (c4_state->is_drain_required)? C4_ALPHA_DRAINING:C4_ALPHA_RECOVER_1024;
     }
 }
 
@@ -732,10 +681,17 @@ static void c4_enter_recovery(
 
 static void c4_exit_recovery(
     picoquic_path_t* path_x,
-    c4_state_t* c4_state)
+    c4_state_t* c4_state, uint64_t current_time)
 {
     /* Assess growth */
     int is_growing = c4_growth_evaluate(c4_state);
+
+    if (c4_state->initial_last_time == 0) {
+        c4_state->initial_last_time = current_time;
+    }
+
+    c4_state->is_drain_required = 0;
+
     if (is_growing) {
         if (!c4_state->excess_ce_after_push && c4_state->nb_era_resuming == 0) {
             c4_state->probe_level++;
@@ -757,10 +713,15 @@ static void c4_exit_recovery(
                 c4_state->recent_maximum_rate > 0 &&
                 c4_state->nominal_rate > c4_state->recent_maximum_rate) {
                 c4_state->nominal_rate = c4_state->recent_maximum_rate;
+                c4_state->recent_congestions = 0;
             }
         }
         else {
             c4_state->recent_congestions = 0;
+            if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
+                c4_state->push_was_not_limited) {
+                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
+            }
         }
     }
     c4_state->nb_era_resuming = 0;
@@ -800,15 +761,10 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
 
-#if 0
-        if (c4_state->nb_cruise_left_before_push == 0) {
-            c4_state->nb_cruise_left_before_push = 1;
-        }
-#else
-        if (c4_state->nb_cruise_left_before_push == 0) {
-            c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
-        }
-#endif
+    if (c4_state->nb_cruise_left_before_push == 0) {
+        c4_state->nb_cruise_left_before_push = (c4_state->probe_level == 0) ? 1 : C4_NB_CRUISE_BEFORE_PUSH;
+    }
+
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
         /* When operating in a CPU limited environment, pacing is too
@@ -880,7 +836,6 @@ static void c4_on_pushing_era_end(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-
     c4_growing_t is_growing = c4_growth_evaluate(c4_state);
     if (is_growing == c4_growing_fast) {
         // c4_state->nb_eras_no_increase = 0;
@@ -888,12 +843,7 @@ static void c4_on_pushing_era_end(
         c4_era_reset(path_x, c4_state);
     }
     else {
-#if 1
         if (c4_state->alpha_1024_previous >= C4_ALPHA_PUSH_25) {
-#else
-        c4_state->nb_eras_no_increase++;
-        if (c4_state->nb_eras_no_increase > 1) {
-#endif
             /* Move to recovery */
             c4_enter_recovery(path_x, c4_state, c4_congestion_none);
         }
@@ -967,7 +917,12 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
     if (path_x->rtt_sample < c4_state->era_min_rtt) {
         c4_state->era_min_rtt = path_x->rtt_sample;
+        c4_state->is_drain_required = 1;
     }
+
+    /* TODO: some of that logic might be located at the end of the RTT cycle, or the end of the era.
+    */
+
     if (c4_state->alpha_1024_previous <= C4_ALPHA_NEUTRAL_1024) {
         /* Update the running min RTT, as the max RTT computation depends on it. */
         if (c4_state->era_min_rtt < c4_state->running_min_rtt) {
@@ -987,8 +942,10 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
             c4_state->nominal_max_rtt = corrected_max;
         }
         else {
+            /* TODO: move this specific bit to the exit recovery function. */
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
+            c4_state->is_drain_required = 1;
         }
         /* Recompute the delay threshold as the max RTT was updated. */
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
@@ -1007,7 +964,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
 
 /* Handle data ack event.
  */
-void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state)
+void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
     uint64_t previous_rate = c4_state->nominal_rate;
     uint64_t rate_measurement = 0;
@@ -1027,6 +984,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             c4_state->push_was_not_limited = 1;
             c4_state->nominal_rate = rate_measurement;
             c4_state->delay_threshold = c4_delay_threshold(c4_state);
+            c4_state->is_drain_required = 0;
         }
         else {
             /* The ACK rate did not grow, but that's not a proof.
@@ -1057,21 +1015,20 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             * However, reentering Initial is a bit of a hack. It is OK in the high jitter or
             * competition secnarios, but it can backfire and cause congestion and losses. So we don't
             * do that if the RTT is low (lower than 50ms) or if the data rate is high enough
-            * (higher than 1Mbps, i.e., 8Mbps). And we only do that once per connection.
+            * (higher than 1Mbps, i.e., 8Mbps).
             */
-            if (!c4_state->initial_after_jitter &&
-                c4_state->nominal_max_rtt > 50000 &&
+            if (c4_state->nominal_max_rtt > 50000 &&
                 c4_state->nominal_rate < 1000000 &&
-                5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt) {
-                c4_state->initial_after_jitter = 1;
+                5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt &&
+                c4_state->initial_last_time > 0 &&
+                current_time > c4_state->initial_last_time + 1000000) {
                 c4_enter_initial(path_x, c4_state);
             }
-            else
-            {
+            else {
                 /* Manage the transition to the next state */
                 switch (c4_state->alg_state) {
                 case c4_recovery:
-                    c4_exit_recovery(path_x, c4_state);
+                    c4_exit_recovery(path_x, c4_state, current_time);
                     break;
                 case c4_cruising:
                     if (c4_state->nb_cruise_left_before_push > 0) {
@@ -1248,7 +1205,7 @@ void c4_notify(
     picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x,
     picoquic_congestion_notification_t notification,
     picoquic_per_ack_state_t * ack_state,
-    uint64_t UNUSED(current_time))
+    uint64_t current_time)
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
@@ -1260,7 +1217,7 @@ void c4_notify(
     if (c4_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            c4_handle_ack(path_x, c4_state, ack_state);
+            c4_handle_ack(path_x, c4_state, ack_state, current_time);
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_ecn_ec:
@@ -1272,7 +1229,6 @@ void c4_notify(
                     if (c4_state->recent_delay_excess > 0
                         && c4_state->nb_eras_no_increase > 1
                         && c4_state->push_rate_old >= c4_state->nominal_rate) {
-
                         c4_exit_initial(path_x, c4_state);
                     }
                 }
