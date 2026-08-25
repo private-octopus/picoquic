@@ -114,7 +114,13 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
 
             /* Print the additional values */
             for (size_t i = 0; i < perflog_item->nb_values; i++) {
-                fprintf(F, ", %"PRIu64, perflog_item->v[i]);
+                if (i == perflog_item->nb_values - 5) {
+                    double bwe_max = 8.0 * ((double)perflog_item->v[i]) / 1000000.0;
+                    fprintf(F, ", %.3f", bwe_max);
+                }
+                else {
+                    fprintf(F, ", %"PRIu64, perflog_item->v[i]);
+                }
             }
             fprintf(F, "\n");
             picoquic_perflog_item_free(perflog_item);
