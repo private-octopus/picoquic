@@ -1468,6 +1468,118 @@ int multipath_abandon_test(void)
     return  multipath_test_one(max_completion_microsec, multipath_test_abandon);
 }
 
+/* 
+ * Verify that abandoning the last valid path will fail.
+ *
+ * This test drives the connection into that state and checks the
+ * double abandon directly, by calling picoquic_delete_abandoned_paths()
+ * the way a live connection would before preparing its next packet
+ * -- so a still-broken tree fails this test cleanly
+ * instead of crashing the test binary.
+ */
+int multipath_abandon_last_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Add a second path, and wait until both sides have validated it. */
+    if (ret == 0) {
+        ret = multipath_test_add_links(test_ctx, 0);
+    }
+    if (ret == 0) {
+        ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+            (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+    }
+    if (ret == 0) {
+        ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 2) {
+        DBG_PRINTF("Expected 2 paths on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* Abandon path 1. This is normal, supported usage: more than one path is
+     * available, so the call succeeds and path 1 is marked for demotion. */
+    if (ret == 0) {
+        ret = picoquic_abandon_path(test_ctx->cnx_client, 1, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path 1, ret=%d", ret);
+        }
+    }
+
+    /* Abandon path 0 as well -- the last path not yet marked for demotion.
+     * This call should be rejected. */
+    if (ret == 0) {
+        int abandon_ret = picoquic_abandon_path(test_ctx->cnx_client, 0, 0, simulated_time);
+
+        if (abandon_ret == PICOQUIC_ERROR_PATH_LAST_REMAINING) {
+            /* Expected: abandoning the last non-demoted path is refused. */
+            ret = 0;
+        }
+        else if (abandon_ret != 0) {
+            DBG_PRINTF("Abandoning the last non-demoted path returned %d, expected PICOQUIC_ERROR_PATH_LAST_REMAINING.", abandon_ret);
+            ret = -1;
+        }
+        else {
+            uint64_t next_wake_time = simulated_time;
+            uint64_t future_time = simulated_time + 10000000;
+
+            DBG_PRINTF("%s", "Abandoning the last non-demoted path wrongly succeeded.");
+
+            /* Let both demotion timers expire, then run the path cleanup
+             * that a live connection performs before sending. */
+            picoquic_delete_abandoned_paths(test_ctx->cnx_client, future_time, &next_wake_time);
+
+            if (test_ctx->cnx_client->nb_paths == 0 || test_ctx->cnx_client->path[0] == NULL) {
+                DBG_PRINTF("Client left with %d paths, path[0] = %p.",
+                    test_ctx->cnx_client->nb_paths,
+                    (void*)test_ctx->cnx_client->path[0]);
+            }
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 /* Test that after breaking path 0 we can establish a new path on the
 * same link when it comes back up.
  */

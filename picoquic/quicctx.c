@@ -2669,16 +2669,34 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         int path_index = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
         if (path_index >= 0) {
-            /* Check whether this is the last path */
-            if (cnx->nb_paths <= 1) {
-                /* That would mean deleting the last path. Don't do that */
-                ret = -1;
-            }
-            else if (!cnx->path[path_index]->path_is_demoted) {
-                /* if demotion is not already in progress, demote the path,
-                * and if the path can be properly identified, post a path abandon frame.
-                */
-                picoquic_demote_path(cnx, path_index, current_time, reason);
+            if (!cnx->path[path_index]->path_is_demoted) {
+                /* Check whether this is the last path not already marked for
+                 * demotion. A path that was abandoned earlier is still counted
+                 * in nb_paths until its demotion timer expires, so checking
+                 * nb_paths alone is not enough: it would let an application
+                 * abandon every path in turn, eventually leaving none.
+                 */
+                int nb_active = 0;
+
+                for (int i = 0; i < cnx->nb_paths; i++) {
+                    if (!cnx->path[i]->path_is_demoted) {
+                        nb_active++;
+                    }
+                }
+
+                if (nb_active <= 1) {
+                    /* That would mean leaving no path available. Don't do
+                     * that: the application should close the connection
+                     * instead, or probe a new path before abandoning this one.
+                     */
+                    ret = PICOQUIC_ERROR_PATH_LAST_REMAINING;
+                }
+                else {
+                    /* Demote the path, and if it can be properly identified,
+                     * post a path abandon frame.
+                     */
+                    picoquic_demote_path(cnx, path_index, current_time, reason);
+                }
             }
         }
         else {
