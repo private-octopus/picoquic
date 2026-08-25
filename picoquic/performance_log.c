@@ -93,7 +93,7 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
             /* Print version identifiers */
             fprintf(F, "%d, %s, ", PICOQUIC_PER_LOG_VERSION, PICOQUIC_VERSION);
             /* Print the key performance data */
-            fprintf(F, "%f, %" PRIu64 ", %" PRIu64 ", %f, %f",
+            fprintf(F, "%.3f, %" PRIu64 ", %" PRIu64 ", %.3f, %.3f",
                 perflog_item->duration_sec,
                 perflog_item->data_sent,
                 perflog_item->data_received,

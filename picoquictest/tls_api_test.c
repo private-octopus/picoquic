@@ -1123,7 +1123,14 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
-    } else {
+    }
+    else {
+        /* avoid too much variability by setting a "test order" of key exchange algorithms
+        * before the client connection is created.
+         */
+        uint16_t keyex_test_order[2] = { PTLS_GROUP_SECP256R1, PTLS_GROUP_X25519 };
+        picoquic_sort_key_exchange_algorithms(keyex_test_order, 2);
+
         test_ctx = (picoquic_test_tls_api_ctx_t*)
             malloc(sizeof(picoquic_test_tls_api_ctx_t));
 
@@ -9817,11 +9824,6 @@ int perflog_test(void)
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
-    }
-
-    /* Fix the key exchange to avoid variations in log */
-    if (ret == 0) {
-        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
     }
 
     /* Require a performance trace of thee server side */
