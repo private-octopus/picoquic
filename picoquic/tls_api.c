@@ -345,7 +345,7 @@ void picoquic_sort_key_exchange_algorithms(uint16_t* ordered_key_exchange, size_
             if (picoquic_key_exchanges[next_algorithm + j]->id == ordered_key_exchange[i]) {
                 if (j != 0) {
                     ptls_key_exchange_algorithm_t* keyex = picoquic_key_exchanges[next_algorithm];
-                    picoquic_key_exchanges[next_algorithm] = picoquic_key_exchanges[next_algorithm] + j;
+                    picoquic_key_exchanges[next_algorithm] = picoquic_key_exchanges[next_algorithm + j];
                     picoquic_key_exchanges[next_algorithm + j] = keyex;
                 }
                 next_algorithm++;
