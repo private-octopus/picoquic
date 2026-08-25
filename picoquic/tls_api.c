@@ -127,6 +127,28 @@ picoquic_crypto_random_provider_t picoquic_crypto_random_provider_fn = NULL;
 picoquic_keyex_from_key_file_t picoquic_keyex_from_key_file_fn = NULL;
 picoquic_keyex_dispose_t picoquic_keyex_dispose_fn = NULL;
 
+/* Default list of key exchange algorithms, by order of preference 
+*/
+
+uint16_t picoquic_key_exchanges_default_order[] = {
+    PTLS_GROUP_X25519MLKEM768, /* Preferred hybrid PQC + classic group. */
+    PTLS_GROUP_X25519, /* Preferred classic group */
+    PTLS_GROUP_MLKEM1024, /* CNSA 2.0 compliance */
+    PTLS_GROUP_SECP256R1MLKEM768, /* legacy hybrid PQC + classic group. */
+    PTLS_GROUP_SECP256R1 /* default classic group. */
+#if 0
+    /* rarely used groups, not very useful */
+    ,PTLS_GROUP_SECP384R1 /* CNSA 1.0 compliance */
+    ,PTLS_GROUP_SECP384R1MLKEM1024
+    ,PTLS_GROUP_NAME_SECP384R1MLKEM1024
+    ,PTLS_GROUP_MLKEM768
+    ,PTLS_GROUP_MLKEM512
+#endif
+
+};
+
+size_t nb_picoquic_key_exchanges_default_order = sizeof(picoquic_key_exchanges_default_order) / sizeof(uint16_t);
+
 
 /* Initialization of the cryptographic tables and functions
  * 
@@ -194,6 +216,7 @@ void picoquic_tls_api_init_providers(int unload)
         picoquic_mbedtls_load(unload);
     }
 #endif
+
 }
 
 static void picoquic_tls_api_zero(void)
@@ -247,6 +270,8 @@ void picoquic_tls_api_init(void)
         picoquic_tls_api_zero();
         picoquic_tls_api_init_providers(0);
         tls_api_is_init = 1;
+        
+        picoquic_sort_key_exchange_algorithms(picoquic_key_exchanges_default_order, nb_picoquic_key_exchanges_default_order);
     }
 }
 
@@ -297,6 +322,35 @@ void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key
             /* Replace the lower priority provider if present! */
             picoquic_key_exchanges[i] = key_exchange;
             break;
+        }
+    }
+}
+
+/* Sort the key exchange algorithms based on specified order 
+* we sort the table picoquic_key_exchanges in place, according
+* to the order list specified in ordered_key_exchange.
+* 
+* After the sort, the list will start with those algorithms
+* that are present in both the discovered list and the ordered list,
+* in the order specified in the order list. The algorithms
+* present in the discovered list but not in the ordered least
+* will follow.
+*/
+void picoquic_sort_key_exchange_algorithms(uint16_t* ordered_key_exchange, size_t nb_ordered_key_exchange)
+{
+    size_t next_algorithm = 0;
+
+    for (size_t i = 0; i < nb_ordered_key_exchange; i++) {
+        for (size_t j = 0; picoquic_key_exchanges[next_algorithm + j] != NULL; j++) {
+            if (picoquic_key_exchanges[next_algorithm + j]->id == ordered_key_exchange[i]) {
+                if (j != 0) {
+                    ptls_key_exchange_algorithm_t* keyex = picoquic_key_exchanges[next_algorithm];
+                    picoquic_key_exchanges[next_algorithm] = picoquic_key_exchanges[next_algorithm] + j;
+                    picoquic_key_exchanges[next_algorithm + j] = keyex;
+                }
+                next_algorithm++;
+                break;
+            }
         }
     }
 }

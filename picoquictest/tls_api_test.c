@@ -12783,6 +12783,17 @@ static uint8_t chello_malformed[] = {
     0xe8,
 };
 
+
+uint16_t bad_hello_key_exchanges[] = {
+    PTLS_GROUP_SECP256R1, /* default classic group. */
+    PTLS_GROUP_X25519MLKEM768, /* Preferred hybrid PQC + classic group. */
+    PTLS_GROUP_X25519, /* Preferred classic group */
+    PTLS_GROUP_MLKEM1024, /* CNSA 2.0 compliance */
+    PTLS_GROUP_SECP256R1MLKEM768 /* legacy hybrid PQC + classic group. */
+};
+
+size_t nb_bad_hello_key_exchanges = sizeof(bad_hello_key_exchanges) / sizeof(uint16_t);
+
 int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buffer_size, uint8_t * chello,  size_t chello_length)
 {
     int ret = 0;
@@ -12872,6 +12883,7 @@ int bad_chello_test(void)
         ret = -1;
     }
     else {
+        picoquic_sort_key_exchange_algorithms(bad_hello_key_exchanges, nb_bad_hello_key_exchanges);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* Create an initial packet with a bad chello */
         ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));

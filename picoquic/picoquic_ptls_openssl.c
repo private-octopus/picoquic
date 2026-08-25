@@ -447,11 +447,14 @@ void picoquic_ptls_openssl_load(int unload)
 
 #ifdef PICOQUIC_WITH_ALL_PQC_ALGORITHMS
 #if PTLS_OPENSSL_HAVE_MLKEM
-        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem512);
-        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem768);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem1024);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1mlkem768);
+#if 0
+        /* rarely used groups, not very useful */
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem512);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem768);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_secp384r1mlkem1024);
+#endif
 #endif
 #endif 
 #if PTLS_OPENSSL_HAVE_X25519MLKEM768
