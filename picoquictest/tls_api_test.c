@@ -9377,7 +9377,10 @@ int packet_trace_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
-
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
@@ -9814,6 +9817,11 @@ int perflog_test(void)
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
+    }
+
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
     }
 
     /* Require a performance trace of thee server side */
@@ -11063,6 +11071,12 @@ int pacing_update_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
+
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
+
     if (ret == 0) {
         /* Open a file to log bandwidth updates and document it in context */
         test_ctx->bw_update = picoquic_file_open(PACING_RATE_CSV, "w");
@@ -11126,6 +11140,12 @@ int quality_update_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
+
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
+
     if (ret == 0) {
         /* Open a file to log bandwidth updates and document it in context */
         test_ctx->default_path_update = picoquic_file_open(QUALITY_UPDATE_CSV, "w");
@@ -13096,6 +13116,11 @@ int test_stateless_blowback(void)
         DBG_PRINTF("Stateless reset interval set to T=%" PRIu64, test_ctx->qserver->stateless_reset_min_interval);
         ret = -1;
 
+    }
+
+    /* Fix the key exchange to avoid variations between platforms */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
     }
 
     /* Format a random packet and submit it, verify that the stateless reset is queued */
