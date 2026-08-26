@@ -1239,3 +1239,293 @@ int quicperf_multipath_settled_test(void)
     return quicperf_e2e_test_multipath(0x1f, quicperf_mp_scenario, 5000000, 1, &quicperf_mp_target,
         quicperf_mp_probe_settled, 0);
 }
+
+/* Loopback performance test.
+ *
+ * Goal: profile the "prepare next packet" sending path -- picoquic_prepare_next_packet_ex,
+ * picoquic_prepare_segment, picoquic_prepare_packet_ready -- without the cost or noise of
+ * an actual socket, or of the simulated-link machinery used by the rest of this file
+ * (queueing, bandwidth/propagation model, NAT rewriting, etc). picoquic_protect_packet and
+ * the sendmsg() call itself are already known to dominate; this harness is meant to make it
+ * easy to see everything else.
+ *
+ * A single picoquic_quic_t context plays both ends of the connection: it is configured with
+ * a server certificate (so it can accept an incoming connection) and is then also used to
+ * originate a client connection to a fictitious server address. There is nothing in picoquic
+ * that requires a context to be exclusively client or server -- connections are looked up by
+ * CID in the context's own table -- so this works exactly like two back-to-back stacks
+ * sharing one process, minus the second context.
+ *
+ * Packets are never queued or delayed: each call to picoquic_prepare_next_packet_ex is
+ * immediately followed by a call to picoquic_incoming_packet_ex feeding the produced bytes
+ * back into the very same context, which dispatches them to the right connection by CID.
+ * There is no simulated bandwidth or propagation delay -- the two connections just run as
+ * fast as the host CPU can prepare, protect and process packets.
+ *
+ * The QUIC clock still needs to move forward, for pacing, loss timers, etc. When neither
+ * connection has anything ready to send, the clock jumps straight to
+ * picoquic_get_next_wake_time(). When a packet is handed off, the clock is nudged forward by
+ * a single microsecond -- just enough to keep timestamps strictly increasing and RTT samples
+ * away from a degenerate zero, without adding any artificial delay of consequence.
+ *
+ * The client runs a quicperf "batch" scenario asking for a large download (10GB by default),
+ * which puts the load on the server's sending path -- the part of the code this test is
+ * meant to profile.
+ */
+
+#define PERF_LOOPBACK_MAX_LOOPS 100000000
+#define PERF_LOOPBACK_MAX_TIME 300000000ull /* 300 simulated seconds, safety net against a stall */
+#define PERF_LOOPBACK_SEND_BUFFER_SIZE 65536 /* 64KB: large enough to let prepare_next_packet_ex
+                                               * batch several UDP datagrams in one call (GSO) */
+
+/* Response size used by perf_loopback_test, in bytes. Kept small by default (1MB) so the
+ * regular test suite stays fast; picohttp_t accepts a "-p nnn" option to run a bigger
+ * transfer (e.g. 10GB) when the point is to actually profile the sending path rather than
+ * just exercise it. */
+uint64_t picohttp_perf_loopback_size = 1000000;
+
+static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_us, uint64_t* p_nb_packets)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx_client = NULL;
+    quicperf_ctx_t* quicperf_ctx = NULL;
+    struct sockaddr_in client_addr;
+    struct sockaddr_in server_addr;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    char scenario[128];
+    uint8_t* send_buffer = NULL;
+    uint64_t nb_packets = 0;
+    uint64_t nb_client_packets = 0;
+    uint64_t nb_server_packets = 0;
+    uint64_t nb_bytes = 0;
+    uint64_t nb_stall_jumps = 0;
+    uint64_t wall_start = 0;
+    uint64_t wall_end = 0;
+    int nb_loops = 0;
+
+    if ((ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file),
+        picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT)) != 0 ||
+        (ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY)) != 0 ||
+        (ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE)) != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+        return -1;
+    }
+
+    memset(&client_addr, 0, sizeof(client_addr));
+    client_addr.sin_family = AF_INET;
+    client_addr.sin_port = 1234;
+#ifdef _WINDOWS
+    client_addr.sin_addr.S_un.S_addr = htonl(0x0A000002);
+#else
+    client_addr.sin_addr.s_addr = htonl(0x0A000002);
+#endif
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = 4321;
+#ifdef _WINDOWS
+    server_addr.sin_addr.S_un.S_addr = htonl(0x0A000001);
+#else
+    server_addr.sin_addr.s_addr = htonl(0x0A000001);
+#endif
+    (void)client_addr; /* not otherwise referenced: the addresses only need to be distinct */
+
+    /* A single context plays both the client and the server roles: it is configured with a
+     * server certificate so incoming Initial packets can be accepted, and the default
+     * callback is quicperf's, which lazily creates a fresh server-side quicperf_ctx_t the
+     * first time it sees a new connection (see quicperf_callback in picohttp/quicperf.c). */
+    quic = picoquic_create(8,
+        test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+        QUICPERF_ALPN, quicperf_callback, NULL, NULL, NULL, NULL,
+        simulated_time, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Could not create the perf loopback QUIC context.\n");
+        return -1;
+    }
+
+    /* No qlog, no binlog: this is meant to measure the sending path itself, not I/O. */
+    picoquic_set_random_initial(quic, 0);
+
+    (void)snprintf(scenario, sizeof(scenario), "=b1:*1:1000:%" PRIu64 ";", response_size);
+
+    if ((quicperf_ctx = quicperf_create_ctx(scenario, stderr)) == NULL) {
+        DBG_PRINTF("Could not parse scenario <%s>\n", scenario);
+        picoquic_free(quic);
+        return -1;
+    }
+
+    cnx_client = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+        (struct sockaddr*)&server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, QUICPERF_ALPN, 1);
+
+    if (cnx_client == NULL) {
+        DBG_PRINTF("%s", "Could not create the perf loopback client connection.\n");
+        quicperf_delete_ctx(quicperf_ctx);
+        picoquic_free(quic);
+        return -1;
+    }
+
+    picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
+
+    if ((ret = picoquic_start_client_cnx(cnx_client)) != 0) {
+        DBG_PRINTF("Could not start the client connection, ret = %d\n", ret);
+    }
+
+    /* Allocated on the heap rather than kept as a stack array: 64KB is large enough to let
+     * picoquic_prepare_next_packet_ex batch several UDP datagrams per call (see the GSO
+     * splitting below), which would be a wasteful amount of stack to reserve by default. */
+    send_buffer = (uint8_t*)malloc(PERF_LOOPBACK_SEND_BUFFER_SIZE);
+
+    if (send_buffer == NULL) {
+        DBG_PRINTF("%s", "Could not allocate the perf loopback send buffer.\n");
+        quicperf_delete_ctx(quicperf_ctx);
+        picoquic_free(quic);
+        return -1;
+    }
+
+    wall_start = picoquic_current_time();
+
+    while (ret == 0 && nb_loops < PERF_LOOPBACK_MAX_LOOPS &&
+        simulated_time < PERF_LOOPBACK_MAX_TIME &&
+        picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
+        struct sockaddr_storage addr_to;
+        struct sockaddr_storage addr_from;
+        int if_index = 0;
+        picoquic_connection_id_t log_cid;
+        picoquic_cnx_t* last_cnx = NULL;
+        picoquic_cnx_t* first_cnx = NULL;
+        size_t send_length = 0;
+        size_t send_msg_size = 0;
+
+        nb_loops++;
+
+        ret = picoquic_prepare_next_packet_ex(quic, simulated_time, send_buffer, PERF_LOOPBACK_SEND_BUFFER_SIZE,
+            &send_length, &addr_to, &addr_from, &if_index, &log_cid, &last_cnx, &send_msg_size);
+
+        if (ret != 0) {
+            DBG_PRINTF("Prepare packet returned %d\n", ret);
+            break;
+        }
+
+        if (send_length > 0) {
+            /* picoquic_prepare_next_packet_ex may coalesce several independent UDP
+             * datagrams into one buffer (the GSO case), reporting the per-datagram
+             * size in send_msg_size. Each such datagram must be handed to
+             * picoquic_incoming_packet_ex separately -- feeding the whole buffer as
+             * one datagram silently corrupts everything past the first segment,
+             * since the trailing short-header packet has no explicit length and
+             * swallows whatever follows it. See tls_api_one_sim_round in
+             * tls_api_test.c for the same splitting logic in the regular harness. */
+            size_t segment_size = (send_msg_size == 0 || send_msg_size > send_length) ? send_length : send_msg_size;
+            size_t sent_so_far = 0;
+            uint8_t* segment_bytes = send_buffer;
+
+            while (ret == 0 && sent_so_far < send_length) {
+                size_t this_length = send_length - sent_so_far;
+                if (this_length > segment_size) {
+                    this_length = segment_size;
+                }
+
+                nb_packets++;
+                nb_bytes += this_length;
+                if (last_cnx == cnx_client) {
+                    nb_client_packets++;
+                }
+                else {
+                    nb_server_packets++;
+                }
+
+                /* Deliver the packet right away: no queue, no delay. Just nudge the
+                 * clock by one microsecond so timestamps stay strictly increasing and
+                 * RTT samples never land on exactly zero. */
+                simulated_time += 1;
+
+                ret = picoquic_incoming_packet_ex(quic, segment_bytes, this_length,
+                    (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index, 0,
+                    &first_cnx, simulated_time);
+
+                if (ret != 0) {
+                    DBG_PRINTF("Incoming packet returned %d\n", ret);
+                    break;
+                }
+
+                segment_bytes += this_length;
+                sent_so_far += this_length;
+            }
+        }
+        else {
+            uint64_t next_time = picoquic_get_next_wake_time(quic, simulated_time);
+
+            if (next_time <= simulated_time) {
+                next_time = simulated_time + 1;
+            }
+            simulated_time = next_time;
+            nb_stall_jumps++;
+        }
+
+        /* Safety net: quicperf already closes the client connection on its own once the
+         * scenario completes (see quicperf_close_stream in picohttp/quicperf.c), but we
+         * mirror the same belt-and-suspenders check used by the regular quicperf e2e tests
+         * above in case a future scenario type does not. */
+        if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
+            picoquic_is_cnx_backlog_empty(cnx_client) &&
+            quicperf_ctx->nb_open_streams == 0) {
+            ret = picoquic_close(cnx_client, 0);
+        }
+    }
+
+    wall_end = picoquic_current_time();
+
+    if (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
+        DBG_PRINTF("%s", "Perf loopback test did not reach a clean disconnect.\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && quicperf_ctx->data_received < response_size) {
+        DBG_PRINTF("Received only %" PRIu64 " of %" PRIu64 " requested bytes\n",
+            quicperf_ctx->data_received, response_size);
+        ret = -1;
+    }
+
+    fprintf(stdout, "Perf loopback: %" PRIu64 " app bytes, %" PRIu64 " wire bytes, %" PRIu64
+        " packets (%" PRIu64 " client, %" PRIu64 " server), %" PRIu64 " stall jumps, in %" PRIu64 " us.\n",
+        quicperf_ctx->data_received, nb_bytes, nb_packets, nb_client_packets, nb_server_packets,
+        nb_stall_jumps, wall_end - wall_start);
+
+    if (wall_end > wall_start) {
+        double seconds = (double)(wall_end - wall_start) / 1000000.0;
+        double us_per_packet = (nb_packets == 0) ? 0.0 :
+            (double)(wall_end - wall_start) / (double)nb_packets;
+
+        fprintf(stdout, "Perf loopback: %.3f seconds, %.1f MB/s, %.0f packets/s, %.3f us/packet.\n",
+            seconds, ((double)nb_bytes / (1024.0 * 1024.0)) / seconds,
+            (double)nb_packets / seconds, us_per_packet);
+    }
+
+    if (p_wall_time_us != NULL) {
+        *p_wall_time_us = wall_end - wall_start;
+    }
+    if (p_nb_packets != NULL) {
+        *p_nb_packets = nb_packets;
+    }
+
+    free(send_buffer);
+    quicperf_delete_ctx(quicperf_ctx);
+    picoquic_free(quic);
+
+    return ret;
+}
+
+int perf_loopback_test(void)
+{
+    uint64_t wall_time_us = 0;
+    uint64_t nb_packets = 0;
+
+    return perf_loopback_test_one(picohttp_perf_loopback_size, &wall_time_us, &nb_packets);
+}
