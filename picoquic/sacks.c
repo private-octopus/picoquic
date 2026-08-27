@@ -177,8 +177,13 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
 {
     int is_received = 0;
     picoquic_sack_list_t* sack_list = picoquic_sack_list_from_cnx_context(cnx, pc, l_cid);
+    picoquic_sack_item_t* highest = picoquic_sack_last_item(sack_list);
 
-    if (sack_list->horizon_delay > 0 && pn64 < sack_list->ack_horizon) {
+    if (highest != NULL && pn64 > highest->end_of_sack_range) {
+        /* Fast path: beyond everything received so far, so it cannot be a duplicate. */
+        is_received = 0;
+    }
+    else if (sack_list->horizon_delay > 0 && pn64 < sack_list->ack_horizon) {
         is_received = 1;
     }
     else {
@@ -197,59 +202,72 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
 int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
     uint64_t pn64_min, uint64_t pn64_max, uint64_t current_time)
 {
-    int ret = 1; /* duplicate by default, reset to 0 if update found */
-    picoquic_sack_item_t* previous = picoquic_sack_find_range_below_number(sack_list, NULL, pn64_min);
+    int ret;
+    picoquic_sack_item_t* highest = picoquic_sack_last_item(sack_list);
 
-    if (previous == NULL || previous->end_of_sack_range + 1 < pn64_min) {
-        /* No overlap with a range below */
-        picoquic_sack_item_t* next = (previous == NULL) ?
-            picoquic_sack_first_item(sack_list) : picoquic_sack_next_item(previous);
-        if (next == NULL || next->start_of_sack_range - 1 > pn64_max) {
-            /* create a new item in the list */
-            ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
-            /* set previous to null to bypass the next block */
-            previous = NULL;
-        }
-        else {
-            /* extend the existing item towards the min. */
-            next->start_of_sack_range = pn64_min;
-            /* record that this item was modified. */
-            picoquic_sack_item_record_reset(sack_list, next);
-            next->time_created = current_time;
-            ret = 0;
-            /* set previous to next and do the extension part */
-            previous = next;
-        }
+    if (highest != NULL && pn64_min == highest->end_of_sack_range + 1) {
+        /* Fast path: packet is the next expected one, so just extend the highest range. */
+        highest->end_of_sack_range = pn64_max;
+        picoquic_sack_item_record_reset(sack_list, highest);
+        highest->time_created = current_time;
+        ret = 0;
     }
-    while (previous != NULL && previous->end_of_sack_range < pn64_max) {
-        /* we found or created an item that includes the beginning
-         * of the acked range. Check the next one */
-        picoquic_sack_item_t* next = picoquic_sack_next_item(previous);
-        if (next == NULL || next->start_of_sack_range - 1 > pn64_max) {
-            /* No overlap. Extend the previous item up to the max of the range */
-            previous->end_of_sack_range = pn64_max;
-            /* record that this item was modified. */
-            picoquic_sack_item_record_reset(sack_list, previous);
-            previous->time_created = current_time;
-            ret = 0;
-        }
-        else {
-            /* Overlap. */
-            /* Extend the range of the previous item to include the next one. */
-            previous->end_of_sack_range = next->end_of_sack_range;
-            /* record that this item was modified. */
-            picoquic_sack_item_record_reset(sack_list, previous);
-            if (next->time_created > previous->time_created) {
-                previous->time_created = next->time_created;
+    else {
+        picoquic_sack_item_t* previous = picoquic_sack_find_range_below_number(sack_list, NULL, pn64_min);
+
+        ret = 1; /* duplicate by default, reset to 0 if update found */
+
+        if (previous == NULL || previous->end_of_sack_range + 1 < pn64_min) {
+            /* No overlap with a range below */
+            picoquic_sack_item_t* next = (previous == NULL) ?
+                picoquic_sack_first_item(sack_list) : picoquic_sack_next_item(previous);
+            if (next == NULL || next->start_of_sack_range - 1 > pn64_max) {
+                /* create a new item in the list */
+                ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                /* set previous to null to bypass the next block */
+                previous = NULL;
             }
-            ret = 0;
-            /* Delete the next item, accounting of ack times, etc. */
-            picoquic_sack_delete_item(sack_list, next);
+            else {
+                /* extend the existing item towards the min. */
+                next->start_of_sack_range = pn64_min;
+                /* record that this item was modified. */
+                picoquic_sack_item_record_reset(sack_list, next);
+                next->time_created = current_time;
+                ret = 0;
+                /* set previous to next and do the extension part */
+                previous = next;
+            }
         }
-    }
+        while (previous != NULL && previous->end_of_sack_range < pn64_max) {
+            /* we found or created an item that includes the beginning
+             * of the acked range. Check the next one */
+            picoquic_sack_item_t* next = picoquic_sack_next_item(previous);
+            if (next == NULL || next->start_of_sack_range - 1 > pn64_max) {
+                /* No overlap. Extend the previous item up to the max of the range */
+                previous->end_of_sack_range = pn64_max;
+                /* record that this item was modified. */
+                picoquic_sack_item_record_reset(sack_list, previous);
+                previous->time_created = current_time;
+                ret = 0;
+            }
+            else {
+                /* Overlap. */
+                /* Extend the range of the previous item to include the next one. */
+                previous->end_of_sack_range = next->end_of_sack_range;
+                /* record that this item was modified. */
+                picoquic_sack_item_record_reset(sack_list, previous);
+                if (next->time_created > previous->time_created) {
+                    previous->time_created = next->time_created;
+                }
+                ret = 0;
+                /* Delete the next item, accounting of ack times, etc. */
+                picoquic_sack_delete_item(sack_list, next);
+            }
+        }
 
-    if (sack_list->horizon_delay > 0) {
-        picoquic_update_ack_horizon(sack_list, current_time);
+        if (sack_list->horizon_delay > 0) {
+            picoquic_update_ack_horizon(sack_list, current_time);
+        }
     }
 
     return ret;
@@ -446,7 +464,7 @@ int picoquic_sack_list_reset(picoquic_sack_list_t* sack_list, uint64_t range_min
     return ret;
 }
 
-/* Free the elements of a sack list 
+/* Free the elements of a sack list
  */
 void picoquic_sack_list_free(picoquic_sack_list_t* sack_list)
 {

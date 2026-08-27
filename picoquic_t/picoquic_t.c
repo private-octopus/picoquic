@@ -148,6 +148,7 @@ static const picoquic_test_def_t test_table[] = {
     { "varint", varint_test },
     { "sqrt_for_test", sqrt_for_test_test },
     { "ack_sack", sacktest },
+    { "ack_stress", sack_stress_test },
     { "frames_skip", skip_frame_test },
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },

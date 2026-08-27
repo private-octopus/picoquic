@@ -31,7 +31,6 @@
 #include "picosplay.h"
 #include "picoquictest_internal.h"
 #include "quicperf.h"
-#include "c4.h"
 
 #define qpstr_batch "256:12345;"
 #define qpstr_batch100 "* 100:256 : 12345;"
@@ -1245,10 +1244,7 @@ int quicperf_multipath_settled_test(void)
  * Goal: profile the "prepare next packet" sending path -- picoquic_prepare_next_packet_ex,
  * picoquic_prepare_segment, picoquic_prepare_packet_ready -- without the cost or noise of
  * an actual socket, or of the simulated-link machinery used by the rest of this file
- * (queueing, bandwidth/propagation model, NAT rewriting, etc). 
- *
- * A single picoquic_quic_t context plays both ends of the connection: it used to
- * originate a client connection to a fictitious server address. 
+ * (queueing, bandwidth/propagation model, NAT rewriting, etc).
  *
  * Packets are never queued or delayed: each call to picoquic_prepare_next_packet_ex is
  * immediately followed by a call to picoquic_incoming_packet_ex feeding the produced bytes
@@ -1256,8 +1252,18 @@ int quicperf_multipath_settled_test(void)
  * There is no simulated bandwidth or propagation delay -- the two connections just run as
  * fast as the host CPU can prepare, protect and process packets.
  *
- * We use the "real" clock, not a simulated clock, too have realistic handling of
- * pacing and congestion control.
+ * The QUIC clock still needs to move forward, for pacing, loss timers, etc. When neither
+ * connection has anything ready to send, the clock jumps straight to
+ * picoquic_get_next_wake_time(). When a packet is handed off, the clock is nudged forward by
+ * a single microsecond -- just enough to keep timestamps strictly increasing and RTT samples
+ * away from a degenerate zero, without adding any artificial delay of consequence. Using a
+ * simulated clock instead of the real one keeps the test fast and repeatable -- it runs at
+ * whatever speed the host CPU can prepare and process packets, not at wall-clock speed.
+ * 
+ * This simplified clock does not play well with classic congestion control algorithms like
+ * Reno, Cubic, etc. Instead, we use a simple "fixed window" algorithm to ensure that
+ * the congestion window is sufficient to get proper packet trains and
+ * thus realistic CPU estimates. 
  *
  * The client runs a quicperf "batch" scenario asking for a large download (e.g., 10GB),
  * which puts the load on the server's sending path -- the part of the code this test is
@@ -1276,12 +1282,100 @@ int quicperf_multipath_settled_test(void)
  * just exercise it. */
 uint64_t picohttp_perf_loopback_size = PERF_LOOPBACK_TEST_RESPONSE_SIZE;
 
-static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_us, uint64_t* p_nb_packets)
+/* "Fixed window" congestion control, for use in the following performance test:
+ * ensure that the congestion window is kept at a large static value.
+ * Defined as static functions here because this algorithm should not be used in production.
+ */
+#define PERF_LOOPBACK_FIXEDCWIN_VALUE (128 * 1024)
+
+static void perf_loopback_fixedcwin_set(picoquic_path_t* path_x)
+{
+    path_x->cwin = PERF_LOOPBACK_FIXEDCWIN_VALUE;
+    path_x->is_ssthresh_initialized = 1;
+    picoquic_update_pacing_data(path_x, 0);
+}
+
+static void perf_loopback_fixedcwin_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(option_string);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
+    /* Stateless: there is nothing to track between calls, cwin is always the same fixed
+     * value regardless of what happens on the path. */
+    path_x->congestion_alg_state = NULL;
+    perf_loopback_fixedcwin_set(path_x);
+}
+
+static void perf_loopback_fixedcwin_notify(
+    picoquic_cnx_t* UNUSED(cnx),
+    picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification,
+    picoquic_per_ack_state_t* UNUSED(ack_state),
+    uint64_t UNUSED(current_time))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(ack_state);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
+    /* Every notification -- acknowledgement, repeat, timeout, ecn, spurious repeat, rtt
+     * measurement, cwin_blocked, seed_cwin, reset, lost_feedback, restart_from_idle -- is
+     * treated the same way: none of them are allowed to move cwin. This is deliberately
+     * not a switch on `notification`: there is no case that should do anything different. */
+    (void)notification;
+    path_x->is_cc_data_updated = 1;
+    perf_loopback_fixedcwin_set(path_x);
+}
+
+static void perf_loopback_fixedcwin_delete(picoquic_path_t* UNUSED(path_x))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(path_x);
+#endif
+    /* Nothing was allocated in perf_loopback_fixedcwin_init. */
+}
+
+static void perf_loopback_fixedcwin_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
+{
+    *cc_state = 0;
+    *cc_param = path_x->cwin;
+}
+
+#define PERF_LOOPBACK_FIXEDCWIN_ID "perf_loopback_fixedcwin"
+
+static picoquic_congestion_algorithm_t perf_loopback_fixedcwin_algorithm_struct = {
+    PERF_LOOPBACK_FIXEDCWIN_ID, 0, PICOQUIC_ECN_ECT_0,
+    perf_loopback_fixedcwin_init,
+    perf_loopback_fixedcwin_notify,
+    perf_loopback_fixedcwin_delete,
+    perf_loopback_fixedcwin_observe
+};
+
+static picoquic_congestion_algorithm_t* perf_loopback_fixedcwin_algorithm = &perf_loopback_fixedcwin_algorithm_struct;
+
+/* Same rotating-bitmask loss idiom as picoquictest_sim_link_testloss in sim_link.c, kept
+ * local since perf_loopback bypasses sim_link entirely and that function is file-static. */
+static int perf_loopback_testloss(uint64_t* loss_mask)
+{
+    uint64_t loss_bit = 0;
+
+    if (loss_mask != NULL) {
+        loss_bit = (uint64_t)((*loss_mask) & 1ull);
+        *loss_mask >>= 1;
+        *loss_mask |= (loss_bit << 63);
+    }
+
+    return (int)loss_bit;
+}
+
+static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, uint64_t* p_wall_time_us, uint64_t* p_nb_packets)
 {
     int ret = 0;
+    uint64_t simulated_time = 0;
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx_client = NULL;
-    picoquic_cnx_t* cnx_server = NULL;
+    picoquic_cnx_t* cnx_server = NULL; /* discovered as first connection that is not the client connection */
     quicperf_ctx_t* quicperf_ctx = NULL;
     struct sockaddr_in client_addr;
     struct sockaddr_in server_addr;
@@ -1291,6 +1385,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
     char scenario[128];
     uint8_t* send_buffer = NULL;
     uint64_t nb_packets = 0;
+    uint64_t nb_packets_lost = 0;
     uint64_t nb_client_packets = 0;
     uint64_t nb_server_packets = 0;
     uint64_t nb_batches = 0;
@@ -1333,14 +1428,15 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
     quic = picoquic_create(8,
         test_server_cert_file, test_server_key_file, test_server_cert_store_file,
         QUICPERF_ALPN, quicperf_callback, NULL, NULL, NULL, NULL,
-        picoquic_current_time(), NULL, NULL, NULL, 0);
+        simulated_time, &simulated_time, NULL, NULL, 0);
 
     if (quic == NULL) {
         DBG_PRINTF("%s", "Could not create the perf loopback QUIC context.\n");
         return -1;
     }
 
-    picoquic_set_default_congestion_algorithm(quic, c4_algorithm);
+    /* Set as the default for the context, before creating any connection */
+    picoquic_set_default_congestion_algorithm(quic, perf_loopback_fixedcwin_algorithm);
 
     /* No qlog, no binlog: this is meant to measure the sending path itself, not I/O. */
     picoquic_set_random_initial(quic, 0);
@@ -1354,7 +1450,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
     }
 
     cnx_client = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
-        (struct sockaddr*)&server_addr, picoquic_get_quic_time(quic), 0, PICOQUIC_TEST_SNI, QUICPERF_ALPN, 1);
+        (struct sockaddr*)&server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, QUICPERF_ALPN, 1);
 
     if (cnx_client == NULL) {
         DBG_PRINTF("%s", "Could not create the perf loopback client connection.\n");
@@ -1382,6 +1478,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
     wall_start = picoquic_current_time();
 
     while (ret == 0 && nb_loops < PERF_LOOPBACK_MAX_LOOPS &&
+        simulated_time < PERF_LOOPBACK_MAX_TIME &&
         picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
         struct sockaddr_storage addr_to;
         struct sockaddr_storage addr_from;
@@ -1394,7 +1491,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
 
         nb_loops++;
 
-        ret = picoquic_prepare_next_packet_ex(quic, picoquic_get_quic_time(quic), send_buffer, PERF_LOOPBACK_SEND_BUFFER_SIZE,
+        ret = picoquic_prepare_next_packet_ex(quic, simulated_time, send_buffer, PERF_LOOPBACK_SEND_BUFFER_SIZE,
             &send_length, &addr_to, &addr_from, &if_index, &log_cid, &last_cnx, &send_msg_size);
 
         if (ret != 0) {
@@ -1402,18 +1499,15 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
             break;
         }
 
-        if (last_cnx != NULL && cnx_server == NULL) {
+        if (last_cnx != NULL && last_cnx != cnx_client && cnx_server == NULL) {
             cnx_server = last_cnx;
         }
-
 
         if (send_length > 0) {
             size_t segment_size = (send_msg_size == 0 || send_msg_size > send_length) ? send_length : send_msg_size;
             size_t sent_so_far = 0;
             uint8_t* segment_bytes = send_buffer;
 
-            /* Each call to picoquic_prepare_next_packet_ex produces a batch of
-             * up to 40 packets, depending on pacing and congestion control */
             nb_batches++;
 
             while (ret == 0 && sent_so_far < send_length) {
@@ -1431,14 +1525,25 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
                     nb_server_packets++;
                 }
 
-                /* Deliver the packet right away: no queue, no delay. */
-                ret = picoquic_incoming_packet_ex(quic, segment_bytes, this_length,
-                    (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index, 0,
-                    &first_cnx, picoquic_get_quic_time(quic));
+                /* Deliver the packet right away: no queue, no delay. Just nudge the
+                 * clock by one microsecond so timestamps stay strictly increasing and
+                 * RTT samples never land on exactly zero. */
+                simulated_time += 1;
 
-                if (ret != 0) {
-                    DBG_PRINTF("Incoming packet returned %d\n", ret);
-                    break;
+                if (perf_loopback_testloss(&loss_mask)) {
+                    /* Simulated loss: the packet was "sent" (already counted above,
+                     * same as a real dropped packet would be) but never delivered. */
+                    nb_packets_lost++;
+                }
+                else {
+                    ret = picoquic_incoming_packet_ex(quic, segment_bytes, this_length,
+                        (struct sockaddr*)&addr_from, (struct sockaddr*)&addr_to, if_index, 0,
+                        &first_cnx, simulated_time);
+
+                    if (ret != 0) {
+                        DBG_PRINTF("Incoming packet returned %d\n", ret);
+                        break;
+                    }
                 }
 
                 segment_bytes += this_length;
@@ -1446,11 +1551,19 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
             }
         }
         else {
+            uint64_t next_time = picoquic_get_next_wake_time(quic, simulated_time);
+
+            if (next_time <= simulated_time) {
+                next_time = simulated_time + 1;
+            }
+            simulated_time = next_time;
             nb_stall_jumps++;
         }
-        /* Safety net: in case quicperf would not close the connection on its own.
-         * Probably not needed, since we also have a test on number of loops.
-         */
+
+        /* Safety net: quicperf already closes the client connection on its own once the
+         * scenario completes (see quicperf_close_stream in picohttp/quicperf.c), but we
+         * mirror the same belt-and-suspenders check used by the regular quicperf e2e tests
+         * above in case a future scenario type does not. */
         if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
             picoquic_is_cnx_backlog_empty(cnx_client) &&
             quicperf_ctx->nb_open_streams == 0) {
@@ -1472,9 +1585,9 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t* p_wall_time_
     }
 
     fprintf(stdout, "Perf loopback: %" PRIu64 " app bytes, %" PRIu64 " wire bytes, %" PRIu64
-        " packets (%" PRIu64 " client, %" PRIu64 " server), %" PRIu64 " batches, %" PRIu64 " stall jumps, in %" PRIu64 " us.\n",
+        " packets (%" PRIu64 " client, %" PRIu64 " server, %" PRIu64 " lost), %" PRIu64 " batches, %" PRIu64 " stall jumps, in %" PRIu64 " us.\n",
         quicperf_ctx->data_received, nb_bytes, nb_packets, nb_client_packets, nb_server_packets,
-        nb_batches, nb_stall_jumps, wall_end - wall_start);
+        nb_packets_lost, nb_batches, nb_stall_jumps, wall_end - wall_start);
 
     if (wall_end > wall_start) {
         double seconds = (double)(wall_end - wall_start) / 1000000.0;
@@ -1506,5 +1619,17 @@ int perf_loopback_test(void)
     uint64_t wall_time_us = 0;
     uint64_t nb_packets = 0;
 
-    return perf_loopback_test_one(picohttp_perf_loopback_size, &wall_time_us, &nb_packets);
+    return perf_loopback_test_one(picohttp_perf_loopback_size, 0, &wall_time_us, &nb_packets);
+}
+
+/* Same scenario, but with a single bit set in the rotating loss mask: one packet in 64
+ * (~1.6%) is dropped in each direction, deterministically and reproducibly, to exercise
+ * the sack-list code paths that perf_loopback's loss-free run never reaches -- multiple
+ * concurrent ranges, merges, and duplicate-after-retransmission checks. */
+int perf_loopback_loss_test(void)
+{
+    uint64_t wall_time_us = 0;
+    uint64_t nb_packets = 0;
+
+    return perf_loopback_test_one(picohttp_perf_loopback_size, 1, &wall_time_us, &nb_packets);
 }

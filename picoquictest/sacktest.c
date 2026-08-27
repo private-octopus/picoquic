@@ -239,6 +239,135 @@ int sacktest(void)
     return ret;
 }
 
+/* Stress test: push the SACK list far beyond the 22-entry table above, with a
+ * delivery order designed to keep it holding many disjoint ranges at once --
+ * the scenario an on-path adversary could force by reordering packets, which
+ * organic loss does not reach because retransmission heals gaps long before
+ * thousands of them pile up. Checks correctness at scale, and reports timing
+ * for the first half of the run against the second half so a regression (or,
+ * eventually, an improvement from replacing the underlying tree) is visible
+ * without needing a separate profiling tool. Pass/fail on that timing compares the two
+ * halves against each other, never against an absolute number -- see the check below. */
+#define SACK_STRESS_NB_PACKETS 20000
+#define SACK_STRESS_MAX_GROWTH_RATIO 8.0
+
+static int sack_stress_check_coverage(picoquic_sack_list_t* sack_list, uint64_t nb_packets)
+{
+    int ret = 0;
+    picoquic_sack_item_t* sack = picoquic_sack_first_item(sack_list);
+    uint64_t next_expected = 0;
+
+    while (ret == 0 && sack != NULL) {
+        if (sack->start_of_sack_range != next_expected) {
+            ret = -1;
+        }
+        else {
+            next_expected = sack->end_of_sack_range + 1;
+            sack = picoquic_sack_next_item(sack);
+        }
+    }
+
+    if (ret == 0 && next_expected != nb_packets) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int sack_stress_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx;
+    picoquic_quic_t* quic;
+    picoquic_packet_context_enum pc = 0;
+    uint64_t nb_ops = 0;
+    uint64_t chunk_start_time;
+    uint64_t chunk_ops = 0;
+    double first_half_us_per_op = 0.0;
+    double second_half_us_per_op = 0.0;
+    uint64_t* pn = (uint64_t*)malloc(SACK_STRESS_NB_PACKETS * sizeof(uint64_t));
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        free(pn);
+        return -1;
+    }
+
+    if (pn == NULL || picoquic_create_local_cnxid(cnx, 0, NULL, 0) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Alternate delivery between the low and high end of the packet-number space,
+         * each walking towards the middle: every packet is far from anything recorded
+         * by the other end, so ranges stay disjoint far longer than organic reordering
+         * would allow, and each side's insertion point keeps moving relative to
+         * wherever the other side last landed. */
+        for (uint64_t i = 0; i < SACK_STRESS_NB_PACKETS; i++) {
+            pn[i] = (i % 2 == 0) ? (i / 2) : (SACK_STRESS_NB_PACKETS - 1 - (i / 2));
+        }
+    }
+
+    chunk_start_time = picoquic_current_time();
+
+    for (uint64_t i = 0; ret == 0 && i < SACK_STRESS_NB_PACKETS; i++) {
+        uint64_t current_time = i + 1;
+
+        /* Mirror the real receive path: check for duplicate, then record. */
+        if (picoquic_is_pn_already_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i]) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_record_pn_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i], current_time) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_is_pn_already_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i]) == 0) {
+            ret = -1;
+        }
+
+        nb_ops++;
+        chunk_ops++;
+
+        if (ret == 0 && i == SACK_STRESS_NB_PACKETS / 2 - 1) {
+            uint64_t now = picoquic_current_time();
+            first_half_us_per_op = (double)(now - chunk_start_time) / (double)chunk_ops;
+            chunk_start_time = now;
+            chunk_ops = 0;
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t now = picoquic_current_time();
+        second_half_us_per_op = (double)(now - chunk_start_time) / (double)chunk_ops;
+    }
+
+    if (ret == 0 && second_half_us_per_op > first_half_us_per_op * SACK_STRESS_MAX_GROWTH_RATIO + 0.01) {
+        /* Compare the two halves of the same run instead of an absolute threshold, so the
+         * check does not depend on how fast this particular machine is: flat per-op cost
+         * keeps the ratio near 1, while a real O(N) degradation would blow it out by many
+         * orders of magnitude at this N, so a generous margin still catches it. */
+        DBG_PRINTF("Sack stress cost grew from %.3f to %.3f us/op between halves",
+            first_half_us_per_op, second_half_us_per_op);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = check_ack_ranges(&cnx->ack_ctx[pc].sack_list);
+    }
+
+    if (ret == 0) {
+        ret = sack_stress_check_coverage(&cnx->ack_ctx[pc].sack_list, SACK_STRESS_NB_PACKETS);
+    }
+
+    fprintf(stdout, "Sack stress: %" PRIu64 " packets, first half %.3f us/op, second half %.3f us/op.\n",
+        nb_ops, first_half_us_per_op, second_half_us_per_op);
+
+    free(pn);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 static void ack_range_mask(uint64_t* mask, uint64_t highest, uint64_t range)
 {
     for (uint64_t i = 0; i < range; i++) {
