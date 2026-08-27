@@ -1264,7 +1264,7 @@ int quicperf_multipath_settled_test(void)
  * meant to profile.
  */
 
-#define PERF_LOOPBACK_TEST_RESPONSE_SIZE 1000000;
+#define PERF_LOOPBACK_TEST_RESPONSE_SIZE 1000000
 #define PERF_LOOPBACK_MAX_LOOPS 100000000
 #define PERF_LOOPBACK_MAX_TIME 300000000ull /* 300 simulated seconds, safety net against a stall */
 #define PERF_LOOPBACK_SEND_BUFFER_SIZE 65536 /* 64KB: large enough to let prepare_next_packet_ex
