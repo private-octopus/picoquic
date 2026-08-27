@@ -1794,7 +1794,7 @@ void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx);
 void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time);
 int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    uint64_t* next_wake_time, int* is_initial_sent);
+    uint64_t* next_wake_time, int* is_initial_sent, int is_first_in_batch);
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,

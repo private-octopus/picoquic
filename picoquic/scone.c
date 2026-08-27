@@ -271,7 +271,7 @@ int picoquic_scone_prepare(picoquic_cnx_t * cnx, picoquic_path_t* path_x, picoqu
         size_t next_segment_length = 0;
 
         ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
-            bytes, available - coalesced_packet_size, &next_segment_length, next_wake_time, is_initial_sent);
+            bytes, available - coalesced_packet_size, &next_segment_length, next_wake_time, is_initial_sent, 1);
         if (ret == 0 && next_segment_length > 0) {
             /* we are actually sending a segment.
             * add the SCONE packet size to the segment length,
