@@ -2188,7 +2188,6 @@ int picoquic_incoming_segment(
         }
 
         if (ret == 0) {
-            picoquic_scone_ready_to_send(cnx, (path_id < 0) ? NULL : cnx->path[path_id], current_time);
             picoquic_log_packet(cnx, (path_id < 0)?NULL:cnx->path[path_id], 1, current_time, &ph, bytes, *consumed);
         }
         else if (is_buffered) {

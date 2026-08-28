@@ -453,7 +453,9 @@ static void picoquic_update_issued_ticket(
         ip_addr_length = PICOQUIC_STORED_IP_MAX;
     }
     ticket->ip_addr_length = ip_addr_length;
-    memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    if (ip_addr_length > 0) {
+        memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    }
     ticket->rtt = rtt;
     ticket->cwin = cwin;
 }

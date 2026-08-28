@@ -1560,13 +1560,10 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
             nb_stall_jumps++;
         }
 
-        /* Safety net: quicperf already closes the client connection on its own once the
-         * scenario completes (see quicperf_close_stream in picohttp/quicperf.c), but we
-         * mirror the same belt-and-suspenders check used by the regular quicperf e2e tests
-         * above in case a future scenario type does not. */
-        if (ret == 0 && picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
-            picoquic_is_cnx_backlog_empty(cnx_client) &&
-            quicperf_ctx->nb_open_streams == 0) {
+        /* Safety net in case a future scenario type does not self-close like this one does. */
+        if (ret == 0 && quicperf_ctx->nb_open_streams == 0 &&
+            picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
+            picoquic_is_cnx_backlog_empty(cnx_client)) {
             ret = picoquic_close(cnx_client, 0);
         }
     }
