@@ -56,6 +56,7 @@ int header_length_test(void);
 int pn2pn64test(void);
 int intformattest(void);
 int sacktest(void);
+int sack_stress_test(void);
 int StreamZeroFrameTest(void);
 int sendacktest(void);
 int sendack_loop_test(void);
@@ -711,6 +712,8 @@ int quicperf_overflow_test(void);
 int quicperf_multipath_race_test(void);
 int quicperf_multipath_race_delayed_test(void);
 int quicperf_multipath_settled_test(void);
+int perf_loopback_test(void);
+int perf_loopback_loss_test(void);
 int cplusplustest(void);
 int error_name_test(void);
 

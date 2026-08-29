@@ -2797,6 +2797,128 @@ int picoquic_prepare_packet_almost_ready(picoquic_cnx_t* cnx, picoquic_path_t* p
 }
 
 /*  Prepare the next packet to send when in the ready state */
+/* Shared closing logic for a 1-RTT packet: PTO/keep-alive/ack-of-ack bookkeeping,
+ * padding, and encryption. Used both by the full picoquic_prepare_packet_ready (every
+ * first packet of a send-buffer batch) and by picoquic_prepare_packet_ready_fast (every
+ * later packet of the same batch, see picoquic_prepare_packet_ex): the two differ only in
+ * how much of the "is there something other than stream data to send" gauntlet they run
+ * before reaching this point, never in how a packet gets closed out once its content is
+ * decided. Keeping that one implementation shared avoids the two versions silently
+ * drifting apart on padding policy or encryption. */
+static int picoquic_prepare_packet_ready_finish(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t* send_length, uint64_t* next_wake_time,
+    picoquic_packet_context_t* pkt_ctx, picoquic_packet_type_enum packet_type, picoquic_packet_context_enum pc,
+    uint8_t* bytes, size_t header_length, size_t length, int ret, int is_pure_ack, int ack_sent, int more_data,
+    int is_challenge_padding_needed, size_t checksum_overhead, size_t send_buffer_min_max)
+{
+    uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+    uint8_t* bytes_next;
+
+    if (length <= header_length) {
+        length = 0;
+    }
+
+    if (cnx->cnx_state != picoquic_state_disconnected) {
+        if (length > 0){
+            path_x->is_pto_required &= is_pure_ack;
+            pkt_ctx->ack_of_ack_requested |= !is_pure_ack;
+            if (!pkt_ctx->ack_of_ack_requested && ack_sent) {
+                /* If we have sent many ACKs, add a PING to get an ack of ack */
+                /* The number 24 is chosen to not break any of the unit tests. If the number is
+                 * too small, the PING mechanism can cause delayed end of the connection, or
+                 * early breakage */
+                const uint64_t ack_repeat_interval = 24;
+                bytes_next = bytes + length;
+                if (bytes_next < bytes_max &&
+                    pkt_ctx->highest_acknowledged + ack_repeat_interval < pkt_ctx->send_sequence &&
+                    path_x == cnx->path[0] &&
+                    pkt_ctx->highest_acknowledged_time + path_x->smoothed_rtt < current_time) {
+                    /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
+                    *bytes_next++ = picoquic_frame_type_ping;
+                    pkt_ctx->ack_of_ack_requested = 1;
+                    is_pure_ack = 0;
+                    length = bytes_next - bytes;
+                }
+            }
+
+            if (is_pure_ack && cnx->is_multipath_enabled &&
+                path_x->is_ack_lost && !path_x->is_ack_expected) {
+                /* In some multipath scenarios, we may need to ping a path if we see
+                 * non-ackable packets being lost. */
+                bytes_next = bytes + length;
+                if (bytes_next < bytes_max) {
+                    is_pure_ack = 0;
+                    *bytes_next = picoquic_frame_type_ping;
+                    length++;
+                }
+            }
+
+            if (!is_pure_ack) {
+                path_x->is_ack_expected = 1;
+            }
+        }
+
+        if (is_pure_ack == 0)
+        {
+            cnx->latest_progress_time = current_time;
+        }
+        else if (cnx->keep_alive_interval != 0) {
+            /* If necessary, encode and send the keep alive packet.
+             * We only send keep alive packets when no other data is sent.
+             */
+            if (cnx->latest_progress_time + cnx->keep_alive_interval <= current_time && length == 0) {
+                length = picoquic_predict_packet_header_length(
+                    cnx, packet_type, pkt_ctx);
+                packet->ptype = packet_type;
+                packet->pc = pc;
+                packet->offset = length;
+                header_length = length;
+                packet->sequence_number = pkt_ctx->send_sequence;
+                packet->send_path = path_x;
+                packet->send_time = current_time;
+                bytes[length++] = picoquic_frame_type_ping;
+                bytes[length++] = 0;
+                cnx->latest_progress_time = current_time;
+            }
+            else if (cnx->latest_progress_time + cnx->keep_alive_interval < *next_wake_time) {
+                *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            }
+        }
+
+        if (more_data) {
+            *next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+            ret = 0;
+        }
+    }
+
+    if (ret == 0 && length > header_length) {
+        /* Ensure that all packets are properly padded before being sent. */
+        if (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+        else {
+            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        }
+    }
+
+    picoquic_finalize_and_protect_packet(cnx, packet,
+        ret, length, header_length, checksum_overhead,
+        send_length, send_buffer, send_buffer_min_max,
+        path_x, current_time, !is_pure_ack);
+
+    if (*send_length > 0) {
+        *next_wake_time = current_time;
+        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
+
+        if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
+            picoquic_log_cc_dump(cnx, current_time);
+        }
+    }
+    return ret;
+}
+
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
 {
@@ -2895,10 +3017,13 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         /* If required, prepare challenge and response frames.
          * These frames will be sent immediately, regardless of pacing or flow control.
          */
-        bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
-            bytes_next, bytes_max,
-            &more_data, &is_pure_ack, &is_challenge_padding_needed,
-            current_time, next_wake_time);
+        if ((path_x->first_tuple->challenge_verified == 0 && path_x->first_tuple->challenge_failed == 0) ||
+            path_x->first_tuple->response_required) {
+            bytes_next = picoquic_prepare_path_challenge_frames(cnx, path_x,
+                bytes_next, bytes_max,
+                &more_data, &is_pure_ack, &is_challenge_padding_needed,
+                current_time, next_wake_time);
+        }
 
         /* Compute the length before pacing block */
         length = bytes_next - bytes;
@@ -3124,109 +3249,107 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         } /* End of challenge verified */
     }
 
-    if (length <= header_length) {
-        length = 0;
-    }
+    return picoquic_prepare_packet_ready_finish(cnx, path_x, packet, current_time, send_buffer, send_length, next_wake_time,
+        pkt_ctx, packet_type, pc, bytes, header_length, length, ret, is_pure_ack, ack_sent, more_data,
+        is_challenge_padding_needed, checksum_overhead, send_buffer_min_max);
+}
 
-    if (cnx->cnx_state != picoquic_state_disconnected) {
-        if (length > 0){
-            path_x->is_pto_required &= is_pure_ack;
-            pkt_ctx->ack_of_ack_requested |= !is_pure_ack;
-            if (!pkt_ctx->ack_of_ack_requested && ack_sent) {
-                /* If we have sent many ACKs, add a PING to get an ack of ack */
-                /* The number 24 is chosen to not break any of the unit tests. If the number is
-                 * too small, the PING mechanism can cause delayed end of the connection, or 
-                 * early breakage */
-                const uint64_t ack_repeat_interval = 24;
-                bytes_next = bytes + length;
-                if (bytes_next < bytes_max &&
-                    pkt_ctx->highest_acknowledged + ack_repeat_interval < pkt_ctx->send_sequence &&
-                    path_x == cnx->path[0] &&
-                    pkt_ctx->highest_acknowledged_time + path_x->smoothed_rtt < current_time) {
-                    /* Bundle a Ping with ACK, so as to get trigger an Acknowledgement */
-                    *bytes_next++ = picoquic_frame_type_ping;
-                    pkt_ctx->ack_of_ack_requested = 1;
-                    is_pure_ack = 0;
-                    length = bytes_next - bytes;
+/* Lean alternate path for the second and later packets of the same send-buffer batch
+ * (see picoquic_prepare_packet_ex): just check pacing and flow control, and if OK
+ * move directly to format stream frames and datagrams, thus bypassing a large number
+ * of tests. */
+static int picoquic_prepare_packet_ready_fast(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
+{
+    int ret = 0;
+    picoquic_packet_type_enum packet_type = picoquic_packet_1rtt_protected;
+    picoquic_packet_context_enum pc = picoquic_packet_context_application;
+    int is_pure_ack = 1;
+    size_t header_length;
+    size_t length;
+    size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
+    size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    uint8_t* bytes = packet->bytes;
+    uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
+    uint8_t* bytes_next;
+    int more_data = 0;
+
+    picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
+        &path_x->pkt_ctx :
+        &cnx->pkt_ctx[picoquic_packet_context_application];
+
+    packet->pc = picoquic_packet_context_application;
+    length = picoquic_predict_packet_header_length(cnx, packet_type, pkt_ctx);
+    packet->ptype = packet_type;
+    packet->offset = length;
+    header_length = length;
+    packet->sequence_number = pkt_ctx->send_sequence;
+    packet->send_time = current_time;
+    packet->send_path = path_x;
+    bytes_next = bytes + length;
+
+    /* We apply here the same pacing and congestion control as the full path,
+    * including the same bypass code. No PTO tests, since PTO only makes sense
+    * for the first packet in a a batch.
+    */
+    if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
+        if (path_x->cwin < path_x->bytes_in_transit || cnx->quic->cwin_max < path_x->bytes_in_transit) {
+            uint8_t* bytes_next_before_bypass = bytes_next;
+
+            if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+                int no_data_to_send_bypass = 0;
+
+                bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                    (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
+                    &more_data, &is_pure_ack, &no_data_to_send_bypass, &ret);
+            }
+
+            if (bytes_next != bytes_next_before_bypass) {
+                length = bytes_next - bytes;
+            }
+            else {
+                cnx->cwin_blocked = 1;
+                path_x->last_cwin_blocked_time = current_time;
+                if (cnx->congestion_alg != NULL) {
+                    picoquic_per_ack_state_t ack_state = { 0 };
+                    ack_state.pc = pc;
+                    cnx->congestion_alg->alg_notify(cnx, path_x,
+                        picoquic_congestion_notification_cwin_blocked,
+                        &ack_state, current_time);
                 }
             }
-
-            if (is_pure_ack && cnx->is_multipath_enabled && 
-                path_x->is_ack_lost && !path_x->is_ack_expected) {
-                /* In some multipath scenarios, we may need to ping a path if we see 
-                 * non-ackable packets being lost. */
-                bytes_next = bytes + length;
-                if (bytes_next < bytes_max) {
-                    is_pure_ack = 0;
-                    *bytes_next = picoquic_frame_type_ping;
-                    length++;
-                }
-            }
-
-            if (!is_pure_ack) {
-                path_x->is_ack_expected = 1;
-            }
-        }
-
-        if (is_pure_ack == 0)
-        {
-            cnx->latest_progress_time = current_time;
-        }
-        else if (cnx->keep_alive_interval != 0) {
-            /* If necessary, encode and send the keep alive packet.
-             * We only send keep alive packets when no other data is sent.
-             */
-            if (cnx->latest_progress_time + cnx->keep_alive_interval <= current_time && length == 0) {
-                length = picoquic_predict_packet_header_length(
-                    cnx, packet_type, pkt_ctx);
-                packet->ptype = packet_type;
-                packet->pc = pc;
-                packet->offset = length;
-                header_length = length;
-                packet->sequence_number = pkt_ctx->send_sequence;
-                packet->send_path = path_x;
-                packet->send_time = current_time;
-                bytes[length++] = picoquic_frame_type_ping;
-                bytes[length++] = 0;
-                cnx->latest_progress_time = current_time;
-            }
-            else if (cnx->latest_progress_time + cnx->keep_alive_interval < *next_wake_time) {
-                *next_wake_time = cnx->latest_progress_time + cnx->keep_alive_interval;
-                SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-            }
-        }
-
-        if (more_data) {
-            *next_wake_time = current_time;
-            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-            ret = 0;
-        }
-    }
-
-    if (ret == 0 && length > header_length) {
-        /* Ensure that all packets are properly padded before being sent. */
-        if (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU) {
-            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
         }
         else {
-            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+            int no_data_to_send = 1;
+
+            bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+                (size_t)(bytes_next - bytes) <= packet->offset, UINT64_MAX, &more_data, &is_pure_ack, &no_data_to_send, &ret);
+            length = bytes_next - bytes;
+
+            if (length <= header_length || is_pure_ack) {
+                picoquic_mark_path_app_limited(path_x);
+                bytes_next = picoquic_format_blocked_frames(cnx, &bytes[length], bytes_max, &more_data, &is_pure_ack);
+                length = bytes_next - bytes;
+            }
+
+            if (no_data_to_send) {
+                path_x->last_sender_limited_time = current_time;
+            }
+        }
+    }
+    else if (cnx->priority_limit_for_bypass > 0 && cnx->nb_paths == 1) {
+        int no_data_to_send = 0;
+
+        if ((bytes_next = picoquic_prepare_stream_and_datagrams(cnx, path_x, bytes_next, bytes_max,
+            (size_t)(bytes_next - bytes) <= packet->offset, cnx->priority_limit_for_bypass,
+            &more_data, &is_pure_ack, &no_data_to_send, &ret)) != NULL) {
+            length = bytes_next - bytes;
         }
     }
 
-    picoquic_finalize_and_protect_packet(cnx, packet,
-        ret, length, header_length, checksum_overhead,
-        send_length, send_buffer, send_buffer_min_max,
-        path_x, current_time, !is_pure_ack);
-
-    if (*send_length > 0) {
-        *next_wake_time = current_time;
-        SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
-
-        if (ret == 0 && picoquic_cnx_is_still_logging(cnx)) {
-            picoquic_log_cc_dump(cnx, current_time);
-        }
-    }
-    return ret;
+    return picoquic_prepare_packet_ready_finish(cnx, path_x, packet, current_time, send_buffer, send_length, next_wake_time,
+        pkt_ctx, packet_type, pc, bytes, header_length, length, ret, is_pure_ack, 0 /* ack_sent */, more_data,
+        0 /* is_challenge_padding_needed */, checksum_overhead, send_buffer_min_max);
 }
 
 static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
@@ -3274,7 +3397,7 @@ static int picoquic_check_idle_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_ti
 /* Prepare next packet to send, or nothing.. */
 int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
-    uint64_t* next_wake_time, int* is_initial_sent)
+    uint64_t* next_wake_time, int* is_initial_sent, int is_first_in_batch)
 {
     int ret = 0;
 
@@ -3315,7 +3438,22 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
         ret = picoquic_prepare_packet_almost_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
         break;
     case picoquic_state_ready:
-        ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        /* The lean fast path is only valid for continuation packets of a batch already
+         * started by a full picoquic_prepare_packet_ready call (see the long comment on
+         * picoquic_prepare_packet_ready_fast for why that is safe), and only when there is
+         * nothing this specific packet still needs to do outside of pacing and stream
+         * data: no path validation pending, no multipath probe pending, no PTO probe
+         * pending. PTO handling in particular is excluded here rather than inside the fast
+         * path itself: a PTO probe is explicitly exempt from congestion control (RFC 9002
+         * 6.2.4) and can carry new data even while cwin-blocked, which is exactly the kind
+         * of exception the fast path is not meant to reason about. */
+        if (!is_first_in_batch && path_x->first_tuple->challenge_verified != 0 &&
+            !path_x->is_multipath_probe_needed && !path_x->is_pto_required) {
+            ret = picoquic_prepare_packet_ready_fast(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        }
+        else {
+            ret = picoquic_prepare_packet_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
+        }
         break;
     case picoquic_state_handshake_failure:
     case picoquic_state_handshake_failure_resend:
@@ -3587,8 +3725,14 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                             packet_buffer, available, &segment_length, &next_wake_time, &is_initial_sent);
                     }
                     else {
+                        /* *send_length accumulates bytes written across the whole batch
+                         * (it is only reset to 0 at the very top of this function), so it
+                         * is 0 only for the very first packet -- exactly the signal
+                         * picoquic_prepare_segment needs to decide between the full check
+                         * and the lean fast path (see picoquic_prepare_packet_ready_fast). */
                         ret = picoquic_prepare_segment(cnx, path_x, packet, current_time,
-                            packet_buffer + coalesced_packet_size, available, &segment_length, &next_wake_time, &is_initial_sent);
+                            packet_buffer + coalesced_packet_size, available, &segment_length, &next_wake_time, &is_initial_sent,
+                            *send_length == 0);
                     }
 
                     if (ret == 0) {

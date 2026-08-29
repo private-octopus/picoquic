@@ -453,7 +453,9 @@ static void picoquic_update_issued_ticket(
         ip_addr_length = PICOQUIC_STORED_IP_MAX;
     }
     ticket->ip_addr_length = ip_addr_length;
-    memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    if (ip_addr_length > 0) {
+        memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    }
     ticket->rtt = rtt;
     ticket->cwin = cwin;
 }
@@ -1558,9 +1560,15 @@ static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx
 
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
 {
-    picoquic_remove_cnx_from_wake_list(cnx);
-    cnx->next_wake_time = next_time;
-    picoquic_insert_cnx_by_wake_time(quic, cnx);
+    if (cnx->is_wake_ready && cnx == quic->cnx_wake_ready_last && next_time <= picoquic_get_quic_time(quic)) {
+        /* Already at the tail of the ready list: no change needed. */
+        cnx->next_wake_time = next_time;
+    }
+    else {
+        picoquic_remove_cnx_from_wake_list(cnx);
+        cnx->next_wake_time = next_time;
+        picoquic_insert_cnx_by_wake_time(quic, cnx);
+    }
 }
 
 static void picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max_wake_time)

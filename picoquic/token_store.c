@@ -46,7 +46,9 @@ picoquic_stored_token_t* picoquic_format_token(uint64_t time_valid_until,
 
         stored->ip_addr = next_p;
         stored->ip_addr_length = ip_addr_length;
-        memcpy(next_p, ip_addr, ip_addr_length);
+        if (ip_addr_length > 0) {
+            memcpy(next_p, ip_addr, ip_addr_length);
+        }
         next_p += ip_addr_length;
         *next_p++ = 0;
 
@@ -184,7 +186,7 @@ int picoquic_store_token(picoquic_quic_t * quic,
 
             /* Now remove the old tokens for that SNI & ip_addr */
             while (next != NULL) {
-                if (next->time_valid_until <= stored->time_valid_until && next->sni_length == sni_length && next->ip_addr_length == ip_addr_length && memcmp(next->sni, sni, sni_length) == 0 && memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0) {
+                if (next->time_valid_until <= stored->time_valid_until && next->sni_length == sni_length && next->ip_addr_length == ip_addr_length && memcmp(next->sni, sni, sni_length) == 0 && (ip_addr_length == 0 || memcmp(next->ip_addr, ip_addr, ip_addr_length) == 0)) {
                     picoquic_stored_token_t* deleted = next;
                     next = next->next_token;
                     *pprevious = next;
