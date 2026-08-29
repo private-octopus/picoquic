@@ -545,13 +545,17 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
         /* We assume that any required correction is done prior to calling this */
         uint64_t ssthresh = c4_state->initial_cwnd / 2;
         c4_state->nominal_max_rtt = ssthresh * 1000000 / c4_state->nominal_rate;
+        c4_state->is_drain_required = 1;
         if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
             c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
+            c4_state->is_drain_required = 0;
+        }
+        else if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
+            c4_state->is_drain_required = 0;
         }
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->nb_eras_no_increase = 0;
         c4_state->probe_level = C4_PROBE_LEVEL_DEFAULT;
-        c4_state->is_drain_required = 1;
         c4_enter_recovery(path_x, c4_state, c4_congestion_none);
     }
 }
@@ -719,7 +723,8 @@ static void c4_exit_recovery(
         else {
             c4_state->recent_congestions = 0;
             if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
-                c4_state->push_was_not_limited) {
+                c4_state->push_was_not_limited &&
+                path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
                 c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
             }
         }
@@ -917,7 +922,9 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
     if (path_x->rtt_sample < c4_state->era_min_rtt) {
         c4_state->era_min_rtt = path_x->rtt_sample;
-        c4_state->is_drain_required = 1;
+        if (path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
+            c4_state->is_drain_required = 1;
+        }
     }
 
     /* TODO: some of that logic might be located at the end of the RTT cycle, or the end of the era.
@@ -957,6 +964,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
 
     if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
+        c4_state->is_drain_required = 0;
         c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
     }
