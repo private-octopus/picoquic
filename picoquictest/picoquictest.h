@@ -385,6 +385,7 @@ int h3zero_setting_error_test(void);
 int h3zero_remote_control_stream_singleton_test(void);
 int h3zero_capsule_test(void);
 int h3zero_client_data_test(void);
+int h3zero_client_data_repeat_test(void);
 int qpack_huffman_test(void);
 int qpack_huffman_base_test(void);
 int h3zero_parse_qpack_test(void);
