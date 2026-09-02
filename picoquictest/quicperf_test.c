@@ -1463,8 +1463,8 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t nb_connection
     (void)snprintf(scenario, sizeof(scenario), "=b1:*%" PRIu64 ":1000:%" PRIu64 ";",
         nb_streams, bytes_per_stream);
 
-    cnx_clients = (picoquic_cnx_t**)calloc(nb_connections, sizeof(picoquic_cnx_t*));
-    quicperf_ctxs = (quicperf_ctx_t**)calloc(nb_connections, sizeof(quicperf_ctx_t*));
+    cnx_clients = (picoquic_cnx_t**)calloc((size_t)nb_connections, sizeof(picoquic_cnx_t*));
+    quicperf_ctxs = (quicperf_ctx_t**)calloc((size_t)nb_connections, sizeof(quicperf_ctx_t*));
 
     if (cnx_clients == NULL || quicperf_ctxs == NULL) {
         DBG_PRINTF("%s", "Could not allocate the perf loopback connection arrays.\n");
