@@ -1245,29 +1245,11 @@ int quicperf_multipath_settled_test(void)
  * picoquic_prepare_segment, picoquic_prepare_packet_ready -- without the cost or noise of
  * an actual socket, or of the simulated-link machinery used by the rest of this file
  * (queueing, bandwidth/propagation model, NAT rewriting, etc).
- *
- * Packets are never queued or delayed: each call to picoquic_prepare_next_packet_ex is
- * immediately followed by a call to picoquic_incoming_packet_ex feeding the produced bytes
- * back into the very same context, which dispatches them to the right connection by CID.
- * There is no simulated bandwidth or propagation delay -- the two connections just run as
- * fast as the host CPU can prepare, protect and process packets.
- *
- * The QUIC clock still needs to move forward, for pacing, loss timers, etc. When neither
- * connection has anything ready to send, the clock jumps straight to
- * picoquic_get_next_wake_time(). When a packet is handed off, the clock is nudged forward by
- * a single microsecond -- just enough to keep timestamps strictly increasing and RTT samples
- * away from a degenerate zero, without adding any artificial delay of consequence. Using a
- * simulated clock instead of the real one keeps the test fast and repeatable -- it runs at
- * whatever speed the host CPU can prepare and process packets, not at wall-clock speed.
  * 
- * This simplified clock does not play well with classic congestion control algorithms like
- * Reno, Cubic, etc. Instead, we use a simple "fixed window" algorithm to ensure that
- * the congestion window is sufficient to get proper packet trains and
- * thus realistic CPU estimates. 
- *
+ * The cost simulates back to back connections managed by a single QUIC context.
+ * 
  * The client runs a quicperf "batch" scenario asking for a large download (e.g., 10GB),
- * which puts the load on the server's sending path -- the part of the code this test is
- * meant to profile.
+ * so we can look at flame graph and 
  */
 
 #define PERF_LOOPBACK_TEST_RESPONSE_SIZE 1000000
@@ -1354,8 +1336,7 @@ static picoquic_congestion_algorithm_t perf_loopback_fixedcwin_algorithm_struct 
 
 static picoquic_congestion_algorithm_t* perf_loopback_fixedcwin_algorithm = &perf_loopback_fixedcwin_algorithm_struct;
 
-/* Same rotating-bitmask loss idiom as picoquictest_sim_link_testloss in sim_link.c, kept
- * local since perf_loopback bypasses sim_link entirely and that function is file-static. */
+/* Using same bit mask driven loss as most other tests. */
 static int perf_loopback_testloss(uint64_t* loss_mask)
 {
     uint64_t loss_bit = 0;
@@ -1369,14 +1350,47 @@ static int perf_loopback_testloss(uint64_t* loss_mask)
     return (int)loss_bit;
 }
 
-static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, uint64_t* p_wall_time_us, uint64_t* p_nb_packets)
+static int perf_loopback_is_client_cnx(picoquic_cnx_t** cnx_clients, uint64_t nb_connections, picoquic_cnx_t* cnx)
+{
+    int is_client = 0;
+
+    for (uint64_t i = 0; !is_client && i < nb_connections; i++) {
+        is_client = (cnx_clients[i] == cnx);
+    }
+
+    return is_client;
+}
+
+static int perf_loopback_any_active(picoquic_cnx_t** cnx_clients, uint64_t nb_connections)
+{
+    int any_active = 0;
+
+    for (uint64_t i = 0; !any_active && i < nb_connections; i++) {
+        any_active = (picoquic_get_cnx_state(cnx_clients[i]) != picoquic_state_disconnected);
+    }
+
+    return any_active;
+}
+
+static void perf_loopback_delete_connections(quicperf_ctx_t** quicperf_ctxs, uint64_t nb_connections)
+{
+    if (quicperf_ctxs != NULL) {
+        for (uint64_t i = 0; i < nb_connections; i++) {
+            if (quicperf_ctxs[i] != NULL) {
+                quicperf_delete_ctx(quicperf_ctxs[i]);
+            }
+        }
+        free(quicperf_ctxs);
+    }
+}
+
+static int perf_loopback_test_one(uint64_t response_size, uint64_t nb_connections, uint64_t nb_streams, uint64_t loss_mask, uint64_t* p_wall_time_us, uint64_t* p_nb_packets)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
     picoquic_quic_t* quic = NULL;
-    picoquic_cnx_t* cnx_client = NULL;
-    picoquic_cnx_t* cnx_server = NULL; /* discovered as first connection that is not the client connection */
-    quicperf_ctx_t* quicperf_ctx = NULL;
+    picoquic_cnx_t** cnx_clients = NULL;
+    quicperf_ctx_t** quicperf_ctxs = NULL;
     struct sockaddr_in client_addr;
     struct sockaddr_in server_addr;
     char test_server_cert_file[512];
@@ -1384,6 +1398,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
     char test_server_cert_store_file[512];
     char scenario[128];
     uint8_t* send_buffer = NULL;
+    uint64_t bytes_per_stream = response_size / (nb_connections * nb_streams);
     uint64_t nb_packets = 0;
     uint64_t nb_packets_lost = 0;
     uint64_t nb_client_packets = 0;
@@ -1393,6 +1408,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
     uint64_t nb_stall_jumps = 0;
     uint64_t wall_start = 0;
     uint64_t wall_end = 0;
+    uint64_t data_received_total = 0;
     int nb_loops = 0;
 
     if ((ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file),
@@ -1424,8 +1440,8 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
 #endif
     (void)client_addr; /* not otherwise referenced: the addresses only need to be distinct */
 
-    /* A single context plays both the client and the server roles. */
-    quic = picoquic_create(8,
+    /* Support nb_connections client-side contexts plus their auto-created server-side counterparts. */
+    quic = picoquic_create((nb_connections * 2 + 4 > 8) ? (uint32_t)(nb_connections * 2 + 4) : 8,
         test_server_cert_file, test_server_key_file, test_server_cert_store_file,
         QUICPERF_ALPN, quicperf_callback, NULL, NULL, NULL, NULL,
         simulated_time, &simulated_time, NULL, NULL, 0);
@@ -1438,31 +1454,49 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
     /* Set as the default for the context, before creating any connection */
     picoquic_set_default_congestion_algorithm(quic, perf_loopback_fixedcwin_algorithm);
 
+    /* All nb_connections clients start their handshake at once, so we need to loosen the anti-DoS protection. */
+    picoquic_set_max_half_open_retry_threshold(quic, (uint32_t)nb_connections + 16);
+
     /* No qlog, no binlog: this is meant to measure the sending path itself, not I/O. */
     picoquic_set_random_initial(quic, 0);
 
-    (void)snprintf(scenario, sizeof(scenario), "=b1:*1:1000:%" PRIu64 ";", response_size);
+    (void)snprintf(scenario, sizeof(scenario), "=b1:*%" PRIu64 ":1000:%" PRIu64 ";",
+        nb_streams, bytes_per_stream);
 
-    if ((quicperf_ctx = quicperf_create_ctx(scenario, stderr)) == NULL) {
-        DBG_PRINTF("Could not parse scenario <%s>\n", scenario);
+    cnx_clients = (picoquic_cnx_t**)calloc(nb_connections, sizeof(picoquic_cnx_t*));
+    quicperf_ctxs = (quicperf_ctx_t**)calloc(nb_connections, sizeof(quicperf_ctx_t*));
+
+    if (cnx_clients == NULL || quicperf_ctxs == NULL) {
+        DBG_PRINTF("%s", "Could not allocate the perf loopback connection arrays.\n");
+        free(cnx_clients);
+        perf_loopback_delete_connections(quicperf_ctxs, nb_connections);
         picoquic_free(quic);
         return -1;
     }
 
-    cnx_client = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
-        (struct sockaddr*)&server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, QUICPERF_ALPN, 1);
-
-    if (cnx_client == NULL) {
-        DBG_PRINTF("%s", "Could not create the perf loopback client connection.\n");
-        quicperf_delete_ctx(quicperf_ctx);
-        picoquic_free(quic);
-        return -1;
+    for (uint64_t i = 0; ret == 0 && i < nb_connections; i++) {
+        if ((quicperf_ctxs[i] = quicperf_create_ctx(scenario, stderr)) == NULL) {
+            DBG_PRINTF("Could not parse scenario <%s>\n", scenario);
+            ret = -1;
+        }
+        else if ((cnx_clients[i] = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&server_addr, simulated_time, 0, PICOQUIC_TEST_SNI, QUICPERF_ALPN, 1)) == NULL) {
+            DBG_PRINTF("Could not create perf loopback client connection %" PRIu64 "\n", i);
+            ret = -1;
+        }
+        else {
+            picoquic_set_callback(cnx_clients[i], quicperf_callback, quicperf_ctxs[i]);
+            if ((ret = picoquic_start_client_cnx(cnx_clients[i])) != 0) {
+                DBG_PRINTF("Could not start client connection %" PRIu64 ", ret = %d\n", i, ret);
+            }
+        }
     }
 
-    picoquic_set_callback(cnx_client, quicperf_callback, quicperf_ctx);
-
-    if ((ret = picoquic_start_client_cnx(cnx_client)) != 0) {
-        DBG_PRINTF("Could not start the client connection, ret = %d\n", ret);
+    if (ret != 0) {
+        free(cnx_clients);
+        perf_loopback_delete_connections(quicperf_ctxs, nb_connections);
+        picoquic_free(quic);
+        return -1;
     }
 
     /* Allocated on the heap rather than kept as a stack array. */
@@ -1470,7 +1504,8 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
 
     if (send_buffer == NULL) {
         DBG_PRINTF("%s", "Could not allocate the perf loopback send buffer.\n");
-        quicperf_delete_ctx(quicperf_ctx);
+        free(cnx_clients);
+        perf_loopback_delete_connections(quicperf_ctxs, nb_connections);
         picoquic_free(quic);
         return -1;
     }
@@ -1479,7 +1514,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
 
     while (ret == 0 && nb_loops < PERF_LOOPBACK_MAX_LOOPS &&
         simulated_time < PERF_LOOPBACK_MAX_TIME &&
-        picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
+        perf_loopback_any_active(cnx_clients, nb_connections)) {
         struct sockaddr_storage addr_to;
         struct sockaddr_storage addr_from;
         int if_index = 0;
@@ -1499,14 +1534,11 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
             break;
         }
 
-        if (last_cnx != NULL && last_cnx != cnx_client && cnx_server == NULL) {
-            cnx_server = last_cnx;
-        }
-
         if (send_length > 0) {
             size_t segment_size = (send_msg_size == 0 || send_msg_size > send_length) ? send_length : send_msg_size;
             size_t sent_so_far = 0;
             uint8_t* segment_bytes = send_buffer;
+            int is_client_packet = perf_loopback_is_client_cnx(cnx_clients, nb_connections, last_cnx);
 
             nb_batches++;
 
@@ -1518,21 +1550,19 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
 
                 nb_packets++;
                 nb_bytes += this_length;
-                if (last_cnx == cnx_client) {
+                if (is_client_packet) {
                     nb_client_packets++;
                 }
                 else {
                     nb_server_packets++;
                 }
 
-                /* Deliver the packet right away: no queue, no delay. Just nudge the
-                 * clock by one microsecond so timestamps stay strictly increasing and
-                 * RTT samples never land on exactly zero. */
+                /* Deliver the packet right away: no queue, no delay, just a 1 microsecond advance
+                 * of the simulated clock. */
                 simulated_time += 1;
 
                 if (perf_loopback_testloss(&loss_mask)) {
-                    /* Simulated loss: the packet was "sent" (already counted above,
-                     * same as a real dropped packet would be) but never delivered. */
+                    /* Simulated loss: do not deliver the packet. */
                     nb_packets_lost++;
                 }
                 else {
@@ -1561,29 +1591,35 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
         }
 
         /* Safety net in case a future scenario type does not self-close like this one does. */
-        if (ret == 0 && quicperf_ctx->nb_open_streams == 0 &&
-            picoquic_get_cnx_state(cnx_client) == picoquic_state_ready &&
-            picoquic_is_cnx_backlog_empty(cnx_client)) {
-            ret = picoquic_close(cnx_client, 0);
+        for (uint64_t i = 0; ret == 0 && i < nb_connections; i++) {
+            if (quicperf_ctxs[i]->nb_open_streams == 0 &&
+                picoquic_get_cnx_state(cnx_clients[i]) == picoquic_state_ready &&
+                picoquic_is_cnx_backlog_empty(cnx_clients[i])) {
+                ret = picoquic_close(cnx_clients[i], 0);
+            }
         }
     }
 
     wall_end = picoquic_current_time();
 
-    if (ret == 0 && picoquic_get_cnx_state(cnx_client) != picoquic_state_disconnected) {
+    if (ret == 0 && perf_loopback_any_active(cnx_clients, nb_connections)) {
         DBG_PRINTF("%s", "Perf loopback test did not reach a clean disconnect.\n");
         ret = -1;
     }
 
-    if (ret == 0 && quicperf_ctx->data_received < response_size) {
-        DBG_PRINTF("Received only %" PRIu64 " of %" PRIu64 " requested bytes\n",
-            quicperf_ctx->data_received, response_size);
-        ret = -1;
+    /* Each connection should deliver bytes_per_stream * nb_streams; integer division earlier may have dropped a remainder, so that -- not response_size -- is the achievable floor per connection. */
+    for (uint64_t i = 0; i < nb_connections; i++) {
+        data_received_total += quicperf_ctxs[i]->data_received;
+        if (ret == 0 && quicperf_ctxs[i]->data_received < bytes_per_stream * nb_streams) {
+            DBG_PRINTF("Connection %" PRIu64 " received only %" PRIu64 " of %" PRIu64 " requested bytes\n",
+                i, quicperf_ctxs[i]->data_received, bytes_per_stream * nb_streams);
+            ret = -1;
+        }
     }
 
     fprintf(stdout, "Perf loopback: %" PRIu64 " app bytes, %" PRIu64 " wire bytes, %" PRIu64
         " packets (%" PRIu64 " client, %" PRIu64 " server, %" PRIu64 " lost), %" PRIu64 " batches, %" PRIu64 " stall jumps, in %" PRIu64 " us.\n",
-        quicperf_ctx->data_received, nb_bytes, nb_packets, nb_client_packets, nb_server_packets,
+        data_received_total, nb_bytes, nb_packets, nb_client_packets, nb_server_packets,
         nb_packets_lost, nb_batches, nb_stall_jumps, wall_end - wall_start);
 
     if (wall_end > wall_start) {
@@ -1593,7 +1629,7 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
         double packets_per_batch = (nb_batches == 0) ? 0.0 : (double)nb_packets / (double)nb_batches;
 
         fprintf(stdout, "Perf loopback: %.3f seconds, %.1f MB/s, %.0f packets/s, %.3f us/packet, %.2f packets/batch.\n",
-            seconds, ((double)nb_bytes / (1024.0 * 1024.0)) / seconds,
+            seconds, ((double)data_received_total / 1000000.0) / seconds,
             (double)nb_packets / seconds, us_per_packet, packets_per_batch);
     }
 
@@ -1605,7 +1641,8 @@ static int perf_loopback_test_one(uint64_t response_size, uint64_t loss_mask, ui
     }
 
     free(send_buffer);
-    quicperf_delete_ctx(quicperf_ctx);
+    free(cnx_clients);
+    perf_loopback_delete_connections(quicperf_ctxs, nb_connections);
     picoquic_free(quic);
 
     return ret;
@@ -1616,17 +1653,41 @@ int perf_loopback_test(void)
     uint64_t wall_time_us = 0;
     uint64_t nb_packets = 0;
 
-    return perf_loopback_test_one(picohttp_perf_loopback_size, 0, &wall_time_us, &nb_packets);
+    return perf_loopback_test_one(picohttp_perf_loopback_size, 1, 1, 0, &wall_time_us, &nb_packets);
 }
 
-/* Same scenario, but with a single bit set in the rotating loss mask: one packet in 64
- * (~1.6%) is dropped in each direction, deterministically and reproducibly, to exercise
- * the sack-list code paths that perf_loopback's loss-free run never reaches -- multiple
- * concurrent ranges, merges, and duplicate-after-retransmission checks. */
+/* Same scenario, but dropping one packet in 64 in each direction, to exercise
+ * the sack-list code paths that perf_loopback's loss-free run never reaches. */
 int perf_loopback_loss_test(void)
 {
     uint64_t wall_time_us = 0;
     uint64_t nb_packets = 0;
 
-    return perf_loopback_test_one(picohttp_perf_loopback_size, 1, &wall_time_us, &nb_packets);
+    return perf_loopback_test_one(picohttp_perf_loopback_size, 1, 1, 1, &wall_time_us, &nb_packets);
+}
+
+#define PERF_LOOPBACK_MULTISTREAM_NB_STREAMS 25
+
+/* Same scenario as perf_loopback, but split across many concurrent streams instead of one,
+ * to handling of streams under real concurrency. */
+int perf_loopback_multistream_test(void)
+{
+    uint64_t wall_time_us = 0;
+    uint64_t nb_packets = 0;
+
+    return perf_loopback_test_one(picohttp_perf_loopback_size, 1, PERF_LOOPBACK_MULTISTREAM_NB_STREAMS, 0, &wall_time_us, &nb_packets);
+}
+
+#define PERF_LOOPBACK_MULTICONN_NB_CONNECTIONS 200
+#define PERF_LOOPBACK_MULTICONN_NB_STREAMS 25
+
+/* Same idea as perf_loopback_multistream, but with many concurrent connections instead of just one,
+ * handling of multiple connections under load. */
+int perf_loopback_multiconn_test(void)
+{
+    uint64_t wall_time_us = 0;
+    uint64_t nb_packets = 0;
+
+    return perf_loopback_test_one(picohttp_perf_loopback_size,
+        PERF_LOOPBACK_MULTICONN_NB_CONNECTIONS, PERF_LOOPBACK_MULTICONN_NB_STREAMS, 0, &wall_time_us, &nb_packets);
 }

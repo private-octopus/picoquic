@@ -714,6 +714,8 @@ int quicperf_multipath_race_delayed_test(void);
 int quicperf_multipath_settled_test(void);
 int perf_loopback_test(void);
 int perf_loopback_loss_test(void);
+int perf_loopback_multistream_test(void);
+int perf_loopback_multiconn_test(void);
 int cplusplustest(void);
 int error_name_test(void);
 
