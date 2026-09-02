@@ -694,18 +694,21 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
         if (ret == 0) {
             size_t max_cnx4 = 0;
+            size_t max_cnx_by_id = 0;
             if (max_nb_connections == 0) {
                 max_nb_connections = 1;
             }
 
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
+            /* use a factor 4 to reduce risk of hash collisions. */
             max_cnx4 = 4 * (size_t)max_nb_connections;
-
-
+            /* Each connection can hold up to PICOQUIC_NB_TUPLE_TARGET local CIDs */
+            max_cnx_by_id = max_cnx4 * PICOQUIC_NB_TUPLE_TARGET;
 
             if (max_cnx4 < (size_t)max_nb_connections ||
-                (quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+                max_cnx_by_id < max_cnx4 ||
+                (quic->table_cnx_by_id = picohash_create_ex(max_cnx_by_id,
                 picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
                     picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item, quic->hash_seed)) == NULL ||
@@ -1398,7 +1401,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp)
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_frame_size = 0;
     tp->ack_delay_exponent = 3;
-    tp->active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
+    tp->active_connection_id_limit = PICOQUIC_NB_TUPLE_TARGET;
     tp->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;

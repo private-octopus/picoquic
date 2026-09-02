@@ -2331,7 +2331,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         /* Push new CID if needed */
         while (
             local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
-            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
+            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
             uint8_t* bytes0 = bytes;
             picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
 

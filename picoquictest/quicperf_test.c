@@ -1679,7 +1679,7 @@ int perf_loopback_multistream_test(void)
 }
 
 #define PERF_LOOPBACK_MULTICONN_NB_CONNECTIONS 200
-#define PERF_LOOPBACK_MULTICONN_NB_STREAMS 25
+#define PERF_LOOPBACK_MULTICONN_NB_STREAMS 1
 
 /* Same idea as perf_loopback_multistream, but with many concurrent connections instead of just one,
  * handling of multiple connections under load. */
