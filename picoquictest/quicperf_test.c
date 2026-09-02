@@ -1666,7 +1666,7 @@ int perf_loopback_loss_test(void)
     return perf_loopback_test_one(picohttp_perf_loopback_size, 1, 1, 1, &wall_time_us, &nb_packets);
 }
 
-#define PERF_LOOPBACK_MULTISTREAM_NB_STREAMS 25
+#define PERF_LOOPBACK_MULTISTREAM_NB_STREAMS 500
 
 /* Same scenario as perf_loopback, but split across many concurrent streams instead of one,
  * to handling of streams under real concurrency. */
