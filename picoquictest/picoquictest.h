@@ -50,6 +50,7 @@ int picolog_basic_test(void);
 int bytestream_test(void);
 int create_cnx_test(void);
 int create_quic_test(void);
+int stateless_packet_queue_limit_test(void);
 int parseheadertest(void);
 int incoming_initial_test(void);
 int header_length_test(void);

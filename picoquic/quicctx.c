@@ -1223,14 +1223,23 @@ void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp)
 
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp)
 {
+    int nb_pending = 0;
     picoquic_stateless_packet_t** pnext = &quic->pending_stateless_packet;
 
     while ((*pnext) != NULL) {
+        nb_pending++;
         pnext = &(*pnext)->next_packet;
     }
 
-    *pnext = sp;
-    sp->next_packet = NULL;
+    if (nb_pending >= PICOQUIC_MAX_PENDING_STATELESS_PACKETS) {
+        /* A peer triggering stateless packets (version negotiation, unexpected CID, retry,
+         * busy, immediate close) faster than the queue drains must not grow it unbounded. */
+        picoquic_delete_stateless_packet(sp);
+    }
+    else {
+        *pnext = sp;
+        sp->next_packet = NULL;
+    }
 }
 
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic)

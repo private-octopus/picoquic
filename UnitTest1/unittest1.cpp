@@ -243,6 +243,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stateless_packet_queue_limit)
+        {
+            int ret = stateless_packet_queue_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(parse_header)
         {
             int ret = parseheadertest();

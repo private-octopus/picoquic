@@ -332,3 +332,51 @@ int create_quic_test(void)
 
     return ret;
 }
+
+/* Check that picoquic_queue_stateless_packet does not let its pending queue grow
+ * larger than PICOQUIC_MAX_PENDING_STATELESS_PACKETS, even if the endpoint
+ * receives rapid succession of packets requiring a stateless reply. */
+int stateless_packet_queue_limit_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+    const int nb_packets = 2 * PICOQUIC_MAX_PENDING_STATELESS_PACKETS;
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        for (int i = 0; ret == 0 && i < nb_packets; i++) {
+            picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
+
+            if (sp == NULL) {
+                ret = -1;
+            }
+            else {
+                sp->length = 0;
+                picoquic_queue_stateless_packet(quic, sp);
+            }
+        }
+
+        if (ret == 0) {
+            int nb_queued = 0;
+            picoquic_stateless_packet_t* sp = quic->pending_stateless_packet;
+
+            while (sp != NULL) {
+                nb_queued++;
+                sp = sp->next_packet;
+            }
+
+            if (nb_queued != PICOQUIC_MAX_PENDING_STATELESS_PACKETS) {
+                DBG_PRINTF("Queued %d packets, expected %d after the cap",
+                    nb_queued, PICOQUIC_MAX_PENDING_STATELESS_PACKETS);
+                ret = -1;
+            }
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}

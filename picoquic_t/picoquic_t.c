@@ -140,6 +140,7 @@ static const picoquic_test_def_t test_table[] = {
     { "splay", splay_test },
     { "create_cnx", create_cnx_test },
     { "create_quic", create_quic_test },
+    { "stateless_packet_queue_limit", stateless_packet_queue_limit_test },
     { "parseheader", parseheadertest },
     { "incoming_initial", incoming_initial_test },
     { "header_length", header_length_test },

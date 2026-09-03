@@ -97,6 +97,8 @@ extern "C" {
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
 #define PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD 64
 
+#define PICOQUIC_MAX_PENDING_STATELESS_PACKETS 32 /* stateless packets drain one per send cycle, so a flood of triggers must not queue unbounded */
+
 #define PICOQUIC_PN_RANDOM_MIN 0xffff
 #define PICOQUIC_PN_RANDOM_RANGE 0x10000
 
