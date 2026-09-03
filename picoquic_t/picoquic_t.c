@@ -639,6 +639,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_socket0_error", multipath_socket0_error_test },
     { "multipath_abandon", multipath_abandon_test },
     { "multipath_abandon_last", multipath_abandon_last_test },
+    { "multipath_abandon_last_by_peer", multipath_abandon_last_by_peer_test },
+    { "multipath_last_path_validation_fails", multipath_last_path_validation_fails_test },
     { "multipath_back0", multipath_back0_test },
     { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },

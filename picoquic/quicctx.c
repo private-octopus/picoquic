@@ -2658,7 +2658,27 @@ int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_i
 }
 
 
-int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
+/* Count the paths that are not already marked for demotion. A path that
+ * was abandoned earlier is still counted in cnx->nb_paths until its
+ * demotion timer expires and picoquic_delete_abandoned_paths() physically
+ * removes it, so callers that need to know whether a path can safely be
+ * demoted -- without eventually leaving the connection with none -- must
+ * use this count rather than cnx->nb_paths.
+ */
+int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx)
+{
+    int nb_active = 0;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (!cnx->path[i]->path_is_demoted) {
+            nb_active++;
+        }
+    }
+
+    return nb_active;
+}
+
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint64_t reason, uint64_t current_time)
 {
     int ret = 0;
@@ -2679,20 +2699,11 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         if (path_index >= 0) {
             if (!cnx->path[path_index]->path_is_demoted) {
                 /* Check whether this is the last path not already marked for
-                 * demotion. A path that was abandoned earlier is still counted
-                 * in nb_paths until its demotion timer expires, so checking
-                 * nb_paths alone is not enough: it would let an application
-                 * abandon every path in turn, eventually leaving none.
+                 * demotion -- checking nb_paths alone is not enough: it would
+                 * let an application abandon every path in turn, eventually
+                 * leaving none.
                  */
-                int nb_active = 0;
-
-                for (int i = 0; i < cnx->nb_paths; i++) {
-                    if (!cnx->path[i]->path_is_demoted) {
-                        nb_active++;
-                    }
-                }
-
-                if (nb_active <= 1) {
+                if (picoquic_nb_paths_not_demoted(cnx) <= 1) {
                     /* That would mean leaving no path available. Don't do
                      * that: the application should close the connection
                      * instead, or probe a new path before abandoning this one.
