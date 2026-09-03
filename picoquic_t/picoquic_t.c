@@ -171,6 +171,8 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_range", ackrange_test },
     { "ack_disorder", ack_disorder_test },
     { "ack_horizon", ack_horizon_test },
+    { "sack_list_unbounded_growth", sack_list_unbounded_growth_test },
+    { "sack_list_stream_bytes_unbounded", sack_list_stream_bytes_unbounded_test },
     { "ack_of_ack", ack_of_ack_test },
     { "ackfrq_basic", ackfrq_basic_test },
     { "ackfrq_short", ackfrq_short_test },

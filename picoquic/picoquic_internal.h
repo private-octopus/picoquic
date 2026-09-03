@@ -117,6 +117,8 @@ extern "C" {
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
 
+#define PICOQUIC_SACK_LIST_PN_MAX_RANGES 128 /* a few ACK frames' worth: each frame reports at most 32 ranges */
+
 #define PICOQUIC_DEFAULT_HOLE_PERIOD 256
 
 #define PICOQUIC_MAX_LOG_FUNCTIONS 3
@@ -711,11 +713,18 @@ typedef struct st_picoquic_sack_range_count_t {
     int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
 } picoquic_sack_range_count_t;
 
+/* Tells picoquic_update_sack_list whether it may cap and evict ranges (packet numbers) or must not (stream bytes, see PICOQUIC_SACK_LIST_PN_MAX_RANGES). */
+typedef enum {
+    picoquic_sack_list_packet_numbers = 0,
+    picoquic_sack_list_stream_bytes = 1
+} picoquic_sack_list_kind_enum;
+
 typedef struct st_picoquic_sack_list_t {
     picosplay_tree_t ack_tree;
     uint64_t ack_horizon;
     int64_t horizon_delay;
     picoquic_sack_range_count_t rc[2];
+    picoquic_sack_list_kind_enum kind;
 } picoquic_sack_list_t;
 
 /*
@@ -1862,7 +1871,7 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack, picoquic_sack_list_kind_enum kind);
 
 int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
     uint64_t range_min, uint64_t range_max, uint64_t current_time);

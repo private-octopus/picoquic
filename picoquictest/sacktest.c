@@ -703,7 +703,7 @@ int ackrange_test(void)
     int ret = 0;
     picoquic_sack_list_t sack0;
 
-    picoquic_sack_list_init(&sack0);
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
 
     for (size_t i = 0; ret == 0 && i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
@@ -819,7 +819,7 @@ int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double r
         ret = -1;
     } 
     else {
-        picoquic_sack_list_init(&sack0);
+        picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
     }
 
     sack0.horizon_delay = horizon_delay;
@@ -919,5 +919,67 @@ int ack_disorder_test(void)
 int ack_horizon_test(void)
 {
     int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 1000000, 196.0);
+    return ret;
+}
+
+/* Feed non-contiguous arrivals into a fresh sack list of the given kind, no ack-of-ack in between, and report the resulting range count. */
+static int sack_list_feed_gaps(picoquic_sack_list_kind_enum kind, uint64_t nb_packets, size_t* nb_ranges_out)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+
+    picoquic_sack_list_init(&sack0, kind);
+
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        /* Only odd packet numbers arrive, so every packet opens a fresh gap */
+        uint64_t pn = 2 * i + 1;
+
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        *nb_ranges_out = picoquic_sack_list_size(&sack0);
+    }
+
+    picoquic_sack_list_free(&sack0);
+
+    return ret;
+}
+
+/* A peer sending only non-contiguous packet numbers, never acking anything, would grow the reception SACK list forever; check the cap holds instead. */
+int sack_list_unbounded_growth_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_packet_numbers, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != PICOQUIC_SACK_LIST_PN_MAX_RANGES) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %d ranges, found %zu",
+            nb_packets, PICOQUIC_SACK_LIST_PN_MAX_RANGES, nb_ranges);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The packet-number cap must not apply to stream-byte ranges (see the kind enum); check that a stream-byte list still grows unbounded. */
+int sack_list_stream_bytes_unbounded_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_stream_bytes, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != nb_packets) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %" PRIu64 " ranges (no cap for stream bytes), found %zu",
+            nb_packets, nb_packets, nb_ranges);
+        ret = -1;
+    }
+
     return ret;
 }

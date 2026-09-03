@@ -456,6 +456,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sack_list_unbounded_growth)
+        {
+            int ret = sack_list_unbounded_growth_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sack_list_stream_bytes_unbounded)
+        {
+            int ret = sack_list_stream_bytes_unbounded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
