@@ -43,7 +43,7 @@ static void qlog_json_boolean(FILE* f, const char* key, int value) {
 /* Helper: write a binary string parameter */
 const uint8_t * qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l)
 {
-    int error_found = (bytes + l > bytes_max);
+    int error_found = (l > (uint64_t)(bytes_max - bytes));
 
     fprintf(f, "\"");
     if (error_found) {
@@ -333,7 +333,7 @@ const uint8_t* qlog_frame_crypto_hs(FILE* f, const uint8_t* bytes, const uint8_t
         qlog_json_uint(f, "offset", offset);
         fprintf(f, ", ");
         qlog_json_uint(f, "length", length);
-        if (bytes + length <= bytes_max) {
+        if (length <= (uint64_t)(bytes_max - bytes)) {
             bytes += length;
         }
         else {
@@ -373,7 +373,7 @@ const uint8_t* qlog_frame_datagram(FILE* f, const uint8_t* bytes, const uint8_t*
     if (has_length) {
         uint64_t length;
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
-            bytes + length > bytes_max) {
+            length > (uint64_t)(bytes_max - bytes)) {
             return NULL;
         }
         fprintf(f, ", ");
