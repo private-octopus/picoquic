@@ -632,7 +632,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_initial_max_data:
                     cnx->remote_parameters.initial_max_data =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+                    /* A server must not reduce this limit below what 0-RTT already assumed. */
+                    if (cnx->maxdata_remote < cnx->remote_parameters.initial_max_data) {
+                        cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+                    }
                     break;
                 case picoquic_tp_initial_max_streams_bidi: {
                     uint64_t old_limit = cnx->max_streams_bidir_remote;

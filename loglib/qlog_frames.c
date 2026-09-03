@@ -453,7 +453,7 @@ const uint8_t* qlog_frame_bdp(FILE* f, const uint8_t* bytes, const uint8_t* byte
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &recon_bytes_in_flight)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &recon_min_rtt)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &saved_ip_length)) == NULL ||
-        (saved_ip_length != 4 && saved_ip_length != 4) ||
+        (saved_ip_length != 4 && saved_ip_length != 16) ||
         (bytes + saved_ip_length > bytes_max)) {
         return NULL;
     }
