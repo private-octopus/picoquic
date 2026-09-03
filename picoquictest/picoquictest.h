@@ -147,6 +147,7 @@ int spurious_retransmit_test(void);
 int pn_ctr_test(void);
 int cleartext_pn_enc_test(void);
 int pn_enc_1rtt_test(void);
+int not_decrypted_stash_test(void);
 int tls_zero_share_test(void);
 int transport_param_log_test(void);
 int set_verify_certificate_callback_test(void);

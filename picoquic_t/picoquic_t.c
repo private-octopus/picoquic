@@ -188,6 +188,7 @@ static const picoquic_test_def_t test_table[] = {
     { "dtn_silence", dtn_silence_test },
     { "dtn_twenty", dtn_twenty_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
+    { "not_decrypted_stash", not_decrypted_stash_test },
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },

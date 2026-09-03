@@ -526,6 +526,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(not_decrypted_stash)
+        {
+            int ret = not_decrypted_stash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(new_cnxid_stash)
         {
             int ret = cnxid_stash_test();
