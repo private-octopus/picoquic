@@ -2523,7 +2523,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
             size_t length = stream->send_queue->length - (size_t)stream->send_queue->offset;
             uint8_t* bytes_l;
 
-            if (bytes + length > bytes_max) {
+            if (length > (uint64_t)(bytes_max - bytes)) {
                 length = bytes_max - bytes;
             }
 
@@ -5159,7 +5159,7 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
     if (bytes != NULL) {
         if (has_length) {
             if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
-                bytes + length > bytes_max ||
+                length > (uint64_t)(bytes_max - bytes) ||
                 length > cnx->local_parameters.max_datagram_frame_size) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
                     frame_id);
