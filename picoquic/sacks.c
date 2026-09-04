@@ -227,11 +227,24 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
                 if (sack_list->kind == picoquic_sack_list_packet_numbers &&
                     picoquic_sack_list_size(sack_list) >= PICOQUIC_SACK_LIST_PN_MAX_RANGES) {
                     picoquic_sack_item_t* oldest = picoquic_sack_first_item(sack_list);
-                    sack_list->ack_horizon = oldest->end_of_sack_range + 1;
-                    picoquic_sack_delete_item(sack_list, oldest);
+                    if (pn64_min > oldest->end_of_sack_range) {
+                        sack_list->ack_horizon = oldest->end_of_sack_range + 1;
+                        picoquic_sack_delete_item(sack_list, oldest);
+                        /* create a new item in the list */
+                        ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                    }
+                    else {
+                        /* This range is reordered below the oldest retained range: evicting
+                         * oldest to make room would move the horizon backward, past this new
+                         * range, and wrongly mark it (and any gap above it) as already
+                         * received. Leave it untracked instead. */
+                        ret = 0;
+                    }
                 }
-                /* create a new item in the list */
-                ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                else {
+                    /* create a new item in the list */
+                    ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                }
                 /* set previous to null to bypass the next block */
                 previous = NULL;
             }

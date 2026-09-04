@@ -477,6 +477,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sack_list_horizon_backward)
+        {
+            int ret = sack_list_horizon_backward_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();

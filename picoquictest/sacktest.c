@@ -983,3 +983,55 @@ int sack_list_stream_bytes_unbounded_test(void)
 
     return ret;
 }
+
+/* picoquic_is_pn_already_received treats anything below ack_horizon as already seen, so the
+ * cap's eviction must never let ack_horizon move past the lowest range still retained -- else
+ * genuinely new, untracked packet numbers get silently classified as duplicates. Verify that. */
+int sack_list_horizon_backward_test(void)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+    const uint64_t nb_packets = PICOQUIC_SACK_LIST_PN_MAX_RANGES;
+    const uint64_t base_pn = 10000;
+    const uint64_t low_pn = 5;
+
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
+
+    /* Fill the list to exactly the cap with distinct, non-contiguous, increasing ranges. */
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        uint64_t pn = base_pn + 2 * i;
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_sack_list_size(&sack0) != nb_packets) {
+        DBG_PRINTF("Expected %" PRIu64 " ranges after filling to the cap, found %zu",
+            nb_packets, picoquic_sack_list_size(&sack0));
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        picoquic_update_sack_list(&sack0, low_pn, low_pn, nb_packets) != 0) {
+        DBG_PRINTF("%s", "Unexpected error recording the reordered low packet number");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_sack_item_t* lowest = picoquic_sack_first_item(&sack0);
+
+        if (lowest == NULL) {
+            DBG_PRINTF("%s", "Sack list unexpectedly empty");
+            ret = -1;
+        }
+        else if (sack0.ack_horizon > lowest->start_of_sack_range) {
+            DBG_PRINTF("ack_horizon %" PRIu64 " is past the lowest retained range start %" PRIu64,
+                sack0.ack_horizon, lowest->start_of_sack_range);
+            ret = -1;
+        }
+    }
+
+    picoquic_sack_list_free(&sack0);
+
+    return ret;
+}
