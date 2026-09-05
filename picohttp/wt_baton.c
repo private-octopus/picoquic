@@ -389,7 +389,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             if (receive_id == SIZE_MAX) {
                 if (receive_available == SIZE_MAX) {
                     /* unexpected incoming stream */
-                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64 ", expected %" PRIu64,
+                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64,
                         stream_ctx->stream_id);
                     ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Data on wrong stream!");
                 }
@@ -563,7 +563,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             const uint8_t* queries = path + query_offset;
             size_t queries_length = path_length - query_offset;
 
-            if (h3zero_query_parameter_number(queries, queries_length, "version", 5, &baton_ctx->version, 0) != 0 ||
+            if (h3zero_query_parameter_number(queries, queries_length, "version", 7, &baton_ctx->version, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "baton", 5, &baton_ctx->initial_baton, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "count", 5, &baton_ctx->nb_lanes, 1) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "inject", 6, &baton_ctx->inject_error, 0) != 0) {
@@ -621,14 +621,13 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
             if (ret != 0) {
-                if (stream_ctx != NULL) {
-                    stream_ctx->path_callback = NULL;
-                    stream_ctx->path_callback_ctx = NULL;
-                    if (h3_ctx != NULL) {
-                        h3zero_delete_stream_prefix(cnx, h3_ctx, stream_ctx->stream_id);
-                    }
+                /* wt_baton_ctx_init, above, may already have declared the
+                 * control stream prefix with baton_ctx as its context. If
+                 * so, unwinding that registration frees baton_ctx via our
+                 * own deregister callback -- see picowt_abort_registration. */
+                if (picowt_abort_registration(cnx, h3_ctx, stream_ctx)) {
+                    free(baton_ctx);
                 }
-                free(baton_ctx);
             }
         }
         return ret;

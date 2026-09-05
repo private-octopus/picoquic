@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.50.2
+        VERSION 1.1.52.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -121,6 +121,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/quicctx.c
     picoquic/register_all_cc_algorithms.c
     picoquic/sacks.c
+    picoquic/scone.c
     picoquic/sender.c
     picoquic/sim_link.c
     picoquic/siphash.c
@@ -234,6 +235,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
     picoquictest/satellite_test.c
+    picoquictest/scone_test.c
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
@@ -384,6 +386,7 @@ endif()
 
 if(WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
+    set(PICOQUIC_OPENSSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
     message(STATUS "root: ${OPENSSL_ROOT_DIR}")
     message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
     message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
@@ -392,6 +395,7 @@ if(WITH_OPENSSL)
     message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 else()
     message(STATUS "Building without picotls-openssl")
+    set(PICOQUIC_OPENSSL_INCLUDE_DIRS "")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
@@ -488,7 +492,7 @@ message(STATUS "mbedtls/include: ${MBEDTLS_INCLUDE_DIRS}")
 target_include_directories(picoquic-core
     PRIVATE
         ${PTLS_INCLUDE_DIRS}
-        ${OPENSSL_INCLUDE_DIR}
+        ${PICOQUIC_OPENSSL_INCLUDE_DIRS}
         ${PICOQUIC_CRYPTO_EXTRA_INCLUDE_DIRS}
     PUBLIC
         $<BUILD_INTERFACE:${MBEDTLS_INCLUDE_DIRS}>
@@ -547,7 +551,7 @@ if (BUILD_HTTP)
     target_include_directories(picohttp-core
         PRIVATE
             ${PTLS_INCLUDE_DIRS}
-            ${OPENSSL_INCLUDE_DIR}
+            ${PICOQUIC_OPENSSL_INCLUDE_DIRS}
             ${MBEDTLS_INCLUDE_DIRS}
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>

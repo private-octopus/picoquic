@@ -703,7 +703,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
         /* Read type and length */
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max,&extension_type)) == NULL ||
             (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &extension_length)) == NULL ||
-            bytes + extension_length > bytes_max) {
+            extension_length > (uint64_t)(bytes_max - bytes)) {
             /* Write a meaningful error report */
             uint64_t l = (uint64_t)(bytes_max - current_bytes);
             fprintf(f, "\"Parameter_coding_error\": ");
@@ -746,6 +746,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_disable_migration:
             case picoquic_tp_enable_time_stamp:
             case picoquic_tp_grease_quic_bit:
+            case picoquic_tp_is_scone_supported:
                 qlog_fns_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), bytes, extension_length);
                 break;
             case picoquic_tp_version_negotiation:
@@ -1053,9 +1054,10 @@ int picoquic_set_qlog(picoquic_quic_t* quic, char const* qlog_dir)
     else {
         void* params = picoquic_get_log_params(quic, &qlog_fns);
         if (params != NULL) {
-            free(params);
+            free(dup_dir);
+            ret = -1;
         }
-        if ((ret = picoquic_register_log_functions(quic, &qlog_fns, dup_dir)) != 0) {
+        else if ((ret = picoquic_register_log_functions(quic, &qlog_fns, dup_dir)) != 0) {
             free(dup_dir);
         }
     }

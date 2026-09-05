@@ -648,8 +648,8 @@ static void picoquic_set_wake_up_from_packet_retransmit(
 {
     uint64_t next_retransmit_time = *next_wake_time;
     int is_timer_expired = 0;
-    int is_probably_lost = picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time,
-        &is_timer_expired);
+    int is_probably_lost = old_p->send_path == NULL ||
+        picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time, &is_timer_expired);
 
     if (is_probably_lost || is_timer_expired) {
         *next_wake_time = current_time;

@@ -186,7 +186,7 @@ static int ack_of_ack_do_one_test(test_ack_of_ack_t const* sample)
     uint8_t ack[1024];
     size_t consumed;
 
-    picoquic_sack_list_init(&sack_list);
+    picoquic_sack_list_init(&sack_list, picoquic_sack_list_packet_numbers);
 
     if (ret == 0) {
         ret = fill_test_sack_list(&sack_list, sample->initial, sample->nb_initial);

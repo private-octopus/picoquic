@@ -100,7 +100,7 @@ static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* pat
             picoquic_get_ip_addr((struct sockaddr*)&path_x->first_tuple->peer_addr, &ip_addr, &ip_addr_length);
 
             if (ip_addr_length == cnx->seed_ip_addr_length &&
-                memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                (ip_addr_length == 0 || memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0)) {
                 picoquic_per_ack_state_t ack_state = { 0 };
                 ack_state.pc = picoquic_packet_context_application; /* Arbitrary! */
                 ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;

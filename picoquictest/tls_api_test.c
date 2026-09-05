@@ -746,6 +746,9 @@ int test_api_callback(picoquic_cnx_t* cnx,
         }
         return ret;
     }
+    else if (fin_or_event == picoquic_callback_scone_indication) {
+        return 0;
+    }
 
     if (bytes != NULL) {
         if (cb_ctx->client_mode) {
@@ -1778,7 +1781,7 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                             picoquic_store_addr(&packet->addr_from, (struct sockaddr*) & addr_from);
                             picoquic_store_addr(&packet->addr_to, (struct sockaddr*) & addr_to);
                             packet->ecn_mark = test_ctx->packet_ecn_default;
-#if 1
+
                             if (test_ctx->ecn_support) {
                                 if (next_action == sim_action_server_departure) {
                                     if (test_ctx->qserver->default_congestion_alg != NULL) {
@@ -1791,12 +1794,13 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                                     }
                                 }
                             }
-#endif
+
                             packet->length = send_length - size_sent;
                             if (packet->length > segment_size) {
                                 packet->length = segment_size;
                             }
                             memcpy(packet->bytes, send_buffer, packet->length);
+
                             picoquictest_sim_link_submit(target_link, packet, *simulated_time);
                             size_sent += segment_size;
                             send_buffer += segment_size;
@@ -2288,6 +2292,43 @@ static int tls_api_test_with_loss(uint64_t* loss_mask, uint32_t proposed_version
 int tls_api_test(void)
 {
     return tls_api_test_with_loss(NULL, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN);
+}
+
+/*
+* test handling of data nodes used in TLS when the pool is
+* nearing exhaustion. This was designed first to reproduce a
+* possible use after free issue.
+ */
+int tls_handshake_pool_exhausted_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Could not create the QUIC test contexts\n");
+    }
+
+    if (ret == 0) {
+        /* Simulate the steady state of a busy, long-running server: the
+         * shared decrypted-data node pool is already at capacity, so
+         * picoquic_stream_data_node_recycle() takes the free() branch
+         * instead of pushing the node back on the freelist. */
+        test_ctx->qserver->nb_data_nodes_in_pool = PICOQUIC_MAX_PACKETS_IN_POOL;
+
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+
+        if (ret != 0) {
+            DBG_PRINTF("Connection loop returns %d\n", ret);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
 }
 
 int tls_api_inject_hs_ack_test(void)
@@ -5335,69 +5376,104 @@ int pn_enc_1rtt_test(void)
     return ret;
 }
 
-int bad_certificate_test(void)
+/* Verify that picoquic_incoming_not_decrypted stashes up to
+ * PICOQUIC_INCOMING_NOT_DECRYPTED_MAX packets received before decryption keys are
+ * available, and that if more arrive they are dropped -- test that by sending
+ * NOT_DECRYPTED_STASH_TEST_PACKET_SIZE packets. Also verify that the stashed
+ * packets are queued in order of arrival. */
+static int not_decrypted_stash_count(picoquic_cnx_t* cnx)
 {
+    int nb_stashed = 0;
+    picoquic_stateless_packet_t* packet = cnx->first_sooner;
+
+    while (packet != NULL) {
+        nb_stashed++;
+        packet = packet->next_packet;
+    }
+
+    return nb_stashed;
+}
+
+#define NOT_DECRYPTED_STASH_TEST_PACKET_SIZE 256
+
+/* Each stashed test packet is filled with a distinct marker byte (index + 1) past the
+ * connection ID, so this walks the stash and checks the markers are in arrival order. */
+static int not_decrypted_stash_check_order(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    int expected = 1;
+    picoquic_stateless_packet_t* packet = cnx->first_sooner;
+
+    while (ret == 0 && packet != NULL) {
+        uint8_t marker = packet->bytes[NOT_DECRYPTED_STASH_TEST_PACKET_SIZE - 1];
+
+        if (marker != (uint8_t)expected) {
+            DBG_PRINTF("Stashed packet marker %d out of order (expected %d)", marker, expected);
+            ret = -1;
+        }
+        expected++;
+        packet = packet->next_packet;
+    }
+
+    return ret;
+}
+
+int not_decrypted_stash_test(void)
+{
+    const int nb_stash_packets = 50;
     uint64_t simulated_time = 0;
-    uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    char test_server_cert_file[512];
-    char test_server_key_file[512];
-    char test_server_cert_store_file[512];
-    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
 
     if (ret == 0) {
-        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_BAD_CERT);
-
-        if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY);
+        /* Run a short loop until the server connection is created, but before the
+         * handshake completes -- at that point the server has no 1-RTT read keys yet. */
+        int nb_trials = 0;
+        while (ret == 0 && nb_trials < 16 && test_ctx->cnx_server == NULL) {
+            int was_active = 0;
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
         }
-
-        if (ret == 0) {
-            ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE);
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Cannot create the server connection");
+            ret = -1;
         }
-
-        if (ret != 0) {
-            DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
-        }
-    }
-
-    /* Delete the server context, and recreate it with the bad certificate */
-
-    if (ret == 0)
-    {
-        if (test_ctx->qserver != NULL) {
-            picoquic_free(test_ctx->qserver);
-        }
-
-        test_ctx->qserver = picoquic_create(8,
-            test_server_cert_file, test_server_key_file, test_server_cert_store_file,
-            PICOQUIC_TEST_ALPN, test_api_callback, (void*)&test_ctx->server_callback, NULL, NULL, NULL,
-            simulated_time, &simulated_time, NULL,
-            test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
-
-        if (test_ctx->qserver == NULL) {
+        else if (test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].pn_dec != NULL) {
+            DBG_PRINTF("%s", "Server already has 1-RTT keys, cannot test the stash");
             ret = -1;
         }
     }
 
-    /* Proceed with the connection loop. It should fail, and thus we don't test the return code */
     if (ret == 0) {
-        (void)tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+        /* Send a batch of packets that carry the server's connection ID but cannot yet be
+         * decrypted. Content is irrelevant: header protection removal fails before any of
+         * it is examined, so garbage bytes are stashed exactly like valid ones would be. */
+        for (int i = 0; ret == 0 && i < nb_stash_packets; i++) {
+            uint8_t p[NOT_DECRYPTED_STASH_TEST_PACKET_SIZE];
 
-        if (test_ctx->cnx_client == NULL) {
-            ret = -1;
+            memset(p, (uint8_t)(i + 1), sizeof(p));
+            p[0] = 0x40;
+            memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id,
+                test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p),
+                (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr,
+                0, test_ctx->recv_ecn_server, simulated_time);
         }
-        else if (test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
-            ret = -1;
-        }
-        else if (!picoquic_is_handshake_error(picoquic_get_local_error(test_ctx->cnx_client))) {
-            ret = -1;
-        }
-        else if (!picoquic_is_handshake_error(picoquic_get_remote_error(test_ctx->cnx_server))) {
+    }
+
+    if (ret == 0) {
+        int nb_stashed = not_decrypted_stash_count(test_ctx->cnx_server);
+
+        if (nb_stashed != PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+            DBG_PRINTF("Sent %d packets, expected %d stashed, found %d", nb_stash_packets,
+                PICOQUIC_INCOMING_NOT_DECRYPTED_MAX, nb_stashed);
             ret = -1;
         }
         else {
-            ret = 0;
+            ret = not_decrypted_stash_check_order(test_ctx->cnx_server);
         }
     }
 
@@ -11744,8 +11820,8 @@ int aegis_initial_aes_test(void)
     void* pn_enc_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
         &simulated_time, NULL, NULL, 0, 1, 0);
-
     if (ret == 0 && test_ctx == NULL) {
+
         ret = -1;
     }
 

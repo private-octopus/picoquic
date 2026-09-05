@@ -26,11 +26,8 @@
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
-#include "csv.h"
-#include "svg.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "cidset.h"
-#include "logreader.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic.h"

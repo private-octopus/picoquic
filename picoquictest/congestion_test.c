@@ -25,10 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "logreader.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_logger.h"
-#include "qlog.h"
 
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"

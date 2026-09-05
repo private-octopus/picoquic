@@ -26,10 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "logreader.h"
-#include "picoquic_binlog.h"
-#include "picoquic_logger.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 
 
 /*

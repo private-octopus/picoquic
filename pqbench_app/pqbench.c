@@ -19,7 +19,7 @@
 #include <picoquic_config.h>
 #include <picoquic_packet_loop.h>
 /* #include <picoquic_internal.h> */
-#include <autoqlog.h>
+#include <picoquic_qlog.h>
 #include <quicperf.h>
 #include <performance_log.h>
 #include "auto_memlog.h"

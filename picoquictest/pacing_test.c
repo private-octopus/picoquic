@@ -26,9 +26,7 @@
 #include <string.h>
 
 #include "logreader.h"
-#include "picoquic_binlog.h"
-#include "picoquic_logger.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
@@ -165,7 +163,7 @@ static int pacing_cc_algotest(picoquic_congestion_algorithm_t* cc_algo, uint64_t
 
         /* Set the CC algorithm to selected value */
         picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
         /* Set leaky bucket parameters */

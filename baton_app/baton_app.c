@@ -33,7 +33,7 @@
 #include <h3zero.h>
 #include <h3zero_common.h>
 #include <picoquic_packet_loop.h>
-#include <autoqlog.h>
+#include <picoquic_qlog.h>
 #include <performance_log.h>
 #include <picoquic_config.h>
 #include "wt_baton.h"

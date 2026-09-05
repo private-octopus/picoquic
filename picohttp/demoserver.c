@@ -339,7 +339,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                 int path_item = picohttp_find_path_item(stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, app_ctx->path_table, app_ctx->path_table_nb);
                 if (path_item >= 0) {
                     stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, stream_ctx, 
+                    stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, picohttp_callback_post, stream_ctx, 
                         app_ctx->path_table[path_item].path_app_ctx);
                 }
                 stream_ctx->post_received += available;
@@ -391,7 +391,7 @@ int picoquic_h09_server_process_data(picoquic_cnx_t* cnx,
                     if (path_item >= 0) {
                         /* TODO-POST: move this code to post-fin callback.*/
                         stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
-                        stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post, 
+                        stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.hq.path, stream_ctx->ps.hq.path_length, picohttp_callback_post, 
                             stream_ctx, app_ctx->path_table[path_item].path_app_ctx);
                     }
                 }

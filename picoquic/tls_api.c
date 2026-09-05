@@ -1139,11 +1139,8 @@ int picoquic_tls_collected_extensions_cb(ptls_t* UNUSED(tls), ptls_handshake_pro
             /* Retrieve the transport parameters */
             ret = picoquic_receive_transport_extensions(ctx->cnx, (ctx->client_mode) ? 1 : 0,
                 slots[i_slot].data.base, slots[i_slot].data.len, &consumed);
-            /* For now, override the value in case of default */
-            ret = 0;
-
             /* In server mode, only compose the extensions if properly received from client */
-            if (ctx->client_mode == 0) {
+            if (ret == 0 && ctx->client_mode == 0) {
                 picoquic_tls_set_extensions(ctx->cnx, ctx);
             }
         }
@@ -1507,9 +1504,15 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
 
     if (*v_aead != NULL) {
         ptls_aead_free((ptls_aead_context_t*)*v_aead);
+        *v_aead = NULL;
     }
 
-    if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, prefix_label)) == NULL) {
+    if (cipher == NULL) {
+        /* Can happen when the caller asked for a cipher suite variant (e.g. the
+         * low-memory/Fusion one) that was not registered in this build. */
+        ret = PTLS_ERROR_NO_MEMORY;
+    }
+    else if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, prefix_label)) == NULL) {
         ret = PTLS_ERROR_NO_MEMORY;
     }
 
@@ -2775,9 +2778,16 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
 
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label)
 {
-    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(1);
+    ptls_cipher_suite_t *cipher;
     void *v_pn_enc = NULL;
-    
+
+    /* This helper is called directly by tests that never create a picoquic_quic_t
+     * context, so crypto providers may not have been registered yet -- do not
+     * rely on some other test having initialized them first. */
+    picoquic_tls_api_init();
+
+    cipher = picoquic_get_aes128gcm_sha256(1);
+
     (void)picoquic_set_pn_enc_from_secret(&v_pn_enc, cipher, 1, secret, prefix_label);
 
     return v_pn_enc;
@@ -2824,7 +2834,14 @@ size_t picoquic_aead_get_checksum_length(void* aead_context)
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label)
 {
     void * v_aead = NULL;
-    ptls_cipher_suite_t* cipher = picoquic_get_aes128gcm_sha256(1);
+    ptls_cipher_suite_t* cipher;
+
+    /* This helper is called directly by tests that never create a picoquic_quic_t
+     * context, so crypto providers may not have been registered yet -- do not
+     * rely on some other test having initialized them first. */
+    picoquic_tls_api_init();
+
+    cipher = picoquic_get_aes128gcm_sha256(1);
 
     (void)picoquic_set_aead_from_secret(&v_aead, cipher, is_encrypt, secret, prefix_label);
 
@@ -3122,7 +3139,6 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
                 case picoquic_state_client_handshake_start:
                     if (ptls_handshake_is_complete(ctx->tls)) {
                         if (cnx->remote_parameters_received == 0) {
-
 #ifdef _DEBUG
                             DBG_PRINTF("%s", "Connection error - no transport parameter received.\n");
 #endif
@@ -3484,6 +3500,7 @@ int picoquic_verify_retry_token(picoquic_quic_t* quic, const struct sockaddr * a
         }
         else {
             *odcid = picoquic_null_connection_id;
+            ret = -1;
         }
     }
 
@@ -3512,6 +3529,13 @@ int picoquic_cid_get_under_mask_ctx(void ** v_cid_enc, const void *secret, const
 
     picoquic_cid_free_under_mask_ctx(*v_cid_enc);
     *v_cid_enc = NULL;
+
+    if (cipher == NULL) {
+        /* Can happen if called before any crypto provider has registered its
+         * cipher suites (see picoquic_tls_api_init). */
+        return PTLS_ERROR_NO_MEMORY;
+    }
+
     /* Secret is only guaranteed to be 16 bytes long. Avoid excess length issues */
     memset(long_secret, 0, sizeof(long_secret));
     memcpy(long_secret, secret, 16);

@@ -33,9 +33,9 @@
 #include "picoqmux.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:5h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:5h";
 #endif
 int config_option_letters_test(void)
 {
@@ -134,7 +134,8 @@ static picoquic_quic_config_t param1 = {
     1000001, /* flow_control_max */
     "192.0.2.1", /* Preferred Address V4 */
     "2001:db8::1", /* Preferred Address V6 */
-    "443:17" /* QMux port and number of connections */
+    "443:17", /* QMux port and number of connections */
+    1 /* SCONE is supported */
 };
 
 static char const* config_argv1[] = {
@@ -171,6 +172,7 @@ static char const* config_argv1[] = {
     "-4", "192.0.2.1",
     "-6", "2001:db8::1",
     "-Y", "443",
+    "-5",
     NULL
 };
 
@@ -240,7 +242,8 @@ static picoquic_quic_config_t param2 = {
     0, /* flow control max */
     NULL,
     NULL,
-    NULL
+    NULL,
+    0 /* SCONE is not supported */
 };
 
 static const char* config_argv2[] = {
@@ -463,6 +466,7 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_uint64("flow_control_max", expected->flow_control_max, actual->flow_control_max);
     ret |= config_test_compare_string("preferred_address_v4", expected->preferred_address_v4, actual->preferred_address_v4);
     ret |= config_test_compare_string("preferred_address_v6", expected->preferred_address_v6, actual->preferred_address_v6);
+    ret |= config_test_compare_int("scone", expected->is_scone_supported, actual->is_scone_supported);
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
             ret = -1;

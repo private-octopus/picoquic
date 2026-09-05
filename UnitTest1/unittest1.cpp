@@ -243,6 +243,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stateless_packet_queue_limit)
+        {
+            int ret = stateless_packet_queue_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(parse_header)
         {
             int ret = parseheadertest();
@@ -456,6 +463,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sack_list_unbounded_growth)
+        {
+            int ret = sack_list_unbounded_growth_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sack_list_stream_bytes_unbounded)
+        {
+            int ret = sack_list_stream_bytes_unbounded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sack_list_horizon_backward)
+        {
+            int ret = sack_list_horizon_backward_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -526,6 +554,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(not_decrypted_stash)
+        {
+            int ret = not_decrypted_stash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(new_cnxid_stash)
         {
             int ret = cnxid_stash_test();
@@ -560,6 +595,13 @@ namespace UnitTest1
 
 			Assert::AreEqual(ret, 0);
 		}
+
+        TEST_METHOD(tls_handshake_pool_exhausted)
+        {
+            int ret = tls_handshake_pool_exhausted_test();
+
+            Assert::AreEqual(ret, 0);
+        }
 
 #if 0
         /* The TLS API connect test is only useful when debugging issues step by step */
@@ -828,6 +870,13 @@ namespace UnitTest1
         TEST_METHOD(stream_rank)
         {
             int ret = stream_rank_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_id_limit)
+        {
+            int ret = stream_id_limit_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1399,12 +1448,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(test_bad_certificate)
-        {
-            int ret = bad_certificate_test();
-
-            Assert::AreEqual(ret, 0);
-        }
 
         TEST_METHOD(client_cert_callback)
         {
@@ -2239,6 +2282,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_at_end)
+        {
+            int ret = reset_at_end_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(reset_loop)
         {
             int ret = reset_loop_test();
@@ -2468,6 +2518,27 @@ namespace UnitTest1
         TEST_METHOD(flow_control)
         {
             int ret = flow_control_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(flow_control_open_max)
+        {
+            int ret = flow_control_open_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_uni_blocked)
+        {
+            int ret = stream_uni_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_uni_reactivate)
+        {
+            int ret = stream_uni_reactivate_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2731,6 +2802,49 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(scone_basic) {
+            int ret = scone_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_client) {
+            int ret = scone_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss) {
+            int ret = scone_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss_client) {
+            int ret = scone_loss_client_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_loss_server) {
+            int ret = scone_loss_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_none) {
+            int ret = scone_none_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_server) {
+            int ret = scone_server_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+
         TEST_METHOD(stream_ack) {
             int ret = stream_ack_test();
 
@@ -2899,6 +3013,13 @@ namespace UnitTest1
 
         TEST_METHOD(cert_verify_rsa) {
             int ret = cert_verify_rsa_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cert_verify_invalid)
+        {
+            int ret = cert_verify_invalid_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3245,6 +3366,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_abandon_last) {
+            int ret = multipath_abandon_last_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_abandon_last_by_peer) {
+            int ret = multipath_abandon_last_by_peer_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_last_path_validation_fails) {
+            int ret = multipath_last_path_validation_fails_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_back0) {
             int ret = multipath_back0_test();
 
@@ -3295,6 +3434,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_backup) {
             int ret = multipath_backup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_stream_af_backup) {
+            int ret = multipath_stream_af_backup_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3430,6 +3575,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_client_data) {
             int ret = h3zero_client_data_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_client_data_repeat) {
+            int ret = h3zero_client_data_repeat_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3726,6 +3877,25 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(ech_bad_config_empty) {
+            int ret = ech_bad_config_empty_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_whitespace) {
+            int ret = ech_bad_config_whitespace_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_too_short) {
+            int ret = ech_bad_config_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(getter) {
             int ret = getter_test();
 
@@ -3781,6 +3951,18 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_reset) {
             int ret = picowt_baton_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_stop_reset) {
+            int ret = picowt_baton_stop_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_bad_params) {
+            int ret = picowt_baton_bad_params_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3844,8 +4026,62 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_datagram_multiflow) {
+            int ret = quicperf_datagram_multiflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_media) {
             int ret = quicperf_media_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_ungrouped) {
+            int ret = quicperf_ungrouped_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_group_remainder) {
+            int ret = quicperf_group_remainder_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_datagram_vs_group) {
+            int ret = quicperf_datagram_vs_group_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_server_timer_wakeup) {
+            int ret = quicperf_server_timer_wakeup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_receive_media_overrun) {
+            int ret = quicperf_receive_media_overrun_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_server_timer_leak) {
+            int ret = quicperf_server_timer_leak_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_chain) {
+            int ret = quicperf_chain_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_print_report) {
+            int ret = quicperf_print_report_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3858,6 +4094,24 @@ namespace UnitTest1
 
         TEST_METHOD(quicperf_overflow) {
             int ret = quicperf_overflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_settled) {
+            int ret = quicperf_multipath_settled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race) {
+            int ret = quicperf_multipath_race_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_multipath_race_delayed) {
+            int ret = quicperf_multipath_race_delayed_test();
 
             Assert::AreEqual(ret, 0);
         }

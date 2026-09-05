@@ -21,12 +21,82 @@
 #ifdef _WINDOWS
 #include "getopt.h"
 #endif
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+/* Temporary diagnostic: on an unhandled exception (e.g. access violation),
+ * print a symbolized stack trace before the process dies. This is much
+ * faster than reaching for an external debugger when a test crashes. */
+static LONG WINAPI picoquic_t_crash_handler(EXCEPTION_POINTERS* ex)
+{
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+    CONTEXT context_record = *ex->ContextRecord;
+    STACKFRAME64 frame = { 0 };
+    DWORD machine_type = IMAGE_FILE_MACHINE_AMD64;
+
+    fprintf(stderr, "\n*** CRASH: exception code 0x%08lx at address %p ***\n",
+        ex->ExceptionRecord->ExceptionCode, ex->ExceptionRecord->ExceptionAddress);
+
+    SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+    SymInitialize(process, NULL, TRUE);
+
+    frame.AddrPC.Offset = context_record.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context_record.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context_record.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+
+    for (int i = 0; i < 32; i++) {
+        if (!StackWalk64(machine_type, process, thread, &frame, &context_record,
+            NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) {
+            break;
+        }
+
+        char symbol_buffer[sizeof(SYMBOL_INFO) + 256] = { 0 };
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)symbol_buffer;
+        DWORD64 displacement64 = 0;
+        DWORD displacement32 = 0;
+        IMAGEHLP_LINE64 line = { 0 };
+
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = 255;
+        line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+        if (SymFromAddr(process, frame.AddrPC.Offset, &displacement64, symbol)) {
+            if (SymGetLineFromAddr64(process, frame.AddrPC.Offset, &displacement32, &line)) {
+                fprintf(stderr, "  #%d %s + 0x%llx  (%s:%lu)\n", i, symbol->Name,
+                    (unsigned long long)displacement64, line.FileName, line.LineNumber);
+            }
+            else {
+                fprintf(stderr, "  #%d %s + 0x%llx  (no line info)\n", i, symbol->Name,
+                    (unsigned long long)displacement64);
+            }
+        }
+        else {
+            fprintf(stderr, "  #%d 0x%p  (no symbol)\n", i, (void*)frame.AddrPC.Offset);
+        }
+    }
+    fflush(stderr);
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
 
 void picoquic_tls_api_unload(void);
 
@@ -70,6 +140,7 @@ static const picoquic_test_def_t test_table[] = {
     { "splay", splay_test },
     { "create_cnx", create_cnx_test },
     { "create_quic", create_quic_test },
+    { "stateless_packet_queue_limit", stateless_packet_queue_limit_test },
     { "parseheader", parseheadertest },
     { "incoming_initial", incoming_initial_test },
     { "header_length", header_length_test },
@@ -78,6 +149,7 @@ static const picoquic_test_def_t test_table[] = {
     { "varint", varint_test },
     { "sqrt_for_test", sqrt_for_test_test },
     { "ack_sack", sacktest },
+    { "ack_stress", sack_stress_test },
     { "frames_skip", skip_frame_test },
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },
@@ -100,6 +172,9 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_range", ackrange_test },
     { "ack_disorder", ack_disorder_test },
     { "ack_horizon", ack_horizon_test },
+    { "sack_list_unbounded_growth", sack_list_unbounded_growth_test },
+    { "sack_list_stream_bytes_unbounded", sack_list_stream_bytes_unbounded_test },
+    { "sack_list_horizon_backward", sack_list_horizon_backward_test },
     { "ack_of_ack", ack_of_ack_test },
     { "ackfrq_basic", ackfrq_basic_test },
     { "ackfrq_short", ackfrq_short_test },
@@ -117,6 +192,7 @@ static const picoquic_test_def_t test_table[] = {
     { "dtn_silence", dtn_silence_test },
     { "dtn_twenty", dtn_twenty_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
+    { "not_decrypted_stash", not_decrypted_stash_test },
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
@@ -126,6 +202,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_api_connect", tls_api_connect_test },
 #endif
     { "tls_api", tls_api_test },
+    { "tls_handshake_pool_exhausted", tls_handshake_pool_exhausted_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "tls_exporter", tls_exporter_test },
     { "null_sni", null_sni_test },
@@ -165,6 +242,7 @@ static const picoquic_test_def_t test_table[] = {
     { "vn_compat", vn_compat_test },
     { "transport_param_default", transport_param_default_test },
     { "stream_rank", stream_rank_test },
+    { "stream_id_limit", stream_id_limit_test },
     { "provide_stream_buffer", provide_stream_buffer_test },
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
@@ -238,7 +316,6 @@ static const picoquic_test_def_t test_table[] = {
     { "spurious_retransmit", spurious_retransmit_test },
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },
-    { "bad_certificate", bad_certificate_test },
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
     { "cert_rollover_inflight", cert_rollover_inflight_test },
     { "cert_rollover_active_connection", cert_rollover_active_connection_test },
@@ -371,6 +448,7 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_max", reset_need_max_test },
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
+    { "reset_at_end", reset_at_end_test },
     { "reset_loop_test", reset_loop_test },
     { "reset_stream_at_basic", reset_stream_at_basic_test },
     { "reset_stream_at_limit_test", reset_stream_at_limit_test },
@@ -391,6 +469,9 @@ static const picoquic_test_def_t test_table[] = {
     { "fastcc", fastcc_test },
     { "fastcc_jitter", fastcc_jitter_test },
     { "flow_control", flow_control_test },
+    { "flow_control_open_max", flow_control_open_max_test },
+    { "stream_uni_blocked", stream_uni_blocked_test },
+    { "stream_uni_reactivate", stream_uni_reactivate_test },
     { "bbr", bbr_test },
     { "bbr_jitter", bbr_jitter_test },
     { "bbr_long", bbr_long_test },
@@ -458,6 +539,12 @@ static const picoquic_test_def_t test_table[] = {
     { "limited_batch", limited_batch_test },
     { "limited_safe", limited_safe_test },
     { "send_stream_blocked", send_stream_blocked_test },
+    { "scone_basic", scone_basic_test },
+    { "scone_loss", scone_loss_test },
+    { "scone_loss_client", scone_loss_client_test },
+    { "scone_loss_server", scone_loss_server_test },
+    { "scone_none", scone_none_test },
+    { "scone_server", scone_server_test },
     { "stream_ack", stream_ack_test },
     { "queue_network_input", queue_network_input_test },
     { "pacing_update", pacing_update_test },
@@ -488,6 +575,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cert_verify_null", cert_verify_null_test },
     { "cert_verify_null_sni", cert_verify_null_sni_test },
     { "cert_verify_rsa", cert_verify_rsa_test },
+    { "cert_verify_invalid", cert_verify_invalid_test },
     { "cid_quiescence", cid_quiescence_test },
     { "client_auth", request_client_authentication_test },
     { "client_auth_25519", request_client_authentication_25519_test },
@@ -555,6 +643,9 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_socket_error", multipath_socket_error_test },
     { "multipath_socket0_error", multipath_socket0_error_test },
     { "multipath_abandon", multipath_abandon_test },
+    { "multipath_abandon_last", multipath_abandon_last_test },
+    { "multipath_abandon_last_by_peer", multipath_abandon_last_by_peer_test },
+    { "multipath_last_path_validation_fails", multipath_last_path_validation_fails_test },
     { "multipath_back0", multipath_back0_test },
     { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },
@@ -566,6 +657,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_datagram", multipath_datagram_test },
     { "multipath_dg_af", multipath_dg_af_test },
     { "multipath_backup", multipath_backup_test },
+    { "multipath_stream_af_backup", multipath_stream_af_backup_test },
     { "multipath_standup", multipath_standup_test },
     { "multipath_discovery", multipath_discovery_test },
     { "multipath_keep_alive", multipath_keep_alive_test },
@@ -585,6 +677,9 @@ static const picoquic_test_def_t test_table[] = {
     { "ech_e2e_0rtt", ech_e2e_0rtt_test },
     { "ech_grease", ech_grease_test },
     { "ech_no_ech", ech_no_ech_test },
+    { "ech_bad_config_empty", ech_bad_config_empty_test },
+    { "ech_bad_config_whitespace", ech_bad_config_whitespace_test },
+    { "ech_bad_config_too_short", ech_bad_config_too_short_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
@@ -682,6 +777,9 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+    SetUnhandledExceptionFilter(picoquic_t_crash_handler);
+#endif
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;

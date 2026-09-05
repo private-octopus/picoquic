@@ -90,10 +90,14 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_INCOMING_NOT_DECRYPTED_MAX (PICOQUIC_CWIN_INITIAL / PICOQUIC_MAX_PACKET_SIZE) /* peer cannot send more than the initial window before an ACK */
+
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
 #define PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD 64
+
+#define PICOQUIC_MAX_PENDING_STATELESS_PACKETS 32 /* stateless packets drain one per send cycle, so a flood of triggers must not queue unbounded */
 
 #define PICOQUIC_PN_RANDOM_MIN 0xffff
 #define PICOQUIC_PN_RANDOM_RANGE 0x10000
@@ -114,6 +118,8 @@ extern "C" {
 
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
+
+#define PICOQUIC_SACK_LIST_PN_MAX_RANGES 128 /* a few ACK frames' worth: each frame reports at most 32 ranges */
 
 #define PICOQUIC_DEFAULT_HOLE_PERIOD 256
 
@@ -585,6 +591,18 @@ typedef struct st_picoquic_quic_t {
     unsigned int is_port_blocking_disabled : 1; /* Do not check client port on incoming connections */
     unsigned int are_path_callbacks_enabled : 1; /* Enable path specific callbacks by default */
     unsigned int use_predictable_random : 1; /* For logging tests */
+    /* Set by add_chunk_node() when it splices a "received_data" node directly into a
+     * stream reassembly tree (zero-copy path) instead of copying its content into a
+     * fresh node. Ownership then belongs to the tree, which may consume and
+     * recycle/free the node before picoquic_incoming_segment() regains control -- that
+     * function must consult this flag, never decrypted_data->bytes (which may by then
+     * point to freed memory), to decide whether it still owns the node.
+     * picoquic_incoming_segment() can be called reentrantly (e.g. picomask decapsulating
+     * a DATAGRAM frame and re-injecting it via a nested picoquic_incoming_packet_ex()
+     * call on the same quic context), so every entry to that function must save this
+     * flag and restore it on exit, the same way a callee saves a register it clobbers --
+     * never just reset it to 0 and drop the previous value on the floor. */
+    unsigned int input_segment_node_taken : 1;
     picoquic_stateless_packet_t* pending_stateless_packet;
 
     picoquic_congestion_algorithm_t const* default_congestion_alg;
@@ -654,6 +672,9 @@ typedef struct st_picoquic_quic_t {
     picoquic_cnx_t* qmux_pending_last;
     picohash_table* qmux_socket_id_table;
 
+    /* Support for scone */
+    uint64_t scone_indication; /* indicated rate in bits/second */
+
     /* Logging APIS */
     struct st_picoquic_unified_logging_t* log_fns[PICOQUIC_MAX_LOG_FUNCTIONS];
     void* log_params[PICOQUIC_MAX_LOG_FUNCTIONS];
@@ -694,11 +715,18 @@ typedef struct st_picoquic_sack_range_count_t {
     int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
 } picoquic_sack_range_count_t;
 
+/* Tells picoquic_update_sack_list whether it may cap and evict ranges (packet numbers) or must not (stream bytes, see PICOQUIC_SACK_LIST_PN_MAX_RANGES). */
+typedef enum {
+    picoquic_sack_list_packet_numbers = 0,
+    picoquic_sack_list_stream_bytes = 1
+} picoquic_sack_list_kind_enum;
+
 typedef struct st_picoquic_sack_list_t {
     picosplay_tree_t ack_tree;
     uint64_t ack_horizon;
     int64_t horizon_delay;
     picoquic_sack_range_count_t rc[2];
+    picoquic_sack_list_kind_enum kind;
 } picoquic_sack_list_t;
 
 /*
@@ -782,7 +810,7 @@ typedef struct st_picoquic_stream_head_t {
 #define IS_CLIENT_STREAM_ID(id) (unsigned int)(((id) & 1) == 0)
 #define IS_BIDIR_STREAM_ID(id)  (unsigned int)(((id) & 2) == 0)
 #define IS_LOCAL_STREAM_ID(id, client_mode)  (unsigned int)(((id)^(client_mode)) & 1)
-#define STREAM_ID_FROM_RANK(rank, client_mode, is_unidir) ((((uint64_t)(rank)-(uint64_t)1)<<2)|(((uint64_t)is_unidir)<<1)|((uint64_t)(client_mode^1)))
+#define STREAM_ID_FROM_RANK(rank, is_client_stream, is_unidir) ((((uint64_t)(rank)-(uint64_t)1)<<2)|(((uint64_t)is_unidir)<<1)|((uint64_t)(is_client_stream^1)))
 #define STREAM_RANK_FROM_ID(id) ((id + 4)>>2)
 #define STREAM_TYPE_FROM_ID(id) ((id)&3)
 #define NEXT_STREAM_ID_FOR_TYPE(id) ((id)+4)
@@ -1148,6 +1176,10 @@ typedef struct st_picoquic_path_t {
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
 
+    /* Support for scone */
+    uint64_t scone_next_send_time;
+    uint64_t scone_advice_last; /* last indicated rate in bits/second */
+
     /* Debug MP */
     int lost_after_delivered;
     int responder;
@@ -1281,6 +1313,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_qmux : 1; /* This connection is handled by QMux, not QUIC */
     unsigned int is_qmux_cleartext : 1; /* This QMux connection is not encrypted */
     unsigned int is_qmux_tls_ready : 1; /* TLS handshake of QMux connection not complete */
+    unsigned int is_scone_indicator_sent : 1; /* Keep track, give up on Scone indicator after 1 trial */
 
     /* PMTUD policy */
     picoquic_pmtud_policy_enum pmtud_policy;
@@ -1442,14 +1475,14 @@ typedef struct st_picoquic_cnx_t {
     uint64_t maxdata_remote; /* Highest value received from the peer */
     uint64_t max_stream_data_local;
     uint64_t max_stream_data_remote;
-    uint64_t max_stream_id_bidir_local; /* Highest value sent to the peer */
-    uint64_t max_stream_id_bidir_rank_acked; /* Highest rank value acked by the peer */
-    uint64_t max_stream_id_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
-    uint64_t max_stream_id_bidir_remote; /* Highest value received from the peer */
-    uint64_t max_stream_id_unidir_local; /* Highest value sent to the peer */
-    uint64_t max_stream_id_unidir_rank_acked; /* Highest rank value acked by the peer */
-    uint64_t max_stream_id_unidir_local_computed;  /* Value computed from stream FIN but not yet sent */
-    uint64_t max_stream_id_unidir_remote; /* Highest value received from the peer */
+    uint64_t max_streams_bidir_local; /* Highest value sent to the peer */
+    uint64_t max_streams_bidir_acked; /* Highest rank value acked by the peer */
+    uint64_t max_streams_bidir_local_computed; /* Value computed from stream FIN but not yet sent */
+    uint64_t max_streams_bidir_remote; /* Highest value received from the peer */
+    uint64_t max_streams_unidir_local; /* Highest value sent to the peer */
+    uint64_t max_streams_unidir_acked; /* Highest rank value acked by the peer */
+    uint64_t max_streams_unidir_local_computed;  /* Value computed from stream FIN but not yet sent */
+    uint64_t max_streams_unidir_remote; /* Highest value received from the peer */
 
     /* Queue for frames waiting to be sent */
     picoquic_misc_frame_header_t* first_misc_frame;
@@ -1596,6 +1629,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
+int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
@@ -1772,6 +1806,9 @@ void picoquic_implicit_handshake_ack(picoquic_cnx_t* cnx, picoquic_packet_contex
 void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time);
 void picoquic_client_almost_ready_transition(picoquic_cnx_t* cnx);
 void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
+    uint64_t* next_wake_time, int* is_initial_sent, int is_first_in_batch);
 
 int picoquic_parse_header_and_decrypt(
     picoquic_quic_t* quic,
@@ -1837,7 +1874,7 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack, picoquic_sack_list_kind_enum kind);
 
 int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
     uint64_t range_min, uint64_t range_max, uint64_t current_time);
@@ -2114,6 +2151,8 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
     uint64_t path_id, uint64_t reason);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, uint64_t reason);
+const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_cnx_t* cnx, uint64_t current_time);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
@@ -2187,6 +2226,26 @@ typedef struct st_picomask_fns_t {
 
 } picomask_fns_t;
 
+/*
+* Support for Scone, see https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/
+* We pick as base delay the smallest prime number of microseconds larger than 19 seconds.
+* We will add a random delay between 0 and 3 seconds, resulting in at least 3 SCONE
+* packets sent in a 67 seconds interval.
+*/
+#define SCONE_DELAY 19000013
+#define SCONE_DELAY_RANDOM 3000000
+#define SCONE_INDICATOR 0xc813
+#define SCONE_VERSION_BASE 0x6f7dc0fd
+#define SCONE_DELAY 19000013
+#define SCONE_DELAY_RANDOM 3000000
+#define SCONE_INDICATOR 0xc813
+
+void picoquic_scone_padding(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
+int picoquic_scone_incoming(picoquic_quic_t* quic,  picoquic_packet_header* ph, const uint8_t* bytes_start, const uint8_t* bytes_max);
+void picoquic_scone_report(picoquic_cnx_t* cnx, int path_index);
+int picoquic_scone_ready_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+int picoquic_scone_prepare(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
+    uint64_t current_time, uint8_t* packet_buffer, size_t available, size_t* segment_length, uint64_t* next_wake_time, int* is_initial_sent);
 /*
 * Multi-threading debugging support.
 * By compiling with the macro PICOQUIC_WITH_THREAD_CHECK, the code will check that

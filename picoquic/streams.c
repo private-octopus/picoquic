@@ -233,6 +233,20 @@ int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
                     stream->is_active = 1;
                     picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
                     picoquic_update_output_stream(cnx, stream);
+                    picoquic_log_app_message(cnx,
+                        "Stream %" PRIu64 " marked active: wake time forced to now, is_output_stream=%d",
+                        stream_id, stream->is_output_stream);
+                }
+                else {
+                    /* The stream was already marked active: this call is a no-op.
+                     * Since the wake time is only forced to "now" on the 0->1
+                     * transition above, an application that relies on repeated
+                     * calls to picoquic_mark_active_stream to signal "more data
+                     * is ready" (rather than clearing is_active via is_still_active=0
+                     * between calls) will not get a fresh callback from this call. */
+                    picoquic_log_app_message(cnx,
+                        "Stream %" PRIu64 " mark active: already active, no-op (no wake update)",
+                        stream_id);
                 }
             }
             else {
@@ -628,9 +642,24 @@ void picoquic_insert_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 {
     if (stream->is_output_stream == 0)
     {
-        /* To not insert if the stream cannot be written to */
+        /* Do not insert if the stream cannot be written to */
         if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-            if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+            uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
+                cnx->max_streams_bidir_remote : cnx->max_streams_unidir_remote;
+            if (STREAM_RANK_FROM_ID(stream->stream_id) > remote_limit) {
+                /* The application marked this stream active (or queued data on it),
+                 * but the peer has not yet granted enough stream credit: the stream
+                 * ID is beyond the current MAX_STREAMS(_UNI) limit. The stream will
+                 * stay out of the send schedule -- and prepare_to_send will not be
+                 * called for it -- until a STREAMS_BLOCKED frame prompts the peer to
+                 * raise the limit. Log this explicitly, since otherwise the only way
+                 * to notice is to cross-reference the stream ID against the
+                 * MAX_STREAMS history in a packet trace. */
+                picoquic_log_app_message(cnx,
+                    "Stream %" PRIu64 " not scheduled: exceeds remote %s stream limit %" PRIu64,
+                    stream->stream_id,
+                    (IS_BIDIR_STREAM_ID(stream->stream_id)) ? "bidir" : "unidir",
+                    remote_limit);
                 return;
             }
         }
@@ -771,7 +800,23 @@ int picoquic_find_ready_stream_has_data(picoquic_cnx_t* cnx, picoquic_stream_hea
             */
             if (stream->sent_offset == 0) {
                 if (IS_CLIENT_STREAM_ID(stream->stream_id) == cnx->client_mode) {
-                    if (stream->stream_id > ((IS_BIDIR_STREAM_ID(stream->stream_id)) ? cnx->max_stream_id_bidir_remote : cnx->max_stream_id_unidir_remote)) {
+                    uint64_t remote_limit = (IS_BIDIR_STREAM_ID(stream->stream_id)) ?
+                        cnx->max_streams_bidir_remote : cnx->max_streams_unidir_remote;
+                    if (STREAM_RANK_FROM_ID(stream->stream_id) > remote_limit) {
+                        /* This is the path actually taken when an application calls
+                         * picoquic_mark_active_stream() on a stream ID beyond the
+                         * peer's currently granted MAX_STREAMS(_UNI) limit: the
+                         * stream is active, but the peer has not yet granted enough
+                         * stream credit. prepare_to_send will not be called for it
+                         * until a STREAMS_BLOCKED frame prompts the peer to raise
+                         * the limit. Log this explicitly, since otherwise the only
+                         * way to notice is to cross-reference the stream ID against
+                         * the MAX_STREAMS history in a packet trace. */
+                        picoquic_log_app_message(cnx,
+                            "Stream %" PRIu64 " not scheduled: exceeds remote %s stream limit %" PRIu64,
+                            stream->stream_id,
+                            (IS_BIDIR_STREAM_ID(stream->stream_id)) ? "bidir" : "unidir",
+                            remote_limit);
                         has_data = 0;
                     }
                 }
@@ -800,13 +845,14 @@ void picoquic_update_output_stream(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
 
 void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64_t new_limit, unsigned int is_bidir)
 {
-    uint64_t old_rank = STREAM_RANK_FROM_ID(old_limit);
+    uint64_t old_rank = old_limit;
     uint64_t first_new_id = STREAM_ID_FROM_RANK(old_rank + 1ull, cnx->client_mode, !is_bidir);
     picoquic_stream_head_t* stream = picoquic_find_stream(cnx, first_new_id);
 
     while (stream) {
-        if (stream->stream_id > old_limit) {
-            if (stream->stream_id > new_limit) {
+        uint64_t new_rank = STREAM_RANK_FROM_ID(stream->stream_id);
+        if (new_rank > old_limit) {
+            if (new_rank > new_limit) {
                 break;
             }
             if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir) {
@@ -822,7 +868,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
         memset(stream, 0, sizeof(picoquic_stream_head_t));
-        picoquic_sack_list_init(&stream->sack_list);
+        picoquic_sack_list_init(&stream->sack_list, picoquic_sack_list_stream_bytes);
     }
 
     if (stream != NULL) {
@@ -834,13 +880,13 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
             if (IS_BIDIR_STREAM_ID(stream_id)) {
                 stream->maxdata_local = cnx->local_parameters.initial_max_stream_data_bidi_local;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
-                is_output_stream = stream->stream_id <= cnx->max_stream_id_bidir_remote;
+                is_output_stream = (STREAM_RANK_FROM_ID(stream->stream_id) <= cnx->max_streams_bidir_remote);
 
             }
             else {
                 stream->maxdata_local = 0;
                 stream->maxdata_remote = cnx->remote_parameters.initial_max_stream_data_uni;
-                is_output_stream = stream->stream_id <= cnx->max_stream_id_unidir_remote;
+                is_output_stream = (STREAM_RANK_FROM_ID(stream->stream_id) <= cnx->max_streams_unidir_remote);
             }
         }
         else {
@@ -969,9 +1015,19 @@ picoquic_stream_head_t* picoquic_find_ready_stream_path(picoquic_cnx_t* cnx, pic
             has_data = picoquic_find_ready_stream_has_data(cnx, stream);
 
             /* implement affinity scheduling. TODO: get this out of the search loop. */
-            if (has_data && path_x != NULL && stream->affinity_path != path_x && stream->affinity_path != NULL) {
-                /* Only consider the streams that meet path affinity requirements */
-                has_data = 0;
+            if (has_data && path_x != NULL) {
+                if (stream->affinity_path != path_x && stream->affinity_path != NULL) {
+                    /* Only consider the streams that meet path affinity requirements */
+                    has_data = 0;
+                }
+                else if (path_x->path_is_backup && stream->affinity_path != path_x) {
+                    /* A backup path is only usable here because some stream has been
+                     * explicitly pinned to it (see picoquic_sort_available_paths /
+                     * picoquic_verify_path_available). Do not let unpinned streams
+                     * piggyback on that packet just because there happens to be room --
+                     * the whole point of "backup" is that ordinary traffic stays off it. */
+                    has_data = 0;
+                }
             }
 
             if (has_data) {
@@ -1017,14 +1073,16 @@ void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_str
         picoquic_remove_output_stream(cnx, stream);
     }
     else if ((stream->stream_priority & 1) == 0 && stream->last_time_data_sent != old_time_sent) {
-        /* TODO: should consider update in place */
-        picoquic_stream_head_t* previous = stream->previous_output_stream;
-        picoquic_stream_head_t* next = stream->previous_output_stream;
+        /* Find the next position. */
+        picoquic_stream_head_t* new_previous = stream->previous_output_stream;
+        picoquic_stream_head_t* next = stream->next_output_stream;
+
         while (next != NULL && picoquic_compare_stream_priority(stream, next) > 0) {
-            previous = next;
+            new_previous = next;
             next = next->next_output_stream;
         }
-        if (previous != stream->previous_output_stream) {
+        /* Reinsert after "previous", but only if it has changed */
+        if (new_previous != stream->previous_output_stream) {
             /* Remove from current position */
             if (stream->previous_output_stream == NULL) {
                 cnx->output_streams.first_output_stream = stream->next_output_stream;
@@ -1038,10 +1096,17 @@ void picoquic_reorder_output_stream_after_send(picoquic_cnx_t* cnx, picoquic_str
             else {
                 stream->next_output_stream->previous_output_stream = stream->previous_output_stream;
             }
-            /* Insert after previous -- by construction, previous cannot be NULL */
-            stream->previous_output_stream = previous;
-            stream->next_output_stream = previous->next_output_stream;
-            previous->next_output_stream = stream;
+            /* Insert after new previous, which by construction cannot be null */
+            if (new_previous->next_output_stream == NULL) {
+                stream->next_output_stream = NULL;
+                cnx->output_streams.last_output_stream = stream;
+            }
+            else {
+                stream->next_output_stream = new_previous->next_output_stream;
+                new_previous->next_output_stream->previous_output_stream = stream;
+            }
+            new_previous->next_output_stream = stream;
+            stream->previous_output_stream = new_previous;
         }
     }
 }
@@ -1228,6 +1293,7 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
     int stream_tried_and_failed = 0;
     int more_data_this_round = 0;
     int is_first_round = 1;
+    uint8_t* bytes_start = bytes_next;
 
     while (bytes_next + 8 < bytes_max && *ret == 0) {
         /* Find the highest priority level for which there is something to send, then
@@ -1269,7 +1335,8 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
         if (datagram_present &&
             cnx->datagram_priority == current_priority &&
             (cnx->datagram_priority < stream_priority || datagram_first)) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+                is_first_in_packet && bytes_next == bytes_start,
                 &more_data_this_round, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }
@@ -1321,7 +1388,8 @@ uint8_t* picoquic_prepare_stream_and_datagrams(picoquic_cnx_t* cnx, picoquic_pat
             cnx->datagram_priority == current_priority &&
             cnx->datagram_priority <= stream_priority &&
             !datagram_first) {
-            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max, is_first_in_packet,
+            bytes_next = picoquic_prepare_datagram_ready(cnx, path_x, bytes_next, bytes_max,
+                is_first_in_packet && bytes_next == bytes_start,
                 more_data, is_pure_ack, &datagram_tried_and_failed, &datagram_sent, ret);
             something_sent = datagram_sent;
         }

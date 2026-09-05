@@ -20,6 +20,7 @@
 */
 
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 
@@ -714,6 +715,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
     int ret = 0;
     picoquic_stream_head_t * stream;
     size_t nb_found = 0;
+    size_t nb_back = 0;
 
     /* test order and value of output list */
     stream = cnx->output_streams.first_output_stream;
@@ -726,7 +728,7 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
             break;
         }
         else if (nb_found >= nb_output) {
-            if (nb_found < nb_output) {
+            if (nb_found > nb_output) {
                 DBG_PRINTF("Stream[%d] is not NULL\n", (int)nb_found);
                 ret = -1;
             }
@@ -740,6 +742,33 @@ static int stream_output_test_list(picoquic_cnx_t * cnx, size_t nb_output, uint6
             nb_found++;
         }
     }
+    /* Test in the reverse direction */
+    stream = cnx->output_streams.last_output_stream;
+    while (ret == 0) {
+        if (stream == NULL) {
+            if (nb_back < nb_output) {
+                DBG_PRINTF("Stream[%d] is NULL\n", (int)nb_back);
+                ret = -1;
+            }
+            break;
+        }
+        else if (nb_back >= nb_output) {
+            if (nb_back > nb_output) {
+                DBG_PRINTF("Back Stream[%d] is not NULL\n", (int)nb_back);
+                ret = -1;
+            }
+        }
+        else if (stream->stream_id != output[nb_output - nb_back - 1]) {
+            DBG_PRINTF("Stream[%d].stream_id = %d, expected %d\n", (int)nb_found, (int)stream->stream_id, (int)output[nb_output - nb_back]);
+            ret = -1;
+        }
+        else {
+            stream = stream->previous_output_stream;
+            nb_back++;
+        }
+    }
+
+
 
     return ret;
 }
@@ -881,8 +910,8 @@ int stream_output_test(void)
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_uni = PICOQUIC_DEFAULT_0RTT_WINDOW;
             cnx->remote_parameters.initial_max_stream_data_bidi_local = PICOQUIC_DEFAULT_0RTT_WINDOW;
-            cnx->max_stream_id_bidir_remote = (cnx->client_mode) ? 4 : 0;
-            cnx->max_stream_id_unidir_remote = (cnx->client_mode) ? 10 : 0;
+            cnx->max_streams_bidir_remote = (cnx->client_mode) ? 2 : 0;
+            cnx->max_streams_unidir_remote = (cnx->client_mode) ? 3 : 0;
 
             cnx->high_priority_stream_id = 1;
 
@@ -896,9 +925,9 @@ int stream_output_test(void)
 
             if (ret == 0) {
                 /* Relax the max stream id value and test order again */
-                uint64_t old_limit = cnx->max_stream_id_bidir_remote;
-                cnx->max_stream_id_bidir_remote = 8;
-                picoquic_add_output_streams(cnx, old_limit, 8, 1);
+                uint64_t old_limit = cnx->max_streams_bidir_remote;
+                cnx->max_streams_bidir_remote = 3;
+                picoquic_add_output_streams(cnx, old_limit, 3, 1);
                 ret = stream_output_test_list(cnx, sizeof(output2) / sizeof(uint64_t), output2);
             }
 
@@ -939,8 +968,6 @@ int stream_output_test(void)
                 }
             }
 
-
-
             /* Reset the priorities to an odd number, and set the last time sent. */
             if (ret == 0) {
                 simulated_time = 1000;
@@ -977,6 +1004,49 @@ int stream_output_test(void)
 
                         picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
                         ret = stream_output_test_list(cnx, sizeof(output4) / sizeof(uint64_t), output4);
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                /* systematic test of reordering with even priorities */
+                size_t nb_streams = 0;
+                uint64_t ordered_list[16];
+                simulated_time = 3000;
+                /* reset priorities for all streams and compute the original order */
+                for (int i = 0; i < 7; i++) {
+                    stream = picoquic_find_stream(cnx, values[i]);
+                    if (stream == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* force the stream to be marked inactive, so as to reset its ranking in the output list*/
+                        picoquic_mark_active_stream(cnx, values[i], 0, NULL);
+                        /* reset priorities and mark active so as to add to output list */
+                        stream->last_time_data_sent = simulated_time + i;
+                        picoquic_set_stream_priority(cnx, values[i], 8);
+                        picoquic_mark_active_stream(cnx, values[i], 1, NULL);
+                        ordered_list[nb_streams] = stream->stream_id;
+                        nb_streams++;
+                    }
+                }
+                simulated_time += 100;
+                /* Do a series of simulated send in which we send data from the first
+                * stream, causing it to be reordered */
+                for (size_t i = 0; ret == 0 && i < nb_streams; i++) {
+                    stream = picoquic_find_ready_stream_path(cnx, NULL, 0);
+                    if (stream == NULL || stream->stream_id != ordered_list[0]) {
+                        /* this is unexpected */
+                        ret = -1;
+                    }
+                    else {
+                        uint64_t old_time_sent = stream->last_time_data_sent;
+                        simulated_time += 100;
+                        stream->last_time_data_sent = simulated_time;
+                        memmove(&ordered_list[0], &ordered_list[1], sizeof(uint64_t) * (nb_streams - 1));
+                        ordered_list[nb_streams - 1] = stream->stream_id;
+                        picoquic_reorder_output_stream_after_send(cnx, stream, old_time_sent);
+                        ret = stream_output_test_list(cnx, nb_streams, ordered_list);
                     }
                 }
             }
@@ -1043,6 +1113,73 @@ int stream_rank_test(void)
     ret |= stream_rank_test_one(n, stream_rank, stream_client_unidir, 1, 1);
     ret |= stream_rank_test_one(n, stream_rank, stream_server_bidir, 0, 0);
     ret |= stream_rank_test_one(n, stream_rank, stream_server_unidir, 1, 0);
+
+    return ret;
+}
+
+/* Verify that the final peer-initiated stream allowed by the advertised
+ * stream count is accepted. */
+int stream_id_limit_test(void)
+{
+    const uint64_t max_stream_rank = 2;
+    const uint64_t final_peer_unidir_stream_id = 7;
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_in peer_addr = { 0 };
+
+    peer_addr.sin_family = AF_INET;
+    quic = picoquic_create(1, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context\n");
+        ret = -1;
+    }
+    else if (picoquic_set_default_tp_value(quic,
+        picoquic_tp_initial_max_streams_uni, max_stream_rank) != 0) {
+        DBG_PRINTF("%s", "Cannot set initial unidirectional stream limit\n");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_cnx(quic,
+            picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&peer_addr, 0, 0, NULL, NULL, 1);
+        if (cnx == NULL) {
+            DBG_PRINTF("%s", "Cannot create client connection\n");
+            ret = -1;
+        }
+        else if (cnx->max_streams_unidir_local != max_stream_rank) {
+            DBG_PRINTF("Expected local max unidirectional stream rank %" PRIu64
+                ", got %" PRIu64 "\n", max_stream_rank, cnx->max_streams_unidir_local);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_stream_head_t* stream = picoquic_create_missing_streams(
+            cnx, final_peer_unidir_stream_id, 1);
+
+        if (stream == NULL) {
+            DBG_PRINTF("Expected peer stream %" PRIu64 " at limit %" PRIu64
+                ", got error 0x%" PRIx64 "\n", final_peer_unidir_stream_id,
+                max_stream_rank, cnx->local_error);
+            ret = -1;
+        }
+        else if (stream->stream_id != final_peer_unidir_stream_id || cnx->local_error != 0) {
+            DBG_PRINTF("Expected peer stream %" PRIu64 " without error, got stream %" PRIu64
+                " and error 0x%" PRIx64 "\n", final_peer_unidir_stream_id,
+                stream->stream_id, cnx->local_error);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_delete_cnx(cnx);
+    }
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
 
     return ret;
 }

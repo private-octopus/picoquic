@@ -34,12 +34,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 #include "picoquic_crypto_provider_api.h"
 #if 0
@@ -84,7 +79,7 @@ int mbedtls_test(void)
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, 0, 1);
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 

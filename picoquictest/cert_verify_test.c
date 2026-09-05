@@ -31,12 +31,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 
 /* Verify that server certificates are properly verified by the client.
@@ -251,5 +246,14 @@ int cert_verify_null_sni_test(void)
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, NULL);
+    return ret;
+}
+
+/* Invalid certificate: issued for ECDSA key, but the server uses an RSA key. Verification should fail.
+ */
+int cert_verify_invalid_test(void)
+{
+    int ret = cert_verify_test_one(0, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
     return ret;
 }

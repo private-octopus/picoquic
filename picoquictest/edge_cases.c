@@ -26,9 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "autoqlog.h"
-#include "logreader.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 
 
 /* This file includes a series of tests covering edge cases, typically
@@ -1363,6 +1361,34 @@ int reset_need_reset_test(void)
 int reset_need_stop_test(void)
 {
     return reset_repeat_test_one(reset_need_stop_sending);
+}
+
+/* Reset stream at end of stream. */
+int reset_at_end_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Ensure client mode for local bidirectional stream IDs */
+        cnx->client_mode = 1;
+
+        /* Create a stream, send data, set fin. */
+        if (ret == 0) {
+            ret = picoquic_add_to_stream(cnx, 4, (uint8_t*)"Hello", 5, 1);
+        }
+        if (ret == 0) {
+            ret = picoquic_reset_stream(cnx, 4, 0);
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
 }
 
 /*

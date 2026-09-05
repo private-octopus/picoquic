@@ -37,7 +37,7 @@
 
 static const uint8_t* picoquic_log_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, size_t size)
 {
-    return bytes == NULL ? NULL : ((bytes += size) <= bytes_max ? bytes : NULL);
+    return bytes == NULL ? NULL : ((size <= (size_t)(bytes_max - bytes)) ? (bytes + size) : NULL);
 }
 
 static const uint8_t* picoquic_log_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
@@ -554,14 +554,14 @@ void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 
     while (bytes != NULL && bytes < bytes_max) {
         uint64_t ftype= 0;
-        size_t ftype_ll = picoquic_varint_decode(bytes, length, &ftype);
+        const uint8_t* next_bytes = picoquic_frames_varint_decode(bytes, bytes_max, &ftype);
 
-        if (ftype_ll == 0) {
+        if (next_bytes == NULL) {
             /* Error, incorrect frame type encoding */
             bytes = NULL;
             break;
         }
-        else if (ftype < 64 && ftype_ll != 1) {
+        else if (ftype < 64 && (next_bytes - bytes) != 1) {
             /* Error, incorrect frame type encoding */
             bytes = NULL;
             break;

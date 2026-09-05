@@ -474,6 +474,10 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 picoquic_tp_address_discovery,
                 (uint64_t)(cnx->local_parameters.address_discovery_mode - 1));
         }
+
+        if (cnx->local_parameters.is_scone_supported > 0 && bytes != NULL) {
+            bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_is_scone_supported);
+        }
     }
 
     if (cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
@@ -529,12 +533,12 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.initial_max_data = 0;
     cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
     cnx->remote_parameters.initial_max_stream_id_bidir = 0;
-    cnx->max_stream_id_bidir_remote = 0;
+    cnx->max_streams_bidir_remote = 0;
     cnx->remote_parameters.max_idle_timeout = 0;
     cnx->remote_parameters.max_packet_size = 1500;
     cnx->remote_parameters.ack_delay_exponent = 3;
     cnx->remote_parameters.initial_max_stream_id_unidir = 0;
-    cnx->max_stream_id_unidir_remote = 0;
+    cnx->max_streams_unidir_remote = 0;
     cnx->remote_parameters.migration_disabled = 0;
     cnx->remote_parameters.max_ack_delay = PICOQUIC_ACK_DELAY_MAX_DEFAULT;
     cnx->remote_parameters.max_datagram_frame_size = 0;
@@ -547,6 +551,7 @@ void picoquic_clear_transport_extensions(picoquic_cnx_t* cnx)
     cnx->remote_parameters.initial_max_path_id = 0;
     cnx->remote_parameters.address_discovery_mode = 0;
     cnx->remote_parameters.is_reset_stream_at_enabled = 0;
+    cnx->remote_parameters.is_scone_supported = 0;
 }
 
 int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mode,
@@ -555,6 +560,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     int ret = 0;
     size_t byte_index = 0;
     uint64_t present_flag = 0;
+    /* Save the 0-RTT send credit before picoquic_clear_transport_extensions() zeroes cnx->maxdata_remote below. */
+    uint64_t maxdata_remote_0rtt = cnx->maxdata_remote;
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
     picoquic_connection_id_t handshake_connection_id = picoquic_null_connection_id;
     picoquic_connection_id_t retry_connection_id = picoquic_null_connection_id;
@@ -627,20 +634,25 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                 case picoquic_tp_initial_max_data:
                     cnx->remote_parameters.initial_max_data =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+                    /* A server must not reduce this limit below what 0-RTT already assumed. */
+                    if (maxdata_remote_0rtt < cnx->remote_parameters.initial_max_data) {
+                        cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+                    }
+                    else {
+                        cnx->maxdata_remote = maxdata_remote_0rtt;
+                    }
                     break;
                 case picoquic_tp_initial_max_streams_bidi: {
-                    uint64_t old_limit = cnx->max_stream_id_bidir_remote;
+                    uint64_t old_limit = cnx->max_streams_bidir_remote;
                     cnx->remote_parameters.initial_max_stream_id_bidir =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                    if (cnx->remote_parameters.initial_max_stream_id_bidir >= (1ull << 60)) {
+                    if (cnx->remote_parameters.initial_max_stream_id_bidir > (1ull << 60)) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max streams bidir");
                     }
                     else {
-                        cnx->max_stream_id_bidir_remote = STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_bidir,
-                            cnx->client_mode, 0);
+                        cnx->max_streams_bidir_remote = cnx->remote_parameters.initial_max_stream_id_bidir;
                         cnx->max_stream_data_remote = cnx->remote_parameters.initial_max_stream_data_bidi_remote;
-                        picoquic_add_output_streams(cnx, old_limit, cnx->max_stream_id_bidir_remote, 1);
+                        picoquic_add_output_streams(cnx, old_limit, cnx->max_streams_bidir_remote, 1);
                     }
                     break;
                 }
@@ -696,16 +708,15 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     }
                     break;
                 case picoquic_tp_initial_max_streams_uni: {
-                    uint64_t old_limit = cnx->max_stream_id_unidir_remote;
+                    uint64_t old_limit = cnx->max_streams_unidir_remote;
                     cnx->remote_parameters.initial_max_stream_id_unidir =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     if (cnx->remote_parameters.initial_max_stream_id_unidir >= (1ull << 60)) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Max streams unidir");
                     }
                     else {
-                        cnx->max_stream_id_unidir_remote = STREAM_ID_FROM_RANK(cnx->remote_parameters.initial_max_stream_id_unidir,
-                            cnx->client_mode, 1);
-                        picoquic_add_output_streams(cnx, old_limit, cnx->max_stream_id_unidir_remote, 0);
+                        cnx->max_streams_unidir_remote = cnx->remote_parameters.initial_max_stream_id_unidir;
+                        picoquic_add_output_streams(cnx, old_limit, cnx->max_streams_unidir_remote, 0);
                     }
                     break;
                 }
@@ -784,10 +795,18 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Forbidden in QMUX");
                     }
                     else {
-                        cnx->remote_parameters.active_connection_id_limit = (uint32_t)
-                            picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
-                        if (cnx->remote_parameters.active_connection_id_limit < 2) {
+                        uint64_t limit = picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
+                        if (limit < 2) {
                             ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "CID limit too small.");
+                        }
+                        else {
+                            if (limit > 0x7fffffff) {
+                                /* Practical limits are small values, tied to the number of supported paths
+                                * and migrations. There is no harm clamping the limit to 0x7fffffff, avoiding
+                                * downstream issues like misunderstanding the value as negative. */
+                                limit = 0x7fffffff;
+                            }
+                            cnx->remote_parameters.active_connection_id_limit = (uint32_t)limit;
                         }
                     }
                     break;
@@ -943,6 +962,14 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                                 cnx->qmux_remote_max_record_size = max_record_size;
                             }
                         }
+                    }
+                    break;
+                case picoquic_tp_is_scone_supported:
+                    if (extension_length != 0) {
+                        ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Scone Supported TP");
+                    }
+                    else {
+                        cnx->remote_parameters.is_scone_supported = 1;
                     }
                     break;
                 default:

@@ -329,6 +329,7 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
     int nb_available = 0;
     uint64_t best_available_retransmit = UINT64_MAX;
     uint64_t best_backup_retransmit = UINT64_MAX;
+    picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
 
     *min_retransmit = 0;
 
@@ -340,8 +341,13 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
             if (cnx->congestion_alg != NULL && path_x->congestion_alg_state == NULL) {
                 cnx->congestion_alg->alg_init(path_x, cnx->congestion_alg_option_string, current_time);
             }
-            /* track the available paths */
-            if (path_x->path_is_backup) {
+            /* track the available paths. A backup path that the next ready stream is
+             * explicitly pinned to (picoquic_set_stream_path_affinity) is treated as
+             * available here, not backup: affinity is a deliberate per-stream override,
+             * and letting it fall into the backup bucket means it would only ever be
+             * picked via the retransmit-count promotion below, never because the stream
+             * is waiting on it. */
+            if (path_x->path_is_backup && !(next_stream != NULL && next_stream->affinity_path == path_x)) {
                 if (backup_index < 0 || path_x->nb_retransmit < best_backup_retransmit) {
                     best_backup_retransmit = path_x->nb_retransmit;
                     backup_index = path_index;
@@ -396,8 +402,17 @@ void picoquic_sort_available_paths(picoquic_cnx_t* cnx, uint64_t current_time, u
         picoquic_path_t* path_x = cnx->path[path_index];
         /* Clear the nominal ack path flag from all path -- it will be reset to the low RTT path later */
         path_x->is_nominal_ack_path = 0;
-        /* Only continue processing if the path is available */
-        if (path_x->path_is_backup || !path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
+        /* Only continue processing if the path is available. A path marked backup is
+         * normally excluded here -- backup paths are otherwise only promoted based on
+         * relative retransmit counts (see picoquic_verify_path_available), never because
+         * a stream is waiting on them. But a stream that has been explicitly pinned to
+         * this path via picoquic_set_stream_path_affinity is asking for that path
+         * specifically, even if it is on backup duty for everything else, so let it
+         * compete normally below instead of stalling forever. */
+        if (!path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
+            continue;
+        }
+        if (path_x->path_is_backup && !(next_stream != NULL && next_stream->affinity_path == path_x)) {
             continue;
         }
         /* This path is a candidate for min rtt */
@@ -515,7 +530,25 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
             continue;
         }
         else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
-            (void)picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id, PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time);
+            if (picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id,
+                PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time) == PICOQUIC_ERROR_PATH_LAST_REMAINING) {
+                /* This was the only path left, and it just failed validation.
+                 * There is no other path to fall back on, and very likely no
+                 * way to reach the peer either: close locally, the way the
+                 * idle timer does, instead of trying to deliver a
+                 * CONNECTION_CLOSE that has nowhere to go. */
+                cnx->local_error = PICOQUIC_ERROR_PATH_LAST_REMAINING;
+                picoquic_connection_disconnect(cnx);
+            }
+        }
+        else if (path_index > 0 && cnx->cnx_state < picoquic_state_ready) {
+            /* Do not try to send packets on paths different from path[0] if
+             * the connection is not fully established. At this point, the
+             * other paths are not guaranteed to be fully established, and
+             * there is a significant rsik of causing crashes when trying
+             * to use them.
+             */
+            continue;
         }
         else if ((*next_tuple = picoquic_check_path_control_needed(cnx, cnx->path[path_index], current_time, next_wake_time)) != NULL) {
             *next_path = cnx->path[path_index];
@@ -648,6 +681,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
             picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, path_x->first_tuple);
         }
+        else {
+            /* If we cannot create a new path, return an error.
+             */
+            path_id = -1;
+            ret = PICOQUIC_ERROR_PATH_ID_INVALID;
+        }
     }
     else
     {
@@ -715,6 +754,13 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                     picoquic_tuple_t* old_tuple = path_x->first_tuple;
                     /* We need to replace the first tuple by this tuple. */
                     picoquic_set_first_tuple(path_x, tuple);
+                    /* We deliberately mark the path as verified in the case of NAT Traversal.
+                    * This is a tradeoff. If this genually is a NAT traversal, continuing to 
+                    * use the old path for 1 RTT before the challenge result is received leads
+                    * to losing 1 RTT worth of packets. If this is a spoofed address, we will be
+                    * able to recover upon receiving the challenge response from the old address,
+                    * and the new address will be demoted.
+                    */
                     tuple->challenge_verified = 1;
                     /* set a challenge on the old tuple to recover from spoofed addresses */
                     picoquic_set_tuple_challenge(old_tuple, current_time, cnx->quic->use_constant_challenges);
@@ -741,7 +787,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         }
     }
     *p_path_id = path_id;
-    cnx->path[path_id]->last_packet_received_at = current_time;
+    if (path_id >= 0 && ret == 0) {
+        cnx->path[path_id]->last_packet_received_at = current_time;
+    }
 
     return ret;
 }

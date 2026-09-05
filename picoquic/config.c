@@ -27,12 +27,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
-#include "picoquic_binlog.h"
-#include "picoquic_qlog.h"
-#include "picoquic_logger.h"
-#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
@@ -110,6 +107,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
     { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
     { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
+    { picoquic_option_SCONE, '5', "scone", 0, "", "Enable support for SCONE" },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -547,6 +545,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
     case picoquic_option_QMUX:
         ret = config_set_string_param(&config->qmux_string, params, nb_params, 0);
         break;
+    case picoquic_option_SCONE:
+        config->is_scone_supported = 1;
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -956,17 +957,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
          /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
-        if (config->bin_dir != NULL) {
-            picoquic_set_binlog(quic, config->bin_dir);
-        }
-
-        if (config->qlog_dir != NULL) {
-            picoquic_set_qlog(quic, config->qlog_dir);
-        }
-
-        if (config->log_file != NULL) {
-            picoquic_set_textlog(quic, config->log_file);
-        }
+        /* Do not handle creation of log contexts at this level, as that
+         * would force linkage of log functions. */
 
         picoquic_set_log_level(quic, config->use_long_log);
 
@@ -1030,6 +1022,10 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (ret == 0 && config->flow_control_max > 0)
         {
             picoquic_set_max_data_control(quic, config->flow_control_max);
+        }
+
+        if (ret == 0 && config->is_scone_supported) {
+            quic->default_tp.is_scone_supported = 1;
         }
 
         if (ret != 0) {
@@ -1117,18 +1113,6 @@ picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
             DBG_PRINTF("%s", "Could not create QMUX context.");
         }
         else {
-            if (config->bin_dir != NULL) {
-                picoquic_set_binlog(qmux, config->bin_dir);
-            }
-
-            if (config->qlog_dir != NULL) {
-                picoquic_set_qlog(qmux, config->qlog_dir);
-            }
-
-            if (config->log_file != NULL) {
-                picoquic_set_textlog(qmux, config->log_file);
-            }
-
             picoquic_set_log_level(qmux, config->use_long_log);
 
 

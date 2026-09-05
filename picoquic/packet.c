@@ -229,10 +229,15 @@ int picoquic_parse_long_packet_header(
     else if (ph->vn != 0) {
         ph->version_index = picoquic_get_version_index(ph->vn);
         if (ph->version_index < 0) {
-            DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
-            ph->ptype = picoquic_packet_error;
-            ph->pc = 0;
-            ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            if (picoquic_scone_incoming(quic, ph, bytes_start, bytes_max) != 0) {
+                DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+                ph->ptype = picoquic_packet_error;
+                ph->pc = 0;
+                ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            }
+            else {
+                ret = PICOQUIC_NO_ERROR_SCONE_ADVICE;
+            }
         }
     }
     
@@ -241,7 +246,6 @@ int picoquic_parse_long_packet_header(
         (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL)) {
         ret = -1;
     }
-
     if (ret == 0) {
         ph->offset = bytes - bytes_start;
 
@@ -317,6 +321,7 @@ int picoquic_parse_long_packet_header(
                 ph->epoch = picoquic_epoch_handshake;
                 break;
             case picoquic_packet_retry: /* Retry */
+            case picoquic_packet_scone: /* SCONE */
             default:
                 /* No default branch in this statement, because there are only 4 possible types
                  * parsed in picoquic_parse_long_packet_type */
@@ -1669,7 +1674,7 @@ int picoquic_incoming_server_initial(
                         size_t frame_length = 0;
                         int frame_is_pure_ack = 0;
                         skip_ret = picoquic_skip_frame(&bytes[byte_index],
-                            ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
+                            ph->offset + ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                         if (frame_is_pure_ack == 0) {
                             ack_needed = 1;
@@ -1977,6 +1982,10 @@ int picoquic_incoming_1rtt(
         else if (ret == 0) {
             picoquic_path_t* path_x = cnx->path[path_id];
 
+
+            /* Check and report SCONE advice */
+            picoquic_scone_report(cnx, path_id);
+
             path_x->first_tuple->if_index = if_index_to;
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
@@ -2051,21 +2060,40 @@ int  picoquic_incoming_not_decrypted(
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&
                 ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {
-                /* stash a copy of the incoming message for processing once the keys are available */
-                picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+                /* Do not stash more than PICOQUIC_INCOMING_NOT_DECRYPTED_MAX, or a forged-CID flood could
+                 * grow the stash without bound. Excess packets are just dropped. */
+                int nb_stashed = 0;
+                picoquic_stateless_packet_t* last_stashed = NULL;
+                picoquic_stateless_packet_t* stashed = cnx->first_sooner;
 
-                if (packet != NULL) {
-                    packet->length = length;
-                    packet->ptype = ph->ptype;
-                    memcpy(packet->bytes, bytes, length);
-                    packet->next_packet = cnx->first_sooner;
-                    cnx->first_sooner = packet;
-                    picoquic_store_addr(&packet->addr_local, addr_to);
-                    picoquic_store_addr(&packet->addr_to, addr_from);
-                    packet->if_index_local = if_index_to;
-                    packet->received_ecn = received_ecn;
-                    packet->receive_time = current_time;
-                    buffered = 1;
+                while (stashed != NULL && nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    nb_stashed++;
+                    last_stashed = stashed;
+                    stashed = stashed->next_packet;
+                }
+
+                if (nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    /* Stash packets in the order in which they arrived. */
+                    picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+
+                    if (packet != NULL) {
+                        packet->length = length;
+                        packet->ptype = ph->ptype;
+                        memcpy(packet->bytes, bytes, length);
+                        packet->next_packet = NULL;
+                        if (last_stashed == NULL) {
+                            cnx->first_sooner = packet;
+                        }
+                        else {
+                            last_stashed->next_packet = packet;
+                        }
+                        picoquic_store_addr(&packet->addr_local, addr_to);
+                        picoquic_store_addr(&packet->addr_to, addr_from);
+                        packet->if_index_local = if_index_to;
+                        packet->received_ecn = received_ecn;
+                        packet->receive_time = current_time;
+                        buffered = 1;
+                    }
                 }
             }
         }
@@ -2103,10 +2131,14 @@ int picoquic_incoming_segment(
     int path_is_not_allocated = 0;
     uint8_t* bytes = NULL;
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
+    /* saving the value of the input_segment_node_taken, to ensure reentrency. */
+    unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
 
     if (decrypted_data == NULL) {
         return -1;
     }
+    quic->input_segment_node_taken = 0;
+
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, raw_bytes, length, packet_length, addr_from,
         current_time, decrypted_data, &ph, &cnx, consumed, &new_context_created);
@@ -2274,9 +2306,6 @@ int picoquic_incoming_segment(
                 if (ph.has_reserved_bit_set) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                 }
-                else if (ph.has_reserved_bit_set) {
-                    ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
-                }
                 else if (cnx->client_mode)
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, decrypted_data, addr_to, if_index_to, &ph, current_time);
@@ -2329,6 +2358,10 @@ int picoquic_incoming_segment(
                 cnx->pkt_ctx[picoquic_packet_context_initial].pending_first->send_time;
         }
     }
+    else if (ret == PICOQUIC_NO_ERROR_SCONE_ADVICE) {
+        *consumed = ph.offset;
+        ret = 0;
+    }
 
     if (ret == 0) {
         if (cnx != NULL && cnx->cnx_state != picoquic_state_disconnected &&
@@ -2357,6 +2390,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
         ret == PICOQUIC_ERROR_DUPLICATE ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+        ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
         ret == PICOQUIC_ERROR_REDIRECTED) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
@@ -2366,6 +2400,7 @@ int picoquic_incoming_segment(
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
             ret == PICOQUIC_ERROR_RETRY ||
             ret == PICOQUIC_ERROR_SERVER_BUSY ||
+            ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
             ret == PICOQUIC_ERROR_REDIRECTED) {
             ret = 0;
         }
@@ -2387,9 +2422,10 @@ int picoquic_incoming_segment(
         ret = -1;
     }
 
-    if (decrypted_data != NULL && decrypted_data->bytes == NULL) {
+    if (decrypted_data != NULL && quic->input_segment_node_taken == 0) {
         picoquic_stream_data_node_recycle(decrypted_data);
     }
+    quic->input_segment_node_taken = saved_input_segment_node_taken;
 
     return ret;
 }
