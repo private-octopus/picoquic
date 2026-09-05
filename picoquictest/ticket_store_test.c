@@ -43,21 +43,24 @@ static picoquic_tp_t test_tp = {
         0 /* is scone supported */
 };
 
+/* Mirrors the wire layout picotls's client_handle_new_session_ticket hands to the save-ticket callback: 8B issued time, 2B key share ID, 2B cipher suite ID, 3B body length, then the NewSessionTicket body starting with its 4B ticket_lifetime. */
 static int create_test_ticket(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
 {
     int ret = 0;
-    if (len < 35) {
+    if (len < 37) {
         ret = -1;
     } else {
-        uint16_t t_length = len - 31;
+        uint32_t t_length = (uint32_t)len - 15;
         picoformat_64(buf, current_time);
         buf[8] = 0;
         buf[9] = 1;
         buf[10] = 0;
-        buf[11] = (uint8_t)(t_length >> 8);
-        buf[12] = (uint8_t)(t_length & 0xFF);
-        picoformat_32(buf + 13, ttl);
-        memset(buf + 17, 0xcc, len - 17);
+        buf[11] = 1;
+        buf[12] = (uint8_t)(t_length >> 16);
+        buf[13] = (uint8_t)(t_length >> 8);
+        buf[14] = (uint8_t)(t_length & 0xFF);
+        picoformat_32(buf + 15, ttl);
+        memset(buf + 19, 0xcc, len - 19);
         buf[len - 18] = 0;
         buf[len - 17] = 16;
     }

@@ -485,9 +485,9 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
     ret = picoquic_save_tickets(NULL, simulated_time, ticket_file_name);
 
     for (int i = 0; ret == 0 && i < 2; i++) {
-        /* If testing delay, insert a delay before the second connection attempt */
+        /* If testing delay, insert a 24 hour delay before the second connection attempt */    
         if (i == 1 && bdp_test_option == bdp_test_option_delay) {
-            simulated_time += 48ull * 3600ull * 1000000ull;
+            simulated_time += 24ull * 3600ull * 1000000ull;
         }
         initial_cid.id[2] = i;
         initial_cid.id[3] = (uint8_t)bdp_test_option;
