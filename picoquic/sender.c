@@ -2331,7 +2331,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         /* Push new CID if needed */
         while (
             local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
-            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
+            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
             uint8_t* bytes0 = bytes;
             picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
 
@@ -3438,15 +3438,10 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
         ret = picoquic_prepare_packet_almost_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
         break;
     case picoquic_state_ready:
-        /* The lean fast path is only valid for continuation packets of a batch already
-         * started by a full picoquic_prepare_packet_ready call (see the long comment on
-         * picoquic_prepare_packet_ready_fast for why that is safe), and only when there is
-         * nothing this specific packet still needs to do outside of pacing and stream
-         * data: no path validation pending, no multipath probe pending, no PTO probe
-         * pending. PTO handling in particular is excluded here rather than inside the fast
-         * path itself: a PTO probe is explicitly exempt from congestion control (RFC 9002
-         * 6.2.4) and can carry new data even while cwin-blocked, which is exactly the kind
-         * of exception the fast path is not meant to reason about. */
+        /* The fast path is only valid for the second to last packets of
+        * a batch. The various optional frames are handled in the first packet
+        * of the batch, allowing for streamlined processing of the next
+        * packets */
         if (!is_first_in_batch && path_x->first_tuple->challenge_verified != 0 &&
             !path_x->is_multipath_probe_needed && !path_x->is_pto_required) {
             ret = picoquic_prepare_packet_ready_fast(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);
