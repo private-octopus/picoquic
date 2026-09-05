@@ -39,7 +39,7 @@ extern "C" {
 #define PICOQUIC_DEMO_STREAM_ID_INITIAL UINT64_MAX
 
 typedef struct st_picoquic_demo_stream_desc_t {
-    int repeat_count;
+    uint64_t repeat_count;
     uint64_t stream_id;
     uint64_t previous_stream_id;
     char const* doc_name;

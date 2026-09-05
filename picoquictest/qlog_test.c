@@ -42,7 +42,7 @@
 */
 #define AUTOQLOG_BAD_QLOG "no_such_folder/bad\\folder"
 
-int autoqlog_bad_file()
+int autoqlog_bad_file(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -53,7 +53,6 @@ int autoqlog_bad_file()
 		ret = picoquic_set_qlog(quic, AUTOQLOG_BAD_QLOG);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}
@@ -62,7 +61,7 @@ int autoqlog_bad_file()
 	return ret;
 }
 
-int autoqlog_no_binlog()
+int autoqlog_no_binlog(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -75,16 +74,17 @@ int autoqlog_no_binlog()
 	if (ret == 0) {
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
-
+#if 0
 		picoquic_string_free(cnx->binlog_file_name);
 		cnx->binlog_file_name = picoquic_string_duplicate(AUTOQLOG_BAD_QLOG);
+#endif
 	}
 
 	picoquic_test_delete_minimal_cnx(&quic, &cnx);
 	return ret;
 }
 
-int autoqlog_longdir()
+int autoqlog_longdir(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -99,7 +99,6 @@ int autoqlog_longdir()
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}
@@ -108,7 +107,7 @@ int autoqlog_longdir()
 	return ret;
 }
 
-int autoqlog_unique()
+int autoqlog_unique(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -124,7 +123,8 @@ int autoqlog_unique()
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
+		/* TODO: fix that, It assumes that binlog is the only method declared in context. */
+		binlog_new_connection(cnx, (void*)".", & cnx->log_ctx[0]);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}
@@ -133,7 +133,7 @@ int autoqlog_unique()
 	return ret;
 }
 
-int qlog_auto_test()
+int qlog_auto_test(void)
 {
 	int ret = autoqlog_bad_file();
 
@@ -332,7 +332,7 @@ int qlog_tp_extension_test(FILE* F)
 	return ret;
 }
 
-int qlog_error_test()
+int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
 	int ret = (F == NULL) ? -1 : 0;

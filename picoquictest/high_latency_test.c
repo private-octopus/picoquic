@@ -32,10 +32,7 @@
 #include <string.h>
 #include "picoquic_binlog.h"
 #include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
@@ -72,13 +69,13 @@ static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* cc
     }
 
     memset(&client_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&client_parameters, 1);
+    picoquic_init_transport_parameters(&client_parameters);
     client_parameters.enable_time_stamp = 3;
     memset(&server_parameters, 0, sizeof(picoquic_tp_t));
-    picoquic_init_transport_parameters(&server_parameters, 0);
+    picoquic_init_transport_parameters(&server_parameters);
     server_parameters.enable_time_stamp = 3;
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -115,14 +112,12 @@ static int high_latency_one(uint8_t test_id, picoquic_congestion_algorithm_t* cc
         picoquic_cnx_set_pmtud_required(test_ctx->cnx_client, 1);
 
         /* Set the binary log on the server side */
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
 
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
@@ -156,7 +151,7 @@ static test_api_stream_desc_t hilat_scenario_basic[] = {
     { 4, 0, 257, 2000 }
 };
 
-int high_latency_basic_test()
+int high_latency_basic_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;
@@ -295,7 +290,7 @@ static test_api_stream_desc_t hilat_scenario_100mb[] = {
  * that then have to be corrected.
  */
 
-int high_latency_bbr_test()
+int high_latency_bbr_test(void)
 {
     uint64_t latency = 5000000;
     uint64_t expected_completion = 145000000;
@@ -306,13 +301,13 @@ int high_latency_bbr_test()
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int high_latency_cubic_test()
+int high_latency_cubic_test(void)
 {
     /* we do not run this test on Win32 builds */
     return 0;
 }
 #else
-int high_latency_cubic_test()
+int high_latency_cubic_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;
@@ -329,7 +324,7 @@ int high_latency_cubic_test()
  * detected, but still some code verifications to do.
  */
 
-int high_latency_probeRTT_test()
+int high_latency_probeRTT_test(void)
 {
     /* Simple test. */
     uint64_t latency = 5000000;

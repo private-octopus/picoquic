@@ -1,6 +1,6 @@
 /*
-* Author: Igor Lubashev
-* Copyright (c) 2017, Private Octopus, Inc.
+* Author: Christan Huitema
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -62,6 +62,7 @@ extern "C" {
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
 #define PICOQUIC_LOSS_RECOVERY 5
+#define PICOQUIC_QMUX 6
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
 /* Macros for handling conversion between data rate, microseconds and bytes
@@ -117,6 +118,8 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
+    char const* v4_text, char const* v6_text, uint16_t preferred_port);
 
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);

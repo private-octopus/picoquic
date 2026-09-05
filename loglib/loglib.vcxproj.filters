@@ -30,5 +30,11 @@
     <ClCompile Include="memory_log.c">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="qlog_frames.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="qlog_fns.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -90,10 +90,11 @@ int picoquic_socket_set_pkt_info(SOCKET_TYPE sd, int af)
     return ret;
 }
 
-int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int * send_set)
+int picoquic_socket_set_ecn_options_ex(SOCKET_TYPE sd, int af, int* recv_set, int* send_set, uint8_t UNUSED(ecn_value))
 {
     int ret = -1;
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(ecn_value);
 
     if (af == AF_INET6) {
 #ifdef IPV6_ECN
@@ -144,8 +145,8 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     if (af == AF_INET6) {
 #if defined(IPV6_TCLASS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_1; /* Setting ECN_ECT_1 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
+            unsigned int ecn = ecn_value; /* Setting ECN=ecn_value in outgoing packets */
+            if (ecn != 0 && setsockopt(sd, IPPROTO_IPV6, IPV6_TCLASS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPV6_TCLASS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
             }
@@ -181,9 +182,9 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     else {
 #if defined(IP_TOS)
         {
-            unsigned int ecn = PICOQUIC_ECN_ECT_1;
-            /* Request setting ECN_ECT_1 in outgoing packets */
-            if (setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
+            unsigned int ecn = ecn_value;
+            /* Request setting ECN=ecn_value in outgoing packets */
+            if (ecn != 0 && setsockopt(sd, IPPROTO_IP, IP_TOS, &ecn, sizeof(ecn)) < 0) {
                 DBG_PRINTF("setsockopt IPv4 IP_TOS (0x%x) fails, errno: %d\n", ecn, errno);
                 *send_set = 0;
             }
@@ -221,7 +222,12 @@ int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int * recv_set, int 
     return ret;
 }
 
-int picoquic_socket_set_pmtud_options(SOCKET_TYPE sd, int af)
+int picoquic_socket_set_ecn_options(SOCKET_TYPE sd, int af, int* recv_set, int* send_set)
+{
+    return picoquic_socket_set_ecn_options_ex(sd, af, recv_set, send_set, PICOQUIC_ECN_ECT_1);
+}
+
+int picoquic_socket_set_pmtud_options(SOCKET_TYPE UNUSED(sd), int UNUSED(af))
 {
     int ret = 0;
 #if defined __linux && defined(IP_MTU_DISCOVER) && defined(IPV6_MTU_DISCOVER) && defined(IP_PMTUDISC_PROBE)
@@ -328,6 +334,7 @@ void picoquic_close_server_sockets(picoquic_server_sockets_t* sockets)
     }
 }
 
+#if _WINDOWS
 void picoquic_socks_cmsg_parse(
     void* vmsg,
     struct sockaddr_storage* addr_dest,
@@ -336,7 +343,6 @@ void picoquic_socks_cmsg_parse(
     size_t * udp_coalesced_size)
 {
     /* Assume that msg has been filled by a call to recvmsg */
-#if _WINDOWS
     struct cmsghdr* cmsg;
     WSAMSG* msg = (WSAMSG*)vmsg;
 
@@ -414,6 +420,14 @@ void picoquic_socks_cmsg_parse(
         }
     }
 #else
+void picoquic_socks_cmsg_parse(
+    void* vmsg,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    size_t* UNUSED(udp_coalesced_size))
+{
+    /* Assume that msg has been filled by a call to recvmsg */
     /* Get the control information */
     struct msghdr* msg = (struct msghdr*)vmsg;
     struct cmsghdr* cmsg;
@@ -529,6 +543,7 @@ static void* cmsg_format_header_return_data_ptr(struct msghdr* msg, struct cmsgh
 }
 #endif
 
+#ifdef _WINDOWS
 void picoquic_socks_cmsg_format(
     void* vmsg,
     size_t message_length,
@@ -536,7 +551,6 @@ void picoquic_socks_cmsg_format(
     struct sockaddr* addr_from,
     int dest_if)
 {
-#ifdef _WINDOWS
     WSAMSG* msg = (WSAMSG*)vmsg;
     int control_length = 0;
     struct cmsghdr* last_cmsg = NULL;
@@ -624,8 +638,24 @@ void picoquic_socks_cmsg_format(
     if (control_length == 0) {
         msg->Control.buf = NULL;
     }
-
+}
 #else
+#if defined(UDP_SEGMENT)
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t message_length,
+    size_t send_msg_size,
+    struct sockaddr* addr_from,
+    int dest_if)
+#else
+void picoquic_socks_cmsg_format(
+    void* vmsg,
+    size_t UNUSED(message_length),
+    size_t UNUSED(send_msg_size),
+    struct sockaddr* addr_from,
+    int dest_if)
+#endif
+{
     struct msghdr* msg = (struct msghdr*)vmsg;
     int control_length = 0;
     struct cmsghdr* last_cmsg = NULL;
@@ -660,20 +690,6 @@ void picoquic_socks_cmsg_format(
             else {
                 is_null = 1;
             }
-#endif
-#if 0
-#ifdef IP_DONTFRAG
-            if (!is_null && message_length > PICOQUIC_INITIAL_MTU_IPV4) {
-                int* pval = (int*)cmsg_format_header_return_data_ptr(msg, &last_cmsg,
-                    &control_length, IPPROTO_IP, IP_DONTFRAG, sizeof(int));
-                if (pval != NULL) {
-                    *pval = 1;
-                }
-                else {
-                    is_null = 1;
-                }
-            }
-#endif
 #endif
         }
         else {
@@ -717,8 +733,8 @@ void picoquic_socks_cmsg_format(
     if (control_length == 0) {
         msg->msg_control = NULL;
     }
-#endif
 }
+#endif
 
 
 #ifdef _WINDOWS

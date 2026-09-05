@@ -547,7 +547,7 @@ void* event_loop_thread(void* lpParam)
 #endif
 }
 
-int main(int argc, char** argv)
+int main(int UNUSED(argc), char** UNUSED(argv))
 {
     int ret = 0;
     thread_test_context_t ctx;

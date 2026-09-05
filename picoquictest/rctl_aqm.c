@@ -70,7 +70,7 @@ void rctl_release(picoquictest_aqm_t* self, picoquictest_sim_link_t* link)
     link->aqm_state = NULL;
 }
 
-void rctl_reset(picoquictest_aqm_t* self, picoquictest_sim_link_t* link, uint64_t current_time)
+void rctl_reset(picoquictest_aqm_t* self, picoquictest_sim_link_t* UNUSED(link), uint64_t current_time)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(link);

@@ -77,7 +77,7 @@ void picoquictest_sim_link_delete(picoquictest_sim_link_t* link)
     free(link);
 }
 
-picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet(void)
 {
     picoquictest_sim_packet_t* packet = (picoquictest_sim_packet_t*)malloc(sizeof(picoquictest_sim_packet_t));
     if (packet != NULL) {
@@ -428,7 +428,7 @@ int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb
     return ret;
 }
 
-int sim_link_test()
+int sim_link_test(void)
 {
     int ret = 0;
     uint64_t loss_mask = 0;

@@ -80,9 +80,9 @@
     ping, 1 bytes
     padding, 1 bytes
     stream 4611684923227504639, offset 4611686018427387903, length 3, fin = 1: ffffff
-    Malformed path_abandon frame: 95228c0500
-    Malformed path_abandon frame: 95228c0500ff
-    Malformed path_available frame: 95228c0800
+    Malformed path_abandon frame: 80003e7500
+    Malformed path_abandon frame: 80003e7500ff
+    Malformed path_available frame: 80003e7700
     Malformed bdp_frame frame: 8000ebd9010204
     Malformed bdp_frame frame: 8000ebd901020405...
     Malformed bdp_frame frame: 8000ebd90802048f...

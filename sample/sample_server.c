@@ -44,7 +44,7 @@
 #include <picoquic.h>
 #include <picosocks.h>
 #include <picoquic_utils.h>
-#include <autoqlog.h>
+#include "picoquic_qlog.h"
 #include "picoquic_sample.h"
 #include "picoquic_packet_loop.h"
 #include "picoquic_bbr.h"

@@ -26,9 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
@@ -149,10 +147,9 @@ int limited_client_test_one(limited_test_config_t * config)
         test_ctx->client_endpoint.prepare_cpu_time = config->prepare_cpu_time;
         test_ctx->client_endpoint.packet_queue_max = config->packet_queue_max;
         test_ctx->qserver->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qclient->use_long_log = 1;
-        picoquic_set_binlog(test_ctx->qclient, ".");
-        binlog_new_connection(test_ctx->cnx_client);
+        picoquic_set_qlog(test_ctx->qclient, ".");
         /* Set long delays, 1 Mbps each way */
         test_ctx->c_to_s_link->microsec_latency = config->microsec_latency;
         test_ctx->c_to_s_link->picosec_per_byte = config->picosec_per_byte;
@@ -208,7 +205,7 @@ static void limited_config_set_default( limited_test_config_t* config, uint8_t t
     config->picosec_per_byte = 80000; /* corresponds to 100 Mbps */
 }
 
-int limited_reno_test()
+int limited_reno_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 1);
@@ -218,7 +215,7 @@ int limited_reno_test()
     return limited_client_test_one(&config);
 }
 
-int limited_cubic_test()
+int limited_cubic_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 2);
@@ -228,7 +225,7 @@ int limited_cubic_test()
     return limited_client_test_one(&config);
 }
 
-int limited_bbr_test()
+int limited_bbr_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 3);
@@ -238,7 +235,7 @@ int limited_bbr_test()
     return limited_client_test_one(&config);
 }
 
-int limited_batch_test()
+int limited_batch_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 4);
@@ -249,7 +246,7 @@ int limited_batch_test()
     return limited_client_test_one(&config);
 }
 
-int limited_safe_test()
+int limited_safe_test(void)
 {
     limited_test_config_t config;
     limited_config_set_default(&config, 5);

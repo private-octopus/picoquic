@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-picohash_table * cidset_create();
+picohash_table * cidset_create(void);
 picohash_table * cidset_delete(picohash_table * cids);
 
 /*! \brief Insert connection id \a cid into a set of connection ids \a cids if

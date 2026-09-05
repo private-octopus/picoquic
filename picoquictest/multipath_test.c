@@ -25,13 +25,12 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
 #include "picoquic_bbr.h"
+#include "picoquic_qlog.h"
+#include "picoquic_unified_log.h"
 
 /* Add the additional links for multipath scenario */
-static int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
+int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop)
 {
     int ret = 0;
     /* Initialize the second client address */
@@ -239,6 +238,16 @@ static test_api_stream_desc_t test_scenario_multipath[] = {
     { 8, 4, 257, 1000000 }
 };
 
+/* Same total data as test_scenario_multipath, but stream 8 does not depend on
+ * stream 4 completing first: both are ready in parallel from the start. Used
+ * to verify that pinning stream 4's affinity to a backup path does not let
+ * stream 8 (unpinned) piggyback onto that path too.
+ */
+static test_api_stream_desc_t test_scenario_multipath_af_backup[] = {
+    { 4, 0, 257, 1000000 },
+    { 8, 0, 257, 1000000 }
+};
+
 static test_api_stream_desc_t test_scenario_multipath_long[] = {
     { 4, 0, 257, 1000000 },
     { 8, 0, 257, 1000000 },
@@ -278,7 +287,7 @@ int migration_test_one(int mtu_drop)
         ret = -1;
     }
     else {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -365,12 +374,12 @@ int migration_test_one(int mtu_drop)
     return ret;
 }
 
-int migration_controlled_test()
+int migration_controlled_test(void)
 {
     return migration_test_one(0);
 }
 
-int migration_mtu_drop_test()
+int migration_mtu_drop_test(void)
 {
     return migration_test_one(1);
 }
@@ -383,9 +392,9 @@ void multipath_init_params(picoquic_tp_t *test_parameters, int enable_time_stamp
 {
     memset(test_parameters, 0, sizeof(picoquic_tp_t));
 
-    picoquic_init_transport_parameters(test_parameters, 1);
+    picoquic_init_transport_parameters(test_parameters);
     test_parameters->initial_max_path_id = 2;
-    test_parameters->enable_time_stamp = 3;
+    test_parameters->enable_time_stamp = 3* enable_time_stamp;
 }
 
 /* wait until the migration completes */
@@ -461,6 +470,7 @@ typedef enum {
     multipath_test_datagram,
     multipath_test_dg_af,
     multipath_test_backup,
+    multipath_test_stream_af_backup,
     multipath_test_standup,
     multipath_test_tunnel,
     multipath_test_fail,
@@ -559,8 +569,7 @@ static int multipath_test_abandon_cycle(picoquic_test_tls_api_ctx_t* test_ctx, u
         ret = -1;
     }
     else {
-        ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0,
-            "cycle of delete", *simulated_time);
+        ret = picoquic_abandon_path(test_ctx->cnx_client, deleted_id, 0, *simulated_time);
         if (ret != 0) {
             DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", deleted_id, ret);
         }
@@ -867,12 +876,11 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             multipath_init_datagram_ctx(test_ctx, &dg_ctx);
         }
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        binlog_new_connection(test_ctx->cnx_client);
         /* Set the multipath option at both client and server */
         multipath_init_params(&server_parameters, is_sat_test);
         if (test_id == multipath_test_datagram || test_id == multipath_test_dg_af) {
@@ -929,6 +937,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     if (ret == 0) {
         if (test_id == multipath_test_sat_plus || test_id == multipath_test_perf) {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_long, sizeof(test_scenario_multipath_long));
+        } else if (test_id == multipath_test_stream_af_backup) {
+            ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_af_backup, sizeof(test_scenario_multipath_af_backup));
         } else {
             ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath, sizeof(test_scenario_multipath));
         }
@@ -977,6 +987,17 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             test_id == multipath_test_standup) {
             ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
         }
+        else if (test_id == multipath_test_stream_af_backup) {
+            /* Path 1 is marked backup, but stream 4's affinity is pinned to it anyway.
+             * Affinity should win: the stream's data must still go out on path 1. */
+            ret = picoquic_set_path_status(test_ctx->cnx_client, 1, picoquic_path_status_backup);
+            if (ret == 0) {
+                ret = picoquic_set_stream_path_affinity(test_ctx->cnx_server, 4, 1);
+            }
+            if (ret != 0) {
+                DBG_PRINTF("Cannot set backup path and stream affinity, ret = %d", ret);
+            }
+        }
     }
 
     if (ret == 0 && (test_id == multipath_test_drop_first || test_id == multipath_test_drop_second ||
@@ -1013,7 +1034,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             }
             else if (test_id == multipath_test_abandon) {
                 /* Client abandons the path, causes it to be demoted. Server should follow suit. */
-                picoquic_abandon_path(test_ctx->cnx_client, 0, 0, "test",
+                picoquic_abandon_path(test_ctx->cnx_client, 0, 0,
                     simulated_time);
             }
             else if (test_id == multipath_test_break2) {
@@ -1243,6 +1264,31 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    /* In the stream-affinity-on-backup-path scenario, verify that the path
+     * is indeed marked backup, but that stream 4's affinity still routed its
+     * data there -- i.e. affinity overrides the backup exclusion instead of
+     * the stream stalling forever.
+     */
+    if (ret == 0 && test_id == multipath_test_stream_af_backup) {
+        if (!test_ctx->cnx_server->path[1]->path_is_backup) {
+            DBG_PRINTF("Backup not set on server path 1 (%d).\n", test_ctx->cnx_server->path[1]->path_is_backup);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered < 900000) {
+            DBG_PRINTF("Not enough data delivered on backup-but-affinity server path 1 (%" PRIu64 ").\n",
+                test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->path[1]->delivered > 1100000) {
+            /* Stream 4 (affinity-pinned) carries ~1MB. Stream 8 is NOT pinned and should
+             * stay off the backup path entirely -- if it leaked onto path 1 too, delivered
+             * would be closer to 2MB than 1MB. */
+            DBG_PRINTF("Too much data delivered on backup-but-affinity server path 1 (%" PRIu64 "), non-affinity stream may have leaked onto it.\n",
+                test_ctx->cnx_server->path[1]->delivered);
+            ret = -1;
+        }
+    }
+
     if (ret == 0 && test_id == multipath_test_discovery) {
         if (test_ctx->nb_address_observed < 2) {
             DBG_PRINTF("Got % addresses observed", test_ctx->nb_address_observed);
@@ -1290,7 +1336,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
  * the overall transmission is shorter than if only one link was used.
  */
 
-int multipath_basic_test()
+int multipath_basic_test(void)
 {
     uint64_t max_completion_microsec = 1060000;
 
@@ -1300,7 +1346,7 @@ int multipath_basic_test()
 /* Multipath fail test. Same as basic, but the multipath setup is expected to fail.
 */
 
-int multipath_fail_test()
+int multipath_fail_test(void)
 {
     uint64_t max_completion_microsec = 2000000;
 
@@ -1313,7 +1359,7 @@ int multipath_fail_test()
 * create a path for real and use it.
 */
 
-int multipath_ab1_test()
+int multipath_ab1_test(void)
 {
     uint64_t max_completion_microsec = 3000000;
 
@@ -1324,7 +1370,7 @@ int multipath_ab1_test()
  * drop the first one of them. Check that the transmission succeeds.
  */
 
-int multipath_drop_first_test()
+int multipath_drop_first_test(void)
 {
     uint64_t max_completion_microsec = 1490000;
 
@@ -1335,7 +1381,7 @@ int multipath_drop_first_test()
  * drop the second one of them. Check that the transmission succeeds.
  */
 
-int multipath_drop_second_test()
+int multipath_drop_second_test(void)
 {
     uint64_t max_completion_microsec = 1260000;
 
@@ -1345,7 +1391,7 @@ int multipath_drop_second_test()
 /* Simulate the combination of a satellite link and a low latency low bandwidth
  * terrestrial link
  */
-int multipath_sat_plus_test()
+int multipath_sat_plus_test(void)
 {
     uint64_t max_completion_microsec = 10000000;
 
@@ -1354,7 +1400,7 @@ int multipath_sat_plus_test()
 
 /* Test the renewal of the connection ID on a path
  */
-int multipath_renew_test()
+int multipath_renew_test(void)
 {
     uint64_t max_completion_microsec = 3000000;
 
@@ -1363,7 +1409,7 @@ int multipath_renew_test()
 
 /* Test key rotation in a multipath setup
  */
-int multipath_rotation_test()
+int multipath_rotation_test(void)
 {
     uint64_t max_completion_microsec = 3000000;
 
@@ -1371,14 +1417,14 @@ int multipath_rotation_test()
 }
 
 /* Test nat traversal in a multipath setup */
-int multipath_nat_test()
+int multipath_nat_test(void)
 {
     uint64_t max_completion_microsec = 3000000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat);
 }
 
-int multipath_nat_challenge_test()
+int multipath_nat_challenge_test(void)
 {
     uint64_t max_completion_microsec = 3000000;
 
@@ -1388,7 +1434,7 @@ int multipath_nat_challenge_test()
 
 /* Test that breaking paths are removed after some time
  */
-int multipath_break1_test()
+int multipath_break1_test(void)
 {
     uint64_t max_completion_microsec = 10800000;
 
@@ -1397,7 +1443,7 @@ int multipath_break1_test()
 
 /* Test reaction to socket error on second path
  */
-int multipath_socket_error_test()
+int multipath_socket_error_test(void)
 {
     uint64_t max_completion_microsec = 11000000;
 
@@ -1406,7 +1452,7 @@ int multipath_socket_error_test()
 
 /* Test reaction to socket error on first path
  */
-int multipath_socket0_error_test()
+int multipath_socket0_error_test(void)
 {
     uint64_t max_completion_microsec = 10900000;
 
@@ -1415,17 +1461,349 @@ int multipath_socket0_error_test()
 
 /* Test that abandoned paths are removed after some time
  */
-int multipath_abandon_test()
+int multipath_abandon_test(void)
 {
     uint64_t max_completion_microsec = 3800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_abandon);
 }
 
+/* 
+ * Verify that abandoning the last valid path will fail.
+ *
+ * This test drives the connection into that state and checks the
+ * double abandon directly, by calling picoquic_delete_abandoned_paths()
+ * the way a live connection would before preparing its next packet
+ * -- so a still-broken tree fails this test cleanly
+ * instead of crashing the test binary.
+ */
+int multipath_abandon_last_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Add a second path, and wait until both sides have validated it. */
+    if (ret == 0) {
+        ret = multipath_test_add_links(test_ctx, 0);
+    }
+    if (ret == 0) {
+        ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+            (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+    }
+    if (ret == 0) {
+        ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 2) {
+        DBG_PRINTF("Expected 2 paths on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* Abandon path 1. This is normal, supported usage: more than one path is
+     * available, so the call succeeds and path 1 is marked for demotion. */
+    if (ret == 0) {
+        ret = picoquic_abandon_path(test_ctx->cnx_client, 1, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path 1, ret=%d", ret);
+        }
+    }
+
+    /* Abandon path 0 as well -- the last path not yet marked for demotion.
+     * This call should be rejected. */
+    if (ret == 0) {
+        int abandon_ret = picoquic_abandon_path(test_ctx->cnx_client, 0, 0, simulated_time);
+
+        if (abandon_ret == PICOQUIC_ERROR_PATH_LAST_REMAINING) {
+            /* Expected: abandoning the last non-demoted path is refused. */
+            ret = 0;
+        }
+        else if (abandon_ret != 0) {
+            DBG_PRINTF("Abandoning the last non-demoted path returned %d, expected PICOQUIC_ERROR_PATH_LAST_REMAINING.", abandon_ret);
+            ret = -1;
+        }
+        else {
+            uint64_t next_wake_time = simulated_time;
+            uint64_t future_time = simulated_time + 10000000;
+
+            DBG_PRINTF("%s", "Abandoning the last non-demoted path wrongly succeeded.");
+
+            /* Let both demotion timers expire, then run the path cleanup
+             * that a live connection performs before sending. */
+            picoquic_delete_abandoned_paths(test_ctx->cnx_client, future_time, &next_wake_time);
+
+            if (test_ctx->cnx_client->nb_paths == 0 || test_ctx->cnx_client->path[0] == NULL) {
+                DBG_PRINTF("Client left with %d paths, path[0] = %p.",
+                    test_ctx->cnx_client->nb_paths,
+                    (void*)test_ctx->cnx_client->path[0]);
+            }
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+/* Verify that receiving a PATH_ABANDON frame for the last remaining path
+ * closes the connection, instead of marking the path demoted while still
+ * using it for every subsequent packet.
+ */
+int multipath_abandon_last_by_peer_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection, with a single path on each side */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 1) {
+        DBG_PRINTF("Expected 1 path on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* Simulate the peer sending a PATH_ABANDON frame for path 0, the
+     * client's only path. Build just the frame payload -- path ID and
+     * reason -- since picoquic_decode_path_abandon_frame() expects the
+     * frame type to already be consumed by the caller. */
+    if (ret == 0) {
+        uint8_t frame_bytes[16];
+        uint8_t* bytes_max = frame_bytes + sizeof(frame_bytes);
+        uint8_t* bytes_next = picoquic_frames_varint_encode(frame_bytes, bytes_max, 0);
+
+        bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, PICOQUIC_TRANSPORT_APPLICATION_ABANDON);
+
+        if (bytes_next == NULL ||
+            picoquic_decode_path_abandon_frame(frame_bytes, bytes_next, test_ctx->cnx_client, simulated_time) == NULL) {
+            DBG_PRINTF("%s", "Could not build or decode the injected PATH_ABANDON frame.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->cnx_state < picoquic_state_disconnecting) {
+        DBG_PRINTF("Client cnx_state is %d after losing its only path to a peer abandon; the connection should be closing.",
+            test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+typedef struct st_multipath_close_test_ctx_t {
+    int close_received;
+} multipath_close_test_ctx_t;
+
+static int multipath_close_test_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+    if (fin_or_event == picoquic_callback_close) {
+        ((multipath_close_test_ctx_t*)callback_ctx)->close_received = 1;
+    }
+    return 0;
+}
+
+/* Verify that when the only path of a connection cannot be validated, the
+ * connection is closed locally -- there is no peer to send a CONNECTION_CLOSE
+ * to, so this mirrors the abrupt local close already used for idle timeout
+ * (picoquic_check_idle_timer), not the protocol-level close used when the
+ * peer itself asks to abandon the last path.
+ *
+ * The test also checks that the code path that discovers the failure --
+ * preparing a packet -- runs to completion without crashing, that it
+ * notifies the application via picoquic_callback_close, and that calling
+ * it again afterwards, as the application's event loop naturally would,
+ * remains safe.
+ */
+int multipath_last_path_validation_fails_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    multipath_close_test_ctx_t close_ctx = { 0 };
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection, with a single path on each side */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 1) {
+        DBG_PRINTF("Expected 1 path on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* From this point on, watch for the close callback instead of running
+     * the default test scenario. */
+    if (ret == 0) {
+        picoquic_set_callback(test_ctx->cnx_client, multipath_close_test_callback, &close_ctx);
+
+        /* Simulate exhausted PATH_CHALLENGE retries on the client's only
+         * path: this is the state picoquic_prepare_tuple_challenge_frames()
+         * (paths.c) reaches on its own after PICOQUIC_CHALLENGE_REPEAT_MAX
+         * unanswered challenges. */
+        test_ctx->cnx_client->path[0]->first_tuple->challenge_failed = 1;
+    }
+
+    /* Preparing a packet is exactly the call chain of the reported crash
+     * (picoquic_prepare_packet_ex -> ... -> picoquic_handle_send_paths ->
+     * picoquic_select_next_path_tuple). It must run to completion, without
+     * touching a path or tuple that no longer makes sense once the
+     * connection is closed mid-call. */
+    if (ret == 0) {
+        size_t send_length = 0;
+        size_t send_msg_size = 0;
+        struct sockaddr_storage addr_to = { 0 };
+        struct sockaddr_storage addr_from = { 0 };
+        int if_index = 0;
+        int prepare_ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time,
+            test_ctx->send_buffer, test_ctx->send_buffer_size, &send_length,
+            &addr_to, &addr_from, &if_index, &send_msg_size);
+
+        if (prepare_ret != PICOQUIC_ERROR_DISCONNECTED) {
+            DBG_PRINTF("First prepare_packet after last-path validation failure returned %d, expected PICOQUIC_ERROR_DISCONNECTED.",
+                prepare_ret);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_disconnected) {
+        DBG_PRINTF("Client cnx_state is %d after its only path failed validation; the connection should be disconnected.",
+            test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0 && !close_ctx.close_received) {
+        DBG_PRINTF("%s", "The application was not notified with picoquic_callback_close.");
+        ret = -1;
+    }
+
+    /* The application's event loop will keep calling into the connection
+     * after it learns about the close, e.g. because other connections
+     * still need service. That must also stay safe. */
+    if (ret == 0) {
+        size_t send_length = 0;
+        size_t send_msg_size = 0;
+        struct sockaddr_storage addr_to = { 0 };
+        struct sockaddr_storage addr_from = { 0 };
+        int if_index = 0;
+        int prepare_ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time + 1000,
+            test_ctx->send_buffer, test_ctx->send_buffer_size, &send_length,
+            &addr_to, &addr_from, &if_index, &send_msg_size);
+
+        if (prepare_ret != PICOQUIC_ERROR_DISCONNECTED || send_length != 0) {
+            DBG_PRINTF("Second prepare_packet after disconnection returned %d, send_length %zu.",
+                prepare_ret, send_length);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 /* Test that after breaking path 0 we can establish a new path on the
 * same link when it comes back up.
  */
-int multipath_back0_test()
+int multipath_back0_test(void)
 {
     uint64_t max_completion_microsec = 3300000;
 
@@ -1434,7 +1812,7 @@ int multipath_back0_test()
 
 /* Test that breaking paths can come back up after some time
  */
-int multipath_back1_test()
+int multipath_back1_test(void)
 {
     /* TODO: investigate why 3.3 instead of 3.05 with prior implementation of multipath */
     uint64_t max_completion_microsec = 3300000;
@@ -1443,7 +1821,7 @@ int multipath_back1_test()
 }
 
 /* Test that a typical wifi+lte scenario provides good performance */
-int multipath_perf_test()
+int multipath_perf_test(void)
 {
     uint64_t max_completion_microsec = 1650000;
 
@@ -1451,13 +1829,13 @@ int multipath_perf_test()
 }
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int multipath_callback_test()
+int multipath_callback_test(void)
 {
     /* we do not run this test on Win32 builds */
     return 0;
 }
 #else
-int multipath_callback_test()
+int multipath_callback_test(void)
 {
     uint64_t max_completion_microsec = 1000000;
 
@@ -1466,13 +1844,13 @@ int multipath_callback_test()
 #endif
 
 #if defined(_WINDOWS) && !defined(_WINDOWS64)
-int multipath_quality_test()
+int multipath_quality_test(void)
 {
     /* we do not run this test on Win32 builds */
     return 0;
 }
 #else
-int multipath_quality_test()
+int multipath_quality_test(void)
 {
     uint64_t max_completion_microsec = 1000000;
 
@@ -1480,14 +1858,14 @@ int multipath_quality_test()
 }
 #endif
 
-int multipath_stream_af_test()
+int multipath_stream_af_test(void)
 {
     uint64_t max_completion_microsec = 1500000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_stream_af);
 }
 
-int multipath_datagram_test()
+int multipath_datagram_test(void)
 {
     /* TODO: investigate why 1.15 instead of 1.12 with prior implementation of multipath */
     uint64_t max_completion_microsec = 1150000;
@@ -1495,35 +1873,42 @@ int multipath_datagram_test()
     return multipath_test_one(max_completion_microsec, multipath_test_datagram);
 }
 
-int multipath_dg_af_test()
+int multipath_dg_af_test(void)
 {
     uint64_t max_completion_microsec = 1100000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_dg_af);
 }
 
-int multipath_backup_test()
+int multipath_backup_test(void)
 {
     uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_backup);
 }
 
-int multipath_standup_test()
+int multipath_stream_af_backup_test(void)
+{
+    uint64_t max_completion_microsec = 3500000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_stream_af_backup);
+}
+
+int multipath_standup_test(void)
 {
     uint64_t max_completion_microsec = 7200000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_standup);
 }
 
-int multipath_discovery_test()
+int multipath_discovery_test(void)
 {
     uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_discovery);
 }
 
-int multipath_keep_alive_test()
+int multipath_keep_alive_test(void)
 {
     uint64_t max_completion_microsec = 210000000;
 
@@ -1531,7 +1916,7 @@ int multipath_keep_alive_test()
 }
 
 /* Setting the initial max patht ID to 1 should allow two paths to be created */
-int multipath_just_one_test()
+int multipath_just_one_test(void)
 {
     uint64_t max_completion_microsec = 1060000;
 
@@ -1540,7 +1925,7 @@ int multipath_just_one_test()
 
 /* Breaking both links at the same time. Expect the connection to break,
  * without crashing. */
-int multipath_break_both_test()
+int multipath_break_both_test(void)
 {
     uint64_t max_completion_microsec = 1060000;
 
@@ -1576,7 +1961,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
     multipath_init_params(&client_parameters, 0);
     multipath_init_params(&server_parameters, 0);
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, &client_parameters, &server_parameters, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -1589,13 +1974,11 @@ int monopath_test_one(monopath_test_enum_t test_case)
         test_ctx->c_to_s_link->microsec_latency = latency;
         test_ctx->s_to_c_link->microsec_latency = latency;
 
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
         /* set the binary log on the client side */
-        picoquic_set_binlog(test_ctx->qclient, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         if (test_case == monopath_test_hole) {
             /* set the optimistic ack policy, to trigger hole insertion at the server */
@@ -1609,7 +1992,7 @@ int monopath_test_one(monopath_test_enum_t test_case)
         }
 
         if (ret == 0) {
-            ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0, 0);
+            ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 0);
             if (ret != 0)
             {
                 DBG_PRINTF("Connect loop returns %d\n", ret);
@@ -1673,25 +2056,25 @@ int monopath_test_one(monopath_test_enum_t test_case)
 }
 
 /* Basic connection with the multicast option enabled. */
-int monopath_basic_test()
+int monopath_basic_test(void)
 {
     return monopath_test_one(monopath_test_basic);
 }
 
 /* Testing the defense against opportunistic acks. */
-int monopath_hole_test()
+int monopath_hole_test(void)
 {
     return monopath_test_one(monopath_test_hole);
 }
 
 /* test that a single path connection can be kept alive */
-int monopath_keep_alive_test()
+int monopath_keep_alive_test(void)
 {
     return monopath_test_one(monopath_keep_alive);
 }
 
 /* Testing key rotation in monopath context. */
-int monopath_rotation_test()
+int monopath_rotation_test(void)
 {
     return monopath_test_one(monopath_test_rotation);
 }
@@ -1701,14 +2084,14 @@ int monopath_rotation_test()
  * Test both regular 0RTT set up, and case of losses.
  */
 
-int monopath_0rtt_test()
+int monopath_0rtt_test(void)
 {
     zero_rtt_test_t zrt = { 0 };
     zrt.do_multipath = 1;
     return zero_rtt_test_one(&zrt);
 }
 
-int monopath_0rtt_loss_test()
+int monopath_0rtt_loss_test(void)
 {
     int ret = 0;
 
@@ -1728,7 +2111,7 @@ int monopath_0rtt_loss_test()
 /*
  * Test the multipath variant of AEAD encrypt and decrypt.
  */
-int multipath_aead_test()
+int multipath_aead_test(void)
 {
     int ret = 0;
     const uint8_t mp_aead_secret[32] = {
@@ -1802,7 +2185,7 @@ int multipath_aead_test()
 /* Test the log of multipath connections
  */
 
-#define MULTIPATH_TRACE_BIN  "0807060504030201.server.log"
+#define MULTIPATH_TRACE_QLOG  "0807060504030201.server.qlog"
 #define MULTIPATH_QLOG "multipath_qlog_test.qlog"
 #ifdef _WINDOWS
 #define MULTIPATH_QLOG_REF "picoquictest\\multipath_qlog_ref.txt"
@@ -1817,7 +2200,7 @@ static test_api_stream_desc_t test_scenario_multipath_qlog[] = {
 
 static const picoquic_connection_id_t qlog_multipath_initial_cid = { {8, 7, 6, 5, 4, 3, 2, 1}, 8 };
 
-int multipath_trace_test_one()
+int multipath_trace_test_one(void)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
@@ -1835,12 +2218,10 @@ int multipath_trace_test_one()
         ret = -1;
     }
 
-    (void)picoquic_file_delete(MULTIPATH_TRACE_BIN, NULL);
-
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         (void)picoquic_set_default_spinbit_policy(test_ctx->qserver, picoquic_spinbit_on);
         (void)picoquic_set_default_spinbit_policy(test_ctx->qclient, picoquic_spinbit_on);
         picoquic_set_default_lossbit_policy(test_ctx->qserver, picoquic_lossbit_send_receive);
@@ -1934,10 +2315,32 @@ int multipath_trace_test_one()
         }
     }
 
+    /* Abandon path 1 so we can check the log of abandon path */
+    if (ret == 0) {
+        ret = picoquic_abandon_path(test_ctx->cnx_server, 1, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path %" PRIu64 ", ret=%d", 1, ret);
+        }
+        else {
+            /* fake a packet loss just after demoting the path */
+            picoquic_log_packet_lost(test_ctx->cnx_server,
+                test_ctx->cnx_server->path[1], picoquic_packet_1rtt_protected,
+                12345, "test", NULL,
+                1234, simulated_time);
+
+            /* wait about 250ms for the abandon to be noticed at both ends. */
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 250000);
+            if (ret != 0) {
+                DBG_PRINTF("Issue after abandon path %" PRIu64 ", ret = %d", 1, ret);
+            }
+        }
+    }
+
     /* Check that the transmission succeeded */
     if (ret == 0) {
         ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, 2000000);
     }
+
 
     /* Add a gratuitous bad packet to test "packet dropped" log */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
@@ -1958,28 +2361,13 @@ int multipath_trace_test_one()
     return ret;
 }
 
-int multipath_qlog_test()
+int multipath_qlog_test(void)
 {
     int ret = 0;
-    (void)picoquic_file_delete(MULTIPATH_QLOG, NULL);
+
+    (void)picoquic_file_delete(MULTIPATH_TRACE_QLOG, NULL);
 
     ret = multipath_trace_test_one();
-
-    /* Create a QLOG file from the .log file */
-    if (ret == 0) {
-        uint64_t log_time = 0;
-        uint16_t flags;
-
-        FILE* f_binlog = picoquic_open_cc_log_file_for_read(MULTIPATH_TRACE_BIN, &flags, &log_time);
-        if (f_binlog == NULL) {
-            ret = -1;
-        }
-        else {
-            ret = qlog_convert(&qlog_multipath_initial_cid, f_binlog, MULTIPATH_TRACE_BIN, 
-                MULTIPATH_QLOG, NULL, flags);
-            picoquic_file_close(f_binlog);
-        }
-    }
 
     /* compare the log file to the expected value */
     if (ret == 0)
@@ -1993,18 +2381,44 @@ int multipath_qlog_test()
             DBG_PRINTF("%s", "Cannot set the qlog trace test ref file name.\n");
         }
         else {
-            ret = picoquic_test_compare_text_files(MULTIPATH_QLOG, qlog_trace_test_ref);
+            ret = picoquic_test_compare_text_files(MULTIPATH_TRACE_QLOG, qlog_trace_test_ref);
         }
     }
 
     return ret;
 }
 
-int multipath_tunnel_test()
+int multipath_tunnel_test(void)
 {
     uint64_t max_completion_microsec = 12000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_tunnel);
+}
+
+/* CID retire */
+int multipath_cid_retire_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx;
+    picoquic_quic_t* quic;
+    struct sockaddr_storage peer = { 0 };
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        return -1;
+    }
+    cnx->local_parameters.initial_max_path_id = 1;
+    cnx->max_path_id_local = 2;
+    cnx->max_path_id_remote = 2;
+    cnx->is_multipath_enabled = 1;
+    (void) picoquic_create_path(cnx, 0,
+        NULL, (struct sockaddr*)&peer, 0, 1);
+    if (ret == 0) {
+        (void) picoquic_find_or_create_remote_cnxid_stash(cnx, 1, 1);
+        (void) picoquic_remove_not_before_cid(cnx, 1, 1, 0);
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return(ret);
 }
 
 /* 

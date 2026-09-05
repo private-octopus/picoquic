@@ -50,6 +50,10 @@ extern "C" {
 #define WT_BATON_VERSION 0
 #define WT_BATON_MAX_COUNT 256
 #define WT_BATON_MAX_LANES 256
+    /* WT Protocol */
+#define PICOWT_BATON_ALPN "devious-baton-00"
+#define PICOWT_BATON_ALPN_AVAILABLE "\"wrong-end-baton\", \"devious-baton-00\""
+#define PICOWT_BATON_ALPN_FILTER "good-end-baton, devious-baton-00"
 
     /* Wt_baton context:
      *
@@ -121,6 +125,7 @@ extern "C" {
         uint8_t baton_datagram_send_next;
         uint64_t nb_baton_bytes_received;
         uint64_t nb_baton_bytes_sent;
+        char wt_protocol[256];
     } wt_baton_ctx_t;
 
     typedef struct st_wt_baton_app_ctx_t {
@@ -135,13 +140,12 @@ extern "C" {
 
     int wt_baton_accept(picoquic_cnx_t* cnx,
         uint8_t* bytes, size_t length,
-        struct st_h3zero_stream_ctx_t* stream_ctx,
-        void* path_app_ctx);
+        struct st_h3zero_stream_ctx_t* stream_ctx);
 
     h3zero_stream_ctx_t* wt_baton_create_stream(picoquic_cnx_t* cnx, int is_bidir, wt_baton_ctx_t* baton_ctx);
     h3zero_stream_ctx_t* wt_baton_find_stream(wt_baton_ctx_t* ctx, uint64_t stream_id);
 
-    int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, wt_baton_app_ctx_t* app_ctx, h3zero_stream_ctx_t* stream_ctx);
+    int wt_baton_ctx_init(wt_baton_ctx_t* baton_ctx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* stream_ctx);
     
     /* Web transport callback. This will be called from the web server
     * when the path points to a web transport callback

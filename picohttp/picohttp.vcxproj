@@ -146,9 +146,9 @@
     <ClCompile Include="h3zero_uri.c" />
     <ClCompile Include="h3zero_url_template.c" />
     <ClCompile Include="picomask.c" />
+    <ClCompile Include="picoquic_ns.c" />
     <ClCompile Include="quicperf.c" />
     <ClCompile Include="webtransport.c" />
-    <ClCompile Include="wt_baton.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="democlient.h" />
@@ -161,7 +161,6 @@
     <ClInclude Include="pico_webtransport.h" />
     <ClInclude Include="quicperf.h" />
     <ClInclude Include="wincompat.h" />
-    <ClInclude Include="wt_baton.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

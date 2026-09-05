@@ -26,9 +26,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
@@ -70,8 +68,10 @@ typedef struct st_app_limited_test_config_t {
     uint8_t test_id;
     picoquic_congestion_algorithm_t* ccalgo;
     int do_preemptive_repeat;
+    int nb_test_streams;
     size_t stream_0_packet_size;
     size_t stream_0_packet_interval;
+    uint64_t stream_0_data_size;
     uint64_t data_stream_size;
     uint64_t time_to_stream[3];
     uint64_t loss_mask;
@@ -80,6 +80,12 @@ typedef struct st_app_limited_test_config_t {
     uint64_t cwin_max;
     uint64_t data_rate_max;
     uint64_t nb_losses_max;
+    uint64_t min_bw_samples;
+    uint64_t min_app_limited_bw_samples;
+    uint64_t min_send_gap;
+    uint64_t post_idle_sample_time;
+    uint64_t min_post_idle_bw_samples;
+    uint64_t min_post_idle_app_limited_bw_samples;
 } app_limited_test_config_t;
 
 typedef struct st_app_limited_stream_ctx_t {
@@ -109,10 +115,22 @@ typedef struct st_app_limited_ctx_t {
     uint64_t rtt_max;
     uint64_t cwin_max;
     uint64_t data_rate_max;
+    uint64_t last_bw_sample_delivered;
+    uint64_t nb_bw_samples;
+    uint64_t nb_app_limited_bw_samples;
+    uint64_t last_sent_time_observed;
+    uint64_t max_send_gap;
+    uint64_t nb_post_idle_bw_samples;
+    uint64_t nb_post_idle_app_limited_bw_samples;
     app_limited_cnx_ctx_t client_cnx_ctx;
     app_limited_cnx_ctx_t server_cnx_ctx;
     app_limited_test_config_t* config;
 } app_limited_ctx_t;
+
+static int app_limited_nb_test_streams(app_limited_test_config_t const* config)
+{
+    return (config->nb_test_streams > 0 && config->nb_test_streams <= 3) ? config->nb_test_streams : 3;
+}
 
 app_limited_cnx_ctx_t* app_limited_initialize_cnx_context(app_limited_ctx_t* callback_ctx,  picoquic_cnx_t* cnx, int is_server )
 {
@@ -189,12 +207,17 @@ void app_limited_prepare_to_send_on_stream(app_limited_cnx_ctx_t* cnx_ctx,
 
     /* Compute how much to send */
     if (stream_ctx->rank == 0) {
+        size_t remaining = stream_ctx->data_size - stream_ctx->octets_sent;
+
         /* Implement here the rate pacing of stream 0. */
         if (length > (cnx_ctx->al_ctx->config->stream_0_packet_size - cnx_ctx->al_ctx->stream0_bytes_sent_this_packet)) {
             /* cannot only send as much as the packet indicates */
             available = cnx_ctx->al_ctx->config->stream_0_packet_size - cnx_ctx->al_ctx->stream0_bytes_sent_this_packet;
         } else {
             available = length;
+        }
+        if (available > remaining) {
+            available = remaining;
         }
 
         cnx_ctx->al_ctx->stream0_bytes_sent_this_packet += (size_t)available;
@@ -346,9 +369,22 @@ int app_limited_callback(picoquic_cnx_t* cnx,
 
 void app_limited_initialize_context(app_limited_ctx_t* al_ctx, app_limited_test_config_t* config)
 {
+    int nb_test_streams = app_limited_nb_test_streams(config);
+
     memset(al_ctx, 0, sizeof(app_limited_ctx_t));
     for (int i = 0; i < 3; i++) {
-        uint64_t data_size = (i != 0) ? config->data_stream_size : ((config->time_to_stream[2] + 1000000) * config->stream_0_packet_size) / config->stream_0_packet_interval;
+        uint64_t data_size = 0;
+        if (i < nb_test_streams) {
+            if (i != 0) {
+                data_size = config->data_stream_size;
+            }
+            else if (config->stream_0_data_size != 0) {
+                data_size = config->stream_0_data_size;
+            }
+            else {
+                data_size = ((config->time_to_stream[2] + 1000000) * config->stream_0_packet_size) / config->stream_0_packet_interval;
+            }
+        }
         al_ctx->client_cnx_ctx.stream_ctx[i].stream_id = UINT64_MAX;
         al_ctx->client_cnx_ctx.stream_ctx[i].data_size = (size_t)data_size;
         al_ctx->client_cnx_ctx.stream_ctx[i].rank = i;
@@ -380,7 +416,8 @@ int app_limited_get_timeout(app_limited_ctx_t* al_ctx, uint64_t simulated_time, 
     *timeout = 0;
 
     if (al_ctx->server_cnx_ctx.cnx != NULL) {
-        for (int i = 0; i < 3; i++) {
+        int nb_test_streams = app_limited_nb_test_streams(al_ctx->config);
+        for (int i = 0; i < nb_test_streams; i++) {
             if (al_ctx->server_cnx_ctx.stream_ctx[i].stream_id == UINT64_MAX) {
                 if (simulated_time >= al_ctx->config->time_to_stream[i]) {
                     uint64_t stream_id = picoquic_get_next_local_stream_id(al_ctx->server_cnx_ctx.cnx, 1);
@@ -422,6 +459,18 @@ void app_limited_monitor(app_limited_ctx_t* al_ctx)
     if (al_ctx->server_cnx_ctx.cnx != NULL) {
         picoquic_path_t* path_x = al_ctx->server_cnx_ctx.cnx->path[0];
 
+        if (path_x->last_sent_time != 0 &&
+            path_x->last_sent_time != al_ctx->last_sent_time_observed) {
+            if (al_ctx->last_sent_time_observed != 0 &&
+                path_x->last_sent_time > al_ctx->last_sent_time_observed) {
+                uint64_t send_gap = path_x->last_sent_time - al_ctx->last_sent_time_observed;
+                if (send_gap > al_ctx->max_send_gap) {
+                    al_ctx->max_send_gap = send_gap;
+                }
+            }
+            al_ctx->last_sent_time_observed = path_x->last_sent_time;
+        }
+
         if (path_x->rtt_max > al_ctx->rtt_max) {
             al_ctx->rtt_max = path_x->rtt_max;
         }
@@ -430,6 +479,22 @@ void app_limited_monitor(app_limited_ctx_t* al_ctx)
         }
         if (path_x->pacing.rate > al_ctx->data_rate_max) {
             al_ctx->data_rate_max = path_x->pacing.rate;
+        }
+        if (path_x->delivered_last != 0 &&
+            path_x->delivered_last != al_ctx->last_bw_sample_delivered) {
+            al_ctx->last_bw_sample_delivered = path_x->delivered_last;
+            al_ctx->nb_bw_samples++;
+            if (al_ctx->config->post_idle_sample_time != 0 &&
+                al_ctx->simulated_time >= al_ctx->config->post_idle_sample_time) {
+                al_ctx->nb_post_idle_bw_samples++;
+            }
+            if (path_x->last_bw_estimate_path_limited) {
+                al_ctx->nb_app_limited_bw_samples++;
+                if (al_ctx->config->post_idle_sample_time != 0 &&
+                    al_ctx->simulated_time >= al_ctx->config->post_idle_sample_time) {
+                    al_ctx->nb_post_idle_app_limited_bw_samples++;
+                }
+            }
         }
     }
 }
@@ -460,9 +525,9 @@ static int app_limited_test_one(app_limited_test_config_t * config)
             picoquic_set_default_congestion_algorithm(test_ctx->qserver, config->ccalgo);
             picoquic_set_congestion_algorithm(test_ctx->cnx_client, config->ccalgo);
 
-            picoquic_set_binlog(test_ctx->qserver, ".");
+            picoquic_set_qlog(test_ctx->qserver, ".");
             test_ctx->qserver->use_long_log = 1;
-            picoquic_set_binlog(test_ctx->qclient, ".");
+            picoquic_set_qlog(test_ctx->qclient, ".");
             if (config->do_preemptive_repeat) {
                 picoquic_set_preemptive_repeat_policy(test_ctx->qserver, 1);
                 picoquic_set_preemptive_repeat_per_cnx(test_ctx->cnx_client, 1);
@@ -500,7 +565,7 @@ static int app_limited_test_one(app_limited_test_config_t * config)
         }
 
         if (picoquic_is_cnx_backlog_empty(test_ctx->cnx_client) &&
-            al_ctx.nb_client_streams_completed >= 3 &&
+            al_ctx.nb_client_streams_completed >= app_limited_nb_test_streams(config) &&
             picoquic_get_cnx_state(test_ctx->cnx_client) < picoquic_state_disconnecting) {
             ret = picoquic_close(test_ctx->cnx_client, 0);
         }
@@ -549,6 +614,35 @@ static int app_limited_test_one(app_limited_test_config_t * config)
             DBG_PRINTF("Nb retransmission %llu instead of %llu", test_ctx->cnx_server->nb_retransmission_total, config->nb_losses_max);
             ret = -1;
         }
+
+        if (ret == 0 && al_ctx.nb_bw_samples < config->min_bw_samples) {
+            DBG_PRINTF("Bw samples %llu instead of %llu", al_ctx.nb_bw_samples, config->min_bw_samples);
+            ret = -1;
+        }
+
+        if (ret == 0 && al_ctx.nb_app_limited_bw_samples < config->min_app_limited_bw_samples) {
+            DBG_PRINTF("App-limited bw samples %llu instead of %llu",
+                al_ctx.nb_app_limited_bw_samples, config->min_app_limited_bw_samples);
+            ret = -1;
+        }
+
+        if (ret == 0 && al_ctx.max_send_gap < config->min_send_gap) {
+            DBG_PRINTF("Max send gap %llu microsec instead of %llu",
+                al_ctx.max_send_gap, config->min_send_gap);
+            ret = -1;
+        }
+
+        if (ret == 0 && al_ctx.nb_post_idle_bw_samples < config->min_post_idle_bw_samples) {
+            DBG_PRINTF("Post-idle bw samples %llu instead of %llu",
+                al_ctx.nb_post_idle_bw_samples, config->min_post_idle_bw_samples);
+            ret = -1;
+        }
+
+        if (ret == 0 && al_ctx.nb_post_idle_app_limited_bw_samples < config->min_post_idle_app_limited_bw_samples) {
+            DBG_PRINTF("Post-idle app-limited bw samples %llu instead of %llu",
+                al_ctx.nb_post_idle_app_limited_bw_samples, config->min_post_idle_app_limited_bw_samples);
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL) {
@@ -564,6 +658,7 @@ static void app_limited_config_set_default( app_limited_test_config_t* config, u
     memset(config, 0, sizeof(app_limited_test_config_t));
     config->test_id = test_id;
     config->ccalgo = picoquic_newreno_algorithm;
+    config->nb_test_streams = 3;
     config->stream_0_packet_size = 511;
     config->stream_0_packet_interval = 800;
     config->data_stream_size = 1000000;
@@ -577,7 +672,7 @@ static void app_limited_config_set_default( app_limited_test_config_t* config, u
     config->nb_losses_max = 10;
 }
 
-int app_limited_reno_test()
+int app_limited_reno_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 1);
@@ -586,7 +681,7 @@ int app_limited_reno_test()
     return app_limited_test_one(&config);
 }
 
-int app_limited_cubic_test()
+int app_limited_cubic_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 2);
@@ -597,16 +692,38 @@ int app_limited_cubic_test()
     return app_limited_test_one(&config);
 }
 
-int app_limited_bbr_test()
+int app_limited_bbr_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 3);
     config.ccalgo = picoquic_bbr_algorithm;
+    config.min_bw_samples = 1;
+    config.min_app_limited_bw_samples = 1;
 
     return app_limited_test_one(&config);
 }
 
-int app_limited_rpr_test()
+int app_limited_bbr_post_idle_test(void)
+{
+    app_limited_test_config_t config;
+    app_limited_config_set_default(&config, 6);
+    config.ccalgo = picoquic_bbr_algorithm;
+    config.nb_test_streams = 2;
+    config.stream_0_data_size = 20000;
+    config.data_stream_size = 250000;
+    config.time_to_stream[1] = 3000000;
+    config.completion_target = 7000000;
+    config.min_bw_samples = 1;
+    config.min_app_limited_bw_samples = 1;
+    config.min_send_gap = 1500000;
+    config.post_idle_sample_time = config.time_to_stream[1];
+    config.min_post_idle_bw_samples = 1;
+    config.min_post_idle_app_limited_bw_samples = 1;
+
+    return app_limited_test_one(&config);
+}
+
+int app_limited_rpr_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 4);
@@ -621,7 +738,7 @@ int app_limited_rpr_test()
 }
 
 #if 0
-int app_limited_safe_test()
+int app_limited_safe_test(void)
 {
     app_limited_test_config_t config;
     app_limited_config_set_default(&config, 5);

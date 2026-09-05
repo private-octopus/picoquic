@@ -26,11 +26,8 @@
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
-#include "csv.h"
-#include "svg.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "cidset.h"
-#include "logreader.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic.h"
@@ -156,7 +153,7 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
     return ret;
 }
 
-int memlog_test()
+int memlog_test(void)
 {
     int ret = memlog_test_one(0, MEMLOG_FILE, 0);
 

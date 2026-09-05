@@ -30,10 +30,7 @@
 #include "picoquic_internal.h"
 #include "picoquictest_internal.h"
 #include "tls_api.h"
-#include "picoquic_binlog.h"
-#include "logreader.h"
-#include "qlog.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 
 /* Wait until handshake key is ready */
 int tester_wait_handshake_key(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time)
@@ -143,7 +140,7 @@ void tester_finalize_packet(picoquic_cnx_t* cnx,
     picoquic_finalize_and_protect_packet(cnx, packet,
         0, length, packet->offset, packet->checksum_overhead,
         send_length, send_buffer, send_buffer_max,
-        path_x, current_time);
+        path_x, current_time, 0);
 }
 
 int tester_push_frame_packet(picoquic_test_tls_api_ctx_t* test_ctx,
@@ -203,7 +200,7 @@ client hello. The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_test()
+int initial_ping_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -243,7 +240,7 @@ int initial_ping_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {
@@ -264,7 +261,7 @@ The test checks what happens, whether the
 server responds properly, or at all.
 */
 
-int initial_ping_ack_test()
+int initial_ping_ack_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -333,7 +330,7 @@ int initial_ping_ack_test()
     }
 
     if (ret == 0) {
-        ret = tls_api_test_with_loss_final(test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time);
     }
 
     if (test_ctx != NULL) {

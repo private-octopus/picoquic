@@ -33,12 +33,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 #include "picoquic_crypto_provider_api.h"
 #include "picotls/minicrypto.h"
@@ -60,7 +55,7 @@ static test_api_stream_desc_t test_scenario_minicrypto[] = {
     { 4, 0, 2000, 2000 }
 };
 
-int minicrypto_test()
+int minicrypto_test(void)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -76,7 +71,7 @@ int minicrypto_test()
     ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid, 8, 0, 0, 1);
     if (ret == 0) {
-        picoquic_set_binlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qserver, ".");
         test_ctx->qserver->use_long_log = 1;
     }
 
@@ -112,7 +107,7 @@ int minicrypto_test()
 extern ptls_cipher_suite_t ptls_minicrypto_aes128gcmsha256;
 extern picoquic_set_private_key_from_file_t picoquic_minicrypto_set_key_fn;
 extern picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn;
-int minicrypto_is_last_test()
+int minicrypto_is_last_test(void)
 {
     int ret = 0;
     int expected_aes128gcm_sha256 = 1;

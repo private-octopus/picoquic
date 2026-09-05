@@ -33,7 +33,7 @@
 #include <h3zero.h>
 #include <h3zero_common.h>
 #include <picoquic_packet_loop.h>
-#include <autoqlog.h>
+#include <picoquic_qlog.h>
 #include <performance_log.h>
 #include <picoquic_config.h>
 #include "wt_baton.h"
@@ -245,7 +245,7 @@ int wt_baton_client(char const* server_name, int server_port, char const* path, 
         * own callback.
          */
         ret = picowt_connect(cnx, h3_ctx, control_stream_ctx, baton_ctx.authority, baton_ctx.server_path,
-            wt_baton_callback, &baton_ctx);
+            wt_baton_callback, &baton_ctx, "spurious-baton-00");
 
         if (ret != 0) {
             fprintf(stderr, "Could not program the web transport connection\n");
@@ -376,8 +376,8 @@ int wt_baton_client(char const* server_name, int server_port, char const* path, 
  * when the connection is complete.
  */
 
-int baton_client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
-    void* callback_ctx, void * callback_arg)
+int baton_client_loop_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* UNUSED(callback_arg))
 {
     int ret = 0;
     wt_baton_ctx_t * cb_ctx = (wt_baton_ctx_t*)callback_ctx;
@@ -502,8 +502,8 @@ int wt_baton_server(char const* path, picoquic_quic_config_t* config)
 }
 
 /* server loop call back management -- place holder, really. */
-static int  baton_server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
-    void* callback_ctx, void* callback_arg)
+static int  baton_server_loop_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* UNUSED(callback_ctx), void* UNUSED(callback_arg))
 {
     int ret = 0;
 #ifdef _WINDOWS

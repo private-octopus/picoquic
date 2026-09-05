@@ -30,13 +30,14 @@
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
+#include "picoqmux.h"
 
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:J:E:y:K:Z:4:6:Y:5h";
 #else
-static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:h";
+static char* ref_option_text = "c:k:p:v:o:w:x:rR:s:XS:G:H:P:O:Me:C:i:l:Lb:q:m:n:a:t:zI:d:DQT:N:B:F:VU:0j:W:8J:E:y:K:Z:4:6:Y:5h";
 #endif
-int config_option_letters_test()
+int config_option_letters_test(void)
 {
     char option_text[256];
     int ret = picoquic_config_option_letters(option_text, sizeof(option_text), NULL);
@@ -76,6 +77,9 @@ static picoquic_quic_config_t param1 = {
     "/data/qlog/", /* char const* qlog_dir; */
     "/data/performance_log.csv", /* char const* performance_log; */
     4433, /* int server_port; */
+    12345, /* int local_port; */
+    1, /* int is_port_shared; */
+    0, /* int nb_threads; */
     1, /* int dest_if; */
     1536, /* int mtu_max; */
     -1, /* int cnx_id_length; */
@@ -127,7 +131,11 @@ static picoquic_quic_config_t param1 = {
     "test.example.com",
     NULL, /* ech_target */
     0, /* ech_target_len */
-    1000001 /* flow_control_max */
+    1000001, /* flow_control_max */
+    "192.0.2.1", /* Preferred Address V4 */
+    "2001:db8::1", /* Preferred Address V6 */
+    "443:17", /* QMux port and number of connections */
+    1 /* SCONE is supported */
 };
 
 static char const* config_argv1[] = {
@@ -161,6 +169,10 @@ static char const* config_argv1[] = {
     "-E", "ech_key.pem", "ech_config.pem",
     "-y", "test.example.com",
     "-Z", "1000001",
+    "-4", "192.0.2.1",
+    "-6", "2001:db8::1",
+    "-Y", "443",
+    "-5",
     NULL
 };
 
@@ -174,6 +186,9 @@ static picoquic_quic_config_t param2 = {
     NULL, /* char const* qlog_dir; */
     NULL, /* char const* performance_log; */
     0, /* int server_port; */
+    0, /* int local_port; */
+    0, /* int is_port_shared; */
+    0, /* int nb_threads; */
     0, /* int dest_if; */
     0, /* int mtu_max; */
     5, /* int cnx_id_length; */
@@ -224,7 +239,11 @@ static picoquic_quic_config_t param2 = {
     NULL, /* ECH public name */
     (uint8_t *)ech_test_config_bin, /* ech_target */
     sizeof(ech_test_config_bin), /* ech_target_len */
-    0 /* flow control max */
+    0, /* flow control max */
+    NULL,
+    NULL,
+    NULL,
+    0 /* SCONE is not supported */
 };
 
 static const char* config_argv2[] = {
@@ -333,7 +352,7 @@ static picoquic_congestion_algorithm_t const* config_test_cc_algo_list[3] = {
     NULL, NULL, NULL
 };
 
-static void config_test_register_cc_algorithms()
+static void config_test_register_cc_algorithms(void)
 {
     config_test_cc_algo_list[0] = picoquic_newreno_algorithm;
     config_test_cc_algo_list[1] = picoquic_cubic_algorithm;
@@ -445,7 +464,9 @@ int config_test_compare(const picoquic_quic_config_t* expected, const picoquic_q
     ret |= config_test_compare_string("ech_config_file", expected->ech_config_file, actual->ech_config_file);
     ret |= config_test_compare_string("ech_public_name", expected->ech_public_name, actual->ech_public_name);
     ret |= config_test_compare_uint64("flow_control_max", expected->flow_control_max, actual->flow_control_max);
-
+    ret |= config_test_compare_string("preferred_address_v4", expected->preferred_address_v4, actual->preferred_address_v4);
+    ret |= config_test_compare_string("preferred_address_v6", expected->preferred_address_v6, actual->preferred_address_v6);
+    ret |= config_test_compare_int("scone", expected->is_scone_supported, actual->is_scone_supported);
     if (expected->ech_target == NULL) {
         if (actual->ech_target != NULL || actual->ech_target_len != 0) {
             ret = -1;
@@ -580,7 +601,7 @@ int config_test_parse_command_line_ex(const picoquic_quic_config_t* expected, co
     return (ret);
 }
 
-int config_set_option_test_one()
+int config_set_option_test_one(void)
 {
     int ret = 0;
     char const* ticket_store = "ticket_store.bin";
@@ -606,7 +627,7 @@ int config_set_option_test_one()
     return (ret);
 }
 
-int config_option_test()
+int config_option_test(void)
 {
     int ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
     if (ret != 0) {
@@ -730,6 +751,10 @@ int config_quic_test_one(picoquic_quic_config_t* config)
         {
             ret = -1;
         }
+        if ((config->preferred_address_v4 != NULL || config->preferred_address_v6 != NULL) &&
+            !quic->default_tp.preferred_address.is_defined) {
+            ret = -1;
+        }
         picoquic_free(quic);
     }
 
@@ -752,7 +777,7 @@ int config_quic_test_one(picoquic_quic_config_t* config)
     return(ret);
 }
 
-int config_quic_test()
+int config_quic_test(void)
 {
     int ret = 0;
     config_test_register_cc_algorithms();
@@ -764,10 +789,141 @@ int config_quic_test()
     return ret;
 }
 
+/*
+* Testing that the QMux instance is properly created from
+* the configuration data */
+
+int config_qmux_parse_test(char const* qmux_string, int expected_port, int expected_nb_connections)
+{
+    int ret = 0;
+    int port = 0xffff;
+    int nb_connection = 0xdeadbeef;
+    picoqmux_parse_option_string(qmux_string, &port, &nb_connection);
+
+    if (port != expected_port) {
+        DBG_PRINTF("Expected QMux port %d, got %d", expected_port, port);
+        ret = -1;
+    }
+    else if (port != -1 && nb_connection != expected_nb_connections) {
+        DBG_PRINTF("Expected QMux nb_connections %d, got %d", expected_nb_connections, nb_connection);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int config_qmux_test_one(picoquic_quic_config_t* config, int qmux_port, int nb_connections)
+{
+    int ret = 0;
+    picoquic_quic_t* qmux;
+    uint64_t current_time = 0;
+    int qmux_port_used = 0;
+    int nb_connections_used = 0;
+
+    char const* server_cert_file = NULL;
+    char test_server_cert_file[512];
+    char const* server_key_file = NULL;
+    char test_server_key_file[512];
+    char const* root_trust_file = NULL;
+    char test_root_trust_file[512];
+
+    if (ret == 0 && config->server_cert_file != NULL) {
+        ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_CERT);
+        if (ret == 0) {
+            server_cert_file = config->server_cert_file;
+            config->server_cert_file = test_server_cert_file;
+        }
+    }
+
+    if (ret == 0 && config->server_key_file) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+        if (ret == 0) {
+            server_key_file = config->server_key_file;
+            config->server_key_file = test_server_key_file;
+        }
+    }
+
+    if (ret == 0 && config->root_trust_file) {
+        ret = picoquic_get_input_path(test_root_trust_file, sizeof(test_root_trust_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+        if (ret == 0) {
+            root_trust_file = config->root_trust_file;
+            config->root_trust_file = test_root_trust_file;
+        }
+    }
+
+    qmux = picoqmux_create_and_configure(config, NULL, NULL, current_time, NULL,
+        &qmux_port_used, &nb_connections_used);
+
+    if (qmux_port == -1) {
+        if (qmux != NULL) {
+            ret = -1;
+        }
+    }
+    else if (qmux == NULL) {
+        ret = 1;
+    }
+    else {
+        /* Check that at least some parameters are what we expect */
+        if (qmux_port_used != qmux_port) {
+            ret = -1;
+        }
+        if (nb_connections!= nb_connections_used) {
+            ret = -1;
+        }
+        if (nb_connections > 0 && nb_connections != (int)qmux->max_number_connections) {
+            ret = -1;
+        }
+        if (config->alpn != NULL &&
+            (qmux->default_alpn == NULL || strcmp(qmux->default_alpn, config->alpn) != 0)) {
+            ret = -1;
+        }
+        picoquic_free(qmux);
+    }
+
+    if (server_key_file != NULL) {
+        config->server_key_file = server_key_file;
+    }
+    if (server_cert_file != NULL) {
+        config->server_cert_file = server_cert_file;
+    }
+    if (root_trust_file != NULL) {
+        config->root_trust_file = root_trust_file;
+    }
+
+    return(ret);
+}
+
+int config_qmux_test(void)
+{
+    int ret = 0;
+
+    if (config_qmux_parse_test("443:17", 443, 17) != 0 ||
+        config_qmux_parse_test("443", 443, 0) != 0 ||
+        config_qmux_parse_test("443:", 443, 0) != 0 ||
+        config_qmux_parse_test("443:0", 443, 0) != 0 ||
+        config_qmux_parse_test(":17", 0, 17) != 0 ||
+        config_qmux_parse_test("0:17", 0, 17) != 0 ||
+        config_qmux_parse_test(":", 0, 0) != 0 ||
+        config_qmux_parse_test("xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0:xyz", -1, 0) != 0 ||
+        config_qmux_parse_test("0:0xyz", -1, 0) != 0) {
+        ret = -1;
+    }
+    else if (config_qmux_test_one(&param1, 443, 17) != 0 ||
+        config_qmux_test_one(&param2, -1, 0) != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 #define CONFIG_USAGE_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "config_usage_ref.txt"
 #define CONFIG_USAGE_TXT "config_usage.txt"
 
-int config_usage_test()
+int config_usage_test(void)
 {
 
     FILE* F = NULL;
@@ -785,5 +941,184 @@ int config_usage_test()
         ret = picoquic_test_compare_text_files(CONFIG_USAGE_TXT, config_usage_ref);
     }
 
+    return ret;
+}
+
+/* Test the parsing of preferred addresses.
+ */
+
+typedef struct st_test_preferred_addr_t {
+    char const* test_name;
+    char const* v4_text;
+    char const* v6_text;
+    uint16_t port;
+    int is_valid;
+    picoquic_tp_preferred_address_t preferred_address;
+} test_preferred_addr_t;
+
+#define NULLCID { { 0 }, 0 }
+
+test_preferred_addr_t test_preferred_address_cases[] = {
+    {
+        "none",
+        NULL,
+        NULL,
+        0,
+        1,
+        {0}
+    },
+    {
+        "v4_only",
+        "192.0.2.1",
+        NULL,
+        4433,
+        1,
+        {
+            1,
+            { 192, 0, 2, 1 },
+            4433,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+            0,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+        }
+    },
+    {
+        "v6_only",
+        NULL,
+        "2001:db8::1",
+        4433,
+        1,
+        {
+            1,
+            { 0, 0, 0, 0 },
+            0,
+            { 0x20,  0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+            4433,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+        }
+    },
+    {
+        "both",
+        "192.0.2.1",
+        "2001:db8::1",
+        4433,
+        1,
+        {
+            1,
+            { 192, 0, 2, 1 },
+            4433,
+            { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+            4433,
+            NULLCID,
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+        }
+    },
+    {
+        "bad v4",
+        "192.a.b.c",
+        "2001:db8::1",
+        4433,
+        0,
+        { 0}
+    },
+    {
+        "bad v6",
+        "192.0.2.1",
+        "2001:local",
+        4433,
+        0,
+        { 0 }
+    }
+};
+
+int config_preferred_test(void)
+{
+    int ret = 0;
+    for (size_t i = 0; ret == 0 && i < sizeof(test_preferred_address_cases) / sizeof(test_preferred_addr_t); i++) {
+        picoquic_tp_preferred_address_t preferred_address;
+        memset(&preferred_address, 0, sizeof(preferred_address));
+        int is_valid = (picoquic_set_preferred_address(&preferred_address, test_preferred_address_cases[i].v4_text,
+            test_preferred_address_cases[i].v6_text, test_preferred_address_cases[i].port) == 0);
+        if (is_valid != test_preferred_address_cases[i].is_valid) {
+            DBG_PRINTF("Test case %s: expected validity %d, got %d", test_preferred_address_cases[i].test_name,
+                test_preferred_address_cases[i].is_valid, is_valid);
+            ret = -1;
+        }
+        else if (is_valid) {
+            if (preferred_address.is_defined != test_preferred_address_cases[i].preferred_address.is_defined ||
+                memcmp(test_preferred_address_cases[i].preferred_address.ipv4Address, preferred_address.ipv4Address, 4) != 0 ||
+                test_preferred_address_cases[i].preferred_address.ipv4Port != preferred_address.ipv4Port ||
+                memcmp(test_preferred_address_cases[i].preferred_address.ipv6Address, preferred_address.ipv6Address, 16) != 0 ||
+                test_preferred_address_cases[i].preferred_address.ipv6Port != preferred_address.ipv6Port) {
+                DBG_PRINTF("Test case %s: expected and actual preferred addresses differ", test_preferred_address_cases[i].test_name);
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+/*
+* test of the port setting option.
+*/
+
+int config_set_port(picoquic_quic_config_t* config, char const* port_string);
+
+
+typedef struct st_test_set_port_t {
+    char const* port_string;
+    int is_valid;
+    uint16_t server_port;
+    uint16_t local_port;
+    uint16_t nb_threads;
+    int is_port_shared;
+} test_set_port_t;
+
+test_set_port_t test_set_port_cases[] = {
+    { "4433", 1, 4433, 0, 0, 0 },
+    { "443:4434", 1, 443, 4434, 0, 0 },
+    { "S4433", 1, 4433, 0, 0, 1 },
+    { "S443:4434", 1, 443, 4434, 0, 1 },
+    { "S443:4434*", 1, 443, 4434, 0, 1 },
+    { "S443:4434*1", 1, 443, 4434, 1, 1 },
+    { "S443:4434*256", 1, 443, 4434, 256, 1 },
+    { "4433*7", 1, 4433, 0, 7, 0 },
+    { "", 1, 0, 0, 0, 0 },
+    { "0", 1, 0, 0, 0, 0 },
+    { "*5", 1, 0, 0, 5, 0 },
+    { "0*3", 1, 0, 0, 3, 0 },
+    { "65535", 1, 65535, 0, 0, 0 },
+    { "S65535", 1, 65535, 0, 0, 1 },
+    { "S65534:65535", 1, 65534, 65535, 0, 1 },
+    { "65536", 0, 0, 0, 0, 0 },
+    { "-1", 0, 0, 0, 0, 0 },
+    { "abc", 0, 0, 0, 0, 0 },
+    { "4433:abc", 0, 0, 0, 0, 0 },
+    { "abc:4433", 0, 0, 0, 0, 0 },
+    { "S4433:abc", 0, 0, 0, 0, 0 },
+    { "Sabc:4433", 0, 0, 0, 0, 0 },
+};
+
+int config_set_port_test(void)
+{
+    int ret = 0;
+    for (size_t i = 0; ret == 0 && i < sizeof(test_set_port_cases) / sizeof(test_set_port_t); i++) {
+        picoquic_quic_config_t config = { 0 };
+        int is_valid = (config_set_port(&config, test_set_port_cases[i].port_string) == 0);
+        if (is_valid != test_set_port_cases[i].is_valid) {
+            DBG_PRINTF("Test case %zu: expected validity %d, got %d", i, test_set_port_cases[i].is_valid, is_valid);
+            ret = -1;
+        }
+        else if (is_valid) {
+            if (config.server_port != test_set_port_cases[i].server_port ||
+                config.local_port != test_set_port_cases[i].local_port ||
+                config.is_port_shared != test_set_port_cases[i].is_port_shared) {
+                DBG_PRINTF("Test case %zu: expected and actual port settings differ", i);
+                ret = -1;
+            }
+        }
+    }
     return ret;
 }
