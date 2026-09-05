@@ -35,6 +35,8 @@
 
 #define QUICPERF_STREAM_ID_INITIAL UINT64_MAX
 
+#include "picosplay.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

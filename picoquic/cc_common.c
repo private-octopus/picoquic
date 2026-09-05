@@ -52,6 +52,14 @@ uint64_t picoquic_cc_get_ack_number(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     return highest_acknowledged;
 }
 
+uint64_t picoquic_cc_get_lowest_not_ack(picoquic_path_t* path_x)
+{
+    picoquic_packet_context_t* pkt_ctx = (path_x->cnx->is_multipath_enabled) ? &path_x->pkt_ctx : &path_x->cnx->pkt_ctx[picoquic_packet_context_application];
+    uint64_t lowest_not_ack = (pkt_ctx->pending_first != NULL) ? pkt_ctx->pending_first->sequence_number : pkt_ctx->highest_acknowledged + 1;
+
+    return lowest_not_ack;
+}
+
 uint64_t picoquic_cc_get_ack_sent_time(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
     uint64_t latest_time_acknowledged;
@@ -160,6 +168,11 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 {
     int ret = 0;
 
+    /* Add silly instruction to bypass "argument not use" warning without changing the signature */
+    if (is_one_way_delay_enabled && rtt_measurement == 0) {
+        return 0;
+    }
+
     if(current_time > rtt_track->last_rtt_sample_time + 1000) {
         picoquic_cc_filter_rtt_min_max(rtt_track, rtt_measurement);
         rtt_track->last_rtt_sample_time = current_time;
@@ -172,6 +185,9 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
                 rtt_track->rtt_filtered_min = rtt_track->sample_max;
             }
             delta_max = rtt_track->rtt_filtered_min / 4;
+            if (delta_max < packet_time) {
+                delta_max = packet_time;
+            }
 
             if (rtt_track->sample_min > rtt_track->rtt_filtered_min) {
                 if (rtt_track->sample_min > rtt_track->rtt_filtered_min + delta_max) {
@@ -241,7 +257,7 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
 
 uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {
     /* RTT measurements will happen after the bandwidth is estimated. */
-    uint64_t max_win = path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000;
+    uint64_t max_win = PICOQUIC_BYTES_FROM_RATE(path_x->smoothed_rtt, path_x->peak_bandwidth_estimate);
     uint64_t min_win = max_win / 2;
 
     /* Return increased cwin, if larger than current cwin. */

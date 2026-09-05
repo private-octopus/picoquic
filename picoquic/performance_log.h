@@ -25,8 +25,8 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_PER_LOG_VERSION 1
-#define PICOQUIC_PERF_LOG_MAX_ITEMS 27
+#define PICOQUIC_PER_LOG_VERSION 2
+#define PICOQUIC_PERF_LOG_MAX_ITEMS 29
 
 typedef enum {
     picoquic_perflog_is_client = 0,
@@ -55,7 +55,9 @@ typedef enum {
     picoquic_perflog_ccalgo = 23,
     picoquic_perflog_bwe_max = 24,
     picoquic_perflog_pacing_quantum_max = 25,
-    picoquic_perflog_pacing_rate = 26
+    picoquic_perflog_pacing_rate = 26,
+    picoquic_perflog_cc_state = 27,
+    picoquic_perflog_cc_param = 28
 } picoquic_perflog_column_enum;
 
 const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank);
@@ -66,4 +68,3 @@ int picoquic_perflog_setup(picoquic_quic_t* quic, char const* perflog_file_name)
 }
 #endif
 #endif /* PICOQUIC_PERFORMANCE_LOG_H */
-

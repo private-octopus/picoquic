@@ -198,9 +198,6 @@
     <ClCompile Include="cc_compete_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picoquic_ns.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ech_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -216,10 +213,16 @@
     <ClCompile Include="rctl_aqm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="dualq_aqm.c">
+    <ClCompile Include="dualq_aqm_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="dualq_aqm_test.c">
+    <ClCompile Include="qlog_frame_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="qmux_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="scone_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

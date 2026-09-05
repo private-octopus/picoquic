@@ -152,7 +152,11 @@ void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing
         pacing->rate_max = pacing->rate;
     }
 
-    pacing->packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
+    if (packet_time > 10000.0) {
+        pacing->packet_time_nanosec = 10000000000000ull;
+    } else {
+        pacing->packet_time_nanosec = (uint64_t)(packet_time * 1000000000.0);
+    }
 
     if (pacing->packet_time_nanosec <= 0) {
         pacing->packet_time_nanosec = 1;
@@ -164,10 +168,13 @@ void picoquic_update_pacing_parameters(picoquic_pacing_t * pacing, double pacing
         }
         pacing->packet_time_microsec = (pacing->packet_time_nanosec + 999ull) / 1000;
     }
-
-    pacing->bucket_max = (uint64_t)(quantum_time * 1000000000.0);
-    if (pacing->bucket_max <= 0) {
-        pacing->bucket_max = 16 * pacing->packet_time_nanosec;
+    if (quantum_time > 100000.0) {
+        pacing->bucket_max = 100000000000000ull;
+    } else {
+        pacing->bucket_max = (uint64_t)(quantum_time * 1000000000.0);
+        if (pacing->bucket_max <= 0) {
+            pacing->bucket_max = 16 * pacing->packet_time_nanosec;
+        }
     }
 
     if (pacing->bucket_nanosec > pacing->bucket_max) {
@@ -257,13 +264,13 @@ int picoquic_is_sending_authorized_by_pacing(picoquic_cnx_t* cnx, picoquic_path_
 }
 
 /* Reset pacing data if congestion algorithm computes it directly */
-void picoquic_update_pacing_rate(picoquic_cnx_t* cnx, picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
+void picoquic_update_pacing_rate(picoquic_path_t* path_x, double pacing_rate, uint64_t quantum)
 {
     picoquic_update_pacing_parameters(&path_x->pacing, pacing_rate,
         quantum, path_x->send_mtu, path_x->smoothed_rtt, path_x);
 }
 /* Reset pacing if expressed as CWIN and RTT */
-void picoquic_update_pacing_data(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int slow_start)
+void picoquic_update_pacing_data(picoquic_path_t* path_x, int slow_start)
 {
     picoquic_update_pacing_window(&path_x->pacing, slow_start, path_x->cwin, path_x->send_mtu, path_x->smoothed_rtt,
         path_x);

@@ -38,7 +38,7 @@ extern "C" {
 
     typedef struct st_dualq_queue_t {
         uint64_t queue_bytes;
-        uint64_t queue_time;
+        //uint64_t queue_time;
         int count; /* number of packets in queue */
         double sum_p; /* Ongoing sum of drop prob, create drop is sum > 1*/
         picoquictest_sim_packet_t* queue_first;
@@ -75,8 +75,8 @@ extern "C" {
         uint64_t last_input_time;
     } dualq_state_t;
 
-    void dualq_enqueue_queue(dualq_state_t* dualq, picoquictest_sim_link_t* link, dualq_queue_t* xq, picoquictest_sim_packet_t* packet);
-    picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, picoquictest_sim_link_t* link, uint64_t current_time, int* should_drop);
+    void dualq_enqueue_queue(dualq_queue_t* xq, picoquictest_sim_packet_t* packet);
+    picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, uint64_t current_time, int* should_drop);
 #ifdef __cplusplus
 }
 #endif

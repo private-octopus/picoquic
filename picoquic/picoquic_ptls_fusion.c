@@ -27,6 +27,7 @@
 #include "wincompat.h"
 #include "ws2ipdef.h"
 #pragma warning(disable:4100)
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #include "picoquic_crypto_provider_api.h"
@@ -74,7 +75,7 @@ void picoquic_ptls_fusion_load(int unload)
     }
 }
 #else
-void picoquic_ptls_fusion_load(int unload)
+void picoquic_ptls_fusion_load(int UNUSED(unload))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(unload);

@@ -31,19 +31,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"
 
 #ifdef PTLS_WITHOUT_OPENSSL
-int openssl_cert_test()
+int openssl_cert_test(void)
 {
     /* Nothing to do, as the module is not loaded. */
     return 0;
@@ -74,7 +69,7 @@ static int openssl_cert_test_one(char const * cert_file_name, int expected_count
     if (ret == 0) {
         ptls_iovec_t* certs_vec = picoquic_openssl_get_certs_from_file(cert_file_path, &count);
 
-        if (count != expected_count) {
+        if ((int)count != expected_count) {
             DBG_PRINTF("Expected %d certs for %s, got=%d", expected_count, cert_file_path, count);
             ret = -1;
         }
@@ -96,7 +91,7 @@ static int openssl_cert_test_one(char const * cert_file_name, int expected_count
 }
 
 
-int openssl_cert_test()
+int openssl_cert_test(void)
 {
     /* Nothing to do, as the module is not loaded. */
     int ret = 0;

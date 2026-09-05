@@ -50,7 +50,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
-int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx);
 
 void picoquic_tlscontext_free(void* ctx, unsigned int client_mode);
 
@@ -125,21 +125,23 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
+void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_key);
 
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
-
-char const* picoquic_tls_get_negotiated_alpn(picoquic_cnx_t* cnx);
-char const* picoquic_tls_get_sni(picoquic_cnx_t* cnx);
 
 void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
     struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn);
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
 
+void picoquic_dispose_ticket_key_state(picoquic_ticket_key_state_t* key);
+
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
 int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic);
+
+void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 
 int picoquic_server_decrypt_retry_token(picoquic_quic_t* quic, const struct sockaddr* addr_peer, 
     int * is_new_token, const uint8_t* token, size_t token_length, uint8_t* text, size_t* text_length);
@@ -199,8 +201,8 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_tls_api_init();
-void picoquic_tls_api_unload();
+void picoquic_tls_api_init(void);
+void picoquic_tls_api_unload(void);
 void picoquic_tls_api_reset(uint64_t init_flags);
 
 void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);

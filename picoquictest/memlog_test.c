@@ -26,11 +26,8 @@
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
-#include "csv.h"
-#include "svg.h"
-#include "qlog.h"
+#include "picoquic_qlog.h"
 #include "cidset.h"
-#include "logreader.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
 #include "picoquic.h"
@@ -78,9 +75,9 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
 
     if (is_multipath) {
         /* Add negotiation of multipath option */
-        test_ctx->qserver->default_tp.is_multipath_enabled = 1;
-        test_ctx->qclient->default_tp.is_multipath_enabled = 1;
-        test_ctx->cnx_client->local_parameters.is_multipath_enabled = 1;
+        test_ctx->qserver->default_tp.initial_max_path_id = 1;
+        test_ctx->qclient->default_tp.initial_max_path_id = 1;
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 1;
     }
 
     if (ret == 0) {
@@ -156,7 +153,7 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
     return ret;
 }
 
-int memlog_test()
+int memlog_test(void)
 {
     int ret = memlog_test_one(0, MEMLOG_FILE, 0);
 

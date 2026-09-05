@@ -1,6 +1,6 @@
 /*
-* Author: Igor Lubashev
-* Copyright (c) 2017, Private Octopus, Inc.
+* Author: Christan Huitema
+* Copyright (c) 2026, Private Octopus, Inc.
 * All rights reserved.
 *
 * Permission to use, copy, modify, and distribute this software for any
@@ -62,7 +62,16 @@ extern "C" {
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
 #define PICOQUIC_LOSS_RECOVERY 5
+#define PICOQUIC_QMUX 6
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
+
+/* Macros for handling conversion between data rate, microseconds and bytes
+* By default, data rates are expressed as bytes per second (uint64_t),
+* delays are expressed in microseconds (uint64_t). The following
+* macros help in the conversions and ensure code consistency.
+*/
+#define PICOQUIC_BYTES_FROM_RATE(microseconds, bps) (((uint64_t)(microseconds)*((uint64_t)(bps)))/1000000ull)
+#define PICOQUIC_RATE_FROM_BYTES(bytes, microseconds) ((((uint64_t)(bytes))*1000000ull)/((uint64_t)(microseconds)))
 
 
 void debug_set_stream(FILE *F);
@@ -109,6 +118,8 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
+    char const* v4_text, char const* v6_text, uint16_t preferred_port);
 
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);
@@ -173,10 +184,8 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t * bytes, const uint8_t *
 #define VARINT_LEN(bytes) (((uint8_t)1) << ((bytes[0] >> 6)&3))
 #define VARINT_LEN_T(bytes, t_len) (((t_len)1) << ((bytes[0] >> 6)&3))
 
-#if 0
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64);
-#endif
 
 /* Encoding functions of the form uint8_t * picoquic_frame_XXX_encode(uint8_t * bytes, uint8_t * bytes-max, ...)
  */
@@ -279,9 +288,10 @@ typedef struct st_picoquictest_aqm_t picoquictest_aqm_t;
 typedef struct st_picoquictest_aqm_t {
     void (*submit) (picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
         picoquictest_sim_packet_t* packet, uint64_t current_time);
-    void (*check_arrival)(picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
     void (*reset) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
     void (*release) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link);
+    int (*has_pending) (picoquictest_aqm_t* self);
+    void (*admit_pending) (picoquictest_aqm_t* self, struct st_picoquictest_sim_link_t* link, uint64_t current_time);
 } picoquictest_aqm_t;
 
 typedef enum {
@@ -329,9 +339,13 @@ picoquictest_sim_link_t* picoquictest_sim_link_create(double data_rate_in_gps,
 
 void picoquictest_sim_link_delete(picoquictest_sim_link_t* link);
 
-picoquictest_sim_packet_t* picoquictest_sim_link_create_packet();
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet(void);
 
 uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time);
+
+void picoquictest_sim_link_admit_pending(picoquictest_sim_link_t* link, uint64_t current_time);
+
+uint64_t picoquictest_sim_link_next_admission(picoquictest_sim_link_t* link, uint64_t current_time, uint64_t next_time);
 
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time);
@@ -379,6 +393,13 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_ECH_CERT "certs\\ech\\ech_cert.pem"
 #define PICOQUIC_TEST_ECH_RR_REF "certs\\ech\\ech_rr.txt"
 #define PICOQUIC_TEST_ECH_CONFIG_REF "certs\\ech\\ech_config.txt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_RSA "certs\\rsa\\cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_RSA "certs\\rsa\\key.pem"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ED25519 "certs\\mtls_ed25519\\server.crt"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ED25519 "certs\\mtls_ed25519\\server.key"
+#define PICOQUIC_TEST_FILE_CLIENT_CERT_ED25519 "certs\\mtls_ed25519\\client.crt"
+#define PICOQUIC_TEST_FILE_CLIENT_KEY_ED25519 "certs\\mtls_ed25519\\client.key"
+#define PICOQUIC_TEST_FILE_CERT_STORE_ED25519 "certs\\mtls_ed25519\\ca.crt"
 #else
 #define PICOQUIC_TEST_FILE_SERVER_CERT "certs/cert.pem"
 #define PICOQUIC_TEST_FILE_SERVER_BAD_CERT "certs/badcert.pem"
@@ -392,6 +413,13 @@ void picoquic_test_simlink_suspend(picoquictest_sim_link_t* link, uint64_t time_
 #define PICOQUIC_TEST_ECH_CERT "certs/ech/ech_cert.pem"
 #define PICOQUIC_TEST_ECH_RR_REF "certs/ech/ech_rr.txt"
 #define PICOQUIC_TEST_ECH_CONFIG_REF "certs/ech/ech_config.txt"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_RSA "certs/rsa/cert.pem"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_RSA "certs/rsa/key.pem"
+#define PICOQUIC_TEST_FILE_SERVER_CERT_ED25519 "certs/mtls_ed25519/server.crt"
+#define PICOQUIC_TEST_FILE_SERVER_KEY_ED25519 "certs/mtls_ed25519/server.key"
+#define PICOQUIC_TEST_FILE_CLIENT_CERT_ED25519 "certs/mtls_ed25519/client.crt"
+#define PICOQUIC_TEST_FILE_CLIENT_KEY_ED25519 "certs/mtls_ed25519/client.key"
+#define PICOQUIC_TEST_FILE_CERT_STORE_ED25519 "certs/mtls_ed25519/ca.crt"
 #endif
 
  /* To set the solution directory for tests */

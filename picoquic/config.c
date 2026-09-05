@@ -27,14 +27,13 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
-#include "picoquic_binlog.h"
-#include "picoquic_logger.h"
-#include "picoquic_unified_log.h"
 #include "tls_api.h"
 #include "picoquic_config.h"
 #include "picoquic_bbr.h"
+#include "picoqmux.h"
 
 typedef struct st_option_param_t {
     char const * param;
@@ -71,7 +70,7 @@ static option_table_line_t option_table[] = {
     { picoquic_option_LOSSBIT, 'O', "lossbit", 1, "number", "Set the default lossbit policy" },
     { picoquic_option_MULTIPATH, 'M', "multipath", 0, "", "Enable QUIC multipath extension" },
     { picoquic_option_DEST_IF, 'e', "dest_if", 1, "if", "Send on interface (default: -1)" },
-    { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20)" },
+    { picoquic_option_CIPHER_SUITE, 'C', "cipher_suite", 1, "cipher_suite_id", "specify cipher suite (e.g. -C 20 = chacha20, -C 1306 = AEGIS-256, -C 1307 = AEGIS-128L)" },
     { picoquic_option_INIT_CNXID, 'i', "cnxid_params", 1, "per-text-lb-spec", "See documentation for LB compatible CID configuration" },
     { picoquic_option_LOG_FILE, 'l', "text_log", 1, "file", "Log file, Log to stdout if file = \"-\". No text logging if absent." },
     { picoquic_option_LONG_LOG, 'L', "long_log", 0, "", "Log all packets. If absent, log stops after 100 packets." },
@@ -103,7 +102,12 @@ static option_table_line_t option_table[] = {
     { picoquic_option_AddressDiscovery, 'J', "addr_disc", 1, "mode", "provider (0), receiver (1) or both (2)."},
     { picoquic_option_ECH_server, 'E' , "ech_s", 2, "key config", "ECH private key file, config file. Default= no ECH on server."},
     { picoquic_option_ECH_init, 'y', "ech_init", 1, "public_name", "Create an ECH configuration before applying the `ech_s` parameter."},
-    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded,"},
+    { picoquic_option_ECH_client, 'K', "ech_c", 1, "base64", "ECH configuration for the client connection, base64 encoded."},
+    { picoquic_option_FLOW_CONTROL_MAX, 'Z', "flow_control_max", 1, "bytes", "Set the flow control's initial max data."},
+    { picoquic_option_Preferred_V4, '4', "preferred_v4", 1, "ip[:port]", "Preferred address for v4 connections." },
+    { picoquic_option_Preferred_V6, '6', "preferred_v6", 1, "ipv6[:port]", "Preferred address for v6 connections." },
+    { picoquic_option_QMUX, 'Y', "qmux", 1, "tcp-port", "Use QMUX in addition to QUIC" },
+    { picoquic_option_SCONE, '5', "scone", 0, "", "Enable support for SCONE" },
     { picoquic_option_HELP, 'h', "help", 0, "", "This help message" }
 };
 
@@ -219,6 +223,54 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
     return v;
 }
 
+int config_set_port(picoquic_quic_config_t* config, char const * port_string)
+{
+    int ret = 0;
+    char opval_buffer[256];
+    char const* p = port_string;
+    int is_port_shared = 0;
+    int p1 = 0;
+    int p2 = 0;
+    int nb_threads = 0;
+
+    if (*p == 'S') {
+        is_port_shared = 1;
+        p++;
+    }
+    while (*p >= '0' && *p <= '9') {
+        p1 *= 10;
+        p1 += (*p - '0');
+        p++;
+    }
+    if (*p == ':') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            p2 *= 10;
+            p2 += (*p - '0');
+            p++;
+        }
+    }
+    if (*p == '*') {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            nb_threads *= 10;
+            nb_threads += (*p - '0');
+            p++;
+        }
+    }
+    if (*p != 0 || p1 < 0 || p1 > 65535 || p2 < 0 || p2 > 65535) {
+        fprintf(stderr, "Invalid port: %s\n", config_optval_string(opval_buffer, 256, port_string, strlen(port_string)));
+        ret = -1;
+    }
+    else {
+        config->server_port = (uint16_t)p1;
+        config->local_port = (uint16_t)p2;
+        config->is_port_shared = is_port_shared;
+        config->nb_threads = nb_threads;
+    }
+    return ret;
+}
+
 static int config_set_option(option_table_line_t* option_desc, option_param_t* params, int nb_params, picoquic_quic_config_t* config)
 {
     int ret = 0;
@@ -232,7 +284,7 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         ret = config_set_string_param(&config->server_key_file, params, nb_params, 0);
         break;
     case picoquic_option_SERVER_PORT:
-        config->server_port = config_atoi(params, nb_params, 0, &ret);
+        ret = config_set_port(config, params->param);
         if (ret != 0) {
             fprintf(stderr, "Invalid port: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
         }
@@ -460,7 +512,11 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         if (nb_params != 1) {
             ret = -1;
         }
-        else {
+        else if (strcmp(params[0].param, "-") == 0) {
+            config->ech_target = NULL;
+            config->ech_target_len = SIZE_MAX;
+        }
+        else{
             ret = picoquic_base64_decode(&config->ech_target, &config->ech_target_len, params[0].param);
         }
         if (ret != 0) {
@@ -469,7 +525,29 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
         }
         break;
     }
-
+    case picoquic_option_FLOW_CONTROL_MAX: {
+        int v = config_atoi(params, nb_params, 0, &ret);
+        if (ret != 0 || v < 0) {
+            fprintf(stderr, "Invalid flow control max option: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
+            ret = (ret == 0) ? -1 : ret;
+        }
+        else {
+            config->flow_control_max = v;
+        }
+        break;
+    }
+    case picoquic_option_Preferred_V4:
+        ret = config_set_string_param(&config->preferred_address_v4, params, nb_params, 0);
+        break;
+    case picoquic_option_Preferred_V6:
+        ret = config_set_string_param(&config->preferred_address_v6, params, nb_params, 0);
+        break;
+    case picoquic_option_QMUX:
+        ret = config_set_string_param(&config->qmux_string, params, nb_params, 0);
+        break;
+    case picoquic_option_SCONE:
+        config->is_scone_supported = 1;
+        break;
     case picoquic_option_HELP:
         ret = -1;
         break;
@@ -534,7 +612,7 @@ void picoquic_config_usage_file(FILE* F)
     }
 }
 
-void picoquic_config_usage()
+void picoquic_config_usage(void)
 {
     picoquic_config_usage_file(stderr);
 }
@@ -850,6 +928,9 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         picoquic_set_cwin_max(quic, config->cwin_max);
         picoquic_set_default_address_discovery_mode(quic, config->address_discovery_mode);
 
+        picoquic_set_preferred_address(&quic->default_tp.preferred_address,
+            config->preferred_address_v4, config->preferred_address_v6, config->local_port);
+
         if (config->token_file_name) {
             if (picoquic_load_retry_tokens(quic, config->token_file_name) != 0) {
                 fprintf(stderr, "No token file present. Will create one as <%s>.\n", config->token_file_name);
@@ -876,15 +957,8 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
          /* TODO: parameters to define padding policy */
         picoquic_set_padding_policy(quic, 39, 128);
 
-        picoquic_set_binlog(quic, config->bin_dir);
-
-        /* We cannot set qlog here, because of the dependency on libraries
-         * that are not linked with picoquic by default. The application
-         * will have to call:
-         *    picoquic_set_qlog(quic, config->qlog_dir);
-         */
-
-        picoquic_set_textlog(quic, config->log_file);
+        /* Do not handle creation of log contexts at this level, as that
+         * would force linkage of log functions. */
 
         picoquic_set_log_level(quic, config->use_long_log);
 
@@ -911,6 +985,12 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             else if (config->cipher_suite_id == 256) {
                 iana_cipher_suite_code = PICOQUIC_AES_256_GCM_SHA384;
             }
+            else if (config->cipher_suite_id == 1306) {
+                iana_cipher_suite_code = PICOQUIC_AEGIS_256_SHA512;
+            }
+            else if (config->cipher_suite_id == 1307) {
+                iana_cipher_suite_code = PICOQUIC_AEGIS_128L_SHA256;
+            }
             if (picoquic_set_cipher_suite(quic, iana_cipher_suite_code) != 0) {
                 fprintf(stderr, "Could not set cipher suite #%d.\n", config->cipher_suite_id);
             }
@@ -935,8 +1015,17 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
             }
         }
 
-        if (ret == 0) {
+        if (ret == 0 && (config->ech_key_file != NULL || config->ech_target != NULL)) {
             ret = picoquic_ech_configure_quic_ctx(quic, config->ech_key_file, config->ech_config_file);
+        }
+
+        if (ret == 0 && config->flow_control_max > 0)
+        {
+            picoquic_set_max_data_control(quic, config->flow_control_max);
+        }
+
+        if (ret == 0 && config->is_scone_supported) {
+            quic->default_tp.is_scone_supported = 1;
         }
 
         if (ret != 0) {
@@ -950,6 +1039,89 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     return quic;
 }
 
+/*
+* Configure a "QMux" context, i.e., a QUIC context specially configured 
+* for managing QMux connections.
+*/
+
+void picoqmux_parse_option_string(char const* option_string, int* qmux_port,
+    int* nb_connections)
+{
+    *qmux_port = -1;
+    *nb_connections = 0;
+
+    if (option_string == NULL) {
+        /* Something went wrong */
+        DBG_PRINTF("%s", "Cannot configure QMUX, no QMux option string present.");
+    }
+    else {
+        int p = 0;
+        int n = 0;
+        char const* x = option_string;
+
+        while (*x != 0 && *x >= '0' && *x <= '9') {
+            p = p * 10 + (*x - '0');
+            x++;
+        }
+        if (*x == ':') {
+            x++;
+            while (*x != 0 && *x >= '0' && *x <= '9') {
+                n = n * 10 + (*x - '0');
+                x++;
+            }
+        }
+        if (*x != 0) {
+            /* Something went wrong */
+            DBG_PRINTF("Invalid QMux string: %s", option_string);
+        }
+        else {
+            *qmux_port = p;
+            *nb_connections = n;
+        }
+    }
+}
+
+picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
+    picoquic_stream_data_cb_fn default_callback_fn,
+    void* default_callback_ctx,
+    uint64_t current_time,
+    uint64_t* p_simulated_time,
+    int *qmux_port,
+    int *nb_connections)
+{
+    picoquic_quic_t* qmux = NULL;
+
+    picoqmux_parse_option_string(config->qmux_string, qmux_port, nb_connections);
+
+    if (*qmux_port >= 0) {
+        qmux = picoqmux_create(
+            *nb_connections,
+            config->server_cert_file,
+            config->server_key_file,
+            config->root_trust_file,
+            config->alpn,
+            default_callback_fn,
+            default_callback_ctx,
+            (config->has_reset_seed) ? (uint8_t*)config->reset_seed : NULL,
+            current_time,
+            p_simulated_time,
+            config->ticket_file_name,
+            config->ticket_encryption_key,
+            config->ticket_encryption_key_length);
+
+        if (qmux == NULL) {
+            DBG_PRINTF("%s", "Could not create QMUX context.");
+        }
+        else {
+            picoquic_set_log_level(qmux, config->use_long_log);
+
+
+            /* TODO: ECH. Is this different from setting ECH for QUIC? */
+        }
+    }
+    return qmux;
+}
+
 void picoquic_config_init(picoquic_quic_config_t* config)
 {
     memset(config, 0, sizeof(picoquic_quic_config_t));
@@ -958,6 +1130,7 @@ void picoquic_config_init(picoquic_quic_config_t* config)
     config->initial_random = 3;
     config->cwin_max = UINT64_MAX;
     config->idle_timeout = PICOQUIC_MICROSEC_HANDSHAKE_MAX / 1000;
+    config->flow_control_max = 0;
 }
 
 void picoquic_config_clear(picoquic_quic_config_t* config)
@@ -1028,5 +1201,18 @@ void picoquic_config_clear(picoquic_quic_config_t* config)
     if (config->ech_target != NULL) {
         free((void*)config->ech_target);
     }
+    if (config->preferred_address_v4 != NULL) {
+        free((void*)config->preferred_address_v4);
+    }
+    if (config->preferred_address_v6 != NULL) {
+        free((void*)config->preferred_address_v6);
+    }
+    if (config->qmux_string != NULL) {
+        free((void*)config->qmux_string);
+    }
     picoquic_config_init(config);
 }
+
+/* Set a server context, using more parameters than the simple
+* creation from configuration.
+ */

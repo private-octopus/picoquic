@@ -100,8 +100,9 @@ static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* pat
             picoquic_get_ip_addr((struct sockaddr*)&path_x->first_tuple->peer_addr, &ip_addr, &ip_addr_length);
 
             if (ip_addr_length == cnx->seed_ip_addr_length &&
-                memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0) {
+                (ip_addr_length == 0 || memcmp(ip_addr, cnx->seed_ip_addr, ip_addr_length) == 0)) {
                 picoquic_per_ack_state_t ack_state = { 0 };
+                ack_state.pc = picoquic_packet_context_application; /* Arbitrary! */
                 ack_state.nb_bytes_acknowledged = (uint64_t)cnx->seed_cwin;
                 cnx->cwin_notified_from_seed = 1;
                 cnx->congestion_alg->alg_notify(cnx, path_x,
@@ -118,7 +119,7 @@ static void picoquic_validate_bdp_seed(picoquic_cnx_t* cnx, picoquic_path_t* pat
 * and that the ack delay has been validated
 */
 
-void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x,
+void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_path,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
     if (time_stamp != 0) {
@@ -176,7 +177,7 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
 * pace computation of averages and variants, so that average delays and variations are
 * computed just a few times per round trip.
 */
-void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, picoquic_path_t* path_x, int epoch,
+void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
     if (old_path != NULL && (!old_path->rtt_is_initialized || epoch >= 0)) {
@@ -238,7 +239,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
 
         /* if one way delay measured, use it */
         if (time_stamp > 0) {
-            picoquic_update_path_rtt_one_way(cnx, old_path, path_x, send_time, current_time, ack_delay, time_stamp);
+            picoquic_update_path_rtt_one_way(cnx, old_path, send_time, current_time, ack_delay, time_stamp);
         }
         /* At the end of the period, update the smoothed and variants statistics.
         */
@@ -302,6 +303,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, pi
         /* Pass the new values to the congestion algorithm */
         if (cnx->congestion_alg != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
+            ack_state.pc = picoquic_context_from_epoch(epoch);
             ack_state.rtt_measurement = rtt_estimate;
             ack_state.one_way_delay = (cnx->is_time_stamp_enabled) ? old_path->one_way_delay_sample : 0;
             cnx->congestion_alg->alg_notify(cnx, old_path,

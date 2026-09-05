@@ -45,14 +45,14 @@ uint8_t picoquic_spinbit_basic_outgoing(picoquic_cnx_t * cnx)
  * Two procedures defining the null spin bit variant
  */
 
-void picoquic_spinbit_null_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
+void picoquic_spinbit_null_incoming(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* UNUSED(path_x), picoquic_packet_header* UNUSED(ph))
 {
     UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(path_x);
     UNREFERENCED_PARAMETER(ph);
 }
 
-uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx)
+uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t* UNUSED(cnx))
 {
     UNREFERENCED_PARAMETER(cnx);
     return 0;
@@ -62,14 +62,14 @@ uint8_t picoquic_spinbit_null_outgoing(picoquic_cnx_t * cnx)
  * Two procedures defining the null spin bit randomized variant
  */
 
-void picoquic_spinbit_random_incoming(picoquic_cnx_t * cnx, picoquic_path_t * path_x, picoquic_packet_header * ph)
+void picoquic_spinbit_random_incoming(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* UNUSED(path_x), picoquic_packet_header* UNUSED(ph))
 {
     UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(path_x);
     UNREFERENCED_PARAMETER(ph);
 }
 
-uint8_t picoquic_spinbit_random_outgoing(picoquic_cnx_t * cnx)
+uint8_t picoquic_spinbit_random_outgoing(picoquic_cnx_t* UNUSED(cnx))
 {
     UNREFERENCED_PARAMETER(cnx);
     return (uint8_t) (picoquic_public_random_64()&0x20);

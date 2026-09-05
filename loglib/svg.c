@@ -25,6 +25,7 @@
 
 #include "logconvert.h"
 #include "logreader.h"
+#include "picoquic.h"
 
 typedef struct svg_context_st {
 
@@ -164,7 +165,7 @@ int svg_packet_frame(bytestream * s, void * ptr)
         byteread_vint(s, &stream_id);
         fprintf(svg->f_txtlog, " stream[%"PRIu64"] ", stream_id);
     } else {
-        fprintf(svg->f_txtlog, " %s ", ftype2str((picoquic_frame_type_enum_t)ftype));
+        fprintf(svg->f_txtlog, " %s ", picoquic_frame_name((picoquic_frame_type_enum_t)ftype));
     }
     return 0;
 }
@@ -177,7 +178,7 @@ int svg_packet_end(void * ptr)
     return 0;
 }
 
-int svg_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
+int svg_cc_update(uint64_t UNUSED(time), uint64_t UNUSED(path_id), bytestream* UNUSED(s), void* UNUSED(ptr))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(time);
@@ -188,7 +189,7 @@ int svg_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     return 0;
 }
 
-int svg_info_message(uint64_t time, bytestream* s, void* ptr)
+int svg_info_message(uint64_t UNUSED(time), bytestream* UNUSED(s), void* UNUSED(ptr))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(time);

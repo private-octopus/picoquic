@@ -26,10 +26,14 @@
 #include "wincompat.h"
 #include "ws2ipdef.h"
 #pragma warning(disable:4100)
+#pragma warning(disable:4204)
 #endif
 #include "picotls.h"
 #include "picoquic_crypto_provider_api.h"
 #include "picotls/minicrypto.h"
+#ifdef PTLS_HAVE_AEGIS
+#include <aegis.h>
+#endif
 
 static int set_minicrypto_private_key_from_key_file(char const* keypem, ptls_context_t* ctx)
 {
@@ -39,12 +43,12 @@ static int set_minicrypto_private_key_from_key_file(char const* keypem, ptls_con
 picoquic_set_private_key_from_file_t picoquic_minicrypto_set_key_fn =
                                          set_minicrypto_private_key_from_key_file;
 
-void picoquic_clear_minicrypto()
+void picoquic_clear_minicrypto(void)
 {
     /* Nothing for now */
 }
 
-void picoquic_init_minicrypto()
+void picoquic_init_minicrypto(void)
 {
     /* Nothing for now */
 }
@@ -59,10 +63,17 @@ void picoquic_ptls_minicrypto_load(int unload)
     }
     else {
         picoquic_init_minicrypto();
+#ifdef PTLS_HAVE_AEGIS
+        (void)aegis_init();
+#endif
 
         picoquic_register_ciphersuite(&ptls_minicrypto_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_minicrypto_aes256gcmsha384, 1);
         picoquic_register_ciphersuite(&ptls_minicrypto_chacha20poly1305sha256, 1);
+#ifdef PTLS_HAVE_AEGIS
+        picoquic_register_ciphersuite(&ptls_minicrypto_aegis256sha512, 1);
+        picoquic_register_ciphersuite(&ptls_minicrypto_aegis128lsha256, 1);
+#endif
         picoquic_register_key_exchange_algorithm(&ptls_minicrypto_secp256r1);
         picoquic_register_key_exchange_algorithm(&ptls_minicrypto_x25519);
 

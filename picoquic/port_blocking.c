@@ -161,5 +161,6 @@ int picoquic_check_addr_blocked(const struct sockaddr* addr_from)
 
 void picoquic_disable_port_blocking(picoquic_quic_t * quic, int is_port_blocking_disabled)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     quic->is_port_blocking_disabled = is_port_blocking_disabled;
 }

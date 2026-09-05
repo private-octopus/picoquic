@@ -159,6 +159,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="getopt.c" />
+    <ClCompile Include="..\picohttp\wt_baton.c" />
     <ClCompile Include="picoquicdemo.c" />
   </ItemGroup>
   <ItemGroup>

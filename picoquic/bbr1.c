@@ -466,7 +466,7 @@ static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path
     BBR1UpdateTargetCwnd(bbr1_state);
 }
 
-static void picoquic_bbr1_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+static void picoquic_bbr1_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_bbr1_state_t* bbr1_state = (picoquic_bbr1_state_t*)malloc(sizeof(picoquic_bbr1_state_t));
@@ -602,7 +602,7 @@ void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x
         return;
     }
     /* Compute  bw in bytes per second */
-    bw = (delivered * 1000000) / interval_microsec; 
+    bw = PICOQUIC_RATE_FROM_BYTES(delivered, interval_microsec);
     /* Apply the changes */
     BBR1ltbwIntervalDone(bbr1_state, path_x, bw, current_time);
 }
@@ -624,7 +624,7 @@ void BBR1UpdateBtlBw(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
 
     if (bbr1_state->rt_prop > 0) {
         /* Stop the bandwidth estimate from falling too low. */
-        uint64_t min_bandwidth = (((uint64_t)PICOQUIC_CWIN_MINIMUM) * 1000000) / bbr1_state->rt_prop;
+        uint64_t min_bandwidth = PICOQUIC_RATE_FROM_BYTES(PICOQUIC_CWIN_MINIMUM, bbr1_state->rt_prop);
         if (bandwidth_estimate < min_bandwidth) {
             bandwidth_estimate = min_bandwidth;
         }
@@ -715,7 +715,7 @@ int BBR1IsNextCyclePhase(picoquic_bbr1_state_t* bbr1_state, uint64_t prior_in_fl
 void BBR1SetMinimalGain(picoquic_bbr1_state_t* bbr1_state)
 {
     if (bbr1_state->pacing_gain > 1.0 && bbr1_state->rt_prop > 0) {
-        uint64_t target_cwin = bbr1_state->btl_bw * bbr1_state->rt_prop / 1000000;
+        uint64_t target_cwin = PICOQUIC_BYTES_FROM_RATE(bbr1_state->rt_prop, bbr1_state->btl_bw);
 
         if (target_cwin < 4 * PICOQUIC_MAX_PACKET_SIZE) {
             double d_target = (double)target_cwin;
@@ -861,7 +861,7 @@ void BBR1ExitStartupSeedBDP(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* 
     uint64_t current_time)
 {
     /* Set the BW to the value deduced from the BDP */
-    uint64_t bandwidth_estimate = bdp * 1000000 / path_x->rtt_min;
+    uint64_t bandwidth_estimate = PICOQUIC_RATE_FROM_BYTES(bdp, path_x->rtt_min);
     path_x->cwin = bdp;
     /* Set the parameters */
     if (bandwidth_estimate > bbr1_state->btl_bw_filter[0]) {
@@ -1161,7 +1161,6 @@ void picoquic_bbr1_notify_congestion(
 */
 void picoquic_bbr1_suspension_almost_over(
     picoquic_bbr1_state_t* bbr1_state,
-    picoquic_path_t* path_x,
     uint64_t lost_packet_number)
 {
     if (bbr1_state->is_suspended &&
@@ -1174,14 +1173,13 @@ void picoquic_bbr1_suspension_almost_over(
 
 void picoquic_bbr1_suspension_exit(
     picoquic_bbr1_state_t* bbr1_state,
-    picoquic_cnx_t * cnx,
     picoquic_path_t* path_x)
 {
     if (bbr1_state->is_suspended &&
         bbr1_state->is_suspension_nearly_over) {
         path_x->cwin = bbr1_state->cwin_before_suspension;
         /* Set the pacing rate in picoquic sender */
-        picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+        picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
     }
     bbr1_state->is_suspended = 0;
     bbr1_state->is_suspension_nearly_over = 0;
@@ -1223,13 +1221,13 @@ static void picoquic_bbr1_notify(
             break;
         case picoquic_congestion_notification_spurious_repeat:
             if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_almost_over(bbr1_state, path_x, ack_state->lost_packet_number);
+                picoquic_bbr1_suspension_almost_over(bbr1_state, ack_state->lost_packet_number);
             }
             break;
         case picoquic_congestion_notification_acknowledgement:
             /* sum the amount of data acked per packet */
             if (bbr1_state->is_suspended) {
-                picoquic_bbr1_suspension_exit(bbr1_state, cnx, path_x);
+                picoquic_bbr1_suspension_exit(bbr1_state, path_x);
             }
             bbr1_state->bytes_delivered += ack_state->nb_bytes_acknowledged;
 
@@ -1259,7 +1257,7 @@ static void picoquic_bbr1_notify(
                 }
                 bbr1_state->bytes_delivered = 0;
 
-                max_win = path_x->peak_bandwidth_estimate * bbr1_state->rt_prop / 1000000;
+                max_win = PICOQUIC_BYTES_FROM_RATE(bbr1_state->rt_prop, path_x->peak_bandwidth_estimate);
                 min_win = max_win /= 2;
 
                 if (path_x->cwin < min_win) {
@@ -1269,7 +1267,7 @@ static void picoquic_bbr1_notify(
                     path_x->pacing.bandwidth_pause = 1;
                 }
 
-                picoquic_update_pacing_data(cnx, path_x, 1);
+                picoquic_update_pacing_data(path_x, 1);
             } else {
                 BBR1UpdateOnACK(bbr1_state, path_x,
                     ack_state->rtt_measurement, path_x->bytes_in_transit, 0 /* packets_lost */, bbr1_state->bytes_delivered,
@@ -1281,7 +1279,7 @@ static void picoquic_bbr1_notify(
 
                 if (bbr1_state->pacing_rate > 0) {
                     /* Set the pacing rate in picoquic sender */
-                    picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+                    picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
                 }
             }
             break;
@@ -1293,7 +1291,7 @@ static void picoquic_bbr1_notify(
         case picoquic_congestion_notification_seed_cwin:
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
                 BBR1ExitStartupSeedBDP(bbr1_state, path_x, ack_state->nb_bytes_acknowledged, current_time);
-                picoquic_update_pacing_data(cnx, path_x, 1);
+                picoquic_update_pacing_data(path_x, 1);
             }
             else if (bbr1_state->state == picoquic_bbr1_alg_startup){
                 /* If in initial startup phase, do something */
@@ -1308,7 +1306,7 @@ static void picoquic_bbr1_notify(
                     BBR1SetPacingRate(bbr1_state);
                     if (bbr1_state->pacing_rate > 0) {
                         /* Set the pacing rate in picoquic sender */
-                        picoquic_update_pacing_rate(cnx, path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+                        picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
                     }
                 }
             }
@@ -1332,7 +1330,7 @@ void picoquic_bbr1_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t
 #define picoquic_bbr1_ID "bbr1" /* BBR1 */
 
 picoquic_congestion_algorithm_t picoquic_bbr1_algorithm_struct = {
-    picoquic_bbr1_ID, PICOQUIC_CC_ALGO_NUMBER_BBR1,
+    picoquic_bbr1_ID, PICOQUIC_CC_ALGO_NUMBER_BBR1, PICOQUIC_ECN_ECT_0,
     picoquic_bbr1_init,
     picoquic_bbr1_notify,
     picoquic_bbr1_delete,

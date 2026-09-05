@@ -1,0 +1,25 @@
+---
+name: "EmbeddingTest"
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  embedding:
+    name: FetchContent-install-reexport
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Run embedding test
+        run: ci/embedding-test/run.sh ${{ github.workspace }}

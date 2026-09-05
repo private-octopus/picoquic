@@ -45,7 +45,7 @@ static int starts_with(char* line, const char* text, size_t text_len, size_t* of
     return(ret);
 }
 
-int code_version_test()
+int code_version_test(void)
 {
     char cmake_file[512];
     int ret = picoquic_get_input_path(cmake_file, sizeof(cmake_file), picoquic_solution_dir, "CMakeLists.txt");

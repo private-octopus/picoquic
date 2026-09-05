@@ -77,7 +77,7 @@ void picoquictest_sim_link_delete(picoquictest_sim_link_t* link)
     free(link);
 }
 
-picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
+picoquictest_sim_packet_t* picoquictest_sim_link_create_packet(void)
 {
     picoquictest_sim_packet_t* packet = (picoquictest_sim_packet_t*)malloc(sizeof(picoquictest_sim_packet_t));
     if (packet != NULL) {
@@ -93,10 +93,6 @@ picoquictest_sim_packet_t* picoquictest_sim_link_create_packet()
 uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint64_t current_time)
 {
     picoquictest_sim_packet_t* packet;
-    if (link->aqm_state != NULL && link->aqm_state->check_arrival != NULL) {
-        /* Calling the update function to retrieve packets from AQM queue as appropriate */
-        link->aqm_state->check_arrival(link->aqm_state, link);
-    }
     packet = link->first_packet;
 
     if (packet != NULL && packet->arrival_time < current_time) {
@@ -106,12 +102,31 @@ uint64_t picoquictest_sim_link_next_arrival(picoquictest_sim_link_t* link, uint6
     return current_time;
 }
 
+uint64_t picoquictest_sim_link_next_admission(picoquictest_sim_link_t* link, uint64_t current_time, uint64_t next_time)
+{
+    if (link->aqm_state != NULL &&
+        link->aqm_state->has_pending != NULL &&
+        link->aqm_state->has_pending(link->aqm_state)) {
+        uint64_t candidate_time = (link->first_packet == NULL) ? current_time : link->queue_time;
+        if (candidate_time < next_time) {
+            next_time = candidate_time;
+        }
+    }
+    return next_time;
+}
+
+void picoquictest_sim_link_admit_pending(picoquictest_sim_link_t* link, uint64_t current_time)
+{
+    if (link->aqm_state != NULL && link->aqm_state->admit_pending != NULL) {
+        link->aqm_state->admit_pending(link->aqm_state, link, current_time);
+    }
+}
+
+
+
 picoquictest_sim_packet_t* picoquictest_sim_link_dequeue(picoquictest_sim_link_t* link,
     uint64_t current_time)
 {
-    if (link->aqm_state != NULL && link->aqm_state->check_arrival != NULL) {
-        link->aqm_state->check_arrival(link->aqm_state, link);
-    }
     picoquictest_sim_packet_t* packet = link->first_packet;
 
     if (packet != NULL && packet->arrival_time <= current_time) {
@@ -413,7 +428,7 @@ int sim_link_one_test(uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t nb
     return ret;
 }
 
-int sim_link_test()
+int sim_link_test(void)
 {
     int ret = 0;
     uint64_t loss_mask = 0;
