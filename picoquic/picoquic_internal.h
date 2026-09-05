@@ -91,10 +91,14 @@ extern "C" {
 #define PICOQUIC_CWIN_INITIAL (10 * PICOQUIC_MAX_PACKET_SIZE)
 #define PICOQUIC_CWIN_MINIMUM (2 * PICOQUIC_MAX_PACKET_SIZE)
 
+#define PICOQUIC_INCOMING_NOT_DECRYPTED_MAX (PICOQUIC_CWIN_INITIAL / PICOQUIC_MAX_PACKET_SIZE) /* peer cannot send more than the initial window before an ACK */
+
 #define PICOQUIC_DEFAULT_CRYPTO_EPOCH_LENGTH (1<<22)
 
 #define PICOQUIC_DEFAULT_SIMULTANEOUS_LOGS 32
 #define PICOQUIC_DEFAULT_HALF_OPEN_RETRY_THRESHOLD 64
+
+#define PICOQUIC_MAX_PENDING_STATELESS_PACKETS 32 /* stateless packets drain one per send cycle, so a flood of triggers must not queue unbounded */
 
 #define PICOQUIC_PN_RANDOM_MIN 0xffff
 #define PICOQUIC_PN_RANDOM_RANGE 0x10000
@@ -115,6 +119,8 @@ extern "C" {
 
 #define PICOQUIC_MAX_ACK_RANGE_REPEAT 4
 #define PICOQUIC_MIN_ACK_RANGE_REPEAT 2
+
+#define PICOQUIC_SACK_LIST_PN_MAX_RANGES 128 /* a few ACK frames' worth: each frame reports at most 32 ranges */
 
 #define PICOQUIC_DEFAULT_HOLE_PERIOD 256
 
@@ -710,11 +716,18 @@ typedef struct st_picoquic_sack_range_count_t {
     int range_counts[PICOQUIC_MAX_ACK_RANGE_REPEAT];
 } picoquic_sack_range_count_t;
 
+/* Tells picoquic_update_sack_list whether it may cap and evict ranges (packet numbers) or must not (stream bytes, see PICOQUIC_SACK_LIST_PN_MAX_RANGES). */
+typedef enum {
+    picoquic_sack_list_packet_numbers = 0,
+    picoquic_sack_list_stream_bytes = 1
+} picoquic_sack_list_kind_enum;
+
 typedef struct st_picoquic_sack_list_t {
     picosplay_tree_t ack_tree;
     uint64_t ack_horizon;
     int64_t horizon_delay;
     picoquic_sack_range_count_t rc[2];
+    picoquic_sack_list_kind_enum kind;
 } picoquic_sack_list_t;
 
 /*
@@ -1617,6 +1630,7 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
+int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx);
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
@@ -1861,7 +1875,7 @@ uint64_t picoquic_sack_list_last(picoquic_sack_list_t* first_sack);
 
 picoquic_sack_item_t* picoquic_sack_list_first_range(picoquic_sack_list_t* first_sack);
 
-void picoquic_sack_list_init(picoquic_sack_list_t* first_sack);
+void picoquic_sack_list_init(picoquic_sack_list_t* first_sack, picoquic_sack_list_kind_enum kind);
 
 int picoquic_sack_list_reset(picoquic_sack_list_t* first_sack, 
     uint64_t range_min, uint64_t range_max, uint64_t current_time);
@@ -2138,6 +2152,8 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
     uint64_t path_id, uint64_t reason);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, uint64_t reason);
+const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max,
+    picoquic_cnx_t* cnx, uint64_t current_time);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
     int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);

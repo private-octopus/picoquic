@@ -868,7 +868,7 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     picoquic_stream_head_t* stream = (picoquic_stream_head_t*)malloc(sizeof(picoquic_stream_head_t));
     if (stream != NULL) {
         memset(stream, 0, sizeof(picoquic_stream_head_t));
-        picoquic_sack_list_init(&stream->sack_list);
+        picoquic_sack_list_init(&stream->sack_list, picoquic_sack_list_stream_bytes);
     }
 
     if (stream != NULL) {

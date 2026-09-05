@@ -718,7 +718,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x07, &n_length);
             if (bytes != NULL) {
-                if (bytes + n_length > bytes_max) {
+                if (n_length > (uint64_t)(bytes_max - bytes)) {
                     bytes = NULL;
                 }
                 else {

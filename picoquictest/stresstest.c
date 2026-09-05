@@ -1441,7 +1441,7 @@ static uint32_t initial_fuzzer(void * fuzz_ctx, picoquic_cnx_t* cnx,
             case 1:
                 if (length + len <= bytes_max) {
                     /* Second test variant: add a random frame at the beginning of the packet */
-                    memmove(bytes + header_length + len, bytes + header_length, len);
+                    memmove(bytes + header_length + len, bytes + header_length, length - header_length);
                     memcpy(&bytes[header_length], test_skip_list[stress_ctx->current_frame].val, len);
                     length += len;
                 }

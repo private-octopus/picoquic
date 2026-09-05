@@ -991,7 +991,7 @@ int picoquic_is_pkt_ctx_backlog_empty(picoquic_packet_context_t* pkt_ctx)
         if (!p->is_ack_trap && !p->is_multipath_probe && !p->is_mtu_probe) {
             while (ret == 0 && byte_index < p->length) {
                 ret = picoquic_skip_frame(&p->bytes[byte_index],
-                    p->length - p->offset, &frame_length, &frame_is_pure_ack);
+                    p->length - byte_index, &frame_length, &frame_is_pure_ack);
 
                 if (!frame_is_pure_ack) {
                     backlog_empty = 0;

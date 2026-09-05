@@ -491,7 +491,7 @@ const uint8_t* picoquic_decode_qmux_tp_frame(picoquic_cnx_t* cnx, const uint8_t*
     /* this code assumes that the frame type has been decoded. */
     size_t length = 0;
     bytes = picoquic_frames_varlen_decode(bytes, bytes_max, &length);
-    if (bytes == NULL || bytes + length > bytes_max) {
+    if (bytes == NULL || length > (uint64_t)(bytes_max - bytes)) {
         bytes = NULL;
     }
     else {

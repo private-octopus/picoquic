@@ -124,6 +124,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_remote_control_stream_singleton", h3zero_remote_control_stream_singleton_test },
     { "h3zero_capsule", h3zero_capsule_test },
     { "h3zero_client_data", h3zero_client_data_test },
+    { "h3zero_client_data_repeat", h3zero_client_data_repeat_test },
     { "qpack_huffman", qpack_huffman_test },
     { "qpack_huffman_base", qpack_huffman_base_test},
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },

@@ -5376,6 +5376,114 @@ int pn_enc_1rtt_test(void)
     return ret;
 }
 
+/* Verify that picoquic_incoming_not_decrypted stashes up to
+ * PICOQUIC_INCOMING_NOT_DECRYPTED_MAX packets received before decryption keys are
+ * available, and that if more arrive they are dropped -- test that by sending
+ * NOT_DECRYPTED_STASH_TEST_PACKET_SIZE packets. Also verify that the stashed
+ * packets are queued in order of arrival. */
+static int not_decrypted_stash_count(picoquic_cnx_t* cnx)
+{
+    int nb_stashed = 0;
+    picoquic_stateless_packet_t* packet = cnx->first_sooner;
+
+    while (packet != NULL) {
+        nb_stashed++;
+        packet = packet->next_packet;
+    }
+
+    return nb_stashed;
+}
+
+#define NOT_DECRYPTED_STASH_TEST_PACKET_SIZE 256
+
+/* Each stashed test packet is filled with a distinct marker byte (index + 1) past the
+ * connection ID, so this walks the stash and checks the markers are in arrival order. */
+static int not_decrypted_stash_check_order(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    int expected = 1;
+    picoquic_stateless_packet_t* packet = cnx->first_sooner;
+
+    while (ret == 0 && packet != NULL) {
+        uint8_t marker = packet->bytes[NOT_DECRYPTED_STASH_TEST_PACKET_SIZE - 1];
+
+        if (marker != (uint8_t)expected) {
+            DBG_PRINTF("Stashed packet marker %d out of order (expected %d)", marker, expected);
+            ret = -1;
+        }
+        expected++;
+        packet = packet->next_packet;
+    }
+
+    return ret;
+}
+
+int not_decrypted_stash_test(void)
+{
+    const int nb_stash_packets = 50;
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        /* Run a short loop until the server connection is created, but before the
+         * handshake completes -- at that point the server has no 1-RTT read keys yet. */
+        int nb_trials = 0;
+        while (ret == 0 && nb_trials < 16 && test_ctx->cnx_server == NULL) {
+            int was_active = 0;
+            nb_trials++;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+        if (test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Cannot create the server connection");
+            ret = -1;
+        }
+        else if (test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].pn_dec != NULL) {
+            DBG_PRINTF("%s", "Server already has 1-RTT keys, cannot test the stash");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Send a batch of packets that carry the server's connection ID but cannot yet be
+         * decrypted. Content is irrelevant: header protection removal fails before any of
+         * it is examined, so garbage bytes are stashed exactly like valid ones would be. */
+        for (int i = 0; ret == 0 && i < nb_stash_packets; i++) {
+            uint8_t p[NOT_DECRYPTED_STASH_TEST_PACKET_SIZE];
+
+            memset(p, (uint8_t)(i + 1), sizeof(p));
+            p[0] = 0x40;
+            memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id,
+                test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
+
+            ret = picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p),
+                (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr,
+                0, test_ctx->recv_ecn_server, simulated_time);
+        }
+    }
+
+    if (ret == 0) {
+        int nb_stashed = not_decrypted_stash_count(test_ctx->cnx_server);
+
+        if (nb_stashed != PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+            DBG_PRINTF("Sent %d packets, expected %d stashed, found %d", nb_stash_packets,
+                PICOQUIC_INCOMING_NOT_DECRYPTED_MAX, nb_stashed);
+            ret = -1;
+        }
+        else {
+            ret = not_decrypted_stash_check_order(test_ctx->cnx_server);
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
 
 /*
 * Test setting the verify certificate callback.
