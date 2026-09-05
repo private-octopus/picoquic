@@ -984,9 +984,7 @@ int sack_list_stream_bytes_unbounded_test(void)
     return ret;
 }
 
-/* picoquic_is_pn_already_received treats anything below ack_horizon as already seen, so the
- * cap's eviction must never let ack_horizon move past the lowest range still retained -- else
- * genuinely new, untracked packet numbers get silently classified as duplicates. Verify that. */
+/* The cap's eviction must never move ack_horizon past the lowest retained range, nor past-claim the untracked gap below it. */
 int sack_list_horizon_backward_test(void)
 {
     int ret = 0;
@@ -994,6 +992,7 @@ int sack_list_horizon_backward_test(void)
     const uint64_t nb_packets = PICOQUIC_SACK_LIST_PN_MAX_RANGES;
     const uint64_t base_pn = 10000;
     const uint64_t low_pn = 5;
+    const uint64_t mid_pn = base_pn - 2; /* in the untouched part of the gap, never received */
 
     picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
 
@@ -1028,6 +1027,28 @@ int sack_list_horizon_backward_test(void)
             DBG_PRINTF("ack_horizon %" PRIu64 " is past the lowest retained range start %" PRIu64,
                 sack0.ack_horizon, lowest->start_of_sack_range);
             ret = -1;
+        }
+        else if (sack0.ack_horizon <= low_pn) {
+            /* Duplicate detection (RFC 9000 13.2.3) requires the accepted packet number be covered by a tracked range or the horizon. */
+            DBG_PRINTF("ack_horizon %" PRIu64 " does not cover accepted packet number %" PRIu64,
+                sack0.ack_horizon, low_pn);
+            ret = -1;
+        }
+        else if (picoquic_sack_list_size(&sack0) != nb_packets) {
+            /* Folding the accepted packet into the horizon must not grow the tree past the cap. */
+            DBG_PRINTF("Expected %" PRIu64 " ranges after folding the low packet number, found %zu",
+                nb_packets, picoquic_sack_list_size(&sack0));
+            ret = -1;
+        }
+        else {
+            /* The horizon must cover exactly what was received, not the untouched rest of the gap above it. */
+            int mid_is_duplicate = (mid_pn < sack0.ack_horizon) ||
+                (lowest->start_of_sack_range <= mid_pn && mid_pn <= lowest->end_of_sack_range);
+            if (mid_is_duplicate) {
+                DBG_PRINTF("Packet number %" PRIu64 ", never received, is wrongly treated as a duplicate",
+                    mid_pn);
+                ret = -1;
+            }
         }
     }
 

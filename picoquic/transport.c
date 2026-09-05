@@ -560,6 +560,8 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     int ret = 0;
     size_t byte_index = 0;
     uint64_t present_flag = 0;
+    /* Save the 0-RTT send credit before picoquic_clear_transport_extensions() zeroes cnx->maxdata_remote below. */
+    uint64_t maxdata_remote_0rtt = cnx->maxdata_remote;
     picoquic_connection_id_t original_connection_id = picoquic_null_connection_id;
     picoquic_connection_id_t handshake_connection_id = picoquic_null_connection_id;
     picoquic_connection_id_t retry_connection_id = picoquic_null_connection_id;
@@ -633,8 +635,11 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                     cnx->remote_parameters.initial_max_data =
                         picoquic_transport_param_varint_decode(cnx, bytes + byte_index, extension_length, &ret);
                     /* A server must not reduce this limit below what 0-RTT already assumed. */
-                    if (cnx->maxdata_remote < cnx->remote_parameters.initial_max_data) {
+                    if (maxdata_remote_0rtt < cnx->remote_parameters.initial_max_data) {
                         cnx->maxdata_remote = cnx->remote_parameters.initial_max_data;
+                    }
+                    else {
+                        cnx->maxdata_remote = maxdata_remote_0rtt;
                     }
                     break;
                 case picoquic_tp_initial_max_streams_bidi: {

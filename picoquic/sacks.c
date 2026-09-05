@@ -234,10 +234,8 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
                         ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
                     }
                     else {
-                        /* This range is reordered below the oldest retained range: evicting
-                         * oldest to make room would move the horizon backward, past this new
-                         * range, and wrongly mark it (and any gap above it) as already
-                         * received. Leave it untracked instead. */
+                        /* At the cap: treat this reordered range as received-then-evicted by advancing the horizon past it. */
+                        sack_list->ack_horizon = pn64_max + 1;
                         ret = 0;
                     }
                 }
