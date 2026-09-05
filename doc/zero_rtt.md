@@ -44,7 +44,7 @@ Client knows that
 server is ready.
 ```
 
-The figure above provides a very raw desctption of the QUIC connection
+The figure above provides a very raw description of the QUIC connection
 setup, which embeds the setup of a TLS 1.3 session 
 (see [RFC 9846](https://www.rfc-editor.org/rfc/rfc9846.html).
 In this exchange, the parties progressively negotiate keys:
@@ -144,7 +144,7 @@ If the ticket is valid, the client can send data immediately
 the server response. The data will be delivered by the server
 as it arrives.
 
-The picoquic client sends 0Rtt data using the same mechanisms
+The picoquic client sends zero RTT data using the same mechanisms
 as 1RTT data, using APIs like `picoquic_add_to_stream`,
 `picoquic_mark_active_stream`, `picoquic_queue_datagram_frame`
 or `picoquic_mark_datagram_ready`. If the resume ticket enabled
@@ -219,5 +219,7 @@ by the client as zero RTT. Picoquic deletes the zero RTT encryption keys
 just before issuing this callback on the server, so zero RTT data is never accepted
 or submitted to the application after that callback is issued.
 
+Data queued by the client after the callback `picoquic_callback_almost_ready`
+will always be sent as 1RTT data, and cannot be replayed by attackers.
 
 
