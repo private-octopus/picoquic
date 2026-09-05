@@ -2089,26 +2089,37 @@ static int demo_server_test(char const* alpn, picoquic_stream_data_cb_fn server_
     return demo_server_test_specced(&test_spec);
 }
 
+static void demo_test_create_directory(char const* dir_path);
+
+/* These tests all download the same scenario file names ("root.html", etc).
+ * Each gets its own output directory, so tests run back-to-back in the 
+ * same process never contend on a file. */
 int h3zero_server_test(void)
 {
-    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, 
+    char const* out_dir = "h3zero_server_test";
+    demo_test_create_directory(out_dir);
+    return demo_server_test(PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL,
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
-        0, 0, 0, 0, NULL, ".", ".", 0);
+        0, 0, 0, 0, out_dir, ".", ".", 0);
 }
 
 int h09_server_test(void)
 {
+    char const* out_dir = "h09_server_test";
+    demo_test_create_directory(out_dir);
     return demo_server_test(PICOHTTP_ALPN_HQ_LATEST, picoquic_h09_server_callback, NULL,
         demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
-        0, 0, 0, 0, NULL, NULL, NULL, 0);
+        0, 0, 0, 0, out_dir, NULL, NULL, 0);
 }
 
 int h3zero_migration_disabled_test(void)
 {
+    char const* out_dir = "h3zero_migration_disabled_test";
     demo_server_test_spec_t test_spec = {
         PICOHTTP_ALPN_H3_LATEST, h3zero_callback, NULL, demo_test_scenario, nb_demo_test_scenario, demo_test_stream_length,
-        0, 0, 0, 0, NULL, ".", ".", 0, 1 };
+        0, 0, 0, 0, out_dir, ".", ".", 0, 1 };
 
+    demo_test_create_directory(out_dir);
     return demo_server_test_specced(&test_spec);
 }
 
@@ -2313,22 +2324,32 @@ int generic_server_test(void)
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;
     char const* alpn_3 = PICOHTTP_ALPN_H3_LATEST;
-    int ret = demo_server_test(alpn_09, NULL, NULL, demo_test_scenario,
-        nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
+    /* Each call below downloads the same scenario file names ("root.html", etc). Use a
+     * distinct output directory per call, so repeated calls never contend on the same file. */
+    char const* out_dir_09 = "generic_server_09";
+    char const* out_dir_3 = "generic_server_h3";
+    char const* out_dir_default = "generic_server_default";
+    int ret;
+
+    demo_test_create_directory(out_dir_09);
+    ret = demo_server_test(alpn_09, NULL, NULL, demo_test_scenario,
+        nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, out_dir_09, NULL, NULL, 0);
 
     if (ret != 0) {
         DBG_PRINTF("Generic server test fails for %s\n", alpn_09);
     }
     else {
+        demo_test_create_directory(out_dir_3);
         ret = demo_server_test(alpn_3, NULL, NULL, demo_test_scenario,
-            nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
+            nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, out_dir_3, NULL, NULL, 0);
 
         if (ret != 0) {
             DBG_PRINTF("Generic server test fails for %s\n", alpn_3);
         }
         else {
+            demo_test_create_directory(out_dir_default);
             ret = demo_server_test(NULL, NULL, NULL, demo_test_scenario,
-                nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
+                nb_demo_test_scenario, demo_test_stream_length, 0, 0, 0, 0, out_dir_default, NULL, NULL, 0);
 
             if (ret != 0) {
                 DBG_PRINTF("Generic server test fails for %s\n", alpn_3);

@@ -1223,14 +1223,23 @@ void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp)
 
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp)
 {
+    int nb_pending = 0;
     picoquic_stateless_packet_t** pnext = &quic->pending_stateless_packet;
 
     while ((*pnext) != NULL) {
+        nb_pending++;
         pnext = &(*pnext)->next_packet;
     }
 
-    *pnext = sp;
-    sp->next_packet = NULL;
+    if (nb_pending >= PICOQUIC_MAX_PENDING_STATELESS_PACKETS) {
+        /* A peer triggering stateless packets (version negotiation, unexpected CID, retry,
+         * busy, immediate close) faster than the queue drains must not grow it unbounded. */
+        picoquic_delete_stateless_packet(sp);
+    }
+    else {
+        *pnext = sp;
+        sp->next_packet = NULL;
+    }
 }
 
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic)
@@ -2980,7 +2989,7 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 /* Manage ACK context and Packet context */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 {
-    picoquic_sack_list_init(&ack_ctx->sack_list);
+    picoquic_sack_list_init(&ack_ctx->sack_list, picoquic_sack_list_packet_numbers);
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
     ack_ctx->act[0].highest_ack_sent = 0;
     ack_ctx->act[0].highest_ack_sent_time = cnx->start_time;
@@ -3956,7 +3965,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].maxdata_remote = UINT64_MAX;
 
             picoquic_init_tls_tree(cnx, epoch);
-            picoquic_sack_list_init(&cnx->tls_stream[epoch].sack_list);
+            picoquic_sack_list_init(&cnx->tls_stream[epoch].sack_list, picoquic_sack_list_stream_bytes);
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
         
@@ -4592,7 +4601,7 @@ void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx)
 {
     picoquic_clear_ack_ctx(ack_ctx);
 
-    picoquic_sack_list_init(&ack_ctx->sack_list);
+    picoquic_sack_list_init(&ack_ctx->sack_list, picoquic_sack_list_packet_numbers);
 
     ack_ctx->ecn_ect0_total_local = 0;
     ack_ctx->ecn_ect1_total_local = 0;

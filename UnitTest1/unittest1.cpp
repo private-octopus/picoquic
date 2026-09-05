@@ -243,6 +243,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stateless_packet_queue_limit)
+        {
+            int ret = stateless_packet_queue_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(parse_header)
         {
             int ret = parseheadertest();
@@ -456,6 +463,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sack_list_unbounded_growth)
+        {
+            int ret = sack_list_unbounded_growth_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sack_list_stream_bytes_unbounded)
+        {
+            int ret = sack_list_stream_bytes_unbounded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sack_list_horizon_backward)
+        {
+            int ret = sack_list_horizon_backward_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -522,6 +550,13 @@ namespace UnitTest1
         TEST_METHOD(test_pn_enc_1rtt)
         {
             int ret = pn_enc_1rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(not_decrypted_stash)
+        {
+            int ret = not_decrypted_stash_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3540,6 +3575,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_client_data) {
             int ret = h3zero_client_data_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_client_data_repeat) {
+            int ret = h3zero_client_data_repeat_test();
 
             Assert::AreEqual(ret, 0);
         }

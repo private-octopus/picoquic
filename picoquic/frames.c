@@ -2523,7 +2523,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
             size_t length = stream->send_queue->length - (size_t)stream->send_queue->offset;
             uint8_t* bytes_l;
 
-            if (bytes + length > bytes_max) {
+            if (length > (uint64_t)(bytes_max - bytes)) {
                 length = bytes_max - bytes;
             }
 
@@ -2532,7 +2532,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
                 bytes = bytes0;
             }
             else {
-                if (bytes_l + length > bytes_max) {
+                if (length > (uint64_t)(bytes_max - bytes_l)) {
                     length = bytes_max - bytes_l;
                     bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
                 }
@@ -2580,6 +2580,7 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
     size_t l_delay = 0;
     size_t l_blocks = 0;
     size_t l_path_id = 0;
+    int ack_delay_overflow = 0;
 
     if (path_id != NULL && bytes_max > byte_index) {
         l_path_id = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, path_id);
@@ -2593,7 +2594,13 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
 
     if (bytes_max > byte_index) {
         l_delay = picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, ack_delay);
-        *ack_delay <<= ack_delay_exponent;
+        /* The decoded value can be up to 2^62-1 and the exponent up to 20. Check for overflow! */
+        if (*ack_delay > (UINT64_MAX >> ack_delay_exponent)) {
+            ack_delay_overflow = 1;
+        }
+        else {
+            *ack_delay <<= ack_delay_exponent;
+        }
         byte_index += l_delay;
     }
 
@@ -2603,7 +2610,7 @@ int picoquic_parse_ack_header(uint8_t const* bytes, size_t bytes_max,
     }
 
     if (l_largest == 0 || l_delay == 0 || l_blocks == 0 || bytes_max < byte_index ||
-        (path_id != NULL && l_path_id == 0)) {
+        ack_delay_overflow || (path_id != NULL && l_path_id == 0)) {
         DBG_PRINTF("ack frame fixed header too large: first_byte=0x%02x, bytes_max=%" PRIst,
             bytes[0], bytes_max);
         byte_index = bytes_max;
@@ -5072,8 +5079,8 @@ const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* byt
 const uint8_t* picoquic_decode_handshake_done_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, uint64_t current_time)
 {
     if (!cnx->client_mode) {
-        DBG_PRINTF("Handshake done (0x%x) not expected from client", bytes[0]);
-        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, bytes[0]);
+        DBG_PRINTF("Handshake done (0x%x) not expected from client", picoquic_frame_type_handshake_done);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_handshake_done);
         bytes = NULL;
     }
     else {
@@ -5086,7 +5093,7 @@ const uint8_t* picoquic_decode_handshake_done_frame(picoquic_cnx_t* cnx, const u
             picoquic_ready_state_transition(cnx, current_time);
         }
         else if (cnx->cnx_state < picoquic_state_client_ready_start) {
-            DBG_PRINTF("Handshake done (0x%x) not expected in state %d", bytes[0], cnx->cnx_state);
+            DBG_PRINTF("Handshake done (0x%x) not expected in state %d", picoquic_frame_type_handshake_done, cnx->cnx_state);
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, picoquic_frame_type_handshake_done);
             bytes = NULL;
         }
@@ -5159,7 +5166,7 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
     if (bytes != NULL) {
         if (has_length) {
             if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
-                bytes + length > bytes_max ||
+                length > (uint64_t)(bytes_max - bytes) ||
                 length > cnx->local_parameters.max_datagram_frame_size) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
                     frame_id);

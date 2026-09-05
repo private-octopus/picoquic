@@ -183,7 +183,8 @@ int picoquic_is_pn_already_received(picoquic_cnx_t* cnx,
         /* Fast path: beyond everything received so far, so it cannot be a duplicate. */
         is_received = 0;
     }
-    else if (sack_list->horizon_delay > 0 && pn64 < sack_list->ack_horizon) {
+    else if (pn64 < sack_list->ack_horizon) {
+        /* Below a horizon raised by horizon_delay or by the packet-number range cap. */
         is_received = 1;
     }
     else {
@@ -222,8 +223,26 @@ int picoquic_update_sack_list(picoquic_sack_list_t* sack_list,
             picoquic_sack_item_t* next = (previous == NULL) ?
                 picoquic_sack_first_item(sack_list) : picoquic_sack_next_item(previous);
             if (next == NULL || next->start_of_sack_range - 1 > pn64_max) {
-                /* create a new item in the list */
-                ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                /* Cap packet-number ranges: forget the oldest to make room, so tracking never gets stuck refusing new gaps under legitimate heavy loss. */
+                if (sack_list->kind == picoquic_sack_list_packet_numbers &&
+                    picoquic_sack_list_size(sack_list) >= PICOQUIC_SACK_LIST_PN_MAX_RANGES) {
+                    picoquic_sack_item_t* oldest = picoquic_sack_first_item(sack_list);
+                    if (pn64_min > oldest->end_of_sack_range) {
+                        sack_list->ack_horizon = oldest->end_of_sack_range + 1;
+                        picoquic_sack_delete_item(sack_list, oldest);
+                        /* create a new item in the list */
+                        ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                    }
+                    else {
+                        /* At the cap: treat this reordered range as received-then-evicted by advancing the horizon past it. */
+                        sack_list->ack_horizon = pn64_max + 1;
+                        ret = 0;
+                    }
+                }
+                else {
+                    /* create a new item in the list */
+                    ret = picoquic_sack_insert_item(sack_list, pn64_min, pn64_max, current_time);
+                }
                 /* set previous to null to bypass the next block */
                 previous = NULL;
             }
@@ -447,9 +466,10 @@ picoquic_sack_item_t * picoquic_sack_list_first_range(picoquic_sack_list_t* sack
 
 /* Initialize a sack list
  */
-void picoquic_sack_list_init(picoquic_sack_list_t* sack_list)
+void picoquic_sack_list_init(picoquic_sack_list_t* sack_list, picoquic_sack_list_kind_enum kind)
 {
     memset(sack_list, 0, sizeof(picoquic_sack_list_t));
+    sack_list->kind = kind;
     picosplay_init_tree(&sack_list->ack_tree, picoquic_sack_item_compare,
         picoquic_sack_node_create, picoquic_sack_node_delete, picoquic_sack_node_value);
 }

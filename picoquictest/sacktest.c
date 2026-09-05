@@ -703,7 +703,7 @@ int ackrange_test(void)
     int ret = 0;
     picoquic_sack_list_t sack0;
 
-    picoquic_sack_list_init(&sack0);
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
 
     for (size_t i = 0; ret == 0 && i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
@@ -819,7 +819,7 @@ int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double r
         ret = -1;
     } 
     else {
-        picoquic_sack_list_init(&sack0);
+        picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
     }
 
     sack0.horizon_delay = horizon_delay;
@@ -919,5 +919,140 @@ int ack_disorder_test(void)
 int ack_horizon_test(void)
 {
     int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 1000000, 196.0);
+    return ret;
+}
+
+/* Feed non-contiguous arrivals into a fresh sack list of the given kind, no ack-of-ack in between, and report the resulting range count. */
+static int sack_list_feed_gaps(picoquic_sack_list_kind_enum kind, uint64_t nb_packets, size_t* nb_ranges_out)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+
+    picoquic_sack_list_init(&sack0, kind);
+
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        /* Only odd packet numbers arrive, so every packet opens a fresh gap */
+        uint64_t pn = 2 * i + 1;
+
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        *nb_ranges_out = picoquic_sack_list_size(&sack0);
+    }
+
+    picoquic_sack_list_free(&sack0);
+
+    return ret;
+}
+
+/* A peer sending only non-contiguous packet numbers, never acking anything, would grow the reception SACK list forever; check the cap holds instead. */
+int sack_list_unbounded_growth_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_packet_numbers, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != PICOQUIC_SACK_LIST_PN_MAX_RANGES) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %d ranges, found %zu",
+            nb_packets, PICOQUIC_SACK_LIST_PN_MAX_RANGES, nb_ranges);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The packet-number cap must not apply to stream-byte ranges (see the kind enum); check that a stream-byte list still grows unbounded. */
+int sack_list_stream_bytes_unbounded_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_stream_bytes, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != nb_packets) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %" PRIu64 " ranges (no cap for stream bytes), found %zu",
+            nb_packets, nb_packets, nb_ranges);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The cap's eviction must never move ack_horizon past the lowest retained range, nor past-claim the untracked gap below it. */
+int sack_list_horizon_backward_test(void)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+    const uint64_t nb_packets = PICOQUIC_SACK_LIST_PN_MAX_RANGES;
+    const uint64_t base_pn = 10000;
+    const uint64_t low_pn = 5;
+    const uint64_t mid_pn = base_pn - 2; /* in the untouched part of the gap, never received */
+
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
+
+    /* Fill the list to exactly the cap with distinct, non-contiguous, increasing ranges. */
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        uint64_t pn = base_pn + 2 * i;
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_sack_list_size(&sack0) != nb_packets) {
+        DBG_PRINTF("Expected %" PRIu64 " ranges after filling to the cap, found %zu",
+            nb_packets, picoquic_sack_list_size(&sack0));
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        picoquic_update_sack_list(&sack0, low_pn, low_pn, nb_packets) != 0) {
+        DBG_PRINTF("%s", "Unexpected error recording the reordered low packet number");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_sack_item_t* lowest = picoquic_sack_first_item(&sack0);
+
+        if (lowest == NULL) {
+            DBG_PRINTF("%s", "Sack list unexpectedly empty");
+            ret = -1;
+        }
+        else if (sack0.ack_horizon > lowest->start_of_sack_range) {
+            DBG_PRINTF("ack_horizon %" PRIu64 " is past the lowest retained range start %" PRIu64,
+                sack0.ack_horizon, lowest->start_of_sack_range);
+            ret = -1;
+        }
+        else if (sack0.ack_horizon <= low_pn) {
+            /* Duplicate detection (RFC 9000 13.2.3) requires the accepted packet number be covered by a tracked range or the horizon. */
+            DBG_PRINTF("ack_horizon %" PRIu64 " does not cover accepted packet number %" PRIu64,
+                sack0.ack_horizon, low_pn);
+            ret = -1;
+        }
+        else if (picoquic_sack_list_size(&sack0) != nb_packets) {
+            /* Folding the accepted packet into the horizon must not grow the tree past the cap. */
+            DBG_PRINTF("Expected %" PRIu64 " ranges after folding the low packet number, found %zu",
+                nb_packets, picoquic_sack_list_size(&sack0));
+            ret = -1;
+        }
+        else {
+            /* The horizon must cover exactly what was received, not the untouched rest of the gap above it. */
+            int mid_is_duplicate = (mid_pn < sack0.ack_horizon) ||
+                (lowest->start_of_sack_range <= mid_pn && mid_pn <= lowest->end_of_sack_range);
+            if (mid_is_duplicate) {
+                DBG_PRINTF("Packet number %" PRIu64 ", never received, is wrongly treated as a duplicate",
+                    mid_pn);
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_sack_list_free(&sack0);
+
     return ret;
 }

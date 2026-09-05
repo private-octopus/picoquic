@@ -562,16 +562,6 @@ int h3zero_client_data_set_file_name(h3zero_stream_ctx_t* stream_ctx, char const
     if ((stream_ctx->file_path = picoquic_string_duplicate(path_name)) == NULL) {
         ret = -1;
     }
-    else {
-        /* ensure that no data is present */
-        FILE* F = picoquic_file_open(stream_ctx->file_path, "w");
-        if (F == NULL) {
-            ret = -1;
-        }
-        else {
-            (void)picoquic_file_close(F);
-        }
-    }
     return ret;
 }
 
@@ -694,7 +684,10 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     uint64_t fin_stream_id = UINT64_MAX;
     size_t data_length = 128;
     h3zero_stream_ctx_t* stream_ctx = NULL;
-    char const* path_name = "h3zero_test_client_data.html";
+    static int file_name_unique = 0;
+    char path_name[64];
+    /* Use a unique file name per call, so repeated calls never contend on the same file */
+    (void)picoquic_sprintf(path_name, sizeof(path_name), NULL, "h3zero_test_client_data_%d.html", file_name_unique++);
 
     if (ret == 0 && (stream_ctx = h3zero_find_or_create_stream(cnx, 4, h3_ctx, 1, 1)) == NULL) {
         ret = -1;
@@ -772,6 +765,7 @@ int h3zero_client_data_test_one(client_data_test_spec_t * spec)
     picoquic_set_callback(cnx, NULL, NULL);
     h3zero_callback_delete_context(cnx, h3_ctx);
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    (void)picoquic_file_delete(path_name, NULL);
 
     return ret;
 }
@@ -874,6 +868,19 @@ int h3zero_client_data_test(void)
 
     if (ret == 0) {
         ret = h3zero_error_client_stream_test();
+    }
+
+    return ret;
+}
+
+/* Repeat the plainest scenario several times in a row, to catch file-reuse races */
+int h3zero_client_data_repeat_test(void)
+{
+    client_data_test_spec_t spec = { 0 };
+    int ret = 0;
+
+    for (int i = 0; ret == 0 && i < 8; i++) {
+        ret = h3zero_client_data_test_one(&spec);
     }
 
     return ret;

@@ -703,7 +703,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
         /* Read type and length */
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max,&extension_type)) == NULL ||
             (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &extension_length)) == NULL ||
-            bytes + extension_length > bytes_max) {
+            extension_length > (uint64_t)(bytes_max - bytes)) {
             /* Write a meaningful error report */
             uint64_t l = (uint64_t)(bytes_max - current_bytes);
             fprintf(f, "\"Parameter_coding_error\": ");

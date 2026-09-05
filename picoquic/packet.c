@@ -1674,7 +1674,7 @@ int picoquic_incoming_server_initial(
                         size_t frame_length = 0;
                         int frame_is_pure_ack = 0;
                         skip_ret = picoquic_skip_frame(&bytes[byte_index],
-                            ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
+                            ph->offset + ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                         if (frame_is_pure_ack == 0) {
                             ack_needed = 1;
@@ -2060,21 +2060,40 @@ int  picoquic_incoming_not_decrypted(
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&
                 ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {
-                /* stash a copy of the incoming message for processing once the keys are available */
-                picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+                /* Do not stash more than PICOQUIC_INCOMING_NOT_DECRYPTED_MAX, or a forged-CID flood could
+                 * grow the stash without bound. Excess packets are just dropped. */
+                int nb_stashed = 0;
+                picoquic_stateless_packet_t* last_stashed = NULL;
+                picoquic_stateless_packet_t* stashed = cnx->first_sooner;
 
-                if (packet != NULL) {
-                    packet->length = length;
-                    packet->ptype = ph->ptype;
-                    memcpy(packet->bytes, bytes, length);
-                    packet->next_packet = cnx->first_sooner;
-                    cnx->first_sooner = packet;
-                    picoquic_store_addr(&packet->addr_local, addr_to);
-                    picoquic_store_addr(&packet->addr_to, addr_from);
-                    packet->if_index_local = if_index_to;
-                    packet->received_ecn = received_ecn;
-                    packet->receive_time = current_time;
-                    buffered = 1;
+                while (stashed != NULL && nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    nb_stashed++;
+                    last_stashed = stashed;
+                    stashed = stashed->next_packet;
+                }
+
+                if (nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    /* Stash packets in the order in which they arrived. */
+                    picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+
+                    if (packet != NULL) {
+                        packet->length = length;
+                        packet->ptype = ph->ptype;
+                        memcpy(packet->bytes, bytes, length);
+                        packet->next_packet = NULL;
+                        if (last_stashed == NULL) {
+                            cnx->first_sooner = packet;
+                        }
+                        else {
+                            last_stashed->next_packet = packet;
+                        }
+                        picoquic_store_addr(&packet->addr_local, addr_to);
+                        picoquic_store_addr(&packet->addr_to, addr_from);
+                        packet->if_index_local = if_index_to;
+                        packet->received_ecn = received_ecn;
+                        packet->receive_time = current_time;
+                        buffered = 1;
+                    }
                 }
             }
         }
