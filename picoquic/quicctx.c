@@ -453,7 +453,9 @@ static void picoquic_update_issued_ticket(
         ip_addr_length = PICOQUIC_STORED_IP_MAX;
     }
     ticket->ip_addr_length = ip_addr_length;
-    memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    if (ip_addr_length > 0) {
+        memcpy(ticket->ip_addr, ip_addr, ip_addr_length);
+    }
     ticket->rtt = rtt;
     ticket->cwin = cwin;
 }
@@ -1221,14 +1223,23 @@ void picoquic_delete_stateless_packet(picoquic_stateless_packet_t* sp)
 
 void picoquic_queue_stateless_packet(picoquic_quic_t* quic, picoquic_stateless_packet_t* sp)
 {
+    int nb_pending = 0;
     picoquic_stateless_packet_t** pnext = &quic->pending_stateless_packet;
 
     while ((*pnext) != NULL) {
+        nb_pending++;
         pnext = &(*pnext)->next_packet;
     }
 
-    *pnext = sp;
-    sp->next_packet = NULL;
+    if (nb_pending >= PICOQUIC_MAX_PENDING_STATELESS_PACKETS) {
+        /* A peer triggering stateless packets (version negotiation, unexpected CID, retry,
+         * busy, immediate close) faster than the queue drains must not grow it unbounded. */
+        picoquic_delete_stateless_packet(sp);
+    }
+    else {
+        *pnext = sp;
+        sp->next_packet = NULL;
+    }
 }
 
 picoquic_stateless_packet_t* picoquic_dequeue_stateless_packet(picoquic_quic_t* quic)
@@ -1558,9 +1569,15 @@ static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx
 
 void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t next_time)
 {
-    picoquic_remove_cnx_from_wake_list(cnx);
-    cnx->next_wake_time = next_time;
-    picoquic_insert_cnx_by_wake_time(quic, cnx);
+    if (cnx->is_wake_ready && cnx == quic->cnx_wake_ready_last && next_time <= picoquic_get_quic_time(quic)) {
+        /* Already at the tail of the ready list: no change needed. */
+        cnx->next_wake_time = next_time;
+    }
+    else {
+        picoquic_remove_cnx_from_wake_list(cnx);
+        cnx->next_wake_time = next_time;
+        picoquic_insert_cnx_by_wake_time(quic, cnx);
+    }
 }
 
 static void picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max_wake_time)
@@ -2650,7 +2667,27 @@ int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_i
 }
 
 
-int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
+/* Count the paths that are not already marked for demotion. A path that
+ * was abandoned earlier is still counted in cnx->nb_paths until its
+ * demotion timer expires and picoquic_delete_abandoned_paths() physically
+ * removes it, so callers that need to know whether a path can safely be
+ * demoted -- without eventually leaving the connection with none -- must
+ * use this count rather than cnx->nb_paths.
+ */
+int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx)
+{
+    int nb_active = 0;
+
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (!cnx->path[i]->path_is_demoted) {
+            nb_active++;
+        }
+    }
+
+    return nb_active;
+}
+
+int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
     uint64_t reason, uint64_t current_time)
 {
     int ret = 0;
@@ -2669,16 +2706,25 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         int path_index = picoquic_get_path_id_from_unique(cnx, unique_path_id);
 
         if (path_index >= 0) {
-            /* Check whether this is the last path */
-            if (cnx->nb_paths <= 1) {
-                /* That would mean deleting the last path. Don't do that */
-                ret = -1;
-            }
-            else if (!cnx->path[path_index]->path_is_demoted) {
-                /* if demotion is not already in progress, demote the path,
-                * and if the path can be properly identified, post a path abandon frame.
-                */
-                picoquic_demote_path(cnx, path_index, current_time, reason);
+            if (!cnx->path[path_index]->path_is_demoted) {
+                /* Check whether this is the last path not already marked for
+                 * demotion -- checking nb_paths alone is not enough: it would
+                 * let an application abandon every path in turn, eventually
+                 * leaving none.
+                 */
+                if (picoquic_nb_paths_not_demoted(cnx) <= 1) {
+                    /* That would mean leaving no path available. Don't do
+                     * that: the application should close the connection
+                     * instead, or probe a new path before abandoning this one.
+                     */
+                    ret = PICOQUIC_ERROR_PATH_LAST_REMAINING;
+                }
+                else {
+                    /* Demote the path, and if it can be properly identified,
+                     * post a path abandon frame.
+                     */
+                    picoquic_demote_path(cnx, path_index, current_time, reason);
+                }
             }
         }
         else {
@@ -2943,7 +2989,7 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
 /* Manage ACK context and Packet context */
 void picoquic_init_ack_ctx(picoquic_cnx_t* cnx, picoquic_ack_context_t* ack_ctx)
 {
-    picoquic_sack_list_init(&ack_ctx->sack_list);
+    picoquic_sack_list_init(&ack_ctx->sack_list, picoquic_sack_list_packet_numbers);
     ack_ctx->time_stamp_largest_received = UINT64_MAX;
     ack_ctx->act[0].highest_ack_sent = 0;
     ack_ctx->act[0].highest_ack_sent_time = cnx->start_time;
@@ -3919,7 +3965,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             cnx->tls_stream[epoch].maxdata_remote = UINT64_MAX;
 
             picoquic_init_tls_tree(cnx, epoch);
-            picoquic_sack_list_init(&cnx->tls_stream[epoch].sack_list);
+            picoquic_sack_list_init(&cnx->tls_stream[epoch].sack_list, picoquic_sack_list_stream_bytes);
             /* No need to reset the state flags, as they are not used for the crypto stream */
         }
         
@@ -4555,7 +4601,7 @@ void picoquic_reset_ack_context(picoquic_ack_context_t* ack_ctx)
 {
     picoquic_clear_ack_ctx(ack_ctx);
 
-    picoquic_sack_list_init(&ack_ctx->sack_list);
+    picoquic_sack_list_init(&ack_ctx->sack_list, picoquic_sack_list_packet_numbers);
 
     ack_ctx->ecn_ect0_total_local = 0;
     ack_ctx->ecn_ect1_total_local = 0;

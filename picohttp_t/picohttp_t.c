@@ -101,6 +101,7 @@ static LONG WINAPI picohttp_t_crash_handler(EXCEPTION_POINTERS* ex)
 extern size_t picohttp_nb_stress_clients;
 extern size_t picohttp_test_multifile_number;
 extern uint64_t picohttp_random_stress_context;
+extern uint64_t picohttp_perf_loopback_size;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
@@ -123,6 +124,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_remote_control_stream_singleton", h3zero_remote_control_stream_singleton_test },
     { "h3zero_capsule", h3zero_capsule_test },
     { "h3zero_client_data", h3zero_client_data_test },
+    { "h3zero_client_data_repeat", h3zero_client_data_repeat_test },
     { "qpack_huffman", qpack_huffman_test },
     { "qpack_huffman_base", qpack_huffman_base_test},
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },
@@ -191,6 +193,10 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_media", quicperf_media_test },
     { "quicperf_ungrouped", quicperf_ungrouped_test },
     { "quicperf_group_remainder", quicperf_group_remainder_test },
+    { "quicperf_datagram_vs_group", quicperf_datagram_vs_group_test },
+    { "quicperf_server_timer_wakeup", quicperf_server_timer_wakeup_test },
+    { "quicperf_receive_media_overrun", quicperf_receive_media_overrun_test },
+    { "quicperf_server_timer_leak", quicperf_server_timer_leak_test },
     { "quicperf_chain", quicperf_chain_test },
     { "quicperf_print_report", quicperf_print_report_test },
     { "quicperf_multi", quicperf_multi_test },
@@ -198,6 +204,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_multipath_race", quicperf_multipath_race_test },
     { "quicperf_multipath_race_delayed", quicperf_multipath_race_delayed_test },
     { "quicperf_multipath_settled", quicperf_multipath_settled_test },
+    { "perf_loopback", perf_loopback_test },
+    { "perf_loopback_loss", perf_loopback_loss_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
     { "cc_compete_c4c4", cc_compete_c4c4_test },
@@ -263,6 +271,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -s nnn            Set the number of stress clients to nnn.\n");
     fprintf(stderr, "  -R xxxxxxxx       Set seed for stress tests to xxxxxxxx.\n");
     fprintf(stderr, "  -m nnn            Set number of files in multi file tests to nnn.\n");
+    fprintf(stderr, "  -p nnn            Set the response size in bytes for perf_loopback to nnn.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -280,6 +289,13 @@ int usage(char const * argv0)
     fprintf(stderr, "with loss and using preemptive repeat. For all these tests,\n");
     fprintf(stderr, "the number of files is controlled by the \"-m\" option\n");
     fprintf(stderr, "(default: 1000).\n");
+    fprintf(stderr, "\nThe perf_loopback test downloads a batch of the given size over\n");
+    fprintf(stderr, "a single QUIC context looped back on itself, with no socket and\n");
+    fprintf(stderr, "no simulated network delay -- it is meant for profiling the sending\n");
+    fprintf(stderr, "path. The response size is controlled by the \"-p\" option, in bytes\n");
+    fprintf(stderr, "(default: 1000000). Set it much higher (e.g. 10000000000 for 10GB)\n");
+    fprintf(stderr, "when actually profiling; the default is kept small so the test\n");
+    fprintf(stderr, "suite stays fast.\n");
 
     return -1;
 }
@@ -320,7 +336,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "R:s:m:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "R:s:m:p:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -364,6 +380,19 @@ int main(int argc, char** argv)
                     picohttp_test_multifile_number = (size_t)nb_multi_file;
                 }
                 break;
+            case 'p': {
+                char* end_ptr = NULL;
+                unsigned long long perf_loopback_size = strtoull(optarg, &end_ptr, 10);
+
+                if (perf_loopback_size == 0 || end_ptr == NULL || *end_ptr != 0) {
+                    fprintf(stderr, "Incorrect response size for perf_loopback: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                else {
+                    picohttp_perf_loopback_size = (uint64_t)perf_loopback_size;
+                }
+                break;
+            }
             case 'S':
                 picoquic_set_solution_dir(optarg);
                 break;

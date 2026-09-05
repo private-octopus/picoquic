@@ -239,6 +239,135 @@ int sacktest(void)
     return ret;
 }
 
+/* Stress test: push the SACK list far beyond the 22-entry table above, with a
+ * delivery order designed to keep it holding many disjoint ranges at once --
+ * the scenario an on-path adversary could force by reordering packets, which
+ * organic loss does not reach because retransmission heals gaps long before
+ * thousands of them pile up. Checks correctness at scale, and reports timing
+ * for the first half of the run against the second half so a regression (or,
+ * eventually, an improvement from replacing the underlying tree) is visible
+ * without needing a separate profiling tool. Pass/fail on that timing compares the two
+ * halves against each other, never against an absolute number -- see the check below. */
+#define SACK_STRESS_NB_PACKETS 20000
+#define SACK_STRESS_MAX_GROWTH_RATIO 8.0
+
+static int sack_stress_check_coverage(picoquic_sack_list_t* sack_list, uint64_t nb_packets)
+{
+    int ret = 0;
+    picoquic_sack_item_t* sack = picoquic_sack_first_item(sack_list);
+    uint64_t next_expected = 0;
+
+    while (ret == 0 && sack != NULL) {
+        if (sack->start_of_sack_range != next_expected) {
+            ret = -1;
+        }
+        else {
+            next_expected = sack->end_of_sack_range + 1;
+            sack = picoquic_sack_next_item(sack);
+        }
+    }
+
+    if (ret == 0 && next_expected != nb_packets) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int sack_stress_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx;
+    picoquic_quic_t* quic;
+    picoquic_packet_context_enum pc = 0;
+    uint64_t nb_ops = 0;
+    uint64_t chunk_start_time;
+    uint64_t chunk_ops = 0;
+    double first_half_us_per_op = 0.0;
+    double second_half_us_per_op = 0.0;
+    uint64_t* pn = (uint64_t*)malloc(SACK_STRESS_NB_PACKETS * sizeof(uint64_t));
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        free(pn);
+        return -1;
+    }
+
+    if (pn == NULL || picoquic_create_local_cnxid(cnx, 0, NULL, 0) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Alternate delivery between the low and high end of the packet-number space,
+         * each walking towards the middle: every packet is far from anything recorded
+         * by the other end, so ranges stay disjoint far longer than organic reordering
+         * would allow, and each side's insertion point keeps moving relative to
+         * wherever the other side last landed. */
+        for (uint64_t i = 0; i < SACK_STRESS_NB_PACKETS; i++) {
+            pn[i] = (i % 2 == 0) ? (i / 2) : (SACK_STRESS_NB_PACKETS - 1 - (i / 2));
+        }
+    }
+
+    chunk_start_time = picoquic_current_time();
+
+    for (uint64_t i = 0; ret == 0 && i < SACK_STRESS_NB_PACKETS; i++) {
+        uint64_t current_time = i + 1;
+
+        /* Mirror the real receive path: check for duplicate, then record. */
+        if (picoquic_is_pn_already_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i]) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_record_pn_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i], current_time) != 0) {
+            ret = -1;
+        }
+        else if (picoquic_is_pn_already_received(cnx, pc,
+            cnx->first_local_cnxid_list->local_cnxid_first, pn[i]) == 0) {
+            ret = -1;
+        }
+
+        nb_ops++;
+        chunk_ops++;
+
+        if (ret == 0 && i == SACK_STRESS_NB_PACKETS / 2 - 1) {
+            uint64_t now = picoquic_current_time();
+            first_half_us_per_op = (double)(now - chunk_start_time) / (double)chunk_ops;
+            chunk_start_time = now;
+            chunk_ops = 0;
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t now = picoquic_current_time();
+        second_half_us_per_op = (double)(now - chunk_start_time) / (double)chunk_ops;
+    }
+
+    if (ret == 0 && second_half_us_per_op > first_half_us_per_op * SACK_STRESS_MAX_GROWTH_RATIO + 0.01) {
+        /* Compare the two halves of the same run instead of an absolute threshold, so the
+         * check does not depend on how fast this particular machine is: flat per-op cost
+         * keeps the ratio near 1, while a real O(N) degradation would blow it out by many
+         * orders of magnitude at this N, so a generous margin still catches it. */
+        DBG_PRINTF("Sack stress cost grew from %.3f to %.3f us/op between halves",
+            first_half_us_per_op, second_half_us_per_op);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = check_ack_ranges(&cnx->ack_ctx[pc].sack_list);
+    }
+
+    if (ret == 0) {
+        ret = sack_stress_check_coverage(&cnx->ack_ctx[pc].sack_list, SACK_STRESS_NB_PACKETS);
+    }
+
+    fprintf(stdout, "Sack stress: %" PRIu64 " packets, first half %.3f us/op, second half %.3f us/op.\n",
+        nb_ops, first_half_us_per_op, second_half_us_per_op);
+
+    free(pn);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 static void ack_range_mask(uint64_t* mask, uint64_t highest, uint64_t range)
 {
     for (uint64_t i = 0; i < range; i++) {
@@ -574,7 +703,7 @@ int ackrange_test(void)
     int ret = 0;
     picoquic_sack_list_t sack0;
 
-    picoquic_sack_list_init(&sack0);
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
 
     for (size_t i = 0; ret == 0 && i < nb_ack_range; i++) {
         ret = picoquic_check_sack_list(&sack0,
@@ -690,7 +819,7 @@ int ack_disorder_test_one(char const * log_name, int64_t horizon_delay, double r
         ret = -1;
     } 
     else {
-        picoquic_sack_list_init(&sack0);
+        picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
     }
 
     sack0.horizon_delay = horizon_delay;
@@ -790,5 +919,140 @@ int ack_disorder_test(void)
 int ack_horizon_test(void)
 {
     int ret = ack_disorder_test_one(ACK_HORIZON_LOG, 1000000, 196.0);
+    return ret;
+}
+
+/* Feed non-contiguous arrivals into a fresh sack list of the given kind, no ack-of-ack in between, and report the resulting range count. */
+static int sack_list_feed_gaps(picoquic_sack_list_kind_enum kind, uint64_t nb_packets, size_t* nb_ranges_out)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+
+    picoquic_sack_list_init(&sack0, kind);
+
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        /* Only odd packet numbers arrive, so every packet opens a fresh gap */
+        uint64_t pn = 2 * i + 1;
+
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        *nb_ranges_out = picoquic_sack_list_size(&sack0);
+    }
+
+    picoquic_sack_list_free(&sack0);
+
+    return ret;
+}
+
+/* A peer sending only non-contiguous packet numbers, never acking anything, would grow the reception SACK list forever; check the cap holds instead. */
+int sack_list_unbounded_growth_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_packet_numbers, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != PICOQUIC_SACK_LIST_PN_MAX_RANGES) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %d ranges, found %zu",
+            nb_packets, PICOQUIC_SACK_LIST_PN_MAX_RANGES, nb_ranges);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The packet-number cap must not apply to stream-byte ranges (see the kind enum); check that a stream-byte list still grows unbounded. */
+int sack_list_stream_bytes_unbounded_test(void)
+{
+    int ret = 0;
+    size_t nb_ranges = 0;
+    const uint64_t nb_packets = 1000;
+
+    ret = sack_list_feed_gaps(picoquic_sack_list_stream_bytes, nb_packets, &nb_ranges);
+
+    if (ret == 0 && nb_ranges != nb_packets) {
+        DBG_PRINTF("Sent %" PRIu64 " packets, expected %" PRIu64 " ranges (no cap for stream bytes), found %zu",
+            nb_packets, nb_packets, nb_ranges);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The cap's eviction must never move ack_horizon past the lowest retained range, nor past-claim the untracked gap below it. */
+int sack_list_horizon_backward_test(void)
+{
+    int ret = 0;
+    picoquic_sack_list_t sack0;
+    const uint64_t nb_packets = PICOQUIC_SACK_LIST_PN_MAX_RANGES;
+    const uint64_t base_pn = 10000;
+    const uint64_t low_pn = 5;
+    const uint64_t mid_pn = base_pn - 2; /* in the untouched part of the gap, never received */
+
+    picoquic_sack_list_init(&sack0, picoquic_sack_list_packet_numbers);
+
+    /* Fill the list to exactly the cap with distinct, non-contiguous, increasing ranges. */
+    for (uint64_t i = 0; ret == 0 && i < nb_packets; i++) {
+        uint64_t pn = base_pn + 2 * i;
+        if (picoquic_update_sack_list(&sack0, pn, pn, i) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && picoquic_sack_list_size(&sack0) != nb_packets) {
+        DBG_PRINTF("Expected %" PRIu64 " ranges after filling to the cap, found %zu",
+            nb_packets, picoquic_sack_list_size(&sack0));
+        ret = -1;
+    }
+
+    if (ret == 0 &&
+        picoquic_update_sack_list(&sack0, low_pn, low_pn, nb_packets) != 0) {
+        DBG_PRINTF("%s", "Unexpected error recording the reordered low packet number");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_sack_item_t* lowest = picoquic_sack_first_item(&sack0);
+
+        if (lowest == NULL) {
+            DBG_PRINTF("%s", "Sack list unexpectedly empty");
+            ret = -1;
+        }
+        else if (sack0.ack_horizon > lowest->start_of_sack_range) {
+            DBG_PRINTF("ack_horizon %" PRIu64 " is past the lowest retained range start %" PRIu64,
+                sack0.ack_horizon, lowest->start_of_sack_range);
+            ret = -1;
+        }
+        else if (sack0.ack_horizon <= low_pn) {
+            /* Duplicate detection (RFC 9000 13.2.3) requires the accepted packet number be covered by a tracked range or the horizon. */
+            DBG_PRINTF("ack_horizon %" PRIu64 " does not cover accepted packet number %" PRIu64,
+                sack0.ack_horizon, low_pn);
+            ret = -1;
+        }
+        else if (picoquic_sack_list_size(&sack0) != nb_packets) {
+            /* Folding the accepted packet into the horizon must not grow the tree past the cap. */
+            DBG_PRINTF("Expected %" PRIu64 " ranges after folding the low packet number, found %zu",
+                nb_packets, picoquic_sack_list_size(&sack0));
+            ret = -1;
+        }
+        else {
+            /* The horizon must cover exactly what was received, not the untouched rest of the gap above it. */
+            int mid_is_duplicate = (mid_pn < sack0.ack_horizon) ||
+                (lowest->start_of_sack_range <= mid_pn && mid_pn <= lowest->end_of_sack_range);
+            if (mid_is_duplicate) {
+                DBG_PRINTF("Packet number %" PRIu64 ", never received, is wrongly treated as a duplicate",
+                    mid_pn);
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_sack_list_free(&sack0);
+
     return ret;
 }

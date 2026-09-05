@@ -115,6 +115,7 @@ extern "C" {
 #define PICOQUIC_ERROR_PACKET_TOO_BIG (PICOQUIC_ERROR_CLASS + 71)
 #define PICOQUIC_ERROR_OFFSET_TOO_BIG (PICOQUIC_ERROR_CLASS + 72)
 #define PICOQUIC_NO_ERROR_SCONE_ADVICE (PICOQUIC_ERROR_CLASS + 73)
+#define PICOQUIC_ERROR_PATH_LAST_REMAINING (PICOQUIC_ERROR_CLASS + 74)
 /*
  * Protocol errors defined in the QUIC spec
  */
@@ -1054,10 +1055,15 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * the new path will come in addition to the set of existing paths; if not,
  * the new path when validated will replace the default path.
  * The "abandon path" should only be used if multipath is enabled, and if more than
- * one path is available -- otherwise, just close the connection. If the command
- * is accepted, the peer will be informed of the need to close the path, and the
- * path will be demoted after a short delay. 
- * 
+ * one path is still available for use -- otherwise, just close the connection, or
+ * probe a new path before abandoning this one. If the command is accepted, the
+ * peer will be informed of the need to close the path, and the path will be
+ * demoted after a short delay. Calling picoquic_abandon_path() on the last path
+ * that is not already marked for demotion returns PICOQUIC_ERROR_PATH_LAST_REMAINING
+ * instead of demoting it, since that would eventually leave the connection with no
+ * path to send on. The peer abandoning its last path is not affected by this check;
+ * it simply results in the connection being closed.
+ *
  * Like all user-level networking API, the "probe new path" API assumes that the
  * port numbers in the socket addresses structures are expressed in network order.
  * 
@@ -1092,7 +1098,12 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  *   PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED: The application is trying to create more
  *   simultaneous paths than allowed. It will need to close one of the existing paths
  *   before creating a new one.
- * 
+ *
+ *   PICOQUIC_ERROR_PATH_LAST_REMAINING: returned by picoquic_abandon_path(). The
+ *   target path is the last one not already marked for demotion, so abandoning it
+ *   would leave the connection with no path to send on. The application should
+ *   close the connection instead, or probe a new path before abandoning this one.
+ *
  * The errors PICOQUIC_ERROR_PATH_ID_BLOCKED, PICOQUIC_ERROR_PATH_CID_BLOCKED.
  * PICOQUIC_ERROR_PATH_NOT_READY and PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED are transient.
  * The application can use the `picoquic_check_new_path_allowed` API to check whether
