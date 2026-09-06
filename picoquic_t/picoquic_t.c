@@ -318,6 +318,7 @@ static const picoquic_test_def_t test_table[] = {
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
+    { "client_cert_verification_policy", client_cert_verification_policy_test },
     { "cert_rollover_inflight", cert_rollover_inflight_test },
     { "cert_rollover_active_connection", cert_rollover_active_connection_test },
     { "virtual_time" , virtual_time_test },

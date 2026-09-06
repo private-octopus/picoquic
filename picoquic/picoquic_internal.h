@@ -574,6 +574,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
     unsigned int is_cert_store_not_empty : 1;
+    unsigned int is_cert_verification_strict : 1; /* refuse client cnx instead of fail-open if no root cert store is configured */
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
     unsigned int enable_sslkeylog : 1; /* Enable the SSLKEYLOG feature */

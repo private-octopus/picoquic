@@ -1183,6 +1183,11 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic) {
     picoquic_dispose_verify_certificate_callback(quic);
 }
 
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict) {
+    PICOQUIC_THREAD_CHECK(quic);
+    quic->is_cert_verification_strict = (is_strict != 0);
+}
+
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     PICOQUIC_THREAD_CHECK(quic);
@@ -3914,13 +3919,6 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             }
 
             cnx->cnx_state = picoquic_state_client_init;
-
-            if (!quic->is_cert_store_not_empty) {
-                /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
-                picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
-
-                picoquic_set_null_verifier(quic);
-            }
         } else {
             cnx->is_half_open = 1;
             cnx->quic->current_number_half_open += 1;
@@ -4104,6 +4102,18 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
         cnx->tls_stream[0].send_queue != NULL) {
         DBG_PRINTF("%s", "picoquic_start_client_cnx called twice.");
         return -1;
+    }
+
+    if (!cnx->quic->is_cert_store_not_empty) {
+        if (cnx->quic->is_cert_verification_strict) {
+            picoquic_log_app_message(cnx, "No root crt list specified, and strict verification was requested -- refusing connection.\n");
+            return -1;
+        }
+        else {
+            /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
+            picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
+            picoquic_set_null_verifier(cnx->quic);
+        }
     }
 
     picoquic_log_new_connection(cnx);
