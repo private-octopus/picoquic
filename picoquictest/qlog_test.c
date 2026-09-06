@@ -219,6 +219,82 @@ static uint8_t qlog_pref_addr[] = {
 };
 void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len);
 
+/* test proper rendering of preferred IPv4 address in qlog. */
+#define QLOG_FNS_PREFADDR_FILE "qlog_fns_preferred_address_test.txt"
+static uint8_t qlog_fns_pref_addr_bytes[] = {
+    /* IPv4 address */
+    10, 0, 0, 99,
+    /* IPv4 port */
+    1, 4,
+    /* IPv6 address */
+    2, 1, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16,
+    /* IPv6 port */
+    2, 8,
+    /* CID len */
+    4,
+    /* CID value */
+    15, 14, 13, 12,
+    /* Reset token */
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+};
+void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len);
+
+int qlog_fns_pref_addr_test(void)
+{
+    int ret = 0;
+    /* Exactly the four bytes the "len >= 4" admission check guarantees -- on a heap allocation this size, reading past it is the exact bug being tested for. */
+    uint8_t* min_bytes = (uint8_t*)malloc(4);
+    FILE* F;
+
+    if (min_bytes == NULL) {
+        ret = -1;
+    }
+    else {
+        memcpy(min_bytes, qlog_fns_pref_addr_bytes, 4);
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "w");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            qlog_fns_preferred_address(F, min_bytes, 4);
+            qlog_fns_preferred_address(F, qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes));
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        char line[256];
+        int found = 0;
+        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            while (fgets(line, sizeof(line), F) != NULL) {
+                if (strstr(line, "\"ip_v4\": \"10.0.0.99\"") != NULL) {
+                    found = 1;
+                    break;
+                }
+            }
+            F = picoquic_file_close(F);
+            if (!found) {
+                DBG_PRINTF("%s", "Preferred address ip_v4 not rendered as 10.0.0.99");
+                ret = -1;
+            }
+        }
+    }
+
+    if (min_bytes != NULL) {
+        free(min_bytes);
+    }
+
+    return ret;
+}
+
 int qlog_pref_addr_test(FILE* F)
 {
 	int ret = 0;
@@ -361,5 +437,10 @@ int qlog_error_test(void)
 	if (F != NULL) {
 		F = picoquic_file_close(F);
 	}
+
+	if (ret == 0) {
+		ret = qlog_fns_pref_addr_test();
+	}
+
 	return ret;
 }
