@@ -200,6 +200,7 @@ int qlog_error_string(FILE* F)
 
 /* Test common function for writing a byte string with proper escape for JSON */
 int qlog_fns_chars(FILE* f, const uint8_t* s, uint64_t l);
+#define QLOG_JSON_ESCAPE_FILE "qlol_json_escape_file.txt"
 
 int qlog_json_escape_test(void)
 {
