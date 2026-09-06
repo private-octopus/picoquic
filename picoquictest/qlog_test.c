@@ -198,6 +198,67 @@ int qlog_error_string(FILE* F)
 	return ret;
 }
 
+/* Test common function for writing a byte string with proper escape for JSON */
+int qlog_fns_chars(FILE* f, const uint8_t* s, uint64_t l);
+
+int qlog_json_escape_test(void)
+{
+	int ret = 0;
+	static const uint8_t escape_input[] = { 0xFF, 0x01, 0x7F };
+	static const char* expected = "\"\\u00ff\\u0001\\u007f\"";
+	char line[256];
+	FILE* F;
+
+	F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+	if (F == NULL) {
+		ret = -1;
+	}
+	else {
+		qlog_fns_chars(F, escape_input, sizeof(escape_input));
+		F = picoquic_file_close(F);
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_fns_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		bytestream bs = { 0 };
+		bs.data = (uint8_t*)escape_input;
+		bs.size = sizeof(escape_input);
+		bs.ptr = 0;
+
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+		if (F == NULL) {
+			ret = -1;
+		}
+		else {
+			qlog_chars(F, &bs, bs.size);
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	return ret;
+}
+
 static uint8_t qlog_pref_addr[] = {
 	/* IPv4 address */
 	10, 0, 0, 1,
@@ -440,6 +501,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_fns_pref_addr_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_json_escape_test();
 	}
 
 	return ret;

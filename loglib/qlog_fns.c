@@ -188,17 +188,13 @@ static void qlog_fns_log_addr(FILE* f, const struct sockaddr* addr_peer)
     }
 }
 
-/* Helper: write a character string defined by pointer and length.
-* Process the string for compatibility with JSON. */
-
-void qlog_fns_chars(FILE* f, const char * s, uint64_t l)
+/* Shared by qlog_fns.c and the older qlog.c: write bytes as JSON-escaped content, unquoted, from unsigned input so no byte renders as more than \u00XX. */
+void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l)
 {
     uint64_t x;
 
-    fprintf(f, "\"");
-
     for (x = 0; x < l; x++) {
-        int c = s[x];
+        uint8_t c = s[x];
         if (c == '"' || c == '\\') {
             fprintf(f, "\\%c", c);
         }
@@ -206,10 +202,16 @@ void qlog_fns_chars(FILE* f, const char * s, uint64_t l)
             fprintf(f, "%c", c);
         }
         else {
-            fprintf(f, "\\%02x", c);
+            fprintf(f, "\\u%04x", c);
         }
     }
+}
 
+/* Helper: write a character string defined by pointer and length, processed for compatibility with JSON. */
+void qlog_fns_chars(FILE* f, const uint8_t * s, uint64_t l)
+{
+    fprintf(f, "\"");
+    qlog_fns_char_content(f, s, l);
     fprintf(f, "\"");
 }
 
@@ -564,7 +566,7 @@ void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
     if (sni_len > 0) {
         fprintf(f, ",\n    \"sni\": ");
-        qlog_fns_chars(f, (const char *)sni, sni_len);
+        qlog_fns_chars(f, sni, sni_len);
     }
 
     if (alpn_count > 0) {
@@ -574,14 +576,14 @@ void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
             if (i != 0) {
                 fprintf(f, ", ");
             }
-            qlog_fns_chars(f, (const char *)alpn_list[i].base, alpn_list[i].len);
+            qlog_fns_chars(f, alpn_list[i].base, alpn_list[i].len);
         }
         fprintf(f, "]");
     }
 
     if (alpn_len > 0) {
         fprintf(f, ",\n    \"alpn\": ");
-        qlog_fns_chars(f, (const char *)alpn, alpn_len);
+        qlog_fns_chars(f, alpn, alpn_len);
     }
 
     fprintf(f, "}]");
