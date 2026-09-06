@@ -121,6 +121,7 @@ static const picoquic_test_def_t test_table[] = {
     { "util_uint8_to_str", util_uint8_to_str_test },
     { "util_memcmp", util_memcmp_test },
     { "threading", util_threading_test },
+    { "is_path_sane", util_is_path_sane_test },
     { "picohash", picohash_test },
     { "picohash_embedded", picohash_embedded_test },
     { "picohash_bytes", picohash_bytes_test },

@@ -169,6 +169,9 @@ FILE * picoquic_file_close(FILE * F);
 
 int picoquic_file_delete(char const* file_name, int* last_err);
 
+/* Sanity check of a path or file name to prevent directory traversal. See util.c for details. */
+int picoquic_is_path_sane(const uint8_t* path, size_t path_length);
+
 /* Skip and decoding functions */
 const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t size);
 const uint8_t* picoquic_frames_varint_skip(const uint8_t * bytes, const uint8_t * bytes_max);

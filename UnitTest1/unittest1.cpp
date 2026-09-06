@@ -132,6 +132,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(is_path_sane)
+        {
+            int ret = util_is_path_sane_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(random_tester)
         {
             int ret = random_tester_test();
@@ -3734,12 +3741,6 @@ namespace UnitTest1
 
         TEST_METHOD(demo_error) {
             int ret = demo_error_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(demo_file_sanitize) {
-            int ret = demo_file_sanitize_test();
 
             Assert::AreEqual(ret, 0);
         }

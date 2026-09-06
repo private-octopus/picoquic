@@ -762,6 +762,52 @@ FILE * picoquic_file_close(FILE * F)
     return NULL;
 }
 
+/* Reject unsafe path components (traversal, absolute-ish or backslash paths, odd characters);
+ * a leading '/' is accepted but not required, so both URL paths and bare relative file names
+ * can be checked with the same function. */
+int picoquic_is_path_sane(const uint8_t* path, size_t path_length)
+{
+    int ret = 0;
+    size_t i = 0;
+    int past_is_dot = 0;
+    int nb_good = 0;
+
+    if (path_length == 0) {
+        ret = -1;
+    }
+    else {
+        if (path[0] == '/') {
+            i++;
+        }
+
+        for (; ret == 0 && i < path_length; i++) {
+            int c = path[i];
+            if ((c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') ||
+                c == '-' || c == '_') {
+                nb_good++;
+                past_is_dot = 0;
+            }
+            else if (c == '/' && i < path_length - 1 && nb_good > 0) {
+                nb_good++;
+            }
+            else if (c == '.' && !past_is_dot && nb_good > 0) {
+                past_is_dot = 1;
+            }
+            else {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && nb_good == 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 /* Safely delete file in a portable way */
 int picoquic_file_delete(char const * file_name, int * last_err)
 {

@@ -2503,35 +2503,6 @@ int h09_post_test(void)
         post_test_stream_length, 0, 0, 0, 0, NULL, NULL, NULL, 0);
 }
 
-int demo_file_sanitize_test(void)
-{
-    int ret = 0;
-    char const* good[] = {
-        "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z", "/dir/index.html"
-    };
-    size_t nb_good = sizeof(good) / sizeof(char const*);
-    char const* bad[] = {
-        "/../index.html", "example.com.txt", "/5000000/", "/.123_45.png", "/a-b-C-Z\\..\\password.txt", "//remote-server/example"
-    };
-    size_t nb_bad = sizeof(bad) / sizeof(char const*);
-
-    for (size_t i = 0; ret == 0 && i < nb_good; i++) {
-        if (demo_server_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
-            DBG_PRINTF("Found good frame not good: %s\n", good[i]);
-            ret = -1;
-        }
-    }
-
-    for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
-        if (demo_server_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
-            DBG_PRINTF("Found bad frame not bad: %s\n", bad[i]);
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
 int demo_file_access_test(void)
 {
     int ret = 0;
