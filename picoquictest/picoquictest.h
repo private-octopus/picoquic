@@ -209,6 +209,7 @@ int sockloop_migration_test(void);
 int sockloop_nat_test(void);
 int sockloop_thread_test(void);
 int sockloop_thread_name_test(void);
+int sockloop_thread_null_callback_test(void);
 int sockloop_qmux_test(void);
 int sockloop_qmux_badp_test(void);
 int splay_test(void);

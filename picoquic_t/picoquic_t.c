@@ -136,6 +136,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_nat", sockloop_nat_test },
     { "sockloop_thread", sockloop_thread_test },
     { "sockloop_thread_name", sockloop_thread_name_test },
+    { "sockloop_thread_null_callback", sockloop_thread_null_callback_test },
     { "sockloop_qmux", sockloop_qmux_test },
     { "sockloop_qmux_badp", sockloop_qmux_badp_test },
     { "splay", splay_test },
