@@ -615,6 +615,7 @@ int multipath_qlog_test(void);
 int multipath_tunnel_test(void);
 int multipath_cid_retire_test(void);
 int token_reuse_api_test(void);
+int token_reuse_cap_test(void);
 int get_hash_test(void);
 int get_tls_errors_test(void);
 int dualq_aqm_test(void);

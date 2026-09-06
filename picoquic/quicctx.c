@@ -587,7 +587,13 @@ int picoquic_registered_token_check_reuse(picoquic_quic_t * quic,
                 DBG_PRINTF("Token reuse detected, count=%d", rt->count);
             }
             else {
-                (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                /* Set an arbitrary limit to size of token tree to avoid infinite growth. */
+                if ((size_t)quic->token_reuse_tree.size < quic->max_number_connections*32) {
+                    (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                }
+                else {
+                    free(rt);
+                }
                 ret = 0;
             }
         }

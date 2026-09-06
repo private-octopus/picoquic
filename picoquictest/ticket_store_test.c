@@ -550,6 +550,66 @@ int token_reuse_api_test(void)
     return ret;
 }
 
+/* Check that token_reuse_tree cannot grow without bound: past the cap, registering a new, distinct token must not grow the tree further. */
+int token_reuse_cap_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(4, NULL, NULL, NULL, "test", NULL, NULL, NULL, NULL,
+        NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        const size_t token_reuse_cap = ((size_t)quic->max_number_connections) * 32;
+        const size_t nb_tokens = token_reuse_cap + 64;
+        uint8_t token[12] = { 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+        /* Register more distinct tokens than the cap allows -- none of them is a reuse. */
+        for (size_t i = 0; ret == 0 && i < nb_tokens; i++) {
+            picoformat_64(token + 4, (uint64_t)i);
+            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)i) != 0) {
+                DBG_PRINTF("Token[%z] unexpectedly flagged as reused", i);
+                ret = -1;
+            }
+        }
+
+        /* The tree must have stopped growing at the cap, not at nb_tokens. */
+        if (ret == 0 && (size_t)quic->token_reuse_tree.size != token_reuse_cap) {
+            DBG_PRINTF("token_reuse_tree size is %d, expected %z", quic->token_reuse_tree.size, token_reuse_cap);
+            ret = -1;
+        }
+
+        /* After time elapses past every registered token's expiry, clearing must empty the tree again. */
+        if (ret == 0) {
+            picoquic_registered_token_clear(quic, (uint64_t)nb_tokens);
+            if (quic->token_reuse_tree.size != 0) {
+                DBG_PRINTF("token_reuse_tree size is %d after clear, expected 0", quic->token_reuse_tree.size);
+                ret = -1;
+            }
+        }
+
+        /* A new, distinct token must then be accepted and actually retained, showing the cap is not stuck permanently full. */
+        if (ret == 0) {
+            picoformat_64(token + 4, (uint64_t)nb_tokens);
+            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)nb_tokens) != 0) {
+                DBG_PRINTF("%s", "New token unexpectedly flagged as reused after clear");
+                ret = -1;
+            }
+            else if (quic->token_reuse_tree.size != 1) {
+                DBG_PRINTF("token_reuse_tree size is %d after post-clear insert, expected 1", quic->token_reuse_tree.size);
+                ret = -1;
+            }
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
 /* Ticket seed. Do a connection, and verify that server and client have properly
  * documented the congestion parameters in the outgoing or incoming tickets
  */
