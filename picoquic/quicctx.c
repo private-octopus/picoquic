@@ -1959,6 +1959,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
                 /* Set the challenge used for this path */
                 picoquic_set_path_challenge(cnx, cnx->nb_paths - 1, start_time);
             }
+            else {
+                /* Tuple creation failed: path_x was never recorded in cnx->path, so it must be freed here. */
+                free(path_x);
+            }
         }
     }
 
