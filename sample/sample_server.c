@@ -121,7 +121,7 @@ int sample_server_open_stream(sample_server_ctx_t* server_ctx, sample_server_str
     stream_ctx->is_name_read = 1;
 
     /* Verify the name, then try to open the file */
-    if (server_ctx->default_dir_len + stream_ctx->name_length + 1 > sizeof(file_path)) {
+    if (server_ctx->default_dir_len + stream_ctx->name_length + 2 > sizeof(file_path)) {
         ret = PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR;
     }
     else if (picoquic_is_path_sane(stream_ctx->file_name, stream_ctx->name_length) != 0) {
@@ -291,7 +291,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
                         int stream_ret;
 
                         /* If fin, mark read, check the file, open it. Or reset if there is no such file */
-                        stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
+                        stream_ctx->file_name[stream_ctx->name_length] = 0;
                         stream_ctx->is_name_read = 1;
                         printf("File requested: <%s>\n", stream_ctx->file_name);
                         stream_ret = sample_server_open_stream(server_ctx, stream_ctx);
