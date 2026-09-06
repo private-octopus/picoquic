@@ -1512,6 +1512,30 @@ int frames_ackack_error_test(void)
     return ret;
 }
 
+/* A late ack of an OBSERVED_ADDRESS frame referencing a delete path must 
+* be consumed safely instead of dereferencing the now-absent path. */
+int observed_address_ack_after_path_deleted_test(void)
+{
+    int ret = 0;
+    /* OBSERVED_ADDRESS(v4) frame bytes, type already skipped: sequence(varint) + addr(4) + port(2). */
+    uint8_t bytes[] = { 1, 10, 0, 0, 1, 0x1F, 0x90 };
+    size_t consumed = 0;
+    int process_ret = picoquic_process_ack_of_observed_address_frame(NULL, bytes, sizeof(bytes),
+        picoquic_frame_type_observed_address_v4, &consumed);
+
+    if (process_ret != 0) {
+        DBG_PRINTF("Ack of observed address frame with a deleted path returned %d", process_ret);
+        ret = -1;
+    }
+    else if (consumed != sizeof(bytes)) {
+        DBG_PRINTF("Ack of observed address frame consumed %d bytes, expected %d",
+            (int)consumed, (int)sizeof(bytes));
+        ret = -1;
+    }
+
+    return ret;
+}
+
 picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct sockaddr * saddr, picoquic_epoch_enum epoch, uint64_t simulated_time, int mpath)
 {
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,

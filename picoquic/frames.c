@@ -6470,7 +6470,10 @@ int picoquic_process_ack_of_observed_address_frame(picoquic_path_t * path_x, con
     }
     else {
         /* TODO: tie this to a specific address and port */
-        path_x->observed_addr_acked = 1;
+        if (path_x != NULL) {
+            /* The path may already be gone if it was deleted before this ack was processed; the frame is still consumed either way. */
+            path_x->observed_addr_acked = 1;
+        }
         *consumed = bytes_next - bytes;
     }
 

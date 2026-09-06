@@ -154,6 +154,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },
     { "frames_ackack_error", frames_ackack_error_test },
+    { "observed_address_ack_after_path_deleted", observed_address_ack_after_path_deleted_test },
     { "frames_format", frames_format_test },
     { "logger", logger_test },
     { "binlog", binlog_test },

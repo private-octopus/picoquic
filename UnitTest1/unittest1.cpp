@@ -334,6 +334,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(observed_address_ack_after_path_deleted)
+        {
+            int ret = observed_address_ack_after_path_deleted_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();

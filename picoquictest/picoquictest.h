@@ -193,6 +193,7 @@ int zero_rtt_ech_test(void);
 int parse_frame_test(void);
 int frames_repeat_test(void);
 int frames_ackack_error_test(void);
+int observed_address_ack_after_path_deleted_test(void);
 int frames_format_test(void);
 int stress_test(void);
 int cnx_stress_unit_test(void);
