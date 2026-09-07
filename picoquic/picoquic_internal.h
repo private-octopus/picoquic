@@ -2237,9 +2237,6 @@ typedef struct st_picomask_fns_t {
 #define SCONE_DELAY_RANDOM 3000000
 #define SCONE_INDICATOR 0xc813
 #define SCONE_VERSION_BASE 0x6f7dc0fd
-#define SCONE_DELAY 19000013
-#define SCONE_DELAY_RANDOM 3000000
-#define SCONE_INDICATOR 0xc813
 
 void picoquic_scone_padding(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
 int picoquic_scone_incoming(picoquic_quic_t* quic,  picoquic_packet_header* ph, const uint8_t* bytes_start, const uint8_t* bytes_max);

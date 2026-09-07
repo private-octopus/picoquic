@@ -61,7 +61,8 @@ void scone_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     scone_aqm_state_t* scone_aqm_state = (scone_aqm_state_t*)self;
     int should_drop = 0;
 
-    if (packet->length > 2 &&
+    /* The indicator is only ever placed on the first Initial (long header) packet */
+    if (packet->length > 2 && (packet->bytes[0] & 0x80) != 0 &&
         packet->bytes[packet->length - 2] == ((SCONE_INDICATOR >> 8) & 0xff) &&
         packet->bytes[packet->length - 1] == (SCONE_INDICATOR & 0xff)) {
         if (scone_aqm_state->first_seen) {
