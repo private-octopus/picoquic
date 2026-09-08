@@ -1518,10 +1518,15 @@ int observed_address_ack_after_path_deleted_test(void)
 {
     int ret = 0;
     /* OBSERVED_ADDRESS(v4) frame bytes, type already skipped: sequence(varint) + addr(4) + port(2). */
-    uint8_t bytes[] = { 1, 10, 0, 0, 1, 0x1F, 0x90 };
+    uint8_t bytes[] = {
+        0x80, 
+        (uint8_t)((picoquic_frame_type_observed_address_v4>>16)&0xff),
+        (uint8_t)((picoquic_frame_type_observed_address_v4 >> 8) & 0xff),
+        (uint8_t)(picoquic_frame_type_observed_address_v4 & 0xff),
+        1, 10, 0, 0, 1, 0x1F, 0x90 };
     size_t consumed = 0;
     int process_ret = picoquic_process_ack_of_observed_address_frame(NULL, bytes, sizeof(bytes),
-        picoquic_frame_type_observed_address_v4, &consumed);
+        picoquic_frame_type_observed_address_v4, 4, &consumed);
 
     if (process_ret != 0) {
         DBG_PRINTF("Ack of observed address frame with a deleted path returned %d", process_ret);
