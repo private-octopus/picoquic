@@ -150,7 +150,7 @@ Upload_Mbps: 1.807767
 Download_Mbps: 1.807767
 ```
 For more detailed statistics, or for gathering statistics on servers, `picoquicdemo`
-can provide performance logs, see {{performance logs}}. 
+can provide performance logs, see {{performance_logs}}. 
 
 There are lots of other arguments in `picoquicdemo`, but you probably don't need them for
 running quicperf, although you may consider collecting quic logs using the `-q` option when

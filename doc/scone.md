@@ -1,5 +1,4 @@
-# Performance testing with picoquicdemo
-
+# SCONE
 The picoquic library includes support for the "Standard Communication with Network Elements Protocol",
 [SCONE](https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/). SCONE enables client and server to
 obtain advice on the long term data rate supported by a network path. When SCONE is enabled:
