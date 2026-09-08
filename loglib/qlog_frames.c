@@ -25,6 +25,7 @@
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
+#include "picoquic_qlog_fns.h"
 
 /* Helper: Write a JSON key-value pair for an integer */
 static void qlog_json_uint(FILE* f, const char* key, uint64_t value) {
@@ -251,14 +252,7 @@ const uint8_t* qlog_frame_connection_close(FILE* f, const uint8_t* bytes, const 
         if (reason_length > 0){
             if ((size_t)(bytes_max - bytes) >= reason_length) {
                 fprintf(f, ", \"reason\": \"");
-                for (uint64_t i = 0; i < reason_length; i++) {
-                    int c = (int)bytes[i];
-
-                    if (c < 0x20 || c > 0x7E) {
-                        c = '.';
-                    }
-                    fprintf(f, "%c", c);
-                }
+                qlog_fns_char_content(f, bytes, reason_length);
                 fprintf(f, "\"");
                 bytes += reason_length;
             }

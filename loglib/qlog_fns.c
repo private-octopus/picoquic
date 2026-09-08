@@ -264,14 +264,8 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
         message_len = written;
     }
 #endif
-    for (size_t i = 0; i < message_len; i++) {
-        int c = message_text[i];
-        if (c < 0x20 || c > 0x7e) {
-            message_text[i] = '?';
-        }
-    }
     fprintf(f, " \"message\": \"");
-    fwrite(message_text, message_len, 1, f);
+    qlog_fns_char_content(f, (uint8_t*)message_text, message_len);
     fprintf(f, "\"}]");
     ctx->event_count++;
 }
