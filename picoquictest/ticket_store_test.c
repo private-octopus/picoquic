@@ -570,7 +570,8 @@ int token_reuse_cap_test(void)
         /* Register more distinct tokens than the cap allows -- none of them is a reuse. */
         for (size_t i = 0; ret == 0 && i < nb_tokens; i++) {
             picoformat_64(token + 4, (uint64_t)i);
-            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)i) != 0) {
+            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)i) != 0 &&
+                quic->token_reuse_tree.size < token_reuse_cap) {
                 DBG_PRINTF("Token[%z] unexpectedly flagged as reused", i);
                 ret = -1;
             }

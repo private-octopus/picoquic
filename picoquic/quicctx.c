@@ -590,11 +590,12 @@ int picoquic_registered_token_check_reuse(picoquic_quic_t * quic,
                 /* Set an arbitrary limit to size of token tree to avoid infinite growth. */
                 if ((size_t)quic->token_reuse_tree.size < quic->max_number_connections*32) {
                     (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                    ret = 0;
                 }
                 else {
+                    /* If the reuse store is full, consider the token as invalid. */
                     free(rt);
                 }
-                ret = 0;
             }
         }
     }
