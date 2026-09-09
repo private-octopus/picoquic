@@ -655,7 +655,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, 16);
     }
     if (bytes != NULL && bytes < end_bytes) {
-        fprintf(f, "\", \"extra_bytes\": ");
+        fprintf(f, ", \"extra_bytes\": ");
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, end_bytes - bytes);
     }
     fprintf(f, "}");

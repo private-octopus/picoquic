@@ -302,56 +302,69 @@ static uint8_t qlog_fns_pref_addr_bytes[] = {
 };
 void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len);
 
+/* Render bytes/len through qlog_fns_preferred_address and compare the whole file
+ * content against expected, potentially detecting JSON formatting errors. */
+static int qlog_fns_pref_addr_check(const uint8_t* bytes, uint64_t len, char const* expected)
+{
+    int ret = 0;
+    char line[512];
+    FILE* F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_preferred_address(F, bytes, len);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            char* line_read = fgets(line, sizeof(line), F);
+            if (line_read == NULL || strcmp(line_read, expected) != 0) {
+                DBG_PRINTF("Unexpected preferred address rendering: %s", (line_read == NULL) ? "(empty)" : line_read);
+                ret = -1;
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
 int qlog_fns_pref_addr_test(void)
 {
     int ret = 0;
-    /* Exactly the four bytes the "len >= 4" admission check guarantees -- on a heap allocation this size, reading past it is the exact bug being tested for. */
+    /* Exactly the four bytes the "len >= 4" admission check guarantees -- reading past it is the OOB bug this guards against. The trailing "port_v4":0 is a separate pre-existing quirk: that field prints before its own failed decode is checked. */
     uint8_t* min_bytes = (uint8_t*)malloc(4);
-    FILE* F;
 
     if (min_bytes == NULL) {
         ret = -1;
     }
     else {
         memcpy(min_bytes, qlog_fns_pref_addr_bytes, 4);
-    }
-
-    if (ret == 0) {
-        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "w");
-        if (F == NULL) {
-            ret = -1;
-        }
-        else {
-            qlog_fns_preferred_address(F, min_bytes, 4);
-            qlog_fns_preferred_address(F, qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes));
-            F = picoquic_file_close(F);
-        }
-    }
-
-    if (ret == 0) {
-        char line[256];
-        int found = 0;
-        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "r");
-        if (F == NULL) {
-            ret = -1;
-        }
-        else {
-            while (fgets(line, sizeof(line), F) != NULL) {
-                if (strstr(line, "\"ip_v4\": \"10.0.0.99\"") != NULL) {
-                    found = 1;
-                    break;
-                }
-            }
-            F = picoquic_file_close(F);
-            if (!found) {
-                DBG_PRINTF("%s", "Preferred address ip_v4 not rendered as 10.0.0.99");
-                ret = -1;
-            }
-        }
-    }
-
-    if (min_bytes != NULL) {
+        ret = qlog_fns_pref_addr_check(min_bytes, 4, "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":0}");
         free(min_bytes);
+    }
+
+    /* Full TP, no extra bytes. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes),
+            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\"}");
+    }
+
+    /* Full TP, with 4 trailing extra bytes -- exercises the "extra_bytes" field and the separator before it. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_pref_addr, sizeof(qlog_pref_addr),
+            "{\"ip_v4\": \"10.0.0.1\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\", \"extra_bytes\": \"10111213\"}");
     }
 
     return ret;
