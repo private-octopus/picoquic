@@ -207,6 +207,10 @@ typedef struct st_picoquic_packet_loop_param_t {
     int simulate_eio;
     size_t send_length_max;
     size_t send_batch_max; /* 0: use PICOQUIC_PACKET_LOOP_SEND_MAX */
+    struct sockaddr_storage local_addr; /* Optional bind address. If ss_family is 0, sockets
+                                         * bind to the wildcard address. If set, only a socket
+                                         * of that family is opened, bound to that address and
+                                         * to local_port. The port inside local_addr is ignored. */
 } picoquic_packet_loop_param_t;
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,

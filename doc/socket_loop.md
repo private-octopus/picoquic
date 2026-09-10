@@ -57,6 +57,14 @@ The `param` argument contains data to parameterize the packet loop:
   the local socket. If the value is left to `AF_UNSPEC`, two sockets
   will be created, one for `AF_INET` (IPv4), and one for `AF_INET6` (IPv6).
 
+* `local_addr`: optional local address to which the socket will be bound,
+  as a `sockaddr_storage`. If the address family is left to `AF_UNSPEC`
+  (the default after zero initialization), sockets are bound to the
+  wildcard address and listen on all interfaces. If an address is set,
+  a single socket of that address family is created and bound to that
+  address and to `local_port`; the port inside `local_addr` is ignored.
+  Setting `local_af` to a different family than `local_addr` is an error.
+
 * `dest_if`: the interface identifier that should be associated with the local
   socket, or 0.
 

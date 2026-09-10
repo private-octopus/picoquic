@@ -63,6 +63,7 @@ typedef struct st_sockloop_test_spec_t {
     int extra_socket_required;
     int prefer_extra_socket;
     int force_migration;
+    int bind_loopback; /* bind the server socket to the loopback address of spec->af */
 } sockloop_test_spec_t;
 
 typedef struct st_sockloop_test_cb_t {
@@ -534,7 +535,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             param.simulate_eio = spec->simulate_eio;
             param.extra_socket_required = spec->extra_socket_required;
             param.prefer_extra_socket = spec->prefer_extra_socket;
-            
+            if (spec->bind_loopback) {
+                ret = sockloop_test_addr_config(&param.local_addr, spec->af, 0);
+            }
 
             loop_cb.force_migration = spec->force_migration;
             loop_cb.param = &param;
@@ -688,6 +691,95 @@ int sockloop_ipv4_test(void)
     spec.scenario_size = sizeof(sockloop_test_scenario_1M);
 
     return(sockloop_test_one(&spec));
+}
+
+/* Compare the address part of two sockaddr, after aligning the port of the
+ * expected address on the port reported by the socket. */
+static int picoquic_addr_set_port_and_compare(struct sockaddr_storage* expected, uint16_t port,
+    struct sockaddr_storage* actual)
+{
+    if (expected->ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)expected)->sin6_port = htons(port);
+    }
+    else if (expected->ss_family == AF_INET) {
+        ((struct sockaddr_in*)expected)->sin_port = htons(port);
+    }
+    return picoquic_compare_addr((struct sockaddr*)expected, (struct sockaddr*)actual);
+}
+
+/* Verify that a socket opened with param.local_addr is bound to that
+ * address rather than to the wildcard address. */
+int sockloop_bind_addr_one(int af)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    struct sockaddr_storage expected = { 0 };
+    struct sockaddr_storage actual = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    /* local_af is left to 0 (unspecified): the address family of local_addr
+     * must narrow the loop to a single socket of that family. */
+    ret = sockloop_test_addr_config(&expected, af, 0);
+    if (ret == 0) {
+        ret = sockloop_test_addr_config(&param.local_addr, af, 0);
+    }
+    if (ret == 0) {
+        param.local_port = 0;
+        param.socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+        param.do_not_use_gso = 1;
+        nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+        if (nb_sockets != 1) {
+            DBG_PRINTF("Expected 1 socket for af=%d, got %d", af, nb_sockets);
+            ret = -1;
+        }
+        else if (s_ctx[0].af != af) {
+            DBG_PRINTF("Expected socket af=%d, got %d", af, s_ctx[0].af);
+            ret = -1;
+        }
+        else if (picoquic_get_local_address(s_ctx[0].fd, &actual) != 0) {
+            DBG_PRINTF("%s", "Cannot read local address of bound socket");
+            ret = -1;
+        }
+        else if (s_ctx[0].port == 0) {
+            DBG_PRINTF("%s", "Ephemeral port was not reported back");
+            ret = -1;
+        }
+        else if (picoquic_addr_set_port_and_compare(&expected, s_ctx[0].port, &actual) != 0) {
+            char expected_text[64];
+            char actual_text[64];
+            DBG_PRINTF("Expected bind address %s, got %s",
+                picoquic_addr_text((struct sockaddr*)&expected, expected_text, sizeof(expected_text)),
+                picoquic_addr_text((struct sockaddr*)&actual, actual_text, sizeof(actual_text)));
+            ret = -1;
+        }
+        for (int i = 0; i < 4; i++) {
+            picoquic_packet_loop_close_socket(&s_ctx[i]);
+        }
+    }
+    return ret;
+}
+
+int sockloop_bind_addr_test(void)
+{
+    int ret = sockloop_bind_addr_one(AF_INET);
+
+    if (ret == 0) {
+        ret = sockloop_bind_addr_one(AF_INET6);
+    }
+    if (ret == 0) {
+        /* Full loop, server bound to 127.0.0.1 only, client connecting to it. */
+        sockloop_test_spec_t spec;
+        sockloop_test_set_spec(&spec, 11);
+        spec.af = AF_INET;
+        spec.bind_loopback = 1;
+        spec.do_not_use_gso = 1;
+        ret = sockloop_test_one(&spec);
+    }
+    return ret;
 }
 
 int sockloop_migration_test(void)

@@ -402,7 +402,8 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         (s_ctx->is_port_shared && (setsockopt(s_ctx->fd, SOL_SOCKET, SO_REUSEPORT,
                                   (const char*)&opt_val, sizeof(opt_val)) != 0)) ||
 #endif
-        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
+        picoquic_bind_to_address(s_ctx->fd, s_ctx->af, s_ctx->port,
+            (param->local_addr.ss_family != AF_UNSPEC) ? (struct sockaddr*)&param->local_addr : NULL) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
@@ -501,7 +502,16 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
     uint16_t current_port = param->local_port;
     int sock_ret = 0;
 
-    if (param->local_af == 0) {
+    if (param->local_addr.ss_family != AF_UNSPEC) {
+        /* Binding to a specific address implies a single socket of that family */
+        if (param->local_af != 0 && param->local_af != param->local_addr.ss_family) {
+            DBG_PRINTF("Cannot bind af=%d socket to address of af=%d\n", param->local_af, param->local_addr.ss_family);
+            return 0;
+        }
+        nb_af = 1;
+        af[0] = param->local_addr.ss_family;
+    }
+    else if (param->local_af == 0) {
 #ifdef ESP_PLATFORM
         nb_af = 1;
         af[0] = AF_INET;
