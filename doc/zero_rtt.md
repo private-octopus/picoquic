@@ -97,7 +97,7 @@ and on the client:
 | Almost Ready | After step (2) | After step (4) |
 | Ready | After step (6) | After step (7) |
 
-If she session is not enabling Zero RTT, all incoming data callback
+If the session is not enabling Zero RTT, all incoming data callback
 for datagrams and streams will happen after the "almost ready"
 callback on the client, and after the "ready" callback on the
 server.
