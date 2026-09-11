@@ -2197,12 +2197,10 @@ uint8_t* picoquic_copy_stream_frame_for_retransmit(
             else {
                 uint8_t* before_length = bytes_next;
                 if ((bytes_next = picoquic_frames_varint_encode(bytes_next, bytes_max, data_available)) != NULL &&
-                    bytes_next + data_available <= bytes_max) {
+                    (bytes_next = picoquic_frames_fixed_copy(bytes_next, bytes_max, frame_bytes, data_available)) != NULL) {
                     /* Can encode everything in a natural way */
                     *bytes_first |= 2; /* length is present */
                     *bytes_first |= fin; /* fin OK */
-                    memcpy(bytes_next, frame_bytes, data_available);
-                    bytes_next += data_available;
                 }
                 else if (before_length + data_available <= bytes_max) {
                     /* everything fits if we remove the length, but we may need to insert initial padding */
@@ -4741,12 +4739,13 @@ uint8_t * picoquic_format_first_misc_or_dg_frame(uint8_t* bytes, uint8_t * bytes
     int * more_data, int * is_pure_ack, picoquic_misc_frame_header_t* misc_frame,
     picoquic_misc_frame_header_t** first, picoquic_misc_frame_header_t** last)
 {
-    if (bytes + misc_frame->length > bytes_max) {
+    uint8_t* frame = ((uint8_t*)misc_frame) + sizeof(picoquic_misc_frame_header_t);
+    uint8_t* next_bytes = picoquic_frames_fixed_copy(bytes, bytes_max, frame, misc_frame->length);
+
+    if (next_bytes == NULL) {
         *more_data = 1;
     } else {
-        uint8_t* frame = ((uint8_t*)misc_frame) + sizeof(picoquic_misc_frame_header_t);
-        memcpy(bytes, frame, misc_frame->length);
-        bytes += misc_frame->length;
+        bytes = next_bytes;
         *is_pure_ack &= misc_frame->is_pure_ack;
         picoquic_delete_misc_or_dg(first, last, misc_frame);
     }
@@ -5204,9 +5203,7 @@ uint8_t * picoquic_format_datagram_frame(uint8_t* bytes, uint8_t* bytes_max, int
 
     if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_datagram_l)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, length)) != NULL &&
-        bytes + length <= bytes_max) {
-        memcpy(bytes, src, length);
-        bytes += length;
+        (bytes = picoquic_frames_fixed_copy(bytes, bytes_max, src, length)) != NULL) {
         *is_pure_ack = 0;
     }
     else {
@@ -5273,10 +5270,10 @@ uint8_t * picoquic_format_first_datagram_frame(picoquic_cnx_t* cnx, uint8_t* byt
                     *bytes++ = picoquic_frame_type_padding;
                 }
                 *bytes++ = picoquic_frame_type_datagram;
-                memcpy(bytes, frame_content + header_length, data_length);
-                bytes += data_length;
-                picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
-                is_sent= 1;
+                if ((bytes = picoquic_frames_fixed_copy(bytes, bytes_max, frame_content + header_length, data_length)) != NULL) {
+                    picoquic_delete_misc_or_dg(&cnx->first_datagram, &cnx->last_datagram, cnx->first_datagram);
+                    is_sent = 1;
+                }
             }
         }
         if (!is_sent && is_first_in_packet) {
@@ -6315,9 +6312,8 @@ uint8_t* picoquic_format_observed_address_frame(
 
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, ftype)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, sequence_number)) != NULL &&
-        bytes + l_addr < bytes_max) {
-        memcpy(bytes, addr, l_addr);
-        bytes = picoquic_frames_uint16_encode(bytes + l_addr, bytes_max, port);
+        (bytes = picoquic_frames_fixed_copy(bytes, bytes_max, addr, l_addr)) != NULL) {
+        bytes = picoquic_frames_uint16_encode(bytes, bytes_max, port);
     }
     else {
         bytes = NULL;
