@@ -2526,7 +2526,7 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
             }
 
             if ((bytes_l = picoquic_frames_varint_encode(bytes, bytes_max, length)) == NULL) {
-                /* *more_data = 1; */
+                *more_data = 1;
                 bytes = bytes0;
             }
             else {

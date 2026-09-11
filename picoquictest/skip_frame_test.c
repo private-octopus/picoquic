@@ -1528,34 +1528,34 @@ picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct so
 }
 
 
-#define FRAME_FORMAT_TEST_ONCE(format_func, s_max, ...)                                               \
-    if (ret == 0) {                                                                                   \
-        bytes_max = buffer + s_max;                                                                   \
-        bytes = buffer;                                                                               \
-        more_data = 0;                                                                                \
-        is_pure_ack = 0;                                                                              \
-        bytes = format_func(__VA_ARGS__);                                                             \
-        if (bytes != buffer || !more_data) {                                                          \
-            ret = -1;                                                                                 \
-        }                                                                                             \
-    }
-
-#define FRAME_FORMAT_TEST(format_func, ...)                                                               \
-    if (ret == 0) {                                                                                       \
-        bytes_max = buffer + PICOQUIC_MAX_PACKET_SIZE;                                                    \
-        for (round = 0; round < 2; round++) {                                                             \
-            bytes = buffer;                                                                               \
-            more_data = 0;                                                                                \
-            is_pure_ack = 0;                                                                              \
-            bytes = format_func(__VA_ARGS__);                                                             \
-            if (bytes == NULL || bytes == buffer) {                                                       \
+/* Sweep buffer sizes 0..needed so every chained bounds check gets its own failing size, not just one. */
+#define FRAME_FORMAT_TEST(format_func, ...)                                                            \
+    if (ret == 0) {                                                                                     \
+        for (test_max = 0; test_max <= PICOQUIC_MAX_PACKET_SIZE; test_max++) {                           \
+            bytes_max = buffer + test_max;                                                               \
+            bytes = buffer;                                                                              \
+            more_data = 0;                                                                               \
+            is_pure_ack = 0;                                                                             \
+            bytes = format_func(__VA_ARGS__);                                                            \
+            if (bytes == NULL) {                                                                          \
+                DBG_PRINTF("FRAME_FORMAT_TEST %s: bytes==NULL at test_max=%zu", #format_func, test_max);  \
+                ret = -1;                                                                                 \
                 break;                                                                                    \
             }                                                                                             \
-            bytes_max = bytes - 1;                                                                        \
-        }                                                                                                 \
-        if (bytes != buffer || !more_data) {                                                              \
-            ret = -1;                                                                                     \
-        }                                                                                                 \
+            else if (bytes != buffer) {                                                                   \
+                /* Frame was formatted: every smaller size up to here was correctly rejected. */           \
+                break;                                                                                     \
+            }                                                                                              \
+            else if (!more_data) {                                                                         \
+                DBG_PRINTF("FRAME_FORMAT_TEST %s: !more_data at test_max=%zu", #format_func, test_max);    \
+                ret = -1;                                                                                  \
+                break;                                                                                     \
+            }                                                                                               \
+        }                                                                                                   \
+        if (ret == 0 && (bytes == buffer || test_max == 0)) {                                               \
+            DBG_PRINTF("FRAME_FORMAT_TEST %s: never succeeded, test_max=%zu", #format_func, test_max);     \
+            ret = -1;                                                                                       \
+        }                                                                                                    \
     }
 
 /* Declarations of format functions that are not already public. */
@@ -1589,7 +1589,7 @@ int frames_format_test(void)
     uint64_t current_time = 0;
     int is_pure_ack = 0;
     picoquic_stream_head_t* stream = NULL;
-    int round;
+    size_t test_max;
     uint64_t simulated_time = 0;
     picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
@@ -1598,7 +1598,11 @@ int frames_format_test(void)
     uint8_t addr_bytes[4] = { 1, 2, 3, 4 };
     picoquic_cnx_t* cnx;
     picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
-    picoquic_local_cnxid_t* l_cid = NULL; 
+    picoquic_local_cnxid_t* l_cid = NULL;
+    picoquic_misc_frame_header_t* misc_first = NULL;
+    picoquic_misc_frame_header_t* misc_last = NULL;
+    uint8_t misc_data[] = { 0xbb, 0xbb, 0xbb };
+    picoquic_stream_queue_node_t* crypto_data = NULL;
 
     if (qclient == NULL) {
         ret = -1;
@@ -1621,19 +1625,42 @@ int frames_format_test(void)
     }
     if (ret == 0) {
         stream->reset_requested = 1;
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_reset_stream_frame, 2, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_reset_stream_frame, stream, bytes, bytes_max, &more_data, &is_pure_ack);
         stream->reset_requested = 0;
+        FRAME_FORMAT_TEST(picoquic_format_reset_stream_at_frame, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        /* crypto_hs_frame reads from the per-epoch TLS stream, not an application stream -- queue data there directly */
+        crypto_data = (picoquic_stream_queue_node_t*)malloc(sizeof(picoquic_stream_queue_node_t));
+        if (crypto_data == NULL) {
+            ret = -1;
+        }
+        else {
+            crypto_data->quic = qclient;
+            crypto_data->next_stream_data = NULL;
+            crypto_data->offset = 0;
+            crypto_data->length = sizeof(data);
+            crypto_data->bytes = (uint8_t*)malloc(sizeof(data));
+            if (crypto_data->bytes == NULL) {
+                free(crypto_data);
+                ret = -1;
+            }
+            else {
+                memcpy(crypto_data->bytes, data, sizeof(data));
+                cnx->tls_stream[picoquic_epoch_1rtt].send_queue = crypto_data;
+            }
+        }
+        FRAME_FORMAT_TEST(picoquic_format_crypto_hs_frame, &cnx->tls_stream[picoquic_epoch_1rtt], bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_max_data_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack, 12345);
         FRAME_FORMAT_TEST(picoquic_format_new_connection_id_frame, cnx, local_cnxid_list, bytes, bytes_max, &more_data, &is_pure_ack, l_cid);
         FRAME_FORMAT_TEST(picoquic_format_retire_connection_id_frame, bytes, bytes_max, &more_data, &is_pure_ack, 1, 0, 17);
         FRAME_FORMAT_TEST(picoquic_format_new_token_frame, bytes, bytes_max, &more_data, &is_pure_ack, data, 2);
         stream->stop_sending_requested = 1;
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_stop_sending_frame, 2, stream, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_stop_sending_frame, stream, bytes, bytes_max, &more_data, &is_pure_ack);
         stream->stop_sending_requested = 0;
         stream->stop_sending_sent = 0;
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_data_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
+        FRAME_FORMAT_TEST(picoquic_format_data_blocked_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
         FRAME_FORMAT_TEST(picoquic_format_stream_data_blocked_frame, bytes, bytes_max, &more_data, &is_pure_ack, stream);
         stream->stream_data_blocked_sent = 0;
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_stream_blocked_frame, 1, cnx, bytes, bytes_max, &more_data, &is_pure_ack, stream);
+        FRAME_FORMAT_TEST(picoquic_format_stream_blocked_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack, stream);
         cnx->stream_blocked_bidir_sent = 0;
         FRAME_FORMAT_TEST(picoquic_format_connection_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
         FRAME_FORMAT_TEST(picoquic_format_application_close_frame, cnx, bytes, bytes_max, &more_data, &is_pure_ack);
@@ -1641,7 +1668,7 @@ int frames_format_test(void)
         FRAME_FORMAT_TEST(picoquic_format_path_challenge_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
         FRAME_FORMAT_TEST(picoquic_format_path_response_frame, bytes, bytes_max, &more_data, &is_pure_ack, 0xaabbccddeeff0011ull);
         FRAME_FORMAT_TEST(picoquic_format_datagram_frame, bytes, bytes_max, &more_data, &is_pure_ack, 2, data);
-        FRAME_FORMAT_TEST_ONCE(picoquic_format_ack_frequency_frame, 2, cnx, bytes, bytes_max, &more_data);
+        FRAME_FORMAT_TEST(picoquic_format_ack_frequency_frame, cnx, bytes, bytes_max, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_immediate_ack_frame, bytes, bytes_max, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_time_stamp_frame, cnx, buffer, bytes_max, &more_data, simulated_time);
         FRAME_FORMAT_TEST(picoquic_format_path_abandon_frame, bytes, bytes_max, &more_data, 1, 3);
@@ -1650,6 +1677,10 @@ int frames_format_test(void)
         FRAME_FORMAT_TEST(picoquic_format_paths_blocked_frame, bytes, bytes_max, 123, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_path_cid_blocked_frame, bytes, bytes_max, 123, 0, &more_data);
         FRAME_FORMAT_TEST(picoquic_format_observed_address_frame, bytes, bytes_max, picoquic_frame_type_observed_address_v4, 13, addr_bytes, 4433, &more_data);
+        if (picoquic_queue_misc_or_dg_frame(cnx, &misc_first, &misc_last, misc_data, sizeof(misc_data), 0, picoquic_packet_context_application) != 0) {
+            ret = -1;
+        }
+        FRAME_FORMAT_TEST(picoquic_format_first_misc_or_dg_frame, bytes, bytes_max, &more_data, &is_pure_ack, misc_first, &misc_first, &misc_last);
     }
 
     if (qclient != NULL) {
