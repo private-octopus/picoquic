@@ -181,6 +181,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_bind_addr)
+        {
+            int ret = sockloop_bind_addr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_migration)
         {
             int ret = sockloop_migration_test();
