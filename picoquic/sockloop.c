@@ -448,7 +448,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
                 DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
                     last_op_name, param->socket_buffer_size, sock_error, so_errbuf, opt_ret);
 #ifdef __FreeBSD__
-                DBG_PRINTF("- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
+                DBG_PRINTF("%s", "- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
 #endif
                 ret = -1;
             }
