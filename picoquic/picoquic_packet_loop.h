@@ -49,6 +49,7 @@ typedef struct st_picoquic_socket_ctx_t {
     unsigned int is_started : 1;
     unsigned int supports_udp_send_coalesced : 1;
     unsigned int supports_udp_recv_coalesced : 1;
+    struct sockaddr_storage bound_addr; /* Local address of the socket after bind, as reported by getsockname */
     /* Receive data buffer and fields */
     size_t recv_buffer_size;
     uint8_t* recv_buffer;
@@ -192,6 +193,8 @@ typedef struct st_picoquic_packet_loop_options_t {
 
 /* Version 2 of packet loop, obsoleted by v3
  */
+#define PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX 2
+
 typedef struct st_picoquic_packet_loop_param_t {
     uint16_t local_port; /* Default port for outgoing connection */
     int local_af;
@@ -207,11 +210,27 @@ typedef struct st_picoquic_packet_loop_param_t {
     int simulate_eio;
     size_t send_length_max;
     size_t send_batch_max; /* 0: use PICOQUIC_PACKET_LOOP_SEND_MAX */
-    struct sockaddr_storage local_addr; /* Optional bind address. If ss_family is 0, sockets
-                                         * bind to the wildcard address. If set, only a socket
-                                         * of that family is opened, bound to that address and
-                                         * to local_port. The port inside local_addr is ignored. */
+    /* Optional bind addresses, at most one per address family. If every entry
+     * has ss_family 0 (the default after zero initialization), sockets bind to
+     * the wildcard address. Otherwise one socket is opened per entry, bound to
+     * that address and to local_port (the port inside the entry is ignored),
+     * every packet sent on that socket carries that address as its source, and
+     * no socket is opened for a family that has no entry. Two entries of the
+     * same family, or an entry whose family differs from a non-zero local_af,
+     * are rejected. */
+    struct sockaddr_storage local_addr[PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX];
 } picoquic_packet_loop_param_t;
+
+/* Returns the entry of param->local_addr for the address family af, or NULL
+ * if there is none. */
+const struct sockaddr* picoquic_packet_loop_local_addr_for_af(const picoquic_packet_loop_param_t* param, int af);
+
+/* If the socket is bound to a specific (non wildcard) address, replace the
+ * address part of local_addr by that address, so the packet is sent from
+ * the address the socket can receive on. The port of local_addr is kept if
+ * it was set, otherwise the socket's port is used. Sockets bound to the
+ * wildcard address leave local_addr untouched. */
+void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, struct sockaddr_storage* local_addr);
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,

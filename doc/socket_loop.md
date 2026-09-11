@@ -57,13 +57,25 @@ The `param` argument contains data to parameterize the packet loop:
   the local socket. If the value is left to `AF_UNSPEC`, two sockets
   will be created, one for `AF_INET` (IPv4), and one for `AF_INET6` (IPv6).
 
-* `local_addr`: optional local address to which the socket will be bound,
-  as a `sockaddr_storage`. If the address family is left to `AF_UNSPEC`
-  (the default after zero initialization), sockets are bound to the
-  wildcard address and listen on all interfaces. If an address is set,
-  a single socket of that address family is created and bound to that
-  address and to `local_port`; the port inside `local_addr` is ignored.
-  Setting `local_af` to a different family than `local_addr` is an error.
+* `local_addr`: optional local addresses to which the sockets will be
+  bound, an array of `PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX` (2)
+  `sockaddr_storage` entries, at most one per address family. If every
+  entry is left to `AF_UNSPEC` (the default after zero initialization),
+  sockets are bound to the wildcard address and listen on all interfaces.
+  Otherwise one socket is created per entry, bound to that address and to
+  `local_port` (the port inside the entry is ignored), and no socket is
+  created for a family that has no entry, so setting one IPv4 address and
+  one IPv6 address serves both families on those two addresses only.
+  Every packet sent on a bound socket carries the bound address as its
+  source, whatever local address the path proposes; this pins the source
+  address of every path on that socket, so `local_addr` cannot be
+  combined with multipath across several local addresses. This is an
+  address binding, not an interface binding: on systems with a weak host
+  model (Linux) the kernel may still route packets from that address
+  through another interface. Two entries of the same family, or an entry
+  whose family differs from a non-zero `local_af`, are an error. The
+  extra socket, when requested, and any socket the loop opens later are
+  bound to the same addresses.
 
 * `dest_if`: the interface identifier that should be associated with the local
   socket, or 0.
