@@ -516,6 +516,7 @@ int picoquic_remember_issued_ticket(picoquic_quic_t* quic,
                 ticket->next_ticket->previous_ticket = ticket;
             }
             picohash_insert(quic->table_issued_tickets, ticket);
+            quic->table_issued_tickets_nb++;
         }
         else {
             ret = PICOQUIC_ERROR_MEMORY;

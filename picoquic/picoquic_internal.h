@@ -2172,6 +2172,7 @@ const uint8_t* picoquic_skip_path_available_or_backup_frame(const uint8_t* bytes
 int picoquic_queue_path_available_or_backup_frame(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_status_enum status);
 int picoquic_queue_paths_blocked_frame(picoquic_cnx_t* cnx);
+int picoquic_queue_max_path_id_frame(picoquic_cnx_t* cnx);
 int picoquic_queue_path_cid_blocked_frame(picoquic_path_t* path_x);
 /* Internal only API, notify that next path is now allowed. */
 void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);

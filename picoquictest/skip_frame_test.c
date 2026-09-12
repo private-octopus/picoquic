@@ -1976,6 +1976,10 @@ int queue_multipath_blocked_frames_test(void)
                     ret = -1;
                 }
             }
+
+            if (ret == 0 && picoquic_queue_max_path_id_frame(cnx) != 0) {
+                ret = -1;
+            }
             picoquic_delete_cnx(cnx);
         }
         picoquic_free(qclient);
@@ -2004,6 +2008,8 @@ static size_t quicctx_never_called_apis_test_alpn_select(picoquic_quic_t* UNUSED
 {
     return 0;
 }
+
+int picoquic_register_net_id(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_path_t* path_x);
 
 /* Several small quicctx.c getters/setters (and picoquic_refresh_path_connection_id, whose own
  * wrapper logic around the well-tested picoquic_renew_path_connection_id was never itself
@@ -2089,6 +2095,34 @@ int quicctx_never_called_apis_test(void)
                 /* No stashed alternate CID is available on a freshly created connection, so this
                  * exercises the wrapper's own lookup/dispatch without needing extra state. */
                 (void)picoquic_refresh_path_connection_id(cnx, cnx->path[0]->unique_path_id);
+            }
+
+            if (ret == 0) {
+                /* picoquic_notify_destination_unreachable_by_cnxid: with an empty cnxid, it looks
+                 * the connection up by net address and forwards to picoquic_set_path_challenge. */
+                picoquic_connection_id_t empty_cid = picoquic_null_connection_id;
+
+                (void)picoquic_register_net_id(qclient, cnx, cnx->path[0]);
+                picoquic_notify_destination_unreachable_by_cnxid(qclient, &empty_cid, simulated_time,
+                    (struct sockaddr*)&saddr, NULL, 0, 0);
+                if (!cnx->path[0]->first_tuple->challenge_required) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                /* picoquic_delete_issued_ticket is only reached when the ticket store evicts its
+                 * oldest entry because the connection limit is exceeded. */
+                if (picoquic_remember_issued_ticket(qclient, 1, simulated_time, 1000, NULL, 0) != 0) {
+                    ret = -1;
+                }
+                else {
+                    qclient->max_number_connections = 0;
+                    if (picoquic_remember_issued_ticket(qclient, 2, simulated_time, 1000, NULL, 0) != 0 ||
+                        qclient->table_issued_tickets_nb != 1) {
+                        ret = -1;
+                    }
+                }
             }
 
             picoquic_delete_cnx(cnx);
