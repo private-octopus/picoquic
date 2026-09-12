@@ -348,6 +348,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(process_ack_of_reset_stream_at)
+        {
+            int ret = process_ack_of_reset_stream_at_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stop_sending_needs_repeat)
+        {
+            int ret = stop_sending_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_invalid_id)
+        {
+            int ret = stream_invalid_id_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();

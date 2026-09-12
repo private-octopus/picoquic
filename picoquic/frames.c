@@ -823,20 +823,16 @@ uint8_t * picoquic_format_retire_connection_id_frame(uint8_t* bytes, uint8_t* by
 
 int picoquic_queue_retire_connection_id_frame(picoquic_cnx_t * cnx, uint64_t unique_path_id, uint64_t sequence)
 {
-    int ret = 0;
-    size_t consumed = 0;
+    /* Buffer sized so the call to format always succeeds */
     uint8_t frame_buffer[258];
     int is_pure_ack = 1;
     int more_data = 0;
     uint8_t * bytes_next = picoquic_format_retire_connection_id_frame(frame_buffer, frame_buffer + sizeof(frame_buffer),
         &more_data, &is_pure_ack, cnx->is_multipath_enabled, unique_path_id, sequence);
-    
-    if ((consumed = bytes_next - frame_buffer) > 0) {
-        ret = picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack,
-            picoquic_packet_context_application);
-    }
+    size_t consumed = bytes_next - frame_buffer;
 
-    return ret;
+    return picoquic_queue_misc_frame(cnx, frame_buffer, consumed, is_pure_ack,
+        picoquic_packet_context_application);
 }
 
 /*
@@ -1013,7 +1009,8 @@ int picoquic_queue_new_token_frame(picoquic_cnx_t * cnx, uint8_t * token, size_t
     int ret = 0;
     int more_data = 0;
     int is_pure_ack = 1;
-    uint8_t frame_buffer[258];
+    /* Type (1) + length varint (up to 2 for a token this size) + the token itself */
+    uint8_t frame_buffer[3 + PICOQUIC_NEW_TOKEN_MAX_LENGTH];
     uint8_t* bytes = picoquic_format_new_token_frame(frame_buffer, frame_buffer + sizeof(frame_buffer), &more_data, &is_pure_ack, token, token_length);
 
     if (bytes > frame_buffer) {
@@ -5785,7 +5782,7 @@ int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     int more_data = 0;
     end_bytes = picoquic_format_path_abandon_frame(buffer, buffer + sizeof(buffer), &more_data,
         unique_path_id, reason);
-    if (end_bytes == NULL ||
+    if (end_bytes == buffer ||
         picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0,
             picoquic_packet_context_application) != 0) {
         /* Could not format or could not queue. Internal error. */

@@ -1698,6 +1698,118 @@ int reset_stream_at_needs_repeat_test(void)
     return ret;
 }
 
+int picoquic_process_ack_of_reset_stream_at_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
+
+/* picoquic_process_ack_of_reset_stream_at_frame only deletes the stream if it is fully
+ * consumed (consumed_offset >= reliable_size); a freshly created stream, whose
+ * consumed_offset is still 0, exercises the "keep it open" branch instead. */
+int process_ack_of_reset_stream_at_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_stream_head_t* stream = picoquic_create_stream(cnx, 17);
+
+            if (stream == NULL) {
+                ret = -1;
+            }
+            else {
+                size_t consumed = 0;
+
+                stream->reliable_size = 13;
+                stream->reset_acked = 0;
+
+                if (picoquic_process_ack_of_reset_stream_at_frame(cnx, test_frame_reset_stream_at,
+                    sizeof(test_frame_reset_stream_at), &consumed) != 0 ||
+                    consumed != sizeof(test_frame_reset_stream_at) ||
+                    !stream->reset_acked ||
+                    picoquic_find_stream(cnx, 17) != stream) {
+                    ret = -1;
+                }
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
+int picoquic_check_stop_sending_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, int* no_need_to_repeat);
+
+/* picoquic_check_stop_sending_needs_repeat has a "stream closed by peer" branch, reached
+ * when fin_received or reset_received is set, that a fresh test stream never exercised. */
+int stop_sending_needs_repeat_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_stream_head_t* stream = picoquic_create_stream(cnx, 17);
+
+            if (stream == NULL) {
+                ret = -1;
+            }
+            else {
+                int no_need_to_repeat = 0;
+
+                /* Peer sent all its data (fin_received): no point repeating stop sending. */
+                stream->fin_received = 1;
+                if (picoquic_check_stop_sending_needs_repeat(cnx, test_frame_type_stop_sending,
+                    sizeof(test_frame_type_stop_sending), &no_need_to_repeat) != 0 ||
+                    no_need_to_repeat != 1) {
+                    ret = -1;
+                }
+
+                /* Peer reset the stream (reset_received): same conclusion. */
+                if (ret == 0) {
+                    stream->fin_received = 0;
+                    stream->reset_received = 1;
+                    no_need_to_repeat = 0;
+                    if (picoquic_check_stop_sending_needs_repeat(cnx, test_frame_type_stop_sending,
+                        sizeof(test_frame_type_stop_sending), &no_need_to_repeat) != 0 ||
+                        no_need_to_repeat != 1) {
+                        ret = -1;
+                    }
+                }
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
 picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct sockaddr * saddr, picoquic_epoch_enum epoch, uint64_t simulated_time, int mpath)
 {
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
@@ -1711,6 +1823,56 @@ picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct so
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
     }
     return cnx;
+}
+
+/* Several public stream-mutation APIs share the same "stream not found" error path:
+ * picoquic_find_stream returns NULL, and the function returns PICOQUIC_ERROR_INVALID_STREAM_ID
+ * without touching anything else. None of them were ever exercised with a stream_id that
+ * does not exist on the connection -- check them all in one pass. */
+int stream_invalid_id_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 0);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            uint64_t stream_id = 4000; /* never created on this connection */
+
+            if (picoquic_set_app_flow_control(cnx, stream_id, 1) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            if (ret == 0 && picoquic_open_flow_control(cnx, stream_id, 1000) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            if (ret == 0 && picoquic_reset_stream_at(cnx, stream_id, 0, 0) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            if (ret == 0 && picoquic_stop_sending(cnx, stream_id, 0) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            if (ret == 0 && picoquic_discard_stream(cnx, stream_id, 0) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            if (ret == 0 && picoquic_mark_direct_receive_stream(cnx, stream_id, NULL, NULL) != PICOQUIC_ERROR_INVALID_STREAM_ID) {
+                ret = -1;
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
 }
 
 

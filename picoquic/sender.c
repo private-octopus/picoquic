@@ -2368,7 +2368,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* On a server that does address validation, send a NEW TOKEN frame */
     if (!cnx->client_mode && (cnx->quic->check_token || cnx->quic->provide_token)) {
-        uint8_t token_buffer[256];
+        uint8_t token_buffer[PICOQUIC_NEW_TOKEN_MAX_LENGTH];
         size_t token_size;
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
