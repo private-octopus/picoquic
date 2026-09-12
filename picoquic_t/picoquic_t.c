@@ -155,6 +155,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_repeat", frames_repeat_test },
     { "frames_ackack_error", frames_ackack_error_test },
     { "frames_ackof_error", frames_ackof_error_test },
+    { "reset_stream_at_needs_repeat", reset_stream_at_needs_repeat_test },
     { "frames_format", frames_format_test },
     { "flow_control_check_stream_offset", flow_control_check_stream_offset_test },
     { "signal_stream_reset", signal_stream_reset_test },

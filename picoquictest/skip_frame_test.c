@@ -1623,6 +1623,81 @@ int frames_ackof_error_test(void)
     return ret;
 }
 
+int picoquic_check_reset_stream_at_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, int* no_need_to_repeat);
+
+/* picoquic_check_reset_stream_at_needs_repeat has a "stream found" branch that only
+ * a stream created and reset locally can reach -- check that it correctly distinguishes
+ * a not-yet-acked reset, an already-acked reset, and a reset re-sent with a different
+ * reliable_size (which makes the older repeat request obsolete). */
+int reset_stream_at_needs_repeat_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_stream_head_t* stream = picoquic_create_stream(cnx, 17);
+
+            if (stream == NULL) {
+                ret = -1;
+            }
+            else {
+                int no_need_to_repeat = 0;
+
+                /* Stream found, reliable_size matches the frame, reset not yet acked: must still be repeated. */
+                stream->reliable_size = 13;
+                stream->reset_acked = 0;
+                if (picoquic_check_reset_stream_at_needs_repeat(cnx, test_frame_reset_stream_at,
+                    sizeof(test_frame_reset_stream_at), &no_need_to_repeat) != 0 ||
+                    no_need_to_repeat != 0) {
+                    ret = -1;
+                }
+
+                /* Stream found, reliable_size matches, reset already acked by the peer: no need to repeat. */
+                if (ret == 0) {
+                    stream->reset_acked = 1;
+                    no_need_to_repeat = 0;
+                    if (picoquic_check_reset_stream_at_needs_repeat(cnx, test_frame_reset_stream_at,
+                        sizeof(test_frame_reset_stream_at), &no_need_to_repeat) != 0 ||
+                        no_need_to_repeat != 1) {
+                        ret = -1;
+                    }
+                }
+
+                /* Stream found, but reset again since with a different reliable_size: the old
+                 * repeat request is obsolete. */
+                if (ret == 0) {
+                    stream->reliable_size = 5;
+                    stream->reset_acked = 0;
+                    no_need_to_repeat = 0;
+                    if (picoquic_check_reset_stream_at_needs_repeat(cnx, test_frame_reset_stream_at,
+                        sizeof(test_frame_reset_stream_at), &no_need_to_repeat) != 0 ||
+                        no_need_to_repeat != 1) {
+                        ret = -1;
+                    }
+                }
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
 picoquic_cnx_t * frames_format_test_get_cnx(picoquic_quic_t * qclient, struct sockaddr * saddr, picoquic_epoch_enum epoch, uint64_t simulated_time, int mpath)
 {
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,

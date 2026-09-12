@@ -341,6 +341,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_stream_at_needs_repeat)
+        {
+            int ret = reset_stream_at_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();
