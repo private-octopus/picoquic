@@ -162,6 +162,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_never_called_apis", stream_never_called_apis_test },
     { "queue_multipath_blocked_frames", queue_multipath_blocked_frames_test },
     { "skip_immediate_ack_frame", skip_immediate_ack_frame_test },
+    { "quicctx_never_called_apis", quicctx_never_called_apis_test },
     { "frames_format", frames_format_test },
     { "flow_control_check_stream_offset", flow_control_check_stream_offset_test },
     { "signal_stream_reset", signal_stream_reset_test },

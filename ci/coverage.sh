@@ -51,10 +51,18 @@ if [ "$FRESH" -eq 1 ] && [ -d "$BUILD_DIR" ]; then
 fi
 
 echo "Configuring instrumented build in $BUILD_DIR"
+# set_picoquic_compile_settings() in the top-level CMakeLists.txt hardcodes -O3 as a
+# PRIVATE compile option on picoquic-core/picoquic_ct/picohttp_ct. Target-level PRIVATE
+# options are appended after CMAKE_C_FLAGS on the actual compile line, and GCC's rule for
+# -O is "last one wins" -- so CMAKE_C_FLAGS=-O0 below is silently overridden back to -O3
+# for exactly the targets being measured. PICOQUIC_ADDITIONAL_C_FLAGS is appended after
+# that hardcoded -O3 in the same target_compile_options call, so passing -O0 through it
+# lands last and wins, without touching the shared macro.
 cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
     -DPICOQUIC_FETCH_PTLS:BOOL=ON \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_FLAGS="--coverage -O0" \
+    -DPICOQUIC_ADDITIONAL_C_FLAGS="-O0" \
     -DCMAKE_EXE_LINKER_FLAGS="--coverage" || exit 1
 
 echo "Building (jobs=$JOBS)"

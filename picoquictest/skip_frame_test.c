@@ -2000,6 +2000,104 @@ int skip_immediate_ack_frame_test(void)
     return ret;
 }
 
+static size_t quicctx_never_called_apis_test_alpn_select(picoquic_quic_t* UNUSED(quic), ptls_iovec_t* UNUSED(list), size_t UNUSED(count))
+{
+    return 0;
+}
+
+/* Several small quicctx.c getters/setters (and picoquic_refresh_path_connection_id, whose own
+ * wrapper logic around the well-tested picoquic_renew_path_connection_id was never itself
+ * exercised) are never called anywhere in the test suite. Exercise them all in one pass. */
+int quicctx_never_called_apis_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 0);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            uint64_t local_reason, remote_reason, local_app_reason, remote_app_reason;
+            int dummy_ctx = 0;
+
+            picoquic_default_quality_update(qclient, 100, 200);
+            if (qclient->pacing_rate_update_delta != 100 || qclient->rtt_update_delta != 200) {
+                ret = -1;
+            }
+
+            if (ret == 0) {
+                qclient->cnx_in_progress = cnx;
+                if (picoquic_get_cnx_in_progress(qclient) != cnx) {
+                    ret = -1;
+                }
+                qclient->cnx_in_progress = NULL;
+            }
+
+            if (ret == 0) {
+                picoquic_set_alpn_select_fn(qclient, quicctx_never_called_apis_test_alpn_select);
+                if (qclient->alpn_select_fn != quicctx_never_called_apis_test_alpn_select) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                cnx->local_error = 1;
+                cnx->remote_error = 2;
+                cnx->application_error = 3;
+                cnx->remote_application_error = 4;
+                picoquic_get_close_reasons(cnx, &local_reason, &remote_reason, &local_app_reason, &remote_app_reason);
+                if (local_reason != 1 || remote_reason != 2 || local_app_reason != 3 || remote_app_reason != 4) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                picoquic_set_rejected_version(cnx, 0x1a2a3a4a);
+                if (cnx->desired_version != 0x1a2a3a4a || !cnx->do_version_negotiation) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                if (picoquic_set_app_path_ctx(cnx, cnx->path[0]->unique_path_id, &dummy_ctx) != 0 ||
+                    cnx->path[0]->app_path_ctx != &dummy_ctx) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                picoquic_path_t* path_x = cnx->path[0];
+                path_x->observed_addr_acked = 1;
+                path_x->first_tuple->nb_observed_repeat = 3;
+                picoquic_update_peer_addr(path_x, (struct sockaddr*)&saddr);
+                if (path_x->observed_addr_acked != 0 || path_x->first_tuple->nb_observed_repeat != 0) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                /* No stashed alternate CID is available on a freshly created connection, so this
+                 * exercises the wrapper's own lookup/dispatch without needing extra state. */
+                (void)picoquic_refresh_path_connection_id(cnx, cnx->path[0]->unique_path_id);
+            }
+
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
 
 /* Sweep buffer sizes 0..needed so every chained bounds check gets its own failing size, not just one. */
 #define FRAME_FORMAT_TEST(format_func, ...)                                                            \
