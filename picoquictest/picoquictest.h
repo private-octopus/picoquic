@@ -213,6 +213,7 @@ int sockloop_basic_test(void);
 int sockloop_eio_test(void);
 int sockloop_errsock_test(void);
 int sockloop_ipv4_test(void);
+int sockloop_bind_addr_test(void);
 int sockloop_migration_test(void);
 int sockloop_nat_test(void);
 int sockloop_thread_test(void);

@@ -363,14 +363,79 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #endif
 }
 
+/* Optional bind addresses: at most one per address family. */
+static int picoquic_packet_loop_has_local_addr(const picoquic_packet_loop_param_t* param)
+{
+    for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+        if (param->local_addr[i].ss_family != AF_UNSPEC) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+const struct sockaddr* picoquic_packet_loop_local_addr_for_af(const picoquic_packet_loop_param_t* param, int af)
+{
+    for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+        if (param->local_addr[i].ss_family == af) {
+            return (const struct sockaddr*)&param->local_addr[i];
+        }
+    }
+    return NULL;
+}
+
+static int picoquic_packet_loop_addr_is_wildcard(const struct sockaddr_storage* addr)
+{
+    if (addr->ss_family == AF_INET) {
+        return ((const struct sockaddr_in*)addr)->sin_addr.s_addr == INADDR_ANY;
+    }
+    else if (addr->ss_family == AF_INET6) {
+        return memcmp(&((const struct sockaddr_in6*)addr)->sin6_addr, &in6addr_any, sizeof(struct in6_addr)) == 0;
+    }
+    return 1;
+}
+
+void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, struct sockaddr_storage* local_addr)
+{
+    if (s_ctx == NULL || picoquic_packet_loop_addr_is_wildcard(&s_ctx->bound_addr) ||
+        (local_addr->ss_family != AF_UNSPEC && local_addr->ss_family != s_ctx->bound_addr.ss_family)) {
+        return;
+    }
+    if (s_ctx->bound_addr.ss_family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)local_addr;
+        uint16_t port = (local_addr->ss_family == AF_INET) ? s4->sin_port : s_ctx->n_port;
+        memset(s4, 0, sizeof(struct sockaddr_in));
+        s4->sin_family = AF_INET;
+        s4->sin_port = port;
+        s4->sin_addr = ((const struct sockaddr_in*)&s_ctx->bound_addr)->sin_addr;
+    }
+    else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)local_addr;
+        uint16_t port = (local_addr->ss_family == AF_INET6) ? s6->sin6_port : s_ctx->n_port;
+        memset(s6, 0, sizeof(struct sockaddr_in6));
+        s6->sin6_family = AF_INET6;
+        s6->sin6_port = port;
+        s6->sin6_addr = ((const struct sockaddr_in6*)&s_ctx->bound_addr)->sin6_addr;
+        s6->sin6_scope_id = ((const struct sockaddr_in6*)&s_ctx->bound_addr)->sin6_scope_id;
+    }
+}
+
 int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
     picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     int ret = 0;
     struct sockaddr_storage local_address;
+    const struct sockaddr* bind_addr = picoquic_packet_loop_local_addr_for_af(param, s_ctx->af);
     int recv_set = 0;
     int send_set = 0;
     int opt_val = 1;
+    if (bind_addr == NULL && picoquic_packet_loop_has_local_addr(param)) {
+        /* Bind addresses are configured, but none for this family: the loop
+         * must not open a socket that could send from an unrestricted address. */
+        DBG_PRINTF("No local address configured for af=%d\n", s_ctx->af);
+        return -1;
+    }
+
 #ifdef _WINDOWS
     int recv_coalesced = 0;
     int send_coalesced = 0;
@@ -402,7 +467,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         (s_ctx->is_port_shared && (setsockopt(s_ctx->fd, SOL_SOCKET, SO_REUSEPORT,
                                   (const char*)&opt_val, sizeof(opt_val)) != 0)) ||
 #endif
-        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
+        picoquic_bind_to_address(s_ctx->fd, s_ctx->af, s_ctx->port, bind_addr) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
@@ -411,6 +476,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         ret = -1;
     }
     else {
+        picoquic_store_addr(&s_ctx->bound_addr, (struct sockaddr*)&local_address);
         if (local_address.ss_family == AF_INET6) {
             s_ctx->port = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
         }
@@ -448,7 +514,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
                 DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
                     last_op_name, param->socket_buffer_size, sock_error, so_errbuf, opt_ret);
 #ifdef __FreeBSD__
-                DBG_PRINTF("- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
+                DBG_PRINTF("%s", "- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
 #endif
                 ret = -1;
             }
@@ -501,7 +567,30 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
     uint16_t current_port = param->local_port;
     int sock_ret = 0;
 
-    if (param->local_af == 0) {
+    if (picoquic_packet_loop_has_local_addr(param)) {
+        /* Binding to specific addresses: one socket per configured address */
+        nb_af = 0;
+        for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+            int addr_af = param->local_addr[i].ss_family;
+            if (addr_af == AF_UNSPEC) {
+                continue;
+            }
+            if (addr_af != AF_INET && addr_af != AF_INET6) {
+                DBG_PRINTF("Unsupported local address family af=%d\n", addr_af);
+                return 0;
+            }
+            if (param->local_af != 0 && param->local_af != addr_af) {
+                DBG_PRINTF("Cannot bind af=%d socket to address of af=%d\n", param->local_af, addr_af);
+                return 0;
+            }
+            if (picoquic_packet_loop_local_addr_for_af(param, addr_af) != (const struct sockaddr*)&param->local_addr[i]) {
+                DBG_PRINTF("Duplicate local address for af=%d\n", addr_af);
+                return 0;
+            }
+            af[nb_af++] = addr_af;
+        }
+    }
+    else if (param->local_af == 0) {
 #ifdef ESP_PLATFORM
         nb_af = 1;
         af[0] = AF_INET;
@@ -2756,6 +2845,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     * - either the source port is not specified, or it matches the local port.
                     */
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
+                    picoquic_socket_ctx_t* send_ctx = NULL;
                     uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
                         ((struct sockaddr_in*)&local_addr)->sin_port :
                         ((struct sockaddr_in6*)&local_addr)->sin6_port;
@@ -2766,6 +2856,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;
+                            send_ctx = &s_ctx[i];
                             if (send_port == 0 && !param->prefer_extra_socket) {
                                 break;
                             }
@@ -2789,6 +2880,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             new_ctx->n_port = htons(new_ctx->port);
                             if (picoquic_packet_loop_open_socket(param, new_ctx, ecn_value) == 0) {
                                 send_socket = new_ctx->fd;
+                                send_ctx = new_ctx;
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;
                                 if (nb_sockets < nb_sockets_available) {
@@ -2805,6 +2897,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             }
                         }
                     }
+                    /* A socket bound to a specific address must send from that address:
+                     * on a weak host model the kernel would otherwise honor a different
+                     * source from the path, whose replies this socket cannot receive. */
+                    picoquic_packet_loop_set_send_source(send_ctx, &local_addr);
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, send_socket, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index,
