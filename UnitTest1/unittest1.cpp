@@ -334,6 +334,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(frames_ackof_error)
+        {
+            int ret = frames_ackof_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();

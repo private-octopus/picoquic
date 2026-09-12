@@ -1370,6 +1370,37 @@ int frames_repeat_test(void)
                 }
             }
         }
+
+        /* Feed the known-bad frames through the same path, to exercise the "parse error" branch of each picoquic_check_XXXX_needs_repeat function.
+         * Some frame types are never content-checked by picoquic_check_frame_needs_repeat -- either because they are pure acks,
+         * or because the "needs repeat" logic for that type does not parse the frame body. Skip those, as the truncation loop above does. */
+        for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
+            size_t len = test_frame_error_list[i].len;
+            uint64_t frame_type = 0;
+
+            if (!test_frame_error_list[i].is_pure_ack &&
+                picoquic_frames_varint_decode(test_frame_error_list[i].val, test_frame_error_list[i].val + len, &frame_type) != NULL) {
+                switch (frame_type) {
+                case picoquic_frame_type_connection_close:
+                case picoquic_frame_type_application_close:
+                case picoquic_frame_type_new_token:
+                case picoquic_frame_type_path_abandon:
+                case picoquic_frame_type_bdp:
+                case picoquic_frame_type_observed_address_v4:
+                case picoquic_frame_type_observed_address_v6:
+                case picoquic_frame_type_max_streams_bidir:
+                case picoquic_frame_type_max_streams_unidir:
+                    break;
+                default:
+                    memcpy(buffer, test_frame_error_list[i].val, len);
+                    if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
+                        test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, 1) != 0) {
+                        ret = -1;
+                    }
+                    break;
+                }
+            }
+        }
         picoquic_free(qclient);
     }
     return ret;
@@ -1508,6 +1539,86 @@ int frames_ackack_error_test(void)
         picoquic_free(qclient);
     }
     DBG_PRINTF("%d ackack trials, %d disconnections", nb_trials, nb_disconnected);
+
+    return ret;
+}
+
+int frame_ackof_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    picoquic_packet_t* p, const uint8_t* bytes, size_t len, int epoch, int mpath, int* disconnected)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+        picoquic_null_connection_id, picoquic_null_connection_id, saddr,
+        simulated_time, 0, "test-sni", "test-alpn", 1);
+
+    if (cnx == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC CNX context\n");
+        ret = -1;
+    }
+    else {
+        int is_spurious = 0;
+        picoquic_state_enum previous_state;
+
+        parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        frame_init_test_packet(p, cnx, epoch, simulated_time);
+        memcpy(p->bytes + p->offset, bytes, len);
+        p->length = p->offset + len;
+
+        previous_state = cnx->cnx_state;
+        picoquic_process_ack_of_frames(cnx, p, is_spurious);
+        *disconnected = (cnx->cnx_state != previous_state);
+
+        picoquic_delete_cnx(cnx);
+    }
+    return ret;
+}
+
+/* Feed truncated (good frame minus one byte) and malformed frames directly to
+ * picoquic_process_ack_of_frames, to exercise the "parse error" branch of each
+ * picoquic_process_ack_of_XXXX_frame function. The function is void, so the only
+ * observable outcomes are that it does not crash and does not spuriously change
+ * the connection state. */
+int frames_ackof_error_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    picoquic_packet_t p;
+    int nb_trials = 0;
+    int nb_disconnected = 0;
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            if (test_skip_list[i].len > 1 && !test_skip_list[i].is_pure_ack) {
+                int disconnected = 0;
+                if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
+                    test_skip_list[i].val, test_skip_list[i].len - 1,
+                    test_skip_list[i].epoch, test_skip_list[i].mpath, &disconnected) != 0) {
+                    ret = -1;
+                }
+                nb_trials++;
+                nb_disconnected += disconnected;
+            }
+        }
+        for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
+            int disconnected = 0;
+            if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
+                test_frame_error_list[i].val, test_frame_error_list[i].len,
+                test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, &disconnected) != 0) {
+                ret = -1;
+            }
+            nb_trials++;
+            nb_disconnected += disconnected;
+        }
+        picoquic_free(qclient);
+    }
+    DBG_PRINTF("%d ackof trials, %d disconnections", nb_trials, nb_disconnected);
 
     return ret;
 }
@@ -1760,6 +1871,21 @@ int flow_control_check_stream_offset_test(void)
         cnx->local_error = 0;
 
         if (picoquic_flow_control_check_stream_offset(cnx, stream, 250) != PICOQUIC_ERROR_DETECTED ||
+            cnx->local_error != PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Under the per-stream limit, but this single update alone exceeds the whole connection's budget. */
+        stream->maxdata_local = 1000000;
+        stream->fin_offset = 0;
+        cnx->maxdata_local = 100;
+        cnx->offset_received = 0;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->local_error = 0;
+
+        if (picoquic_flow_control_check_stream_offset(cnx, stream, 500) != PICOQUIC_ERROR_DETECTED ||
             cnx->local_error != PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR) {
             ret = -1;
         }
