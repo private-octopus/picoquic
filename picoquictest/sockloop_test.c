@@ -557,6 +557,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
                     }
                 }
                 else {
+                    if (picoquic_get_thread_ctx(test_ctx->qserver) != thread_ctx) {
+                        DBG_PRINTF("%s", "picoquic_get_thread_ctx does not match the started thread");
+                        ret = -1;
+                    }
                     for (int i = 0; i < 2000; i++) {
                         if (thread_ctx->thread_is_ready) {
                             DBG_PRINTF("Thread is ready after %dms", i);
@@ -586,6 +590,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
                         }
                     }
                     picoquic_delete_network_thread(thread_ctx);
+                    if (picoquic_get_thread_ctx(test_ctx->qserver) != NULL) {
+                        DBG_PRINTF("%s", "picoquic_get_thread_ctx is not NULL after delete");
+                        ret = -1;
+                    }
                 }
             }
             else {
@@ -960,6 +968,96 @@ int sockloop_nat_test(void)
     spec.force_migration = 1;
 
     return(sockloop_test_one(&spec));
+}
+
+/* picoquic_packet_loop_set_send_source returns immediately if the socket's bound
+ * address has a family other than AF_INET/AF_INET6 (picoquic_packet_loop_addr_is_wildcard's
+ * fallthrough treats that as "wildcard"). Exercise that fallthrough directly. */
+int sockloop_send_source_test(void)
+{
+    int ret = 0;
+    picoquic_socket_ctx_t s_ctx;
+    struct sockaddr_storage local_addr;
+
+    memset(&s_ctx, 0, sizeof(s_ctx));
+    memset(&local_addr, 0, sizeof(local_addr));
+
+    s_ctx.bound_addr.ss_family = AF_UNSPEC;
+    local_addr.ss_family = AF_UNSPEC;
+
+    picoquic_packet_loop_set_send_source(&s_ctx, &local_addr);
+
+    if (local_addr.ss_family != AF_UNSPEC) {
+        DBG_PRINTF("%s", "picoquic_packet_loop_set_send_source touched local_addr for a non-IP bound address");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int sockloop_delete_thread_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum UNUSED(cb_mode),
+    void* UNUSED(callback_ctx), void* UNUSED(callback_argv))
+{
+    return 0;
+}
+
+/* picoquic_delete_network_thread only frees thread_ctx->param if is_param_allocated is set.
+ * That flag is only ever set by picoquic_start_server_threads, which is not itself under
+ * test here, so poke it directly on a param that this test really did allocate -- matching
+ * the ownership contract exactly, so the delete path frees real heap memory. */
+int sockloop_delete_thread_allocated_param_test(void)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    picoquic_quic_t* quic = NULL;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        quic = picoquic_create(8, test_server_cert_file, test_server_key_file, NULL,
+            PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        if (quic == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_packet_loop_param_t* param = (picoquic_packet_loop_param_t*)malloc(sizeof(picoquic_packet_loop_param_t));
+
+        if (param == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_network_thread_ctx_t* thread_ctx;
+            memset(param, 0, sizeof(picoquic_packet_loop_param_t));
+
+            thread_ctx = picoquic_start_network_thread(quic, param, sockloop_delete_thread_test_cb, NULL, &ret);
+            if (thread_ctx == NULL) {
+                free(param);
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                for (int i = 0; i < 2000 && !thread_ctx->thread_is_ready; i++) {
+                    SLEEP(1);
+                }
+                thread_ctx->is_param_allocated = 1;
+                picoquic_delete_network_thread(thread_ctx);
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
 }
 
 int sockloop_thread_test(void)

@@ -134,6 +134,8 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_bind_addr", sockloop_bind_addr_test },
     { "sockloop_migration", sockloop_migration_test },
     { "sockloop_nat", sockloop_nat_test },
+    { "sockloop_send_source", sockloop_send_source_test },
+    { "sockloop_delete_thread_allocated_param", sockloop_delete_thread_allocated_param_test },
     { "sockloop_thread", sockloop_thread_test },
     { "sockloop_thread_name", sockloop_thread_name_test },
     { "sockloop_qmux", sockloop_qmux_test },

@@ -3413,7 +3413,7 @@ int picoquic_start_server_threads(
         }
         else {
             memset(param, 0, sizeof(picoquic_packet_loop_param_t));
-            if (param->local_port != 0) {
+            if (config->local_port != 0) {
                 param->local_port = (uint16_t)(config->local_port + i);
             }
             param->public_port = config->server_port;

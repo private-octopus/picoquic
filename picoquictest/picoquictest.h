@@ -216,6 +216,8 @@ int sockloop_ipv4_test(void);
 int sockloop_bind_addr_test(void);
 int sockloop_migration_test(void);
 int sockloop_nat_test(void);
+int sockloop_send_source_test(void);
+int sockloop_delete_thread_allocated_param_test(void);
 int sockloop_thread_test(void);
 int sockloop_thread_name_test(void);
 int sockloop_qmux_test(void);

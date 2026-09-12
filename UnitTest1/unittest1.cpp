@@ -202,6 +202,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_send_source)
+        {
+            int ret = sockloop_send_source_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_delete_thread_allocated_param)
+        {
+            int ret = sockloop_delete_thread_allocated_param_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_thread)
         {
             int ret = sockloop_thread_test();
