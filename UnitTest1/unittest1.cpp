@@ -341,6 +341,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(flow_control_check_stream_offset)
+        {
+            int ret = flow_control_check_stream_offset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(signal_stream_reset)
+        {
+            int ret = signal_stream_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();

@@ -1577,6 +1577,9 @@ uint8_t* picoquic_format_paths_blocked_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, int* more_data);
 uint8_t* picoquic_format_path_cid_blocked_frame(
     uint8_t* bytes, const uint8_t* bytes_max, uint64_t max_path_id, uint64_t next_sequence_number, int* more_data);
+int picoquic_flow_control_check_stream_offset(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream,
+    uint64_t new_fin_offset);
+void picoquic_signal_stream_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream);
 
 int frames_format_test(void)
 {
@@ -1681,6 +1684,217 @@ int frames_format_test(void)
             ret = -1;
         }
         FRAME_FORMAT_TEST(picoquic_format_first_misc_or_dg_frame, bytes, bytes_max, &more_data, &is_pure_ack, misc_first, &misc_first, &misc_last);
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+/* picoquic never sends past a limit its peer advertised, so a picoquic-to-picoquic exchange
+ * never reaches either violation branch below -- exercise both directly instead. */
+int flow_control_check_stream_offset_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint8_t data[] = { 0xaa, 0xaa };
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_stream_head_t* stream = NULL;
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 0);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_add_to_stream(cnx, 0, data, 2, 0);
+        stream = picoquic_find_stream(cnx, 0);
+        if (stream == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Baseline: within both limits, so the offset is accepted and accounting is updated. */
+        stream->maxdata_local = 1000;
+        stream->fin_offset = 0;
+        cnx->maxdata_local = 1000;
+        cnx->offset_received = 0;
+
+        if (picoquic_flow_control_check_stream_offset(cnx, stream, 100) != 0 ||
+            stream->fin_offset != 100 || cnx->offset_received != 100) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Per-stream limit exceeded: new_fin_offset > stream->maxdata_local. */
+        stream->maxdata_local = 500;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->local_error = 0;
+
+        if (picoquic_flow_control_check_stream_offset(cnx, stream, 2000) != PICOQUIC_ERROR_DETECTED ||
+            cnx->local_error != PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Under the per-stream limit but over the connection-wide limit -- the overflow-safe subtraction arm. */
+        stream->maxdata_local = 1000000;
+        stream->fin_offset = 100;
+        cnx->maxdata_local = 200;
+        cnx->offset_received = 150;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->local_error = 0;
+
+        if (picoquic_flow_control_check_stream_offset(cnx, stream, 250) != PICOQUIC_ERROR_DETECTED ||
+            cnx->local_error != PICOQUIC_TRANSPORT_FLOW_CONTROL_ERROR) {
+            ret = -1;
+        }
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+static int signal_stream_reset_test_nb_reset_calls = 0;
+static int signal_stream_reset_test_should_fail = 0;
+
+static int signal_stream_reset_test_cb(picoquic_cnx_t* UNUSED(cnx), uint64_t UNUSED(stream_id),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t fin_or_event, void* UNUSED(callback_ctx), void* UNUSED(v_stream_ctx))
+{
+    int ret = 0;
+    if (fin_or_event == picoquic_callback_stream_reset) {
+        signal_stream_reset_test_nb_reset_calls++;
+        ret = signal_stream_reset_test_should_fail;
+    }
+    return ret;
+}
+
+/* picoquic_signal_stream_reset has branches no other test reaches: no callback registered, a
+ * redundant second signal on an already-signalled stream, offset_received not exceeding the
+ * unconsumed delta, and the callback returning an error -- exercise all four directly. */
+int signal_stream_reset_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint8_t data[] = { 0xaa, 0xaa, 0xaa, 0xaa };
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_stream_head_t* stream = NULL;
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 0);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_callback(cnx, signal_stream_reset_test_cb, NULL);
+        }
+    }
+
+    if (ret == 0) {
+        /* Baseline: callback succeeds, the stream is marked signalled. */
+        picoquic_add_to_stream(cnx, 0, data, sizeof(data), 0);
+        stream = picoquic_find_stream(cnx, 0);
+        if (stream == NULL) {
+            ret = -1;
+        }
+        else {
+            signal_stream_reset_test_nb_reset_calls = 0;
+            picoquic_signal_stream_reset(cnx, stream);
+            if (!stream->reset_signalled || signal_stream_reset_test_nb_reset_calls != 1) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* Redundant second signal on the same stream: the guard must suppress the callback call. */
+        picoquic_signal_stream_reset(cnx, stream);
+        if (signal_stream_reset_test_nb_reset_calls != 1) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Nothing happens at all if the connection has no callback registered. */
+        picoquic_add_to_stream(cnx, 4, data, sizeof(data), 0);
+        stream = picoquic_find_stream(cnx, 4);
+        if (stream == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_stream_data_cb_fn saved_cb = cnx->callback_fn;
+            cnx->callback_fn = NULL;
+            signal_stream_reset_test_nb_reset_calls = 0;
+            picoquic_signal_stream_reset(cnx, stream);
+            cnx->callback_fn = saved_cb;
+            if (stream->reset_signalled || signal_stream_reset_test_nb_reset_calls != 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* offset_received not greater than the unconsumed delta: it must be left unchanged. */
+        picoquic_add_to_stream(cnx, 8, data, sizeof(data), 0);
+        stream = picoquic_find_stream(cnx, 8);
+        if (stream == NULL) {
+            ret = -1;
+        }
+        else {
+            stream->consumed_offset = 100;
+            stream->fin_offset = 500;
+            cnx->offset_received = 300; /* <= delta (400), so no decrement should happen */
+            signal_stream_reset_test_nb_reset_calls = 0;
+            picoquic_signal_stream_reset(cnx, stream);
+            if (cnx->offset_received != 300 || !stream->reset_signalled ||
+                signal_stream_reset_test_nb_reset_calls != 1) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        /* The callback returning an error must raise a connection error. */
+        picoquic_add_to_stream(cnx, 12, data, sizeof(data), 0);
+        stream = picoquic_find_stream(cnx, 12);
+        if (stream == NULL) {
+            ret = -1;
+        }
+        else {
+            cnx->cnx_state = picoquic_state_ready;
+            cnx->local_error = 0;
+            signal_stream_reset_test_should_fail = 1;
+            picoquic_signal_stream_reset(cnx, stream);
+            signal_stream_reset_test_should_fail = 0;
+            if (!stream->reset_signalled || cnx->local_error != PICOQUIC_TRANSPORT_INTERNAL_ERROR) {
+                ret = -1;
+            }
+        }
     }
 
     if (qclient != NULL) {

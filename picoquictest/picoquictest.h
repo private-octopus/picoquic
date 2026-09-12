@@ -193,6 +193,8 @@ int parse_frame_test(void);
 int frames_repeat_test(void);
 int frames_ackack_error_test(void);
 int frames_format_test(void);
+int flow_control_check_stream_offset_test(void);
+int signal_stream_reset_test(void);
 int stress_test(void);
 int cnx_stress_unit_test(void);
 int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report);
