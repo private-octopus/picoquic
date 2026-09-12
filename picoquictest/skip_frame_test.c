@@ -2042,6 +2042,13 @@ int quicctx_never_called_apis_test(void)
             }
 
             if (ret == 0) {
+                picoquic_set_default_datagram_priority(qclient, 7);
+                if (qclient->default_datagram_priority != 7) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
                 qclient->cnx_in_progress = cnx;
                 if (picoquic_get_cnx_in_progress(qclient) != cnx) {
                     ret = -1;

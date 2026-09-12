@@ -1442,32 +1442,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     return ret;
 }
 
-/* Get packet type from epoch */
-picoquic_packet_type_enum picoquic_packet_type_from_epoch(int epoch)
-{
-    picoquic_packet_type_enum ptype;
-
-    switch (epoch) {
-    case 0:
-        ptype = picoquic_packet_initial;
-        break;
-    case 1:
-        ptype = picoquic_packet_0rtt_protected;
-        break;
-    case 2:
-        ptype = picoquic_packet_handshake;
-        break;
-    case 3:
-        ptype = picoquic_packet_1rtt_protected;
-        break;
-    default:
-        ptype = picoquic_packet_error;
-        break;
-    }
-
-    return ptype;
-}
-
 /* Prepare a required repetition or ack in a previous context */
 size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_path_t* path_x, picoquic_packet_t* packet, size_t send_buffer_max, uint64_t current_time,
