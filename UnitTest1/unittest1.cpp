@@ -383,6 +383,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(skip_immediate_ack_frame)
+        {
+            int ret = skip_immediate_ack_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();

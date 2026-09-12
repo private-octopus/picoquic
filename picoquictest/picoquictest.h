@@ -199,6 +199,7 @@ int stop_sending_needs_repeat_test(void);
 int stream_invalid_id_test(void);
 int stream_never_called_apis_test(void);
 int queue_multipath_blocked_frames_test(void);
+int skip_immediate_ack_frame_test(void);
 int frames_format_test(void);
 int flow_control_check_stream_offset_test(void);
 int signal_stream_reset_test(void);

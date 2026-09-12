@@ -1983,6 +1983,23 @@ int queue_multipath_blocked_frames_test(void)
     return ret;
 }
 
+const uint8_t* picoquic_skip_immediate_ack_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+
+/* picoquic_skip_immediate_ack_frame is a one-line pass-through (the frame carries no
+ * payload beyond its type), but it was never actually reached by picoquic_skip_frame in
+ * the test suite. Call it directly so the line is exercised regardless of dispatch. */
+int skip_immediate_ack_frame_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[1] = { picoquic_frame_type_immediate_ack };
+    const uint8_t* bytes_after = picoquic_skip_immediate_ack_frame(buffer, buffer + sizeof(buffer));
+
+    if (bytes_after != buffer) {
+        ret = -1;
+    }
+    return ret;
+}
+
 
 /* Sweep buffer sizes 0..needed so every chained bounds check gets its own failing size, not just one. */
 #define FRAME_FORMAT_TEST(format_func, ...)                                                            \
