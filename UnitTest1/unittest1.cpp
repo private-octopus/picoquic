@@ -369,6 +369,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_never_called_apis)
+        {
+            int ret = stream_never_called_apis_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(queue_multipath_blocked_frames)
+        {
+            int ret = queue_multipath_blocked_frames_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();

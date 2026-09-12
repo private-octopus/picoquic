@@ -1875,6 +1875,114 @@ int stream_invalid_id_test(void)
     return ret;
 }
 
+static int stream_never_called_apis_test_cb(picoquic_cnx_t* UNUSED(cnx), uint64_t UNUSED(stream_id),
+    uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t UNUSED(fin_or_event), void* UNUSED(callback_ctx), void* UNUSED(v_stream_ctx))
+{
+    return 0;
+}
+
+/* picoquic_mark_active_stream_v2, picoquic_set_default_priority and
+ * picoquic_mark_high_priority_stream are never called anywhere in the test suite.
+ * The latter is also the only function that ever sets cnx->high_priority_stream_id,
+ * so exercising it incidentally covers the stream lookup guarded by that field
+ * in the packet-preparation scheduler. */
+int stream_never_called_apis_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 0);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            uint8_t default_priority_before = cnx->quic->default_stream_priority;
+            uint8_t new_default_priority = (uint8_t)(default_priority_before + 1);
+
+            picoquic_set_default_priority(cnx->quic, new_default_priority);
+            if (cnx->quic->default_stream_priority != new_default_priority) {
+                ret = -1;
+            }
+
+            if (ret == 0) {
+                picoquic_stream_head_t* stream;
+                cnx->callback_fn = stream_never_called_apis_test_cb;
+                cnx->callback_ctx = NULL;
+                if (picoquic_mark_active_stream_v2(cnx, 4004, 1) != 0 ||
+                    (stream = picoquic_find_stream(cnx, 4004)) == NULL ||
+                    !stream->is_active) {
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                if (picoquic_mark_high_priority_stream(cnx, 4008, 1) != 0 ||
+                    cnx->high_priority_stream_id != 4008) {
+                    ret = -1;
+                }
+                else if (picoquic_mark_high_priority_stream(cnx, 4008, 0) != 0 ||
+                    cnx->high_priority_stream_id != UINT64_MAX) {
+                    ret = -1;
+                }
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
+/* picoquic_queue_paths_blocked_frame and picoquic_queue_path_cid_blocked_frame are not
+ * called from any production code path yet -- the trigger logic for when to send these
+ * multipath frames is a separate design question. Exercise them directly here so the
+ * formatting and queuing code itself is covered. */
+int queue_multipath_blocked_frames_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    struct sockaddr_in saddr = { 0 };
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_cnx_t* cnx = frames_format_test_get_cnx(qclient, (struct sockaddr*)&saddr, picoquic_epoch_1rtt, simulated_time, 1);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            if (picoquic_queue_paths_blocked_frame(cnx) != 0 || cnx->first_misc_frame == NULL) {
+                ret = -1;
+            }
+
+            if (ret == 0) {
+                picoquic_path_t* path_x = cnx->path[0];
+                if (picoquic_queue_path_cid_blocked_frame(path_x) != 0 ||
+                    !path_x->sending_path_cid_blocked_frame) {
+                    ret = -1;
+                }
+            }
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
 
 /* Sweep buffer sizes 0..needed so every chained bounds check gets its own failing size, not just one. */
 #define FRAME_FORMAT_TEST(format_func, ...)                                                            \

@@ -5639,13 +5639,6 @@ uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, u
     return picoquic_format_single_varint_frame(bytes, bytes_max, picoquic_frame_type_time_stamp, time_stamp, more_data);
 }
 
-size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time)
-{
-    uint64_t time_stamp = (current_time - cnx->start_time) >> cnx->local_parameters.ack_delay_exponent;
-
-    return (2 + picoquic_encode_varint_length(time_stamp));
-}
-
 /* Multipath PATH ABANDON frames
  */
 
@@ -7134,45 +7127,6 @@ int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_maxsize, size_t* cons
 
     return bytes == NULL;
 }
-
-int picoquic_is_path_challenging_packet(const uint8_t* bytes, size_t bytes_maxsize)
-{
-    const uint8_t* bytes_max = bytes + bytes_maxsize;
-    uint64_t frame_id64;
-    int is_challenge = 1;
-    int has_challenge = 0;
-
-    /* Only a few frames are path challenging, so we check for those. */
-    while (bytes != NULL && bytes < bytes_max) {
-        size_t consumed = 0;
-        int pure_ack = 0;
-
-        if (picoquic_frames_varint_decode(bytes, bytes_max, &frame_id64) == NULL) {
-            break;
-        }
-        switch (frame_id64) {
-        case picoquic_frame_type_path_challenge:
-            has_challenge = 1;
-            break;
-        case picoquic_frame_type_path_response:
-        case picoquic_frame_type_padding:
-        case picoquic_frame_type_new_connection_id:
-        case picoquic_frame_type_path_new_connection_id:
-            break;
-        default:
-            is_challenge = 0;
-            break;
-        }
-        if (picoquic_skip_frame(bytes, bytes_max - bytes, &consumed, &pure_ack) != 0) {
-            break;
-        }
-        else {
-            bytes += consumed;
-        }
-    }
-    return (is_challenge && has_challenge);
-}
-
 
 int picoquic_decode_closing_frames(uint8_t* bytes, size_t bytes_max, int* closing_received)
 {
