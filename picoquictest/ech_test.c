@@ -54,6 +54,7 @@ int picoquic_ech_read_config(ptls_buffer_t* config, char const* file_name);
 int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_len, char const* public_key_file, char const* public_name);
 int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name);
 int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name);
+int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file);
 
 int ech_test_check_buf(uint8_t* config, size_t config_len, char const* ref_file_name)
 {
@@ -152,6 +153,92 @@ int ech_config_p_test(void)
 
     if (config != NULL) {
         free(config);
+    }
+
+    return ret;
+}
+
+/* picoquic_ech_create_config_from_private_key's 0x61-byte-pubkey branch (secp384r1) was
+ * never exercised by any test -- the checked-in ECH test key is secp256r1 (0x41 bytes). */
+#define ECH_CONFIG_SECP384R1_KEY "certs" PICOQUIC_FILE_SEPARATOR "ech" PICOQUIC_FILE_SEPARATOR "private_secp384r1.pem"
+#define ECH_CONFIG_SECP384R1_REF "certs" PICOQUIC_FILE_SEPARATOR "ech" PICOQUIC_FILE_SEPARATOR "ech_config_secp384r1.txt"
+#define ECH_CONFIG_SECP384R1_TXT "ech_config_secp384r1_test.txt"
+
+int ech_config_secp384r1_test(void)
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    const char* public_name = "test.example.com";
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        ECH_CONFIG_SECP384R1_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", ECH_CONFIG_SECP384R1_KEY);
+    }
+    else if ((ret = picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_key_file, ret, ret);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_SECP384R1_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(config, config_len, ECH_CONFIG_SECP384R1_REF);
+        }
+    }
+
+    if (config != NULL) {
+        free(config);
+    }
+
+    return ret;
+}
+
+#define ECH_CONFIG_FROM_FILE_TXT "ech_config_from_file_test.txt"
+
+/* picoquic_ech_create_config_file combines picoquic_ech_create_config_from_private_key
+ * and picoquic_ech_save_config (each already exercised separately in ech_config_p_test
+ * above) into the single entry point used by picoquic_config.c -- never itself called
+ * from a test until now. Check its output file matches the checked-in reference. */
+int ech_config_file_test(void)
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    char test_ref_file[512];
+    const char* public_name = "test.example.com";
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    }
+    else {
+        ret = picoquic_get_input_path(test_ref_file, sizeof(test_ref_file), picoquic_solution_dir,
+            PICOQUIC_TEST_ECH_CONFIG_REF);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_CONFIG_REF);
+        }
+    }
+
+    if (ret == 0 &&
+        (ret = picoquic_ech_create_config_file(public_name, test_server_key_file, ECH_CONFIG_FROM_FILE_TXT)) != 0) {
+        DBG_PRINTF("Cannot create ECH config file from <%s>, err: %d (0x%x)", test_server_key_file, ret, ret);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_test_compare_text_files(ECH_CONFIG_FROM_FILE_TXT, test_ref_file);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "ECH config file content does not match reference.");
+        }
     }
 
     return ret;

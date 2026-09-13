@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include "picoquic_internal.h"
+#include "picoquic_unified_log.h"
 #include "bytestream.h"
 #include "csv.h"
 #include "svg.h"
@@ -667,6 +668,99 @@ int picoquic_check_json_well_formed(char const* fname)
         }
 
         (void)picoquic_file_close(F);
+    }
+
+    return ret;
+}
+
+/* qlog_fns_new_connection names the output file after the initial CID's hex form
+ * (see qlog_fns_set_file_name), so an explicit, non-random CID is needed here -- a
+ * client-mode cnx created with a null initial CID gets a random one instead. */
+#define QLOG_FNS_TRIM_FILE "09090909.client.qlog"
+
+/* qlog_fns_get_path_context keeps a per-connection list of path contexts, one per
+ * unique_path_id it has ever seen a cc_dump event for. When that list grows past the
+ * connection's current number of paths, it calls qlog_fns_trim_path_contexts to drop
+ * entries for paths that no longer exist. Exercise that by creating three paths, cc-
+ * dumping all of them (three contexts remembered), abandoning one, then creating a new
+ * path and cc-dumping again -- the new, not-yet-seen path id pushes the remembered count
+ * over the live path count, triggering the trim of the abandoned path's stale entry. */
+int qlog_fns_trim_path_contexts_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    const picoquic_connection_id_t initial_cid = {
+        { 9, 9, 9, 9 }, 4
+    };
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+        (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* picoquic_create_path returns the new path's array index (>= 0) on success,
+         * or -1 on failure -- it is not a plain 0/nonzero status code. */
+        cnx->is_multipath_enabled = 1;
+
+        if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 1) < 0 ||
+            picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 2) < 0) {
+            ret = -1;
+        }
+        else if (picoquic_set_qlog(quic, ".") != 0) {
+            ret = -1;
+        }
+        else {
+            picoquic_log_new_connection(cnx);
+
+            /* Dump all three paths: creates three remembered path contexts. */
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                cnx->path[i]->is_cc_data_updated = 1;
+            }
+            picoquic_log_cc_dump(cnx, simulated_time);
+
+            /* Abandon the path with unique_path_id 1. */
+            picoquic_delete_path(cnx, 1);
+
+            /* Create a new, not-yet-seen path: nb_paths is 3 again (ids 0, 2, 3), but
+             * the qlog context list still has 3 entries for ids 0, 1, 2 -- adding a
+             * context for id 3 pushes that list to 4, past nb_paths, triggering trim. */
+            if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 3) < 0) {
+                ret = -1;
+            }
+            else {
+                for (int i = 0; i < cnx->nb_paths; i++) {
+                    cnx->path[i]->is_cc_data_updated = 1;
+                }
+                picoquic_log_cc_dump(cnx, simulated_time);
+            }
+        }
+
+        picoquic_log_close_connection(cnx);
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_check_json_well_formed(QLOG_FNS_TRIM_FILE);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Trim-path-contexts QLOG output is not well-formed JSON.");
+        }
     }
 
     return ret;

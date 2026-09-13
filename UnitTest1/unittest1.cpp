@@ -2087,6 +2087,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_fns_trim_path_contexts)
+        {
+            int ret = qlog_fns_trim_path_contexts_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_trace)
         {
             int ret = qlog_trace_test();
@@ -4017,6 +4024,18 @@ namespace UnitTest1
 
         TEST_METHOD(ech_config_p) {
             int ret = ech_config_p_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_config_secp384r1) {
+            int ret = ech_config_secp384r1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_config_file) {
+            int ret = ech_config_file_test();
 
             Assert::AreEqual(ret, 0);
         }

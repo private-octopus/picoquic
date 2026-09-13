@@ -3134,23 +3134,38 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_i
  * the TLV frame sequence of a regular packet). */
 static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connection_id_t* dcid, uint64_t current_time)
 {
-    struct sockaddr_in6 addr_peer;
-    struct sockaddr_in6 addr_local;
+    struct sockaddr_in addr_peer4;
+    struct sockaddr_in addr_local4;
+    struct sockaddr_in6 addr_peer6;
+    struct sockaddr_in6 addr_local6;
     picoquic_packet_header ph;
     static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
     static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
     static const uint8_t retry_token_bytes[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 
-    memset(&addr_peer, 0, sizeof(addr_peer));
-    addr_peer.sin6_family = AF_INET6;
-    addr_peer.sin6_port = htons(4433);
-    memset(&addr_peer.sin6_addr, 0x30, 16);
-    memset(&addr_local, 0, sizeof(addr_local));
-    addr_local.sin6_family = AF_INET6;
-    addr_local.sin6_port = htons(4433);
-    memset(&addr_local.sin6_addr, 0x31, 16);
+    memset(&addr_peer4, 0, sizeof(addr_peer4));
+    addr_peer4.sin_family = AF_INET;
+    addr_peer4.sin_port = htons(4433);
+    memset(&addr_peer4.sin_addr, 0x30, sizeof(addr_peer4.sin_addr));
+    memset(&addr_local4, 0, sizeof(addr_local4));
+    addr_local4.sin_family = AF_INET;
+    addr_local4.sin_port = htons(4433);
+    memset(&addr_local4.sin_addr, 0x31, sizeof(addr_local4.sin_addr));
 
-    picoquic_log_pdu(cnx, 1, current_time, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local, 1200, 0, 0);
+    memset(&addr_peer6, 0, sizeof(addr_peer6));
+    addr_peer6.sin6_family = AF_INET6;
+    addr_peer6.sin6_port = htons(4433);
+    memset(&addr_peer6.sin6_addr, 0x30, sizeof(addr_peer6.sin6_addr));
+    memset(&addr_local6, 0, sizeof(addr_local6));
+    addr_local6.sin6_family = AF_INET6;
+    addr_local6.sin6_port = htons(4433);
+    memset(&addr_local6.sin6_addr, 0x31, sizeof(addr_local6.sin6_addr));
+
+    /* One PDU of each family: bytewrite_addr now writes a protocol-defined marker (4 or
+     * 6), not the platform's raw sa_family_t, so both are safe to log to a reference
+     * file compared byte-for-byte across platforms -- see bytestream.c. */
+    picoquic_log_pdu(cnx, 1, current_time, (struct sockaddr*)&addr_peer4, (struct sockaddr*)&addr_local4, 1200, 0, 0);
+    picoquic_log_pdu(cnx, 1, current_time, (struct sockaddr*)&addr_peer6, (struct sockaddr*)&addr_local6, 1200, 0, 0);
 
     picoquic_log_packet_lost(cnx, cnx->path[0], picoquic_packet_1rtt_protected, 42,
         "test_trigger", (picoquic_connection_id_t*)dcid, 123, current_time);

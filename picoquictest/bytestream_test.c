@@ -655,7 +655,8 @@ int bytestream_test_vint(void)
     return ret;
 }
 
-int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_storage * out, size_t addr_size, const char * type_name)
+int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_storage * out, size_t addr_size,
+    const char * type_name, uint8_t expected_wire_family)
 {
     int ret = 0;
 
@@ -664,6 +665,15 @@ int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_sto
 
     ret |= bytewrite_addr(s, in);
     ret |= bytewrite_addr(s, in);
+
+    /* The family marker on the wire must be the protocol-defined value (4 or 6), not
+     * the platform's raw sa_family_t -- that value is not portable across Windows and
+     * Linux and must never leak into a persisted stream. */
+    if (ret == 0 && (s->ptr < 1 || s->data[0] != expected_wire_family)) {
+        DBG_PRINTF("wire family marker for %s is 0x%02x, expected %d\n", type_name,
+            (s->ptr < 1) ? 0 : s->data[0], expected_wire_family);
+        ret = -1;
+    }
 
     bytestream_reset(s);
 
@@ -695,7 +705,7 @@ int bytestream_test_addr(void)
         (const struct sockaddr*)&addr_in,
         & addr_out,
         sizeof(struct sockaddr_in),
-        "sockaddr_in");
+        "sockaddr_in", 4);
 
     struct sockaddr_in6 addr_in6 = { 0 };
     addr_in6.sin6_family = AF_INET6;
@@ -706,7 +716,7 @@ int bytestream_test_addr(void)
         (const struct sockaddr*)&addr_in6,
         &addr_out,
         sizeof(struct sockaddr_in6),
-        "sockaddr_in6");
+        "sockaddr_in6", 6);
 
     return ret;
 }
