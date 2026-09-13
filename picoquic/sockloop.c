@@ -3193,6 +3193,13 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
     return picoquic_start_custom_network_thread(quic, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
 }
 
+picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(picoquic_quic_t* quic,
+    picoquic_quic_t* qmux, picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx, int* ret)
+{
+    return picoquic_start_custom_network_thread_qmux(quic, qmux, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
+}
+
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 {
     int ret = 0;

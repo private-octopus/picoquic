@@ -943,7 +943,7 @@ static int sockloop_bind_addr_unsupported_af(void)
     for (int i = 0; i < 4; i++) {
         s_ctx[i].fd = INVALID_SOCKET;
     }
-    param.local_addr[0].ss_family = 999; /* Not AF_INET, AF_INET6, or AF_UNSPEC */
+    param.local_addr[0].ss_family = 200; /* Not AF_INET, AF_INET6, or AF_UNSPEC; fits sa_family_t on all platforms */
     param.do_not_use_gso = 1;
 
     nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
@@ -1551,7 +1551,7 @@ int sockloop_qmux_one(
                     picoquic_internal_thread_setname, spec->thread_name, sockloop_qmux_test_cb, spec, &ret);
             }
             else {
-                thread_ctx = picoquic_start_network_thread(qserver, &param, sockloop_qmux_test_cb, spec, &ret);
+                thread_ctx = picoquic_start_network_thread_qmux(qserver, qmux, &param, sockloop_qmux_test_cb, spec, &ret);
             }
             if (thread_ctx == NULL) {
                 if (ret == 0) {
@@ -1693,6 +1693,159 @@ int sockloop_qmux_cnx_sockets_limit_test(void)
             picoquic_delete_cnx(cnx);
         }
         picoquic_free(qclient);
+    }
+    return ret;
+}
+
+/* Open two extra raw TCP connections to the QMUX port, then close the first
+ * one while the second stays open and the real QMUX connection is still
+ * running. This exercises the "socket was closed" compaction logic in the
+ * main loop, including the array memmove, which no other test reaches. */
+int sockloop_qmux_close_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* qserver = NULL;
+    picoquic_quic_t* qmux = NULL;
+    picoquic_cnx_t* cnx_qmux = NULL;
+    picoquic_packet_loop_param_t param = { 0 };
+    struct sockaddr_storage dest = { 0 };
+    struct sockaddr_in probe_dest = { 0 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    const uint8_t test_ticket_encrypt_key[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+    sockloop_qmux_test_t spec;
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
+    SOCKET_TYPE probe1 = INVALID_SOCKET;
+    SOCKET_TYPE probe2 = INVALID_SOCKET;
+
+    sockloop_test_set_qmux_spec(&spec, 4);
+    spec.port = 3458;
+    /* Keep the connection (and thus the loop) alive after the data exchange,
+     * so there is time to open and close the probe connections below. */
+    spec.test_idle = 1;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        qserver = picoquic_create(8,
+            NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, NULL, NULL,
+            0, NULL, NULL, NULL, 0);
+        qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, sockloop_qmux_callback, &spec, NULL, 0, NULL,
+            0, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+        if (qserver == NULL || qmux == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_test_address((struct sockaddr_in*)&dest, htonl(0x7f000001), htons(spec.port));
+            cnx_qmux = picoqmux_create_qmux_cnx(qmux, picoquic_current_time(), 1, 0,
+                PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, (struct sockaddr*)&dest);
+            if (cnx_qmux == NULL) {
+                ret = -1;
+            }
+            else {
+                spec.qmux_cnx = cnx_qmux;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        param.local_port = spec.port;
+        param.qmux_port = spec.port;
+        param.local_af = 0;
+        param.socket_buffer_size = spec.socket_buffer_size;
+
+        thread_ctx = picoquic_start_network_thread_qmux(qserver, qmux, &param, sockloop_qmux_test_cb, &spec, &ret);
+        if (thread_ctx == NULL) {
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            int thread_ready = 0;
+            for (int i = 0; i < 2000 && !thread_ready; i++) {
+                thread_ready = thread_ctx->thread_is_ready;
+                if (!thread_ready) {
+                    SLEEP(1);
+                }
+            }
+            if (!thread_ready) {
+                DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                ret = -1;
+            }
+            else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                ret = -1;
+            }
+            else {
+                /* Wait for the real QMUX connection to complete its data
+                 * exchange; it stays open afterwards because of test_idle. */
+                int nb_waits = 0;
+                while (nb_waits < 2000 &&
+                    !(spec.received_stream_0 && spec.stream_0_fin_received)) {
+                    SLEEP(1);
+                    nb_waits++;
+                }
+                if (!spec.received_stream_0 || !spec.stream_0_fin_received || !spec.stream_0_data_matches) {
+                    ret = -1;
+                }
+                else {
+                    picoquic_set_test_address(&probe_dest, htonl(0x7f000001), htons(spec.port));
+                    probe1 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                    if (probe1 == INVALID_SOCKET ||
+                        connect(probe1, (struct sockaddr*)&probe_dest, sizeof(probe_dest)) != 0) {
+                        DBG_PRINTF("%s", "Cannot open first probe connection");
+                        ret = -1;
+                    }
+                    else {
+                        SLEEP(100);
+                        probe2 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                        if (probe2 == INVALID_SOCKET ||
+                            connect(probe2, (struct sockaddr*)&probe_dest, sizeof(probe_dest)) != 0) {
+                            DBG_PRINTF("%s", "Cannot open second probe connection");
+                            ret = -1;
+                        }
+                        else {
+                            SLEEP(100);
+                            /* probe1 is not the last qmux socket, since probe2 stays
+                             * open: closing it exercises the array compaction. */
+                            SOCKET_CLOSE(probe1);
+                            probe1 = INVALID_SOCKET;
+                            SLEEP(100);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (probe1 != INVALID_SOCKET) {
+        SOCKET_CLOSE(probe1);
+    }
+    if (probe2 != INVALID_SOCKET) {
+        SOCKET_CLOSE(probe2);
+    }
+    if (thread_ctx != NULL) {
+        picoquic_delete_network_thread(thread_ctx);
+    }
+    if (qmux != NULL) {
+        picoquic_free(qmux);
+    }
+    if (qserver != NULL) {
+        picoquic_free(qserver);
     }
     return ret;
 }

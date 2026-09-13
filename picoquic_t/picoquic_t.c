@@ -144,6 +144,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_qmux", sockloop_qmux_test },
     { "sockloop_qmux_badp", sockloop_qmux_badp_test },
     { "sockloop_qmux_cnx_sockets_limit", sockloop_qmux_cnx_sockets_limit_test },
+    { "sockloop_qmux_close", sockloop_qmux_close_test },
     { "splay", splay_test },
     { "create_cnx", create_cnx_test },
     { "create_quic", create_quic_test },
