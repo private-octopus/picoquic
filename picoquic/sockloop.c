@@ -2107,7 +2107,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
     }
     else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
-        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL ||
+        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, (struct sockaddr*)&addr_from)) == NULL ||
         (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
     }
