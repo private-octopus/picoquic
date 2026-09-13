@@ -574,6 +574,7 @@ typedef struct st_picoquic_quic_t {
     unsigned int client_zero_share : 1;
     unsigned int server_busy : 1;
     unsigned int is_cert_store_not_empty : 1;
+    unsigned int is_cert_verification_strict : 1; /* refuse client cnx instead of fail-open if no root cert store is configured */
     unsigned int use_long_log : 1;
     unsigned int should_close_log : 1;
     unsigned int enable_sslkeylog : 1; /* Enable the SSLKEYLOG feature */
@@ -2097,7 +2098,7 @@ int picoquic_path_cid_blocked_frame_needs_repeat(picoquic_cnx_t* cnx, const uint
 int picoquic_process_ack_of_path_cid_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
     size_t bytes_max, size_t* consumed);
 int picoquic_process_ack_of_observed_address_frame(picoquic_path_t* path_x, const uint8_t* bytes,
-    size_t bytes_max, uint64_t ftype, size_t* consumed);
+    size_t bytes_max, uint64_t ftype, size_t l_ftype, size_t* consumed);
 int picoquic_process_ack_of_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, size_t bytes_size, size_t* consumed);
 
 uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_window); /* Trigger sending more data if window increases */
@@ -2236,9 +2237,6 @@ typedef struct st_picomask_fns_t {
 #define SCONE_DELAY_RANDOM 3000000
 #define SCONE_INDICATOR 0xc813
 #define SCONE_VERSION_BASE 0x6f7dc0fd
-#define SCONE_DELAY 19000013
-#define SCONE_DELAY_RANDOM 3000000
-#define SCONE_INDICATOR 0xc813
 
 void picoquic_scone_padding(picoquic_cnx_t * cnx, uint8_t * bytes, size_t length);
 int picoquic_scone_incoming(picoquic_quic_t* quic,  picoquic_packet_header* ph, const uint8_t* bytes_start, const uint8_t* bytes_max);

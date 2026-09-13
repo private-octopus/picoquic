@@ -198,6 +198,68 @@ int qlog_error_string(FILE* F)
 	return ret;
 }
 
+/* Test common function for writing a byte string with proper escape for JSON */
+int qlog_fns_chars(FILE* f, const uint8_t* s, uint64_t l);
+#define QLOG_JSON_ESCAPE_FILE "qlol_json_escape_file.txt"
+
+int qlog_json_escape_test(void)
+{
+	int ret = 0;
+	static const uint8_t escape_input[] = { 0xFF, 0x01, 0x7F };
+	static const char* expected = "\"\\u00ff\\u0001\\u007f\"";
+	char line[256];
+	FILE* F;
+
+	F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+	if (F == NULL) {
+		ret = -1;
+	}
+	else {
+		qlog_fns_chars(F, escape_input, sizeof(escape_input));
+		F = picoquic_file_close(F);
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_fns_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		bytestream bs = { 0 };
+		bs.data = (uint8_t*)escape_input;
+		bs.size = sizeof(escape_input);
+		bs.ptr = 0;
+
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+		if (F == NULL) {
+			ret = -1;
+		}
+		else {
+			qlog_chars(F, &bs, bs.size);
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	return ret;
+}
+
 static uint8_t qlog_pref_addr[] = {
 	/* IPv4 address */
 	10, 0, 0, 1,
@@ -218,6 +280,95 @@ static uint8_t qlog_pref_addr[] = {
 	16, 17, 18, 19
 };
 void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len);
+
+/* test proper rendering of preferred IPv4 address in qlog. */
+#define QLOG_FNS_PREFADDR_FILE "qlog_fns_preferred_address_test.txt"
+static uint8_t qlog_fns_pref_addr_bytes[] = {
+    /* IPv4 address */
+    10, 0, 0, 99,
+    /* IPv4 port */
+    1, 4,
+    /* IPv6 address */
+    2, 1, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16,
+    /* IPv6 port */
+    2, 8,
+    /* CID len */
+    4,
+    /* CID value */
+    15, 14, 13, 12,
+    /* Reset token */
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+};
+void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len);
+
+/* Render bytes/len through qlog_fns_preferred_address and compare the whole file
+ * content against expected, potentially detecting JSON formatting errors. */
+static int qlog_fns_pref_addr_check(const uint8_t* bytes, uint64_t len, char const* expected)
+{
+    int ret = 0;
+    char line[512];
+    FILE* F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_preferred_address(F, bytes, len);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            char* line_read = fgets(line, sizeof(line), F);
+            if (line_read == NULL || strcmp(line_read, expected) != 0) {
+                DBG_PRINTF("Unexpected preferred address rendering: %s", (line_read == NULL) ? "(empty)" : line_read);
+                ret = -1;
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
+int qlog_fns_pref_addr_test(void)
+{
+    int ret = 0;
+    /* Exactly the four bytes the "len >= 4" admission check guarantees -- reading past it is the OOB bug this guards against. The trailing "port_v4":0 is a separate pre-existing quirk: that field prints before its own failed decode is checked. */
+    uint8_t* min_bytes = (uint8_t*)malloc(4);
+
+    if (min_bytes == NULL) {
+        ret = -1;
+    }
+    else {
+        memcpy(min_bytes, qlog_fns_pref_addr_bytes, 4);
+        ret = qlog_fns_pref_addr_check(min_bytes, 4, "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":0}");
+        free(min_bytes);
+    }
+
+    /* Full TP, no extra bytes. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes),
+            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\"}");
+    }
+
+    /* Full TP, with 4 trailing extra bytes -- exercises the "extra_bytes" field and the separator before it. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_pref_addr, sizeof(qlog_pref_addr),
+            "{\"ip_v4\": \"10.0.0.1\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\", \"extra_bytes\": \"10111213\"}");
+    }
+
+    return ret;
+}
 
 int qlog_pref_addr_test(FILE* F)
 {
@@ -361,5 +512,14 @@ int qlog_error_test(void)
 	if (F != NULL) {
 		F = picoquic_file_close(F);
 	}
+
+	if (ret == 0) {
+		ret = qlog_fns_pref_addr_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_json_escape_test();
+	}
+
 	return ret;
 }

@@ -45,50 +45,6 @@
 extern char const* h3zero_server_default_page;
 extern char const* h3zero_server_post_response_page;
 
-/* Sanity check of path name to prevent directory traversal.
- * We use a simple command that check for file names mae of alpha,
- * num, hyphens and underlines, plus non repeated dots */
-int demo_server_is_path_sane(const uint8_t* path, size_t path_length)
-{
-    int ret = 0;
-    size_t i = 0;
-    int past_is_dot = 0;
-    int nb_good = 0;
-
-    if (path[0] == '/') {
-        i++;
-    }
-    else {
-        ret = -1;
-    }
-
-    for (; ret == 0 && i < path_length; i++) {
-        int c = path[i];
-        if ((c >= 'a' && c <= 'z') ||
-            (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') ||
-            c == '-' || c == '_') {
-            nb_good++;
-            past_is_dot = 0;
-        }
-        else if (c == '/' && i < path_length - 1 && nb_good > 0) {
-            nb_good++;
-        }
-        else if (c == '.' && !past_is_dot && nb_good > 0){
-            past_is_dot = 1;
-        }
-        else {
-            ret = -1;
-        }
-    }
-
-    if (ret == 0 && nb_good == 0) {
-        ret = -1;
-    }
-
-    return ret;
-}
-
 int demo_server_try_file_path(const uint8_t* path, size_t path_length, uint64_t* echo_size,
     char** file_path, char const* web_folder, int * file_error)
 {
@@ -98,7 +54,7 @@ int demo_server_try_file_path(const uint8_t* path, size_t path_length, uint64_t*
     char* file_name = malloc(file_name_len);
     FILE* F;
 
-    if (file_name != NULL && demo_server_is_path_sane(path, path_length) == 0) {
+    if (file_name != NULL && picoquic_is_path_sane(path, path_length) == 0) {
         memcpy(file_name, web_folder, len);
 #ifdef _WINDOWS
         if (len == 0 || file_name[len - 1] != '\\') {

@@ -29,3 +29,8 @@ picoquic API to build a simple application. The current code is
 limited: it does not use the "configuration" API to set parameters
 of the picoquic endpoint, and it does not demonstrate how to run
 picoquic in a background thread.
+
+The sample server code validates the file names provided by the
+client, and will verify that the name does not contains "." or
+other characters used in path traversal attacks. The code however
+will follow symbolink links, even if they lead outside of the server's folder.

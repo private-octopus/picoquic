@@ -987,6 +987,40 @@ int sockloop_thread_name_test(void)
     return(sockloop_test_one(&spec));
 }
 
+/* The wake up action calls loop_callback unconditionally. Verify that so the
+* thread-starting APIs refuses a NULL loop_callback rather than store it and crash later. */
+int sockloop_thread_null_callback_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        picoquic_packet_loop_param_t param = { 0 };
+        int thread_ret = 0;
+        picoquic_network_thread_ctx_t* thread_ctx = picoquic_start_network_thread(quic, &param, NULL, NULL, &thread_ret);
+
+        if (thread_ctx != NULL) {
+            DBG_PRINTF("%s", "picoquic_start_network_thread accepted a NULL loop_callback");
+            picoquic_delete_network_thread(thread_ctx);
+            ret = -1;
+        }
+        else if (thread_ret == 0) {
+            DBG_PRINTF("%s", "picoquic_start_network_thread with a NULL loop_callback did not report an error");
+            ret = -1;
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
 /* Add tests of a QMUX loop. */
 uint8_t sockloop_qmux_test_data[] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,14, 15, 16

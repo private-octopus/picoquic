@@ -121,8 +121,12 @@ int sample_server_open_stream(sample_server_ctx_t* server_ctx, sample_server_str
     stream_ctx->is_name_read = 1;
 
     /* Verify the name, then try to open the file */
-    if (server_ctx->default_dir_len + stream_ctx->name_length + 1 > sizeof(file_path)) {
+    if (server_ctx->default_dir_len + stream_ctx->name_length + 2 > sizeof(file_path)) {
         ret = PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR;
+    }
+    else if (picoquic_is_path_sane(stream_ctx->file_name, stream_ctx->name_length) != 0) {
+        /* Reject silently as "no such file", rather than reveal that the name was rejected as unsafe. */
+        ret = PICOQUIC_SAMPLE_NO_SUCH_FILE_ERROR;
     }
     else {
         /* Verify that the default path is empty of terminates with "/" or "\" depending on OS,
@@ -135,8 +139,18 @@ int sample_server_open_stream(sample_server_ctx_t* server_ctx, sample_server_str
                 dir_len++;
             }
         }
-        memcpy(file_path + dir_len, stream_ctx->file_name, stream_ctx->name_length);
-        file_path[dir_len + stream_ctx->name_length] = 0;
+        /* picoquic_is_path_sane accepts an optional leading '/' (regardless of platform);
+         * skip it here, since dir_len already ends on a separator. */
+        {
+            uint8_t const* name = stream_ctx->file_name;
+            size_t name_length = stream_ctx->name_length;
+            if (name_length > 0 && name[0] == '/') {
+                name++;
+                name_length--;
+            }
+            memcpy(file_path + dir_len, name, name_length);
+            file_path[dir_len + name_length] = 0;
+        }
 
         /* Use the picoquic_file_open API for portability to Windows and Linux */
         stream_ctx->F = picoquic_file_open(file_path, "rb");
@@ -277,7 +291,7 @@ int sample_server_callback(picoquic_cnx_t* cnx,
                         int stream_ret;
 
                         /* If fin, mark read, check the file, open it. Or reset if there is no such file */
-                        stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
+                        stream_ctx->file_name[stream_ctx->name_length] = 0;
                         stream_ctx->is_name_read = 1;
                         printf("File requested: <%s>\n", stream_ctx->file_name);
                         stream_ret = sample_server_open_stream(server_ctx, stream_ctx);

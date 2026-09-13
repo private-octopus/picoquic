@@ -802,6 +802,13 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
 /* Tell the TLS stack to not attempt verifying certificates */
 void picoquic_set_null_verifier(picoquic_quic_t* quic);
 
+/* Set the policy applied when a client connection has no root certificate store to verify
+ * against (no cert_root_file_name given to picoquic_create, or it failed to load). By
+ * default (is_strict = 0) verification is silently disabled (fail open), preserved for
+ * applications -- e.g. test setups -- that rely on it. With is_strict != 0,
+ * picoquic_start_client_cnx refuses the connection instead of proceeding unverified. */
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict);
+
 /* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 
