@@ -4034,6 +4034,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ech_config_pub_secp384r1) {
+            int ret = ech_config_pub_secp384r1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_config_pub_x25519) {
+            int ret = ech_config_pub_x25519_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ech_config_file) {
             int ret = ech_config_file_test();
 

@@ -700,6 +700,8 @@ static const picoquic_test_def_t test_table[] = {
     { "ech_config", ech_config_test },
     { "ech_config_p", ech_config_p_test },
     { "ech_config_secp384r1", ech_config_secp384r1_test },
+    { "ech_config_pub_secp384r1", ech_config_pub_secp384r1_test },
+    { "ech_config_pub_x25519", ech_config_pub_x25519_test },
     { "ech_config_file", ech_config_file_test },
     { "ech_e2e", ech_e2e_test },
     { "ech_e2e_0rtt", ech_e2e_0rtt_test },

@@ -647,6 +647,8 @@ int dualq_aqm_test(void);
 int ech_config_test(void);
 int ech_config_p_test(void);
 int ech_config_secp384r1_test(void);
+int ech_config_pub_secp384r1_test(void);
+int ech_config_pub_x25519_test(void);
 int ech_config_file_test(void);
 int ech_e2e_test(void);
 int ech_e2e_0rtt_test(void);

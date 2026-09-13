@@ -199,6 +199,88 @@ int ech_config_secp384r1_test(void)
     return ret;
 }
 
+/* picoquic_ech_create_config_from_public_key (unlike _from_private_key) goes through
+ * picoquic_ech_parse_public_key, which reads the curve from the key's ASN.1 algorithm
+ * OID rather than deriving it from the raw key length -- its secp384r1 and x25519
+ * branches were never exercised, only the default secp256r1 one. */
+#define ECH_CONFIG_PUB_SECP384R1_KEY "certs" PICOQUIC_FILE_SEPARATOR "secp384r1" PICOQUIC_FILE_SEPARATOR "pub.pem"
+#define ECH_CONFIG_PUB_SECP384R1_REF "certs" PICOQUIC_FILE_SEPARATOR "ech" PICOQUIC_FILE_SEPARATOR "ech_config_pub_secp384r1.txt"
+#define ECH_CONFIG_PUB_SECP384R1_TXT "ech_config_pub_secp384r1_test.txt"
+
+int ech_config_pub_secp384r1_test(void)
+{
+    int ret = 0;
+    char test_server_pub_key_file[512];
+    const char* public_name = "test.example.com";
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_pub_key_file, sizeof(test_server_pub_key_file), picoquic_solution_dir,
+        ECH_CONFIG_PUB_SECP384R1_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", ECH_CONFIG_PUB_SECP384R1_KEY);
+    }
+    else if ((ret = picoquic_ech_create_config_from_public_key(&config, &config_len, test_server_pub_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_PUB_SECP384R1_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(config, config_len, ECH_CONFIG_PUB_SECP384R1_REF);
+        }
+    }
+
+    if (config != NULL) {
+        free(config);
+    }
+
+    return ret;
+}
+
+#define ECH_CONFIG_PUB_X25519_KEY "certs" PICOQUIC_FILE_SEPARATOR "ech" PICOQUIC_FILE_SEPARATOR "public_x25519.pem"
+#define ECH_CONFIG_PUB_X25519_REF "certs" PICOQUIC_FILE_SEPARATOR "ech" PICOQUIC_FILE_SEPARATOR "ech_config_pub_x25519.txt"
+#define ECH_CONFIG_PUB_X25519_TXT "ech_config_pub_x25519_test.txt"
+
+int ech_config_pub_x25519_test(void)
+{
+    int ret = 0;
+    char test_server_pub_key_file[512];
+    const char* public_name = "test.example.com";
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_pub_key_file, sizeof(test_server_pub_key_file), picoquic_solution_dir,
+        ECH_CONFIG_PUB_X25519_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", ECH_CONFIG_PUB_X25519_KEY);
+    }
+    else if ((ret = picoquic_ech_create_config_from_public_key(&config, &config_len, test_server_pub_key_file, public_name)) != 0) {
+        DBG_PRINTF("Cannot create ECH record from <%s>, err: %d (0x%x)", test_server_pub_key_file, ret, ret);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_ech_save_config(config, config_len, ECH_CONFIG_PUB_X25519_TXT);
+        if (ret == 0) {
+            ret = ech_test_check_buf(config, config_len, ECH_CONFIG_PUB_X25519_REF);
+        }
+    }
+
+    if (config != NULL) {
+        free(config);
+    }
+
+    return ret;
+}
+
 #define ECH_CONFIG_FROM_FILE_TXT "ech_config_from_file_test.txt"
 
 /* picoquic_ech_create_config_file combines picoquic_ech_create_config_from_private_key
