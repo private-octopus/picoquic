@@ -205,6 +205,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_multipath_settled", quicperf_multipath_settled_test },
     { "perf_loopback", perf_loopback_test },
     { "perf_loopback_loss", perf_loopback_loss_test },
+    { "perf_loopback_multistream", perf_loopback_multistream_test },
+    { "perf_loopback_multiconn", perf_loopback_multiconn_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
     { "cc_compete_c4c4", cc_compete_c4c4_test },
