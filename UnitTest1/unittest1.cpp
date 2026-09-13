@@ -486,6 +486,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(binlog_compare_mismatch)
+        {
+            int ret = binlog_compare_mismatch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_frames)
         {
             int ret = qlog_frames_test();

@@ -624,7 +624,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
     if (len < 4) {
         bytes = NULL;
     } else {
-        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[4]);
+        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[3]);
         bytes += 4;
     }
     if (bytes != NULL) {

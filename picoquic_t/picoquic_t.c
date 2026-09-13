@@ -176,6 +176,7 @@ static const picoquic_test_def_t test_table[] = {
     { "signal_stream_reset", signal_stream_reset_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
+    { "binlog_compare_mismatch", binlog_compare_mismatch_test },
     { "qlog_frames", qlog_frames_test },
     { "app_message_overflow", app_message_overflow_test },
     { "TlsStreamFrame", TlsStreamFrameTest },

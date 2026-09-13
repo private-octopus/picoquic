@@ -137,3 +137,6 @@
 0b0c0d0e0f101112: Sending 55 bytes to 1.1.1.1:443 at T=12.345000 (8182bbd)
 123456789abcdef0: Sending 1234 bytes to [2020:0:0:0:0:0:0:ffff]:12345 at T=135.801789 (8182bbd)
 123456789abcdef0: Receiving 55 bytes from 34.34.34.34:12345 at T=135.801789 (8182bbd)
+0b0c0d0e0f101112: T= 0.000000, Keys unavailable, buffered packet type 2.
+0b0c0d0e0f101112: T= 0.000000, Lost packet type 6, path 0, number 42, size 123, DCID <0b0c0d0e0f101112>, reason: test_trigger
+0b0c0d0e0f101112: Context free app message test #1.

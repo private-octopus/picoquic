@@ -2618,7 +2618,7 @@ static int picoquic_compare_binary_files(char const* fname1, char const* fname2,
         size_t len2 = fread(buffer2, 1, sizeof(buffer2), f2);
 
         if (ret == 0 && len1 != len2) {
-            DBG_PRINTF("Length %s=%z, %s=%z", fname1, len1, fname2, len2);
+            DBG_PRINTF("Length %s=%zu, %s=%zu", fname1, len1, fname2, len2);
             ret = -1;
         }
         if (ret == 0 && memcmp(buffer1, buffer2, len1) != 0) {
@@ -2662,6 +2662,58 @@ int picoquic_test_compare_text_files(char const* fname1, char const* fname2)
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2)
 {
     return picoquic_test_compare_files(fname1, fname2, "rb", picoquic_compare_binary_files);
+}
+
+/* picoquic_compare_binary_files used an invalid "%z" printf conversion (a length modifier
+ * with no type character) to report a length mismatch, which crashed instead of reporting
+ * a clean failure. Verify both a length mismatch and a same-length content mismatch are
+ * now reported correctly. */
+int binlog_compare_mismatch_test(void)
+{
+    int ret = 0;
+    static char const* file_a = "binlog_compare_mismatch_a.bin";
+    static char const* file_b = "binlog_compare_mismatch_b.bin";
+    uint8_t data_16[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    uint8_t data_16_diff[16] = { 0xff, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    uint8_t data_8[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    FILE* F;
+
+    if ((F = picoquic_file_open(file_a, "wb")) == NULL || fwrite(data_16, 1, sizeof(data_16), F) != sizeof(data_16)) {
+        ret = -1;
+    }
+    if (F != NULL) {
+        (void)picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        /* Different length: must be reported as a mismatch, not crash. */
+        if ((F = picoquic_file_open(file_b, "wb")) == NULL || fwrite(data_8, 1, sizeof(data_8), F) != sizeof(data_8)) {
+            ret = -1;
+        }
+        if (F != NULL) {
+            (void)picoquic_file_close(F);
+        }
+        if (ret == 0 && picoquic_test_compare_binary_files(file_a, file_b) == 0) {
+            DBG_PRINTF("%s", "Files of different length should not compare equal.\n");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Same length, different content: must also be reported as a mismatch. */
+        if ((F = picoquic_file_open(file_b, "wb")) == NULL || fwrite(data_16_diff, 1, sizeof(data_16_diff), F) != sizeof(data_16_diff)) {
+            ret = -1;
+        }
+        if (F != NULL) {
+            (void)picoquic_file_close(F);
+        }
+        if (ret == 0 && picoquic_test_compare_binary_files(file_a, file_b) == 0) {
+            DBG_PRINTF("%s", "Files with different content should not compare equal.\n");
+            ret = -1;
+        }
+    }
+
+    return ret;
 }
 
 uint64_t picoquic_sum_text_file(char const* fname)
@@ -2891,6 +2943,15 @@ int logger_test(void)
         fprintf(F_log, "\n");
         logger_test_packets(cnx);
         logger_test_pdus(quic, cnx);
+
+        /* Exercise buffered-packet, packet-lost, quic-level app-message, and flush
+         * logging, which were previously never called by any test. */
+        picoquic_log_buffered_packet(cnx, cnx->path[0], picoquic_packet_initial, simulated_time);
+        picoquic_log_packet_lost(cnx, cnx->path[0], picoquic_packet_1rtt_protected, 42,
+            "test_trigger", (picoquic_connection_id_t*)&logger_test_cid, 123, simulated_time);
+        picoquic_log_context_free_app_message(quic, &logger_test_cid,
+            "Context free app message test #%d.", 1);
+        picoquic_log_flush(cnx);
 
         (void)picoquic_file_close(F_log);
         /* Manually remove the reference to the text log in the QUIC context

@@ -121,6 +121,7 @@ int skip_frame_test(void);
 int keep_alive_test(void);
 int logger_test(void);
 int binlog_test(void);
+int binlog_compare_mismatch_test(void);
 int qlog_frames_test(void);
 int app_message_overflow_test(void);
 int socket_test(void);
