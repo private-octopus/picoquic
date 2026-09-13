@@ -588,8 +588,15 @@ int picoquic_registered_token_check_reuse(picoquic_quic_t * quic,
                 DBG_PRINTF("Token reuse detected, count=%d", rt->count);
             }
             else {
-                (void)picosplay_insert(&quic->token_reuse_tree, rt);
-                ret = 0;
+                /* Set an arbitrary limit to size of token tree to avoid infinite growth. */
+                if ((size_t)quic->token_reuse_tree.size < quic->max_number_connections*32) {
+                    (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                    ret = 0;
+                }
+                else {
+                    /* If the reuse store is full, consider the token as invalid. */
+                    free(rt);
+                }
             }
         }
     }
@@ -1176,6 +1183,11 @@ int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
     PICOQUIC_THREAD_CHECK(quic);
     picoquic_dispose_verify_certificate_callback(quic);
+}
+
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict) {
+    PICOQUIC_THREAD_CHECK(quic);
+    quic->is_cert_verification_strict = (is_strict != 0);
 }
 
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
@@ -1948,6 +1960,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
 
                 /* Set the challenge used for this path */
                 picoquic_set_path_challenge(cnx, cnx->nb_paths - 1, start_time);
+            }
+            else {
+                /* Tuple creation failed: path_x was never recorded in cnx->path, so it must be freed here. */
+                free(path_x);
             }
         }
     }
@@ -3909,13 +3925,6 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             }
 
             cnx->cnx_state = picoquic_state_client_init;
-
-            if (!quic->is_cert_store_not_empty) {
-                /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
-                picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
-
-                picoquic_set_null_verifier(quic);
-            }
         } else {
             cnx->is_half_open = 1;
             cnx->quic->current_number_half_open += 1;
@@ -4099,6 +4108,18 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
         cnx->tls_stream[0].send_queue != NULL) {
         DBG_PRINTF("%s", "picoquic_start_client_cnx called twice.");
         return -1;
+    }
+
+    if (!cnx->quic->is_cert_store_not_empty) {
+        if (cnx->quic->is_cert_verification_strict) {
+            picoquic_log_app_message(cnx, "No root crt list specified, and strict verification was requested -- refusing connection.\n");
+            return -1;
+        }
+        else {
+            /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
+            picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
+            picoquic_set_null_verifier(cnx->quic);
+        }
     }
 
     picoquic_log_new_connection(cnx);

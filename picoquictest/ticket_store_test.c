@@ -43,21 +43,24 @@ static picoquic_tp_t test_tp = {
         0 /* is scone supported */
 };
 
+/* Mirrors the wire layout picotls's client_handle_new_session_ticket hands to the save-ticket callback: 8B issued time, 2B key share ID, 2B cipher suite ID, 3B body length, then the NewSessionTicket body starting with its 4B ticket_lifetime. */
 static int create_test_ticket(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
 {
     int ret = 0;
-    if (len < 35) {
+    if (len < 37) {
         ret = -1;
     } else {
-        uint16_t t_length = len - 31;
+        uint32_t t_length = (uint32_t)len - 15;
         picoformat_64(buf, current_time);
         buf[8] = 0;
         buf[9] = 1;
         buf[10] = 0;
-        buf[11] = (uint8_t)(t_length >> 8);
-        buf[12] = (uint8_t)(t_length & 0xFF);
-        picoformat_32(buf + 13, ttl);
-        memset(buf + 17, 0xcc, len - 17);
+        buf[11] = 1;
+        buf[12] = (uint8_t)(t_length >> 16);
+        buf[13] = (uint8_t)(t_length >> 8);
+        buf[14] = (uint8_t)(t_length & 0xFF);
+        picoformat_32(buf + 15, ttl);
+        memset(buf + 19, 0xcc, len - 19);
         buf[len - 18] = 0;
         buf[len - 17] = 16;
     }
@@ -537,6 +540,67 @@ int token_reuse_api_test(void)
                 token_reuse_api_cases[0].token, l,
                 token_reuse_api_cases[0].expiry_date) == 0) {
                 DBG_PRINTF("Token[1] length %z accepted?", l);
+                ret = -1;
+            }
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* Check that token_reuse_tree cannot grow without bound: past the cap, registering a new, distinct token must not grow the tree further. */
+int token_reuse_cap_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(4, NULL, NULL, NULL, "test", NULL, NULL, NULL, NULL,
+        NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        const size_t token_reuse_cap = ((size_t)quic->max_number_connections) * 32;
+        const size_t nb_tokens = token_reuse_cap + 64;
+        uint8_t token[12] = { 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+        /* Register more distinct tokens than the cap allows -- none of them is a reuse. */
+        for (size_t i = 0; ret == 0 && i < nb_tokens; i++) {
+            picoformat_64(token + 4, (uint64_t)i);
+            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)i) != 0 &&
+                (size_t)quic->token_reuse_tree.size < token_reuse_cap) {
+                DBG_PRINTF("Token[%z] unexpectedly flagged as reused", i);
+                ret = -1;
+            }
+        }
+
+        /* The tree must have stopped growing at the cap, not at nb_tokens. */
+        if (ret == 0 && (size_t)quic->token_reuse_tree.size != token_reuse_cap) {
+            DBG_PRINTF("token_reuse_tree size is %d, expected %z", quic->token_reuse_tree.size, token_reuse_cap);
+            ret = -1;
+        }
+
+        /* After time elapses past every registered token's expiry, clearing must empty the tree again. */
+        if (ret == 0) {
+            picoquic_registered_token_clear(quic, (uint64_t)nb_tokens);
+            if (quic->token_reuse_tree.size != 0) {
+                DBG_PRINTF("token_reuse_tree size is %d after clear, expected 0", quic->token_reuse_tree.size);
+                ret = -1;
+            }
+        }
+
+        /* A new, distinct token must then be accepted and actually retained, showing the cap is not stuck permanently full. */
+        if (ret == 0) {
+            picoformat_64(token + 4, (uint64_t)nb_tokens);
+            if (picoquic_registered_token_check_reuse(quic, token, sizeof(token), (uint64_t)nb_tokens) != 0) {
+                DBG_PRINTF("%s", "New token unexpectedly flagged as reused after clear");
+                ret = -1;
+            }
+            else if (quic->token_reuse_tree.size != 1) {
+                DBG_PRINTF("token_reuse_tree size is %d after post-clear insert, expected 1", quic->token_reuse_tree.size);
                 ret = -1;
             }
         }

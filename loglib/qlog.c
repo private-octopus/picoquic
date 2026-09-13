@@ -29,6 +29,7 @@
 #include "bytestream.h"
 #include "logreader.h"
 #include "logconvert.h"
+#include "picoquic_qlog_fns.h"
 
 typedef struct qlog_context_st {
 
@@ -90,23 +91,12 @@ int qlog_string(FILE* f, bytestream* s, uint64_t l)
 
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
 {
-    uint64_t x;
     int error_found = (s->ptr + (size_t)l > s->size);
+    size_t actual_len = error_found ? (s->size - s->ptr) : (size_t)l;
 
     fprintf(f, "\"");
-
-    for (x = 0; x < l && s->ptr < s->size; x++) {
-        int c = s->data[s->ptr++];
-        if (c == '"' || c == '\\') {
-            fprintf(f, "\\%c", c);
-        }
-        else if (c >= ' ' && c < 127) {
-            fprintf(f, "%c", c);
-        }
-        else {
-            fprintf(f, "\\%02x", c);
-        }
-    }
+    qlog_fns_char_content(f, s->data + s->ptr, actual_len);
+    s->ptr += actual_len;
 
     if (error_found) {
         fprintf(f, "... coding error!");

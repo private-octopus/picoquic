@@ -3748,7 +3748,7 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                         break;
                     case picoquic_frame_type_observed_address_v4:
                     case picoquic_frame_type_observed_address_v6:
-                        ret = picoquic_process_ack_of_observed_address_frame(p->send_path, &p->bytes[byte_index], p->length - byte_index, ftype, &frame_length);
+                        ret = picoquic_process_ack_of_observed_address_frame(p->send_path, &p->bytes[byte_index], p->length - byte_index, ftype, l_ftype, &frame_length);
                         byte_index += frame_length;
                         break;
                     default:
@@ -6375,18 +6375,21 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
 }
 
 int picoquic_process_ack_of_observed_address_frame(picoquic_path_t * path_x, const uint8_t* bytes,
-    size_t bytes_max, uint64_t ftype, size_t* consumed)
+    size_t bytes_max, uint64_t ftype, size_t l_ftype, size_t* consumed)
 {
     int ret = 0;
-    const uint8_t* bytes_next = picoquic_skip_observed_address_frame(bytes, bytes + bytes_max, ftype);
+    const uint8_t* bytes_next = picoquic_skip_observed_address_frame(bytes + l_ftype, bytes + bytes_max, ftype);
 
     if (bytes_next == NULL) {
         ret = -1;
     }
     else {
         /* TODO: tie this to a specific address and port */
-        path_x->observed_addr_acked = 1;
-        *consumed = bytes_next - bytes;
+        if (path_x != NULL) {
+            /* The path may already be gone if it was deleted before this ack was processed; the frame is still consumed either way. */
+            path_x->observed_addr_acked = 1;
+        }
+        *consumed = (bytes_next - bytes);
     }
 
     return ret;

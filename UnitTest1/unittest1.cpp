@@ -132,6 +132,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(is_path_sane)
+        {
+            int ret = util_is_path_sane_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(random_tester)
         {
             int ret = random_tester_test();
@@ -247,6 +254,13 @@ namespace UnitTest1
         TEST_METHOD(sockloop_thread_name)
         {
             int ret = sockloop_thread_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_thread_null_callback)
+        {
+            int ret = sockloop_thread_null_callback_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -398,6 +412,13 @@ namespace UnitTest1
         TEST_METHOD(reset_stream_at_needs_repeat)
         {
             int ret = reset_stream_at_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(observed_address_ack_after_path_deleted)
+        {
+            int ret = observed_address_ack_after_path_deleted_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1286,6 +1307,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(token_reuse_cap)
+        {
+            int ret = token_reuse_cap_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_session_resume)
         {
             int ret = session_resume_test();
@@ -1590,6 +1618,13 @@ namespace UnitTest1
         TEST_METHOD(client_cert_callback)
         {
             int ret = set_verify_certificate_callback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(client_cert_verification_policy)
+        {
+            int ret = client_cert_verification_policy_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3851,12 +3886,6 @@ namespace UnitTest1
 
         TEST_METHOD(demo_error) {
             int ret = demo_error_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
-        TEST_METHOD(demo_file_sanitize) {
-            int ret = demo_file_sanitize_test();
 
             Assert::AreEqual(ret, 0);
         }

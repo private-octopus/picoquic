@@ -2749,7 +2749,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     &qmux_socket_was_closed, current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_wake_up:
-                ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
+                if (loop_callback != NULL) {
+                    ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
+                }
                 break;
             case picoquic_packet_loop_action_udp_received:
                 ret = picoquic_packet_loop_udp_received(quic, &last_cnx,
@@ -3138,42 +3140,50 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread_qmux(picoqui
     picoquic_custom_thread_setname_fn thread_setname_fn, char const* thread_name,
     picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
 {
-    picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
     *ret = 0;
 
-    if (thread_ctx == NULL) {
-        /* Error, no memory */
+    if (loop_callback == NULL) {
+        /* The wake up action calls loop_callback unconditionally; refuse to start a thread without one. */
+        *ret = -1;
     }
     else {
-        memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
-        /* Set the thread context in the quic context */
-        quic->v_thread_ctx = thread_ctx;
-        /* Fill the arguments in the context */
-        thread_ctx->quic = quic;
-        thread_ctx->qmux = qmux;
-        thread_ctx->param = param;
-        thread_ctx->loop_callback = loop_callback;
-        thread_ctx->loop_callback_ctx = loop_callback_ctx;
-        /* Open the wake up pipe or event */
-        picoquic_open_network_wake_up(thread_ctx, ret);
-        /* Start thread at specified entry point */
-        if (thread_ctx->wake_up_defined){
-            thread_ctx->is_threaded = 1;
-            if (thread_create_fn == NULL) {
-                thread_create_fn = picoquic_internal_thread_create;
-            }
-            if ((thread_ctx->thread_setname_fn = thread_setname_fn) == NULL) {
-                thread_ctx->thread_setname_fn = picoquic_internal_thread_setname;
-            }
-            if ((thread_ctx->thread_delete_fn = thread_delete_fn) == NULL) {
-                thread_ctx->thread_delete_fn = picoquic_internal_thread_delete;
-            }
-            thread_ctx->thread_name = thread_name;
-            if ((*ret = thread_create_fn((void **)&thread_ctx->pthread, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
-                /* Free the context and return error condition if something went wrong */
-                thread_ctx->is_threaded = 0;
-                picoquic_delete_network_thread(thread_ctx);
-                thread_ctx = NULL;
+        thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
+
+        if (thread_ctx == NULL) {
+            /* Error, no memory */
+        }
+        else {
+            memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
+            /* Set the thread context in the quic context */
+            quic->v_thread_ctx = thread_ctx;
+            /* Fill the arguments in the context */
+            thread_ctx->quic = quic;
+            thread_ctx->qmux = qmux;
+            thread_ctx->param = param;
+            thread_ctx->loop_callback = loop_callback;
+            thread_ctx->loop_callback_ctx = loop_callback_ctx;
+            /* Open the wake up pipe or event */
+            picoquic_open_network_wake_up(thread_ctx, ret);
+            /* Start thread at specified entry point */
+            if (thread_ctx->wake_up_defined){
+                thread_ctx->is_threaded = 1;
+                if (thread_create_fn == NULL) {
+                    thread_create_fn = picoquic_internal_thread_create;
+                }
+                if ((thread_ctx->thread_setname_fn = thread_setname_fn) == NULL) {
+                    thread_ctx->thread_setname_fn = picoquic_internal_thread_setname;
+                }
+                if ((thread_ctx->thread_delete_fn = thread_delete_fn) == NULL) {
+                    thread_ctx->thread_delete_fn = picoquic_internal_thread_delete;
+                }
+                thread_ctx->thread_name = thread_name;
+                if ((*ret = thread_create_fn((void **)&thread_ctx->pthread, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
+                    /* Free the context and return error condition if something went wrong */
+                    thread_ctx->is_threaded = 0;
+                    picoquic_delete_network_thread(thread_ctx);
+                    thread_ctx = NULL;
+                }
             }
         }
     }

@@ -255,11 +255,14 @@ void* picoquic_packet_loop_v3(void* v_ctx);
 #endif
 
 /* Threaded version of packet loop, when running picoquic in a background thread.
-* 
+*
 * Thread is started by calling picoquic_start_network_thread, which
 * returns an argument of type picoquic_network_thread_ctx_t. Returns a NULL
-* pointer if the thread could not be created.
-* 
+* pointer if the thread could not be created, including if loop_callback is
+* NULL: unlike the non-threaded picoquic_packet_loop_v3, this API requires a
+* non-NULL loop_callback, because the wake up mechanism below calls it
+* unconditionally.
+*
 * If the application needs to post new data or otherwise interact with
 * the quic connections, it should call picoquic_wake_up_network_thread,
 * passing the thread context as an argument. This will trigger a

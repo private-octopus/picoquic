@@ -47,8 +47,8 @@
 typedef struct st_scone_aqm_state_t {
 struct st_picoquictest_aqm_t super;
     int first_seen;
+    int short_header_seen;
     int indicator_first;
-    int indicator_after;
     int nb_advices;
     int nb_seen;
     int do_loss;
@@ -61,18 +61,30 @@ void scone_aqm_submit(picoquictest_aqm_t* self, picoquictest_sim_link_t* link,
     scone_aqm_state_t* scone_aqm_state = (scone_aqm_state_t*)self;
     int should_drop = 0;
 
-    if (packet->length > 2 &&
-        packet->bytes[packet->length - 2] == ((SCONE_INDICATOR >> 8) & 0xff) &&
-        packet->bytes[packet->length - 1] == (SCONE_INDICATOR & 0xff)) {
-        if (scone_aqm_state->first_seen) {
-            scone_aqm_state->indicator_after += 1;
+    /* We want to test whether the client sent a SCONE indication. This
+    * indication may be sent in the first packet, and it may be repeated in any
+    * of the long header packets in the client's first flight, including for
+    * example 0RTT packets. It should probably not be set in the following
+    * "handshake" packets, but the last bits of an AEAD checksum may occasionally
+    * create a false positive.
+    * 
+    * We will mark the checksum as seen if the first packet is a long header packet,
+    * and it contains the SCONE indication. We will ignore occurence of the
+    * scone header in the consecutive long header packets.
+     */
+    if (packet->length > 2 && (packet->bytes[0] & 0x80) != 0){
+        if (packet->bytes[packet->length - 2] == ((SCONE_INDICATOR >> 8) & 0xff) &&
+            packet->bytes[packet->length - 1] == (SCONE_INDICATOR & 0xff)) {
+            if (!scone_aqm_state->first_seen) {
+                scone_aqm_state->indicator_first = 1;
+            }
+            scone_aqm_state->first_seen = 1;
+            should_drop = scone_aqm_state->do_loss;
         }
-        else {
-            scone_aqm_state->indicator_first = 1;
-        }
-        should_drop = scone_aqm_state->do_loss;
     }
-    scone_aqm_state->first_seen = 1;
+    else if ((packet->bytes[0] & 0x80) == 0) {
+        scone_aqm_state->short_header_seen = 1;
+    }
 
     if (packet->length > 5 &&
         (packet->bytes[0] & 0x80) != 0 &&
@@ -235,8 +247,7 @@ int scone_e2e_test_one(uint8_t test_id, scone_e2e_test_t * spec)
                 if (test_ctx->cnx_server->remote_parameters.is_scone_supported) {
                     ret = -1;
                 }
-                else if (scone_aqm_client->indicator_first ||
-                    scone_aqm_client->indicator_after) {
+                else if (scone_aqm_client->indicator_first) {
                     ret = -1;
                 }
             }
