@@ -232,6 +232,26 @@ const struct sockaddr* picoquic_packet_loop_local_addr_for_af(const picoquic_pac
  * wildcard address leave local_addr untouched. */
 void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, struct sockaddr_storage* local_addr);
 
+/* Send one datagram, or a GSO batch of datagrams of send_msg_size bytes, and
+ * handle send errors: an error implying that the destination is unreachable
+ * is reported to last_cnx, and on EIO the batch is resent packet by packet
+ * and GSO is disabled for the rest of the loop by clearing *send_msg_ptr and
+ * the segment size it points to. send_msg_ptr may be NULL. */
+int picoquic_packet_loop_do_udp_send(
+    picoquic_quic_t* quic,
+    picoquic_cnx_t* last_cnx,
+    SOCKET_TYPE send_socket,
+    picoquic_packet_loop_param_t* param,
+    uint8_t* send_buffer,
+    size_t send_length,
+    struct sockaddr_storage* peer_addr,
+    struct sockaddr_storage* local_addr,
+    int if_index,
+    size_t send_msg_size,
+    size_t** send_msg_ptr,
+    picoquic_connection_id_t* log_cid,
+    uint64_t current_time);
+
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
     picoquic_packet_loop_cb_fn loop_callback,
