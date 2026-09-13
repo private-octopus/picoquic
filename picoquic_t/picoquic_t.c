@@ -132,6 +132,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_eio", sockloop_eio_test },
     { "sockloop_errsock", sockloop_errsock_test },
     { "sockloop_ipv4", sockloop_ipv4_test },
+    { "sockloop_send_err", sockloop_send_err_test },
     { "sockloop_bind_addr", sockloop_bind_addr_test },
     { "sockloop_migration", sockloop_migration_test },
     { "sockloop_nat", sockloop_nat_test },
