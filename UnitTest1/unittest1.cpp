@@ -209,6 +209,41 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_send_source)
+        {
+            int ret = sockloop_send_source_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_delete_thread_allocated_param)
+        {
+            int ret = sockloop_delete_thread_allocated_param_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_server_set_context)
+        {
+            int ret = sockloop_server_set_context_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_start_server_threads)
+        {
+            int ret = sockloop_start_server_threads_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_system_call_duration)
+        {
+            int ret = sockloop_system_call_duration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_thread)
         {
             int ret = sockloop_thread_test();
@@ -240,6 +275,18 @@ namespace UnitTest1
         TEST_METHOD(sockloop_qmux_badp)
         {
             int ret = sockloop_qmux_badp_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_qmux_cnx_sockets_limit)
+        {
+            int ret = sockloop_qmux_cnx_sockets_limit_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_qmux_close)
+        {
+            int ret = sockloop_qmux_close_test();
             Assert::AreEqual(ret, 0);
         }
 
@@ -355,6 +402,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(frames_ackof_error)
+        {
+            int ret = frames_ackof_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_stream_at_needs_repeat)
+        {
+            int ret = reset_stream_at_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(observed_address_ack_after_path_deleted)
         {
             int ret = observed_address_ack_after_path_deleted_test();
@@ -362,9 +423,72 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(process_ack_of_reset_stream_at)
+        {
+            int ret = process_ack_of_reset_stream_at_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stop_sending_needs_repeat)
+        {
+            int ret = stop_sending_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_invalid_id)
+        {
+            int ret = stream_invalid_id_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_never_called_apis)
+        {
+            int ret = stream_never_called_apis_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(queue_multipath_blocked_frames)
+        {
+            int ret = queue_multipath_blocked_frames_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(skip_immediate_ack_frame)
+        {
+            int ret = skip_immediate_ack_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_never_called_apis)
+        {
+            int ret = quicctx_never_called_apis_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(frames_format)
         {
             int ret = frames_format_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(flow_control_check_stream_offset)
+        {
+            int ret = flow_control_check_stream_offset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(signal_stream_reset)
+        {
+            int ret = signal_stream_reset_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -379,6 +503,13 @@ namespace UnitTest1
         TEST_METHOD(binlog)
         {
             int ret = binlog_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(binlog_compare_mismatch)
+        {
+            int ret = binlog_compare_mismatch_test();
 
             Assert::AreEqual(ret, 0);
         }

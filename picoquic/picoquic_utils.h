@@ -23,6 +23,7 @@
 #define PICOQUIC_UTILS_H
 
 #include <stdio.h>
+#include <string.h>
 #include <inttypes.h>
 #include "picoquic.h"
 
@@ -173,7 +174,25 @@ int picoquic_file_delete(char const* file_name, int* last_err);
 int picoquic_is_path_sane(const uint8_t* path, size_t path_length);
 
 /* Skip and decoding functions */
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t size);
+/* static inline: called on the packet-parse hot path, and must fold away to nothing when only its NULL-ness is checked */
+static inline const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
+{
+    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
+    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
+}
+/* Same bound check as picoquic_frames_fixed_skip, but for the encode side: copies size bytes from src if they fit */
+static inline uint8_t* picoquic_frames_fixed_copy(uint8_t* bytes, const uint8_t* bytes_max, const uint8_t* src, size_t size)
+{
+    uint8_t* next_bytes;
+    if (bytes == NULL || size > (size_t)(bytes_max - bytes)) {
+        next_bytes = NULL;
+    }
+    else {
+        memcpy(bytes, src, size);
+        next_bytes = bytes + size;
+    }
+    return next_bytes;
+}
 const uint8_t* picoquic_frames_varint_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_varint_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n64);
 const uint8_t* picoquic_frames_varlen_decode(const uint8_t * bytes, const uint8_t * bytes_max, size_t * n);

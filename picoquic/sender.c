@@ -1442,32 +1442,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     return ret;
 }
 
-/* Get packet type from epoch */
-picoquic_packet_type_enum picoquic_packet_type_from_epoch(int epoch)
-{
-    picoquic_packet_type_enum ptype;
-
-    switch (epoch) {
-    case 0:
-        ptype = picoquic_packet_initial;
-        break;
-    case 1:
-        ptype = picoquic_packet_0rtt_protected;
-        break;
-    case 2:
-        ptype = picoquic_packet_handshake;
-        break;
-    case 3:
-        ptype = picoquic_packet_1rtt_protected;
-        break;
-    default:
-        ptype = picoquic_packet_error;
-        break;
-    }
-
-    return ptype;
-}
-
 /* Prepare a required repetition or ack in a previous context */
 size_t picoquic_prepare_packet_old_context(picoquic_cnx_t* cnx, picoquic_packet_context_enum pc,
     picoquic_path_t* path_x, picoquic_packet_t* packet, size_t send_buffer_max, uint64_t current_time,
@@ -2368,7 +2342,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* On a server that does address validation, send a NEW TOKEN frame */
     if (!cnx->client_mode && (cnx->quic->check_token || cnx->quic->provide_token)) {
-        uint8_t token_buffer[256];
+        uint8_t token_buffer[PICOQUIC_NEW_TOKEN_MAX_LENGTH];
         size_t token_size;
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 

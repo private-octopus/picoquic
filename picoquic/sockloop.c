@@ -1239,15 +1239,14 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
             if (*nb_qmux_sockets < max_qmux_socket) {
                 struct sockaddr* dest =
                     (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr;
-                if ((sqmux_ctx[*nb_qmux_sockets] = 
+                if ((sqmux_ctx[*nb_qmux_sockets] =
                     picoquic_packet_loop_open_qmux_client_socket(dest, cnx)) == NULL) {
                     ret = -1;
                     break;
                 }
-
-                cnx = cnx->next_in_table;
                 (*nb_qmux_sockets) += 1;
             }
+            cnx = cnx->next_in_table;
         }
     }
     return ret;
@@ -2108,7 +2107,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
     }
     else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
-        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL ||
+        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, (struct sockaddr*)&addr_from)) == NULL ||
         (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
     }
@@ -3204,6 +3203,13 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
     return picoquic_start_custom_network_thread(quic, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
 }
 
+picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(picoquic_quic_t* quic,
+    picoquic_quic_t* qmux, picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx, int* ret)
+{
+    return picoquic_start_custom_network_thread_qmux(quic, qmux, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
+}
+
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 {
     int ret = 0;
@@ -3423,7 +3429,7 @@ int picoquic_start_server_threads(
         }
         else {
             memset(param, 0, sizeof(picoquic_packet_loop_param_t));
-            if (param->local_port != 0) {
+            if (config->local_port != 0) {
                 param->local_port = (uint16_t)(config->local_port + i);
             }
             param->public_port = config->server_port;

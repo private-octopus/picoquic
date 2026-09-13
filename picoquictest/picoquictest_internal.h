@@ -386,6 +386,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
+int picoquic_check_json_well_formed(char const* fname);
 
 uint64_t picoquic_sum_text_file(char const* fname);
 

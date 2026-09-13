@@ -221,7 +221,7 @@ void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
         s->size = s->ptr + (size_t)len;
         fprintf(f, "{ ");
         if ((len & 3) != 0 || len == 0) {
-            fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+            fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
         }
         else {
             fprintf(f, "\"chosen\": \"");

@@ -829,14 +829,8 @@ int picoquic_file_delete(char const * file_name, int * last_err)
 
  /* Skip and decode function.
   * These functions return NULL in case of a failure (insufficient buffer).
+  * picoquic_frames_fixed_skip lives in picoquic_utils.h (static inline).
   */
-
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
-{
-    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
-    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
-}
-
 
 const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {

@@ -147,4 +147,31 @@
     "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 4, "ip": "0102030405"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 28, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 29, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "unknown","unknown_type": 1073741823,"begins_with": "bfffffff0802048f"}]}]]}]}
+    "frame_type": "unknown","unknown_type": 1073741823,"begins_with": "bfffffff0802048f"}]}],
+[0, "transport", "datagram_received", { "byte_length": 1200, "addr_from" : { "ip_v6": "3030:3030:3030:3030:3030:3030:3030:3030", "port_v6" :20753}, "addr_to" : { "ip_v6": "3131:3131:3131:3131:3131:3131:3131:3131", "port_v6" :20753}}],
+[0, "recovery", "packet_lost", {
+    "packet_type" : "1RTT",
+    "packet_number" : 42,
+    "trigger": "test_trigger",
+    "header": {
+        "packet_type" : "1RTT",
+        "packet_number" : 42,
+        "dcid" : "01020304",
+        "packet_size" : 123}}],
+[0, "transport", "packet_dropped", {
+    "packet_type" : "initial",
+    "packet_size" : 227,
+    "trigger": "payload_decrypt_error"}],
+[0, "transport", "packet_buffered", {
+    "type" : "initial",
+    "trigger": "keys_unavailable"}],
+[0, "transport", "parameters_set", {
+    "owner": "local",
+    "alpn": "test-alpn"}],
+[0, "transport", "parameters_set", {
+    "owner": "local"}],
+[0, "recovery", "metrics_updated", {"cwnd": 15360}],
+[0, "transport", "packet_sent", { "packet_type": "version_negotiation", "header": { "packet_size": 8, "dcid": "01020304" },
+    "proposed_versions": ["00000001", "ff00001d"]}],
+[0, "transport", "packet_sent", { "packet_type": "retry", "header": { "packet_size": 8, "dcid": "01020304" },
+    "retry_token": "0102030405060708"}]]}]}

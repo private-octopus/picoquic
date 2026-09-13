@@ -423,6 +423,70 @@ int qlog_pref_vnego_test(FILE* F)
 	return ret;
 }
 
+#define QLOG_FNS_VNEGO_FILE "qlog_fns_tp_version_negotiation_test.txt"
+void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len);
+
+static int qlog_fns_vnego_check(const uint8_t* bytes, uint64_t len, char const* expected)
+{
+    int ret = 0;
+    char line[512];
+    FILE* F = picoquic_file_open(QLOG_FNS_VNEGO_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_tp_version_negotiation(F, bytes, len);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_check_json_well_formed(QLOG_FNS_VNEGO_FILE);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Version negotiation TP rendering is not well-formed JSON.");
+        }
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_VNEGO_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            char* line_read = fgets(line, sizeof(line), F);
+            if (line_read == NULL || strcmp(line_read, expected) != 0) {
+                DBG_PRINTF("Unexpected version negotiation TP rendering: %s", (line_read == NULL) ? "(empty)" : line_read);
+                ret = -1;
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
+/* Render the same version-negotiation TP bytes used by qlog_pref_vnego_test through the
+ * live-path sibling qlog_fns_tp_version_negotiation, checking both exact content and that
+ * the output is well-formed JSON -- qlog_fns_tp_version_negotiation used to omit its
+ * opening "{", and its "bad_length" branch used to leave a string unterminated. */
+int qlog_fns_vnego_test(void)
+{
+    int ret = qlog_fns_vnego_check(qlog_vnego_tp_input, sizeof(qlog_vnego_tp_input),
+        "{\"chosen\": \"00000002\", \"others\": [\"00000001\",\"01020304\",\"05060708\"]}");
+
+    if (ret == 0) {
+        /* Length not a multiple of 4: exercises the "bad_length" branch. */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 15, "{\"bad_length\": \"15\"}");
+    }
+
+    if (ret == 0) {
+        /* Zero length is also treated as "bad_length". */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 0, "{\"bad_length\": \"0\"}");
+    }
+
+    return ret;
+}
+
 uint8_t qlog_tp_extension_input[] = {
 	picoquic_tp_ack_delay_exponent, 1, 3,
 	picoquic_tp_server_preferred_address, 45,
@@ -518,8 +582,92 @@ int qlog_error_test(void)
 	}
 
 	if (ret == 0) {
+		ret = qlog_fns_vnego_test();
+	}
+
+	if (ret == 0) {
 		ret = qlog_json_escape_test();
 	}
 
 	return ret;
+}
+
+/* Minimal structural well-formedness check: balanced {}/[] and properly closed,
+ * properly escaped strings. Not a full RFC 8259 validator, but enough to catch the
+ * class of bug where a frame-rendering off-by-one corrupts the JSON structure --
+ * a text diff against a reference file would not catch that if the reference file was
+ * itself generated from already-broken output. */
+int picoquic_check_json_well_formed(char const* fname)
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open(fname, "r");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        int c;
+        int in_string = 0;
+        int is_escaped = 0;
+        size_t depth = 0;
+        char stack[256];
+        long line = 1;
+
+        while (ret == 0 && (c = fgetc(F)) != EOF) {
+            if (c == '\n') {
+                line++;
+            }
+            if (in_string) {
+                if (is_escaped) {
+                    is_escaped = 0;
+                }
+                else if (c == '\\') {
+                    is_escaped = 1;
+                }
+                else if (c == '"') {
+                    in_string = 0;
+                }
+                else if ((unsigned char)c < 0x20) {
+                    DBG_PRINTF("Unescaped control character 0x%02x in JSON string, %s line %ld", c, fname, line);
+                    ret = -1;
+                }
+            }
+            else if (c == '"') {
+                in_string = 1;
+            }
+            else if (c == '{' || c == '[') {
+                if (depth >= sizeof(stack)) {
+                    DBG_PRINTF("JSON nesting too deep in %s", fname);
+                    ret = -1;
+                }
+                else {
+                    stack[depth] = (char)c;
+                    depth++;
+                }
+            }
+            else if (c == '}' || c == ']') {
+                char expected = (c == '}') ? '{' : '[';
+                if (depth == 0 || stack[depth - 1] != expected) {
+                    DBG_PRINTF("Unbalanced JSON closer '%c' in %s, line %ld", c, fname, line);
+                    ret = -1;
+                }
+                else {
+                    depth--;
+                }
+            }
+        }
+
+        if (ret == 0 && in_string) {
+            DBG_PRINTF("JSON file %s ends inside an unterminated string", fname);
+            ret = -1;
+        }
+        if (ret == 0 && depth != 0) {
+            DBG_PRINTF("JSON file %s ends with %zu unclosed brace(s)/bracket(s)", fname, depth);
+            ret = -1;
+        }
+
+        (void)picoquic_file_close(F);
+    }
+
+    return ret;
 }
