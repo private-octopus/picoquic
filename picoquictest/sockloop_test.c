@@ -989,6 +989,19 @@ static int sockloop_bind_addr_refused(int local_af, int af0, int af1)
     return ret;
 }
 
+/* Without IP_PKTINFO (BSD), the source of an IPv4 packet sent on a bound
+ * socket is left unspecified, because IP_SENDSRCADDR is refused there. */
+static void sockloop_bind_addr_expected_source(struct sockaddr_storage* expected)
+{
+#ifndef IP_PKTINFO
+    if (expected->ss_family == AF_INET) {
+        memset(expected, 0, sizeof(struct sockaddr_storage));
+    }
+#else
+    (void)expected;
+#endif
+}
+
 /* Verify that the send path substitutes the bound address for whatever
  * local address the path proposes, keeps the port, fills in an unspecified
  * local address, and leaves sockets bound to the wildcard alone. */
@@ -1029,6 +1042,7 @@ static int sockloop_bind_addr_send_source(int af)
         picoquic_store_addr(&local_addr, (struct sockaddr*)&other);
         picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
         (void)sockloop_test_addr_config(&expected, af, 1234);
+        sockloop_bind_addr_expected_source(&expected);
         if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
             DBG_PRINTF("%s", "Bound address was not substituted for the path's local address");
             ret = -1;
@@ -1039,6 +1053,7 @@ static int sockloop_bind_addr_send_source(int af)
         memset(&local_addr, 0, sizeof(local_addr));
         picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
         (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
+        sockloop_bind_addr_expected_source(&expected);
         if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
             DBG_PRINTF("%s", "Unspecified local address was not filled from the bound address");
             ret = -1;
@@ -1194,6 +1209,15 @@ int sockloop_bind_addr_test(void)
         sockloop_test_spec_t spec;
         sockloop_test_set_spec(&spec, 11);
         spec.af = AF_INET;
+        spec.bind_loopback = 1;
+        spec.do_not_use_gso = 1;
+        ret = sockloop_test_one(&spec);
+    }
+    if (ret == 0) {
+        /* Full loop, server bound to ::1 only, client connecting to it. */
+        sockloop_test_spec_t spec;
+        sockloop_test_set_spec(&spec, 12);
+        spec.af = AF_INET6;
         spec.bind_loopback = 1;
         spec.do_not_use_gso = 1;
         ret = sockloop_test_one(&spec);

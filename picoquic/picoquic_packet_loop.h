@@ -229,7 +229,10 @@ const struct sockaddr* picoquic_packet_loop_local_addr_for_af(const picoquic_pac
  * address part of local_addr by that address, so the packet is sent from
  * the address the socket can receive on. The port of local_addr is kept if
  * it was set, otherwise the socket's port is used. Sockets bound to the
- * wildcard address leave local_addr untouched. */
+ * wildcard address leave local_addr untouched. On platforms without
+ * IP_PKTINFO (BSD), an IPv4 local_addr is cleared instead, because
+ * IP_SENDSRCADDR is refused on a bound socket; the kernel then uses the
+ * bound address. */
 void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, struct sockaddr_storage* local_addr);
 
 /* Send one datagram, or a GSO batch of datagrams of send_msg_size bytes, and
