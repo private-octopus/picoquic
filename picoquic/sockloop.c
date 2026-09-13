@@ -1239,15 +1239,14 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
             if (*nb_qmux_sockets < max_qmux_socket) {
                 struct sockaddr* dest =
                     (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr;
-                if ((sqmux_ctx[*nb_qmux_sockets] = 
+                if ((sqmux_ctx[*nb_qmux_sockets] =
                     picoquic_packet_loop_open_qmux_client_socket(dest, cnx)) == NULL) {
                     ret = -1;
                     break;
                 }
-
-                cnx = cnx->next_in_table;
                 (*nb_qmux_sockets) += 1;
             }
+            cnx = cnx->next_in_table;
         }
     }
     return ret;

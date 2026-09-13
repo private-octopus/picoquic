@@ -216,6 +216,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_server_set_context)
+        {
+            int ret = sockloop_server_set_context_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_start_server_threads)
+        {
+            int ret = sockloop_start_server_threads_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_system_call_duration)
+        {
+            int ret = sockloop_system_call_duration_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_thread)
         {
             int ret = sockloop_thread_test();
@@ -240,6 +261,12 @@ namespace UnitTest1
         TEST_METHOD(sockloop_qmux_badp)
         {
             int ret = sockloop_qmux_badp_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_qmux_cnx_sockets_limit)
+        {
+            int ret = sockloop_qmux_cnx_sockets_limit_test();
             Assert::AreEqual(ret, 0);
         }
 
