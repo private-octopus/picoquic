@@ -2404,7 +2404,7 @@ int picoquic_packet_loop_do_udp_send(
     struct sockaddr_storage* local_addr,
     int if_index,
     size_t send_msg_size,
-    size_t* send_msg_ptr,
+    size_t** send_msg_ptr,
     picoquic_connection_id_t* log_cid,
     uint64_t current_time)
 {
@@ -2443,7 +2443,7 @@ int picoquic_packet_loop_do_udp_send(
 
             if (picoquic_socket_error_implies_unreachable(sock_err)) {
                 picoquic_notify_destination_unreachable(last_cnx, current_time,
-                    (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
                     sock_err);
             }
             else if (sock_err == EIO) {
@@ -2478,9 +2478,12 @@ int picoquic_packet_loop_do_udp_send(
                     picoquic_log_app_message(last_cnx, "Retry of %zu bytes by chunks of %zu bytes succeeds.",
                         send_length, send_msg_size);
                 }
-                if (send_msg_ptr != NULL) {
-                    /* Make sure that we do not use GSO anymore in this run */
-                    send_msg_ptr = NULL;
+                if (send_msg_ptr != NULL && *send_msg_ptr != NULL) {
+                    /* Make sure that we do not use GSO anymore in this run: clear the
+                     * caller's segment size, and the pointer through which
+                     * picoquic_prepare_next_packet_ex would set it again. */
+                    **send_msg_ptr = 0;
+                    *send_msg_ptr = NULL;
                     picoquic_log_app_message(last_cnx, "%s", "UDP GSO was disabled");
                 }
             }
@@ -2906,7 +2909,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, send_socket, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index,
-                        send_msg_size, send_msg_ptr, &log_cid, current_time);
+                        send_msg_size, &send_msg_ptr, &log_cid, current_time);
                 }
                 else {
                     break;

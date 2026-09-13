@@ -693,6 +693,148 @@ int sockloop_ipv4_test(void)
     return(sockloop_test_one(&spec));
 }
 
+/* Verify that after EIO on a GSO batch, picoquic_packet_loop_do_udp_send
+ * resends the batch packet by packet and disables GSO for the caller, by
+ * clearing both the caller's segment size and its pointer to it. */
+static int sockloop_send_err_eio(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t current_time)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[2] = { 0 };
+    picoquic_cnx_t* cnx = test_ctx->cnx_client;
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    uint8_t buffer[3 * 1440] = { 0 };
+    size_t send_msg_size = 1440;
+    size_t* send_msg_ptr = &send_msg_size;
+
+    for (int i = 0; i < 2; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&peer_addr, AF_INET, 4433);
+    if (ret == 0) {
+        param.local_af = AF_INET;
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open IPv4 socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        param.simulate_eio = 1;
+        ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
+            buffer, sizeof(buffer), &peer_addr, &local_addr, 0, send_msg_size, &send_msg_ptr,
+            &cnx->initial_cnxid, current_time);
+        if (ret == 0 && param.simulate_eio != 0) {
+            DBG_PRINTF("%s", "EIO was not simulated");
+            ret = -1;
+        }
+        else if (ret == 0 && (send_msg_ptr != NULL || send_msg_size != 0)) {
+            DBG_PRINTF("GSO was not disabled after EIO, ptr %s, size %zu",
+                (send_msg_ptr == NULL) ? "cleared" : "kept", send_msg_size);
+            ret = -1;
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+/* Verify that a send error implying that the destination is unreachable is
+ * reported against the path whose peer address was used, which sets a path
+ * challenge on that path. The error is produced by sending to an IPv6
+ * address on an IPv4 socket, which most stacks refuse with EAFNOSUPPORT;
+ * if this platform reports another error, that check is skipped. */
+static int sockloop_send_err_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t current_time)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[2] = { 0 };
+    picoquic_cnx_t* cnx = test_ctx->cnx_client;
+    picoquic_tuple_t* tuple = cnx->path[0]->first_tuple;
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    uint8_t buffer[64] = { 0 };
+    int sock_ret = 0;
+    int sock_err = 0;
+
+    for (int i = 0; i < 2; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&peer_addr, AF_INET6, 4433);
+    if (ret == 0) {
+        param.local_af = AF_INET;
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open IPv4 socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        sock_ret = picoquic_sendmsg(s_ctx[0].fd, (struct sockaddr*)&peer_addr, NULL, 0,
+            (const char*)buffer, (int)sizeof(buffer), 0, &sock_err);
+        if (sock_ret > 0 || !picoquic_socket_error_implies_unreachable(sock_err)) {
+            DBG_PRINTF("IPv6 send on IPv4 socket returns %d, err=%d, skipping unreachable check",
+                sock_ret, sock_err);
+        }
+        else {
+            /* Make path 0 use the unreachable peer, with an unspecified local address */
+            picoquic_store_addr(&tuple->peer_addr, (struct sockaddr*)&peer_addr);
+            memset(&tuple->local_addr, 0, sizeof(tuple->local_addr));
+            tuple->challenge_required = 0;
+            tuple->challenge_verified = 1;
+            ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
+                buffer, sizeof(buffer), &peer_addr, &local_addr, 0, 0, NULL,
+                &cnx->initial_cnxid, current_time);
+            if (ret == 0 && (!tuple->challenge_required || tuple->challenge_verified)) {
+                DBG_PRINTF("%s", "Unreachable error was not reported against the path");
+                ret = -1;
+            }
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+int sockloop_send_err_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x5e, 0xe7, 0xe4, 4, 5, 6, 7, 8}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    /* The unreachable notification only acts on connections in the ready state */
+    for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->cnx_state != picoquic_state_ready; i++) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_ready) {
+        DBG_PRINTF("Client not ready, state %d", (int)test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = sockloop_send_err_eio(test_ctx, simulated_time);
+    }
+    if (ret == 0) {
+        ret = sockloop_send_err_unreachable(test_ctx, simulated_time);
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
 /* Compare the address part of two sockaddr, after aligning the port of the
  * expected address on the port reported by the socket. */
 static int picoquic_addr_set_port_and_compare(struct sockaddr_storage* expected, uint16_t port,
