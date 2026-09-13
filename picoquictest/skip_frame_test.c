@@ -3128,6 +3128,59 @@ void binlog_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx)
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);
 
+/* Exercise binlog/qlog event kinds that no earlier test ever produced: pdu, packet
+ * lost/dropped/buffered, alpn/param update, congestion control dump, and the
+ * version-negotiation/retry packet-payload rendering (a single opaque blob, unlike
+ * the TLV frame sequence of a regular packet). */
+static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connection_id_t* dcid, uint64_t current_time)
+{
+    struct sockaddr_in6 addr_peer;
+    struct sockaddr_in6 addr_local;
+    picoquic_packet_header ph;
+    static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
+    static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
+    static const uint8_t retry_token_bytes[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+    memset(&addr_peer, 0, sizeof(addr_peer));
+    addr_peer.sin6_family = AF_INET6;
+    addr_peer.sin6_port = htons(4433);
+    memset(&addr_peer.sin6_addr, 0x30, 16);
+    memset(&addr_local, 0, sizeof(addr_local));
+    addr_local.sin6_family = AF_INET6;
+    addr_local.sin6_port = htons(4433);
+    memset(&addr_local.sin6_addr, 0x31, 16);
+
+    picoquic_log_pdu(cnx, 1, current_time, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local, 1200, 0, 0);
+
+    picoquic_log_packet_lost(cnx, cnx->path[0], picoquic_packet_1rtt_protected, 42,
+        "test_trigger", (picoquic_connection_id_t*)dcid, 123, current_time);
+
+    memset(&ph, 0, sizeof(ph));
+    ph.ptype = picoquic_packet_initial;
+    ph.dest_cnx_id = *dcid;
+    picoquic_log_dropped_packet(cnx, cnx->path[0], &ph, 227, PICOQUIC_ERROR_AEAD_CHECK, NULL, current_time);
+
+    picoquic_log_buffered_packet(cnx, cnx->path[0], picoquic_packet_initial, current_time);
+
+    picoquic_log_negotiated_alpn(cnx, 1, NULL, 0, alpn_bytes, sizeof(alpn_bytes), NULL, 0);
+    picoquic_log_transport_extension(cnx, 1, 0, NULL);
+
+    cnx->path[0]->is_cc_data_updated = 1;
+    picoquic_log_cc_dump(cnx, current_time);
+
+    memset(&ph, 0, sizeof(ph));
+    ph.ptype = picoquic_packet_version_negotiation;
+    ph.dest_cnx_id = *dcid;
+    ph.payload_length = sizeof(vn_versions);
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, vn_versions, sizeof(vn_versions));
+
+    memset(&ph, 0, sizeof(ph));
+    ph.ptype = picoquic_packet_retry;
+    ph.dest_cnx_id = *dcid;
+    ph.payload_length = sizeof(retry_token_bytes);
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_token_bytes, sizeof(retry_token_bytes));
+}
+
 int binlog_test(void)
 {
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
@@ -3207,6 +3260,7 @@ int binlog_test(void)
 
                 binlog_packet((FILE*)cnx->log_ctx[0], &initial_cid, 0, 0, 0, &ph, test_frame_error_list[i].val, test_frame_error_list[i].len);
             }
+            binlog_test_extra_events(cnx, &initial_cid, simulated_time);
             picoquic_delete_cnx(cnx);
         }
     }
@@ -3228,11 +3282,20 @@ int binlog_test(void)
         if (ret != 0) {
             DBG_PRINTF("%s", "Cannot convert the binary log into QLOG.\n");
         } else {
+            /* A text diff against the reference file cannot catch a bug baked into the
+             * reference file itself (e.g. a frame-rendering off-by-one), so also check
+             * the generated file is structurally valid JSON. */
+            ret_qlog = picoquic_check_json_well_formed(qlog_test_file);
+            if (ret_qlog != 0) {
+                DBG_PRINTF("%s", "Generated QLOG file is not well-formed JSON.\n");
+            }
             /* When changing the reference QLOG file please verify the new file at:
                 https://qvis.edm.uhasselt.be/#/files */
-            ret_qlog = picoquic_test_compare_text_files(qlog_test_file, qlog_test_ref);
-            if (ret_qlog != 0) {
-                DBG_PRINTF("%s", "Unexpected content in QLOG log file.\n");
+            if (ret_qlog == 0) {
+                ret_qlog = picoquic_test_compare_text_files(qlog_test_file, qlog_test_ref);
+                if (ret_qlog != 0) {
+                    DBG_PRINTF("%s", "Unexpected content in QLOG log file.\n");
+                }
             }
         }
 
