@@ -14,7 +14,7 @@
     stream_data_blocked: 65536.
     streams_blocked_bidir: 256
     streams_blocked_unidir: 512
-    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
+    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf
     stop_sending: Stream 17 (0x11), Error 0x17.
     path_challenge: 0102030405060708
     path_response: 0102030405060708
@@ -37,7 +37,7 @@
     path_backup, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
     max_path_id, max_path_id: 17
-    path_retire_connection_id[1, 7]: 0x0102030405060708, a1a2a3a4a5a6a7a8a9aaabacadaeafb0
+    path_new_connection_id[1, 7]: 0x0102030405060708, a1a2a3a4a5a6a7a8a9aaabacadaeafb0
     path_retire_connection_id[0, 2]
     paths_blocked, max_path_id: 17
     path_cid_blocked, path_id: 7, next_sequence_number: 1
@@ -47,6 +47,38 @@
     path_ack (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351
     path_ack_ecn (nb=2), path=0, 4328719360-4328719365, 4328719358, 4328719339-4328719351, ect0=3, ect1=0, ce=1
     reset_stream_at, stream 17, error 0x00000001, offset 0x80, reliable size 0xd.
+    Malformed RESET STREAM, requires 4 bytes out of 3
+    Malformed MAX DATA, requires 1 bytes out of 8
+    Malformed MAX STREAM DATA, requires 2 bytes out of 5
+    Malformed max_streams_bidir, requires 3 bytes out of 2
+    Malformed max_streams_unidir, requires 3 bytes out of 2
+    Malformed data_blocked, requires 5 bytes out of 4
+    Malformed STREAM BLOCKED, requires 5 bytes out of 8
+    Malformed streams_blocked_bidir frame, requires 3 bytes out of 2
+    Malformed streams_blocked_unidir frame, requires 3 bytes out of 2
+    Malformed NEW CONNECTION ID, requires 28 bytes out of 27
+    Malformed STOP SENDING, requires more than 2 bytes
+    Malformed new_token, requires 19 bytes out of 18
+    stream 1, offset 0, length 15, fin = 0: a0a1a2a3a4a5a6a7...
+    Malformed crypto_hs frame.
+    Malformed RETIRE CONNECTION ID, requires 2 bytes out of 1
+    datagram, length: 15: a0a1a2a3a4a5a6a7...
+    Malformed datagram: 3110a0a1a2a3a4a5...
+    Malformed ack_frequency frame: 40af110a4420
+    Malformed ack_frequency frame: 40af110a442040
+    Malformed path_abandon frame: 7e7501
+    Malformed path_abandon frame: 7e7501
+    Malformed path_backup frame: 7e7600
+    Malformed path_available frame: 7e7700
+    Malformed max_path_id frame: 7e7a
+    Malformed PATH NEW CONNECTION ID, requires 30 bytes out of 29
+    Malformed PATH RETIRE CONNECTION ID, requires 4 bytes out of 3
+    Malformed paths_blocked frame: 7e7b
+    Malformed path_cid_blocked frame: 7e7c07
+    Malformed bdp_frame frame: 8000ebd901020304...
+    Malformed observed_address_v4 frame.
+    Malformed observed_address_v6 frame.
+    reset_stream_at, stream 17, error 0x00000001, offset 0x80, reliable size 0x0.
     reset_stream 17, Error 0x00000001, Offset 0x3fffffffffffffff.
     reset_stream 4611686018427387903, Error 0x00000001, Offset 0x1.
     Malformed RESET STREAM, requires 12 bytes out of 7
@@ -59,9 +91,9 @@
     max_streams_bidir: max rank 4611686018427387903.
     max_streams_unidir: max rank 4611686018427387903.
     Malformed NEW CONNECTION ID, requires 83 bytes out of 28
-    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 4611686018427387903
-    retire_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 8
-    retire_connection_id[7]: 0x, 01020304050607080900010203040506
+    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 4611686018427387903
+    new_connection_id[7]: 0x0102030405060708, a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, retire before: 8
+    new_connection_id[7]: 0x, 01020304050607080900010203040506
     new_token[8]: 0x090001a0a1a2a3a4
     Unknown frame, type: 631678888 (0xa5a6a7a8a9aaabac... + 3 bytes)
     stop_sending: Stream 19 (0x13), Error 0x17.

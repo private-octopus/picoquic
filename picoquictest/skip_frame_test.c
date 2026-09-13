@@ -2956,6 +2956,14 @@ int logger_test(void)
         for (size_t i = 0; i < nb_test_skip_list; i++) {
             picoquic_textlog_frames(F_log, 0, test_skip_list[i].val, test_skip_list[i].len);
         }
+        /* Also log a one-byte-short version of each good frame, to exercise the
+         * "ran out of bytes mid-parse" branch of each per-frame-type text log
+         * function -- same truncation idiom already used by frames_repeat_test. */
+        for (size_t i = 0; i < nb_test_skip_list; i++) {
+            if (test_skip_list[i].len > 1 && !test_skip_list[i].is_pure_ack) {
+                picoquic_textlog_frames(F_log, 0, test_skip_list[i].val, test_skip_list[i].len - 1);
+            }
+        }
         for (size_t i = 0; i < nb_test_frame_error_list; i++) {
             picoquic_textlog_frames(F_log, 0, test_frame_error_list[i].val, test_frame_error_list[i].len);
         }
@@ -3128,6 +3136,17 @@ void binlog_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ctx)
 void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_id, int receiving, uint64_t current_time,
     const picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max);
 
+/* picoquic_log_app_message_v takes a va_list directly and has no internal caller of its
+ * own -- picoquic_log_app_message (the variadic public entry point, already exercised
+ * elsewhere) builds the va_list itself and calls this. Give it one here too. */
+static void binlog_test_app_message_v(picoquic_cnx_t* cnx, const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    picoquic_log_app_message_v(cnx, fmt, args);
+    va_end(args);
+}
+
 /* Exercise binlog/qlog event kinds that no earlier test ever produced: pdu, packet
  * lost/dropped/buffered, alpn/param update, congestion control dump, and the
  * version-negotiation/retry packet-payload rendering (a single opaque blob, unlike
@@ -3142,6 +3161,7 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
     static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
     static const uint8_t retry_token_bytes[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    static const uint8_t fake_ticket_bytes[] = { 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7 };
 
     memset(&addr_peer4, 0, sizeof(addr_peer4));
     addr_peer4.sin_family = AF_INET;
@@ -3183,6 +3203,9 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     cnx->path[0]->is_cc_data_updated = 1;
     picoquic_log_cc_dump(cnx, current_time);
 
+    picoquic_log_tls_ticket(cnx, (uint8_t*)fake_ticket_bytes, (uint16_t)sizeof(fake_ticket_bytes));
+    binlog_test_app_message_v(cnx, "extra event test message #%d", 1);
+
     memset(&ph, 0, sizeof(ph));
     ph.ptype = picoquic_packet_version_negotiation;
     ph.dest_cnx_id = *dcid;
@@ -3194,6 +3217,8 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     ph.dest_cnx_id = *dcid;
     ph.payload_length = sizeof(retry_token_bytes);
     binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_token_bytes, sizeof(retry_token_bytes));
+
+    picoquic_log_flush(cnx);
 }
 
 int binlog_test(void)
@@ -3259,6 +3284,25 @@ int binlog_test(void)
                 ph.payload_length = test_skip_list[i].len;
 
                 binlog_packet((FILE*)cnx->log_ctx[0], &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len);
+            }
+            /* Log a one-byte-short version of each good frame, to exercise the "ran out
+             * of bytes mid-parse" branch of each per-frame-type binlog write function --
+             * same truncation idiom already used by frames_repeat_test. */
+            for (size_t i = 0; i < nb_test_skip_list; i++) {
+                if (test_skip_list[i].len > 1 && !test_skip_list[i].is_pure_ack) {
+                    picoquic_packet_header ph;
+                    memset(&ph, 0, sizeof(ph));
+
+                    ph.ptype = picoquic_packet_1rtt_protected;
+                    ph.pn64 = i;
+                    ph.dest_cnx_id = initial_cid;
+                    ph.srce_cnx_id = dest_cid;
+
+                    ph.offset = 0;
+                    ph.payload_length = test_skip_list[i].len - 1;
+
+                    binlog_packet((FILE*)cnx->log_ctx[0], &initial_cid, 0, 0, 0, &ph, test_skip_list[i].val, test_skip_list[i].len - 1);
+                }
             }
             /* Log of bad backets */
             for (size_t i = 0; i < nb_test_frame_error_list; i++) {
@@ -3367,6 +3411,67 @@ int binlog_test(void)
             picoquic_binlog_frames(F, fuzz_buffer, bytes_max);
         }
         (void)picoquic_file_close(F);
+    }
+
+    return ret;
+}
+
+#define UNIFIED_LOG_MULTI_TEXT_FILE "unified_log_multi_backend_test.txt"
+
+/* Every picoquic_log_* dispatcher in unified_log.c fans out to each registered backend
+ * via a loop over PICOQUIC_MAX_LOG_FUNCTIONS slots (for (i=0; i<MAX; i++) { if
+ * (registered) {...} else break; }). Every test so far registers exactly one backend at
+ * a time, so the "a second slot is also registered and gets invoked" branch was never
+ * taken anywhere in that file. Register binlog and textlog together on the same
+ * connection and replay the same event sequence already verified, per backend
+ * individually, by binlog_test -- the point here is the fan-out itself, not re-checking
+ * each backend's own rendering, so no new golden file is needed. */
+int unified_log_multi_backend_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    const picoquic_connection_id_t initial_cid = {
+        { 7, 7, 7, 7 }, 4
+    };
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else if (picoquic_set_binlog(quic, ".") != 0 ||
+        picoquic_set_textlog(quic, UNIFIED_LOG_MULTI_TEXT_FILE) != 0) {
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+        (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_log_new_connection(cnx);
+
+        if (cnx->log_ctx[0] == NULL || cnx->log_ctx[1] == NULL) {
+            DBG_PRINTF("%s", "Expected two simultaneously registered log backends.");
+            ret = -1;
+        }
+        else {
+            binlog_test_extra_events(cnx, &initial_cid, simulated_time);
+        }
+
+        picoquic_log_close_connection(cnx);
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
     }
 
     return ret;

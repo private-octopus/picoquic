@@ -31,8 +31,7 @@
 #define QLOG_FRAMES_TEST "qlog_frames_test.json"
 
 // Forward declaration for the QLOG frame logging dispatcher
-// Adjust the signature if your implementation differs
-extern const uint8_t* qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding);
+extern void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding);
 
 int qlog_frames_test(void)
 {
@@ -53,6 +52,35 @@ int qlog_frames_test(void)
         need_comma = ",\n";
 
         // Write one line per frame
+        qlog_frames(F, bytes, bytes_max, 0);
+        fprintf(F, "}");
+    }
+    /* Also log a one-byte-short version of each good frame, to exercise the
+     * "ran out of bytes mid-parse" branch of each per-frame-type qlog decoder --
+     * same truncation idiom already used by logger_test and binlog_test. */
+    for (size_t i = 0; i < nb_test_skip_list; i++) {
+        test_skip_frames_t* test = &test_skip_list[i];
+        if (test->len > 1 && !test->is_pure_ack) {
+            const uint8_t* bytes = test->val;
+            const uint8_t* bytes_max = test->val + test->len - 1;
+
+            fprintf(F, "%s{ \"test\": \"%s_truncated\", \"frame\": ", need_comma, test->name);
+            need_comma = ",\n";
+
+            qlog_frames(F, bytes, bytes_max, 0);
+            fprintf(F, "}");
+        }
+    }
+    /* Also run the known-malformed frames, matching logger_test/binlog_test's
+     * coverage of test_frame_error_list. */
+    for (size_t i = 0; i < nb_test_frame_error_list; i++) {
+        test_skip_frames_t* test = &test_frame_error_list[i];
+        const uint8_t* bytes = test->val;
+        const uint8_t* bytes_max = test->val + test->len;
+
+        fprintf(F, "%s{ \"test\": \"%s\", \"frame\": ", need_comma, test->name);
+        need_comma = ",\n";
+
         qlog_frames(F, bytes, bytes_max, 0);
         fprintf(F, "}");
     }

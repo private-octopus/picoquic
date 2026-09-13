@@ -180,6 +180,7 @@ static const picoquic_test_def_t test_table[] = {
     { "logger", logger_test },
     { "binlog", binlog_test },
     { "binlog_compare_mismatch", binlog_compare_mismatch_test },
+    { "unified_log_multi_backend", unified_log_multi_backend_test },
     { "qlog_frames", qlog_frames_test },
     { "app_message_overflow", app_message_overflow_test },
     { "TlsStreamFrame", TlsStreamFrameTest },

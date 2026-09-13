@@ -796,28 +796,37 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
+/* max_path_id, paths_blocked and path_cid_blocked have no dedicated binlog writer
+ * (picoquic_binlog_frames falls back to picoquic_log_erroring_frame for them), so a
+ * truncated frame can reach this decoder with fewer bytes than a full field needs --
+ * byteread_vint's return must be checked, or a failed read silently prints the
+ * variable's initialized value (0) as if it had been read successfully. */
 void qlog_max_path_id_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
     uint64_t next_sequence_number = 0;
-    byteread_vint(s, &path_id);
-    byteread_vint(s, &next_sequence_number);
-    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
-    fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    if (byteread_vint(s, &path_id) == 0) {
+        fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    }
+    if (byteread_vint(s, &next_sequence_number) == 0) {
+        fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    }
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)

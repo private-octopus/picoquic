@@ -514,6 +514,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(unified_log_multi_backend)
+        {
+            int ret = unified_log_multi_backend_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_frames)
         {
             int ret = qlog_frames_test();
