@@ -2220,7 +2220,14 @@ User - Agent: curl / 7.16.3 libcurl / 7.16.3 OpenSSL / 0.9.7l zlib / 1.2.3\n\
 Host : www.example.com\n\
 Accept - Language : en, mi",
     148, picohttp_server_stream_status_header, 0, 1, "/hello.txt", 23 },
-    { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
+    { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 },
+    /* Trailing spaces before the CRLF, and an explicit "HTTP/0.9" marker --
+     * neither is exercised by the other cases above, which either have no
+     * protocol suffix at all or use "HTTP/1.1" with no trailing spaces. */
+    { "GET /test.html HTTP/0.9  \r\n", 27, picohttp_server_stream_status_crlf, 0, 0, "/test.html", 25 },
+    /* A method with no path at all: picohttp_server_parse_commandline must
+     * reject it instead of treating the empty remainder as the path. */
+    { "GET\r\n", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
 };
 
 static size_t nb_h09_header_data_test_cases = sizeof(h09_header_data_test_case) / sizeof(h09_header_test_data_t);
