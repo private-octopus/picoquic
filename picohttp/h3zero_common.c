@@ -2246,6 +2246,11 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		capsule->capsule_length = 0;
 		capsule->is_stored = 0;
 		capsule->is_length_known = 0;
+		/* value_read must also be reset: capsule_buffer/capsule_buffer_size are kept
+		 * across capsules to avoid a realloc, but if a shorter capsule follows one
+		 * that left value_read at its (larger) final count, "capsule_length -
+		 * value_read" below would underflow (both are size_t) into a huge memcpy. */
+		capsule->value_read = 0;
 	}
 	if (!capsule->is_length_known) {
 		size_t length_of_type = 0;

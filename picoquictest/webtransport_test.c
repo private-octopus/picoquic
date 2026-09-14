@@ -1060,6 +1060,63 @@ static int picowt_drain_receive_capsule_test(void)
     return ret;
 }
 
+/* Regression test for a buffer-overflow bug: h3zero_accumulate_capsule keeps
+ * capsule_buffer/capsule_buffer_size across capsules (to avoid a realloc when
+ * the next capsule fits in the existing buffer), but was not resetting
+ * value_read when starting the next one. If a shorter capsule immediately
+ * followed a longer one on the same h3zero_capsule_t -- exactly how
+ * picowt_receive_capsule's own loop processes multiple capsules from one
+ * buffer, with no picowt_release_capsule call in between -- "capsule_length -
+ * value_read" underflowed (both are size_t) into a huge memcpy. Feed two
+ * close-session capsules, second shorter than the first, through a single
+ * picowt_receive_capsule call to reproduce that exact sequence. */
+static int picowt_receive_capsule_reuse_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+    picowt_capsule_t capsule;
+    uint8_t buffer[128];
+    uint8_t* next = buffer;
+    uint8_t payload1[44];
+    uint8_t payload2[4];
+
+    memset(&capsule, 0, sizeof(capsule));
+
+    if (ret == 0) {
+        uint8_t* p = picoquic_frames_uint32_encode(payload1, payload1 + sizeof(payload1), 0x01020304);
+        if (p != NULL) {
+            memset(p, 'A', payload1 + sizeof(payload1) - p);
+        }
+        next = picowt_test_format_capsule(next, buffer + sizeof(buffer),
+            picowt_capsule_close_webtransport_session, payload1, sizeof(payload1));
+
+        if (next != NULL) {
+            (void)picoquic_frames_uint32_encode(payload2, payload2 + sizeof(payload2), 0x0a0b0c0d);
+            next = picowt_test_format_capsule(next, buffer + sizeof(buffer),
+                picowt_capsule_close_webtransport_session, payload2, sizeof(payload2));
+        }
+
+        if (next == NULL ||
+            picowt_receive_capsule(cnx, buffer, next, &capsule) != 0 ||
+            !capsule.h3_capsule.is_stored ||
+            capsule.h3_capsule.capsule_type != picowt_capsule_close_webtransport_session ||
+            capsule.error_code != 0x0a0b0c0d ||
+            capsule.error_msg_len != 0) {
+            ret = -1;
+        }
+    }
+
+    picowt_release_capsule(&capsule);
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int picowt_drain_test_one(int expect_error)
 {
     picoquic_quic_t* quic = NULL;
@@ -1105,6 +1162,9 @@ int picowt_drain_test(void)
     }
     if (ret == 0) {
         ret = picowt_drain_receive_capsule_test();
+    }
+    if (ret == 0) {
+        ret = picowt_receive_capsule_reuse_test();
     }
 
     return ret;

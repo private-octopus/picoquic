@@ -3723,6 +3723,12 @@ char const css_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'c', 's', 's', 
 
 char const double_dot_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'e', 'x', 't', '.', 'h', 't', 'm', 'l', 0 };
 
+/* A path whose only '.' is its very first character (e.g. no leading '/').
+ * strrchr finds it, but "dot != path" must reject it as a real extension --
+ * a name that's entirely "dot + text", like a dotfile, has no basename
+ * before the dot and shouldn't be treated as having that extension. */
+char const dot_first_path_str[] = { '.', 'h', 't', 'm', 'l', 0 };
+
 static const h3zero_string_content_type_compare_list_t h3zero_string_content_type_compare_list[] = {
     /* Invalid paths and paths without extensions. */
     { NULL, h3zero_content_type_text_plain },
@@ -3742,13 +3748,67 @@ static const h3zero_string_content_type_compare_list_t h3zero_string_content_typ
     { css_path_str, h3zero_content_type_text_css },
 
     /* Special cases but valid. */
-    { double_dot_path_str, h3zero_content_type_text_html }
+    { double_dot_path_str, h3zero_content_type_text_html },
+    { dot_first_path_str, h3zero_content_type_text_plain }
     /* TODO Add more test cases.
      * e.g. query string?
      */
 };
 
 static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_content_type_compare_list) / sizeof(h3zero_string_content_type_compare_list_t);
+
+extern int h3zero_find_path_item(const uint8_t* path, size_t path_length,
+    const picohttp_server_path_item_t* path_table, size_t path_table_nb);
+
+/* h3zero_find_path_item matches a request path against a server's path
+ * table: an exact match, a match followed by '?' (query string), or a
+ * fallback '*' wildcard entry. Coverage showed two untested branches:
+ * - a path that is a proper prefix of a table entry but continues with
+ *   something other than '?' (e.g. "/foobar" against a "/foo" entry) must
+ *   NOT match -- it should fall through to the next entry or the wildcard;
+ * - a length-1, non-wildcard table entry (path[0] != '*') must not be
+ *   mistaken for the wildcard marker. */
+int h3zero_find_path_item_test(void)
+{
+    int ret = 0;
+    static const picohttp_server_path_item_t table_no_wildcard[] = {
+        { "/foo", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    static const picohttp_server_path_item_t table_with_wildcard[] = {
+        { "/foo", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "*", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    static const picohttp_server_path_item_t table_short_entry_first[] = {
+        { "x", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "*", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+
+    /* Exact match */
+    if (h3zero_find_path_item((const uint8_t*)"/foo", 4, table_no_wildcard, 1) != 0) {
+        ret = -1;
+    }
+    /* Match followed by query string */
+    else if (h3zero_find_path_item((const uint8_t*)"/foo?x=1", 8, table_no_wildcard, 1) != 0) {
+        ret = -1;
+    }
+    /* Longer path that only shares a prefix: must not match, and there is
+     * no wildcard to fall back on. */
+    else if (h3zero_find_path_item((const uint8_t*)"/foobar", 7, table_no_wildcard, 1) >= 0) {
+        ret = -1;
+    }
+    /* Same non-matching prefix case, but with a wildcard present: falls
+     * back to the wildcard entry. */
+    else if (h3zero_find_path_item((const uint8_t*)"/foobar", 7, table_with_wildcard, 2) != 1) {
+        ret = -1;
+    }
+    /* A length-1, non-'*' entry ahead of the real wildcard must not be
+     * mistaken for it, and must still fall through to the wildcard. */
+    else if (h3zero_find_path_item((const uint8_t*)"y", 1, table_short_entry_first, 2) != 1) {
+        ret = -1;
+    }
+
+    return ret;
+}
 
 int h3zero_get_content_type_by_path_test(void) {
     int ret = 0;
