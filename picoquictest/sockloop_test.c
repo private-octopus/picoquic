@@ -989,6 +989,15 @@ static int sockloop_bind_addr_refused(int local_af, int af0, int af1)
     return ret;
 }
 
+/* Without IP_PKTINFO (BSD), the source of an IPv4 packet sent on a bound
+ * socket is left unspecified, because IP_SENDSRCADDR is refused there. */
+#ifndef IP_PKTINFO
+#define SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(expected) do { \
+    if ((expected)->ss_family == AF_INET) { memset((expected), 0, sizeof(struct sockaddr_storage)); } } while (0)
+#else
+#define SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(expected) do { } while (0)
+#endif
+
 /* Verify that the send path substitutes the bound address for whatever
  * local address the path proposes, keeps the port, fills in an unspecified
  * local address, and leaves sockets bound to the wildcard alone. */
@@ -1029,6 +1038,7 @@ static int sockloop_bind_addr_send_source(int af)
         picoquic_store_addr(&local_addr, (struct sockaddr*)&other);
         picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
         (void)sockloop_test_addr_config(&expected, af, 1234);
+        SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(&expected);
         if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
             DBG_PRINTF("%s", "Bound address was not substituted for the path's local address");
             ret = -1;
@@ -1039,6 +1049,7 @@ static int sockloop_bind_addr_send_source(int af)
         memset(&local_addr, 0, sizeof(local_addr));
         picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
         (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
+        SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(&expected);
         if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
             DBG_PRINTF("%s", "Unspecified local address was not filled from the bound address");
             ret = -1;
@@ -1155,6 +1166,75 @@ static int sockloop_bind_addr_open_socket_no_addr_for_af(void)
     return ret;
 }
 
+/* Send a datagram from a socket bound to the loopback address, using the
+ * source that picoquic_packet_loop_set_send_source proposes, and verify that
+ * the send is accepted and that the receiver sees the bound address as the
+ * source. On FreeBSD, an IP_SENDSRCADDR control message on such a socket
+ * fails with EINVAL. */
+static int sockloop_bind_addr_send_bound(int af)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    picoquic_socket_ctx_t r_ctx[4] = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage addr_from = { 0 };
+    struct sockaddr_storage addr_dest = { 0 };
+    struct sockaddr_storage expected = { 0 };
+    uint8_t buffer[64] = { 0 };
+    uint8_t received[256];
+    uint64_t current_time = picoquic_current_time();
+    unsigned char received_ecn = 0;
+    int dest_if = 0;
+    int sock_ret = 0;
+    int sock_err = 0;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+        r_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&param.local_addr[0], af, 0);
+    if (ret == 0) {
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1 ||
+            picoquic_packet_loop_open_sockets(&param, r_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open the bound sockets");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = sockloop_test_addr_config(&peer_addr, af, r_ctx[0].port);
+    }
+    if (ret == 0) {
+        picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
+        sock_ret = picoquic_sendmsg(s_ctx[0].fd, (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, 0,
+            (const char*)buffer, (int)sizeof(buffer), 0, &sock_err);
+        if (sock_ret <= 0) {
+            DBG_PRINTF("Send from bound socket fails, af=%d, ret=%d, err=%d", af, sock_ret, sock_err);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        sock_ret = picoquic_select(&r_ctx[0].fd, 1, &addr_from, &addr_dest, &dest_if, &received_ecn,
+            received, (int)sizeof(received), 1000000, &current_time);
+        (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
+        if (sock_ret != (int)sizeof(buffer)) {
+            DBG_PRINTF("Expected %zu bytes from bound socket, got %d", sizeof(buffer), sock_ret);
+            ret = -1;
+        }
+        else if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&addr_from) != 0) {
+            DBG_PRINTF("%s", "Datagram was not received from the bound address");
+            ret = -1;
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+        picoquic_packet_loop_close_socket(&r_ctx[i]);
+    }
+    return ret;
+}
+
 int sockloop_bind_addr_test(void)
 {
     const int af_v4[1] = { AF_INET };
@@ -1190,10 +1270,25 @@ int sockloop_bind_addr_test(void)
         ret = sockloop_bind_addr_send_source(AF_INET6);
     }
     if (ret == 0) {
+        ret = sockloop_bind_addr_send_bound(AF_INET);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_send_bound(AF_INET6);
+    }
+    if (ret == 0) {
         /* Full loop, server bound to 127.0.0.1 only, client connecting to it. */
         sockloop_test_spec_t spec;
         sockloop_test_set_spec(&spec, 11);
         spec.af = AF_INET;
+        spec.bind_loopback = 1;
+        spec.do_not_use_gso = 1;
+        ret = sockloop_test_one(&spec);
+    }
+    if (ret == 0) {
+        /* Full loop, server bound to ::1 only, client connecting to it. */
+        sockloop_test_spec_t spec;
+        sockloop_test_set_spec(&spec, 12);
+        spec.af = AF_INET6;
         spec.bind_loopback = 1;
         spec.do_not_use_gso = 1;
         ret = sockloop_test_one(&spec);
