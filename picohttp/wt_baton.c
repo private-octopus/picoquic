@@ -403,8 +403,11 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
 
-            /* Process to receive the stream */
-            if (ret == 0) {
+            /* Process to receive the stream. receive_id stays SIZE_MAX when
+             * the "wrong stream" branch above ran: wt_baton_close_session
+             * commonly returns 0 (a graceful close was successfully queued),
+             * so ret == 0 alone does not mean a lane was assigned. */
+            if (ret == 0 && receive_id != SIZE_MAX) {
                 wt_baton_incoming_t* incoming_ctx = &baton_ctx->incoming[receive_id];
 
                 if (length > 0) {

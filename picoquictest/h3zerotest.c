@@ -2397,6 +2397,308 @@ int h09_header_test(void)
     return ret;
 }
 
+/* picoquic_h09_server_parse_method, picoquic_h09_server_parse_protocol and
+ * picohttp_server_parse_commandline are internal to demoserver.c and are not
+ * declared in demoserver.h, but -- like the quicperf.c and democlient.c
+ * scenario parsers -- they have external linkage specifically so tests can
+ * drive them directly, instead of only indirectly through
+ * picoquic_h09_server_process_data_header. */
+int picoquic_h09_server_parse_method(uint8_t* command, size_t command_length, size_t* consumed);
+void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_length, int* proto, size_t* consumed);
+int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, h3zero_stream_ctx_t* stream_ctx);
+
+typedef struct st_h09_parse_method_test_case_t {
+    char const* command;
+    int expected_method;
+    size_t expected_consumed;
+} h09_parse_method_test_case_t;
+
+static const h09_parse_method_test_case_t h09_parse_method_test_cases[] = {
+    { "GET /", 0, 3 },
+    { "get /", 0, 3 },
+    { "GeT /", 0, 3 },
+    { "POST /bla", 1, 4 },
+    { "post /bla", 1, 4 },
+    { "PoSt /bla", 1, 4 },
+    { "GE", -1, 0 },            /* too short to be GET */
+    { "PO", -1, 0 },            /* too short to be GET or POST */
+    { "GOT /", -1, 0 },         /* GET-length, wrong letters */
+    { "PAST /", -1, 0 },        /* POST-length, wrong 2nd letter */
+    { "POKE /", -1, 0 },        /* POST-length, wrong 3rd letter */
+    { "", -1, 0 }               /* empty command */
+};
+
+static const size_t nb_h09_parse_method_test_cases = sizeof(h09_parse_method_test_cases) / sizeof(h09_parse_method_test_cases[0]);
+
+int h09_parse_method_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_method_test_cases; i++) {
+        size_t consumed = 0xbad;
+        int method = picoquic_h09_server_parse_method((uint8_t*)h09_parse_method_test_cases[i].command,
+            strlen(h09_parse_method_test_cases[i].command), &consumed);
+
+        if (method != h09_parse_method_test_cases[i].expected_method) {
+            DBG_PRINTF("Parse method \"%s\": expected method %d, got %d",
+                h09_parse_method_test_cases[i].command, h09_parse_method_test_cases[i].expected_method, method);
+            ret = -1;
+        }
+        else if (consumed != h09_parse_method_test_cases[i].expected_consumed) {
+            DBG_PRINTF("Parse method \"%s\": expected consumed %zu, got %zu",
+                h09_parse_method_test_cases[i].command, h09_parse_method_test_cases[i].expected_consumed, consumed);
+            ret = -1;
+        }
+    }
+
+    /* The "consumed" output is optional; no existing caller passes NULL,
+     * so exercise that branch directly here. */
+    if (ret == 0) {
+        int method = picoquic_h09_server_parse_method((uint8_t*)"GET /", 5, NULL);
+        if (method != 0) {
+            DBG_PRINTF("Parse method with NULL consumed: expected method 0, got %d", method);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+typedef struct st_h09_parse_protocol_test_case_t {
+    char const* command;
+    int expected_proto;
+    size_t expected_consumed;
+} h09_parse_protocol_test_case_t;
+
+static const h09_parse_protocol_test_case_t h09_parse_protocol_test_cases[] = {
+    /* Recognized versions, each preceded by exactly one separating space. */
+    { "GET /test.html HTTP/1.1", 1, 9 },
+    { "GET /test.html HTTP/1.0", 1, 9 },
+    { "GET /test.html HTTP/0.9", 0, 9 },
+    /* An "HTTP/x.y"-shaped suffix with an unrecognized version: bad_version
+     * is set, so it is left in place rather than stripped. */
+    { "GET /test.html HTTP/1.5", 0, 0 },
+    { "GET /test.html HTTP/2.0", 0, 0 },
+    /* No protocol suffix at all: the 7-char-span pattern match itself fails. */
+    { "GET /test.html", 0, 0 },
+    /* The protocol token spans the entire command, starting at index 0 --
+     * exercises the "byte_index > 0" check being false after the match. */
+    { "HTTP/1.1", 1, 8 },
+    /* Nothing but trailing whitespace: exercises the space-skip loop's
+     * byte_index == 0 exit, taken instead of the byte_index-- path. */
+    { "   ", 0, 3 },
+    /* Multiple spaces on both sides of the protocol token: exercises the
+     * final space-trim loop running more than once. */
+    { "GET  /x   HTTP/1.0", 1, 11 }
+};
+
+static const size_t nb_h09_parse_protocol_test_cases = sizeof(h09_parse_protocol_test_cases) / sizeof(h09_parse_protocol_test_cases[0]);
+
+int h09_parse_protocol_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_protocol_test_cases; i++) {
+        int proto = -1;
+        size_t consumed = 0xbad;
+        char const* command = h09_parse_protocol_test_cases[i].command;
+
+        picoquic_h09_server_parse_protocol((uint8_t*)command, strlen(command), &proto, &consumed);
+
+        if (proto != h09_parse_protocol_test_cases[i].expected_proto) {
+            DBG_PRINTF("Parse protocol \"%s\": expected proto %d, got %d",
+                command, h09_parse_protocol_test_cases[i].expected_proto, proto);
+            ret = -1;
+        }
+        else if (consumed != h09_parse_protocol_test_cases[i].expected_consumed) {
+            DBG_PRINTF("Parse protocol \"%s\": expected consumed %zu, got %zu",
+                command, h09_parse_protocol_test_cases[i].expected_consumed, consumed);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+typedef struct st_h09_parse_commandline_test_case_t {
+    char const* command;
+    int expected_ret;
+    int expected_method;
+    int expected_proto;
+    char const* expected_path; /* not checked if expected_ret != 0 */
+} h09_parse_commandline_test_case_t;
+
+static const h09_parse_commandline_test_case_t h09_parse_commandline_test_cases[] = {
+    { "GET /", 0, 0, 0, "/" },
+    { "get /bla", 0, 0, 0, "/bla" },
+    { "POST /bla", 0, 1, 0, "/bla" },
+    { "GET /test.html HTTP/1.1", 0, 0, 1, "/test.html" },
+    /* An unrecognized HTTP version is not stripped, so it becomes (and
+     * stays) part of the path -- see h09_parse_protocol_test above. */
+    { "GET /test.html HTTP/2.0", 0, 0, 0, "/test.html HTTP/2.0" },
+    /* Protocol token only, no method at all. */
+    { "HTTP/1.1", -1, 0, 0, NULL },
+    /* Nothing but whitespace. */
+    { "   ", -1, 0, 0, NULL },
+    /* A method with no path, or only trailing spaces where a path would be. */
+    { "GET", -1, 0, 0, NULL },
+    { "GET   ", -1, 0, 0, NULL },
+    /* Empty command. */
+    { "", -1, 0, 0, NULL }
+};
+
+static const size_t nb_h09_parse_commandline_test_cases = sizeof(h09_parse_commandline_test_cases) / sizeof(h09_parse_commandline_test_cases[0]);
+
+int h09_parse_commandline_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_commandline_test_cases; i++) {
+        h09_parse_commandline_test_case_t const* c = &h09_parse_commandline_test_cases[i];
+        h3zero_stream_ctx_t stream_ctx;
+        int parse_ret;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+
+        parse_ret = picohttp_server_parse_commandline((uint8_t*)c->command, strlen(c->command), &stream_ctx);
+
+        if (parse_ret != c->expected_ret) {
+            DBG_PRINTF("Parse commandline \"%s\": expected ret %d, got %d",
+                c->command, c->expected_ret, parse_ret);
+            ret = -1;
+        }
+        else if (parse_ret == 0) {
+            if (stream_ctx.ps.hq.method != c->expected_method) {
+                DBG_PRINTF("Parse commandline \"%s\": expected method %d, got %d",
+                    c->command, c->expected_method, stream_ctx.ps.hq.method);
+                ret = -1;
+            }
+            else if (stream_ctx.ps.hq.proto != c->expected_proto) {
+                DBG_PRINTF("Parse commandline \"%s\": expected proto %d, got %d",
+                    c->command, c->expected_proto, stream_ctx.ps.hq.proto);
+                ret = -1;
+            }
+            else if (stream_ctx.ps.hq.path_length != strlen(c->expected_path) ||
+                memcmp(stream_ctx.ps.hq.path, c->expected_path, stream_ctx.ps.hq.path_length) != 0) {
+                DBG_PRINTF("Parse commandline \"%s\": expected path \"%s\", got \"%.*s\"",
+                    c->command, c->expected_path, (int)stream_ctx.ps.hq.path_length, stream_ctx.ps.hq.path);
+                ret = -1;
+            }
+        }
+
+        if (stream_ctx.ps.hq.path != NULL) {
+            free((void*)stream_ctx.ps.hq.path);
+        }
+    }
+
+    return ret;
+}
+
+/* picoquic_h09_server_callback's picoquic_callback_stop_sending and
+ * picoquic_callback_stream_reset cases were never exercised by any
+ * existing test: a third-party HTTP/0.9 client can trigger either one
+ * just by abandoning a request (STOP_SENDING) or aborting one it already
+ * sent (RESET_STREAM), so picoquic_ns and demo_server_test's own
+ * well-behaved clients never happen to hit them. Drive the callback
+ * directly, on a minimal (unconnected) cnx -- as with
+ * h3zero_process_request_frame_test above -- rather than orchestrating a
+ * full simulated connection just to deliver two specific stream events. */
+#define H09_STOP_SENDING_RESET_TEST_FILE "h09_stop_sending_reset_test.txt"
+
+int h09_stop_sending_reset_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    picoquic_h09_server_callback_ctx_t* app_ctx = NULL;
+    uint64_t stream_id = 4;
+
+    if (ret == 0) {
+        app_ctx = (picoquic_h09_server_callback_ctx_t*)malloc(sizeof(picoquic_h09_server_callback_ctx_t));
+        if (app_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(app_ctx, 0, sizeof(picoquic_h09_server_callback_ctx_t));
+            h3zero_init_stream_tree(&app_ctx->h3_stream_tree);
+        }
+    }
+
+    /* STOP_SENDING: the peer no longer wants the response the server is
+     * (or is about to start) sending. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_h09_server_callback(cnx, stream_id, NULL, 0,
+            picoquic_callback_stop_sending, app_ctx, stream_ctx) != 0) {
+            DBG_PRINTF("%s", "picoquic_callback_stop_sending returned an error");
+            ret = -1;
+        }
+        else if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+            DBG_PRINTF("Stop sending: expected status %d, got %d",
+                picohttp_server_stream_status_finished, stream_ctx->ps.hq.status);
+            ret = -1;
+        }
+        stream_id += 4;
+    }
+
+    /* RESET_STREAM: the peer aborts a request it already sent. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_h09_server_callback(cnx, stream_id, NULL, 0,
+            picoquic_callback_stream_reset, app_ctx, stream_ctx) != 0) {
+            DBG_PRINTF("%s", "picoquic_callback_stream_reset returned an error");
+            ret = -1;
+        }
+        else if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+            DBG_PRINTF("Stream reset: expected status %d, got %d",
+                picohttp_server_stream_status_finished, stream_ctx->ps.hq.status);
+            ret = -1;
+        }
+    }
+
+    /* A stream that already has an open file must have it closed, not
+     * leaked, by either event. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id + 4, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx->F = picoquic_file_open(H09_STOP_SENDING_RESET_TEST_FILE, "w");
+            if (stream_ctx->F == NULL) {
+                DBG_PRINTF("Cannot open %s", H09_STOP_SENDING_RESET_TEST_FILE);
+                ret = -1;
+            }
+            else if (picoquic_h09_server_callback(cnx, stream_id + 4, NULL, 0,
+                picoquic_callback_stop_sending, app_ctx, stream_ctx) != 0) {
+                ret = -1;
+            }
+            else if (stream_ctx->F != NULL) {
+                DBG_PRINTF("%s", "Stop sending did not close the open file");
+                ret = -1;
+            }
+        }
+    }
+
+    if (app_ctx != NULL) {
+        picosplay_empty_tree(&app_ctx->h3_stream_tree);
+        free(app_ctx);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int generic_server_test(void)
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;

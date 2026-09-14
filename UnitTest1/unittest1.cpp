@@ -3936,6 +3936,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h09_parse_method) {
+            int ret = h09_parse_method_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_parse_protocol) {
+            int ret = h09_parse_protocol_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_parse_commandline) {
+            int ret = h09_parse_commandline_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_stop_sending_reset) {
+            int ret = h09_stop_sending_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(generic_server) {
             int ret = generic_server_test();
 
