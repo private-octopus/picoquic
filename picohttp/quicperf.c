@@ -1242,10 +1242,17 @@ int quicperf_prepare_to_send_batch(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, qui
     * set a wakeup time for the stream, and then for the connection.
      */
 
+#if 0
+    /* Currently unreachable: nothing sets is_stopped on the server side,
+     * since STOP_SENDING is instead handled by an immediate reset in
+     * quicperf_stop_sending_stream. Kept disabled rather than removed,
+     * since issue #2171 (client-side media sending) may require it. */
     if (!ctx->is_client && stream_ctx->is_stopped) {
         available = 0;
         is_fin = 1;
-    } else if (sent_already + available > send_limit) {
+    } else
+#endif
+    if (sent_already + available > send_limit) {
         is_fin = 1;
         available = (size_t)(send_limit - sent_already);
     }

@@ -4250,8 +4250,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_scenario_error) {
+            int ret = quicperf_scenario_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_batch) {
             int ret = quicperf_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_infinite) {
+            int ret = quicperf_infinite_test();
 
             Assert::AreEqual(ret, 0);
         }

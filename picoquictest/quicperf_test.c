@@ -290,6 +290,45 @@ const quicperf_stream_desc_t qpsc_combo[4] = {
     }
 };
 
+#define qpstr_upper_id "=AB:256:12345; -0:999;"
+
+const quicperf_stream_desc_t qpsc_upper_id[2] = {
+    {
+        { 'A', 'B', 0 }, /* id -- exercises the uppercase-letter case of the alphanum parser */
+        { 0, 0 }, /* previous id */
+        1, /* repeat_count */
+        quicperf_media_batch, /* media_type */
+        0, /* frequency */
+        256, /* post_size */
+        12345, /* response_size */
+        0, /* nb_frames */
+        0, /* frame_size */
+        0, /* group_size */
+        0, /* first_frame_size */
+        0, /* reset_delay */
+        0, /* priority */
+        0, /* is_infinite */
+        0, /*  is_client_media */
+    },
+    {
+        { 0, 0 }, /* id */
+        { 0, 0 }, /* previous id */
+        1, /* repeat_count */
+        quicperf_media_batch, /* media_type */
+        0, /* frequency */
+        0, /* post_size -- "-0" means "use the default", which is 0 here */
+        999, /* response_size */
+        0, /* nb_frames */
+        0, /* frame_size */
+        0, /* group_size */
+        0, /* first_frame_size */
+        0, /* reset_delay */
+        0, /* priority */
+        0, /* is_infinite */
+        0, /*  is_client_media */
+    }
+};
+
 typedef struct st_quicperf_test_line_t {
     const quicperf_stream_desc_t* sc;
     size_t nb_sc;
@@ -305,7 +344,8 @@ const quicperf_test_line_t test_lines[] = {
     { qpsc_video3, 1, qpstr_video3 },
     { qpsc_video4, 1, qpstr_video4 },
     { qpsc_audio, 1, qpstr_audio },
-    { qpsc_combo, 4, qpstr_combo }
+    { qpsc_combo, 4, qpstr_combo },
+    { qpsc_upper_id, 2, qpstr_upper_id }
 };
 
 const size_t nb_test_lines = sizeof(test_lines) / sizeof(quicperf_test_line_t);
@@ -408,6 +448,50 @@ int quicperf_parse_test(void)
             DBG_PRINTF("Parse test fails for test_lines[%zu]", i);
         }
     }
+    return ret;
+}
+
+/* quicperf_create_ctx takes an err_fd for diagnostics, but every other test
+ * in this file passes NULL there -- so the error-reporting branches in the
+ * scenario parser (quicperf_parse_stream_choice, quicperf_parse_scenario_desc)
+ * were never actually exercised. Feed a real file and a handful of malformed
+ * scenarios, each targeting a distinct message, and confirm something was
+ * actually written each time. */
+#define QUICPERF_SCENARIO_ERROR_TEST_FILE "quicperf_scenario_error_test.txt"
+
+int quicperf_scenario_error_test(void)
+{
+    int ret = 0;
+    static const char* bad_scenarios[] = {
+        "0:400xyz;",  /* trailing garbage after an otherwise valid stream description */
+        "0:abc;",     /* unparseable response size, no stream ID given */
+        "=ZZ:0:abc;"  /* unparseable response size, with a stream ID given */
+    };
+    size_t nb_bad_scenarios = sizeof(bad_scenarios) / sizeof(char const*);
+
+    for (size_t i = 0; ret == 0 && i < nb_bad_scenarios; i++) {
+        FILE* err_fd = picoquic_file_open(QUICPERF_SCENARIO_ERROR_TEST_FILE, "w");
+        quicperf_ctx_t* ctx;
+
+        if (err_fd == NULL) {
+            ret = -1;
+            break;
+        }
+
+        ctx = quicperf_create_ctx(bad_scenarios[i], err_fd);
+        (void)picoquic_file_close(err_fd);
+
+        if (ctx != NULL) {
+            DBG_PRINTF("Scenario \"%s\" unexpectedly parsed successfully", bad_scenarios[i]);
+            quicperf_delete_ctx(ctx);
+            ret = -1;
+        }
+        else if (picoquic_sum_text_file(QUICPERF_SCENARIO_ERROR_TEST_FILE) == 0) {
+            DBG_PRINTF("Scenario \"%s\" failed as expected, but nothing was logged to err_fd", bad_scenarios[i]);
+            ret = -1;
+        }
+    }
+
     return ret;
 }
 
@@ -724,6 +808,24 @@ int quicperf_batch_test(void)
     };
 
     return quicperf_e2e_test(0xba, batch_scenario, 1200000, 1, &batch_target);
+}
+
+int quicperf_infinite_test(void)
+{
+    /* A negative response size means "infinite": the server does not
+     * announce a length, and the client is expected to send a
+     * STOP_SENDING once it has received enough bytes. */
+    char const* infinite_scenario = "=b1:*1:397:-100000;";
+    quicperf_test_target_t infinite_target = {
+        0, /* nb_frames_received_min */
+        0, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0xbf, infinite_scenario, 1200000, 1, &infinite_target);
 }
 
 int quicperf_datagram_test(void)
