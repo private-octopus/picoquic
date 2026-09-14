@@ -984,7 +984,7 @@ int h3zero_parse_qpack_test(void)
 int h3zero_prepare_qpack_test(void)
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, 20, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 9, 13, 20, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -995,11 +995,19 @@ int h3zero_prepare_qpack_test(void)
         if (qpack_test_case[j].parts.path != NULL) {
             if (qpack_test_case[j].parts.method == h3zero_method_get)
             {
-                /* Create a request header */
-                bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
-                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
-                    qpack_test_case[j].parts.range, qpack_test_case[j].parts.range_length,
-                    "example.com", NULL);
+                if (qpack_test_case[j].parts.range_length == 0) {
+                    /* Create a request header, using the plain wrapper (fixed UA, no range) */
+                    bytes = h3zero_create_request_header_frame(buffer, bytes_max,
+                        qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
+                        "example.com");
+                }
+                else {
+                    /* Create a request header */
+                    bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
+                        qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
+                        qpack_test_case[j].parts.range, qpack_test_case[j].parts.range_length,
+                        "example.com", NULL);
+                }
             }
             else  if (qpack_test_case[j].parts.method == h3zero_method_post)
             {

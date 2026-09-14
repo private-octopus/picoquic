@@ -706,11 +706,13 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 
 
 /* Receive a WT capsule.
-* With web transport, we expect three types of capsule:
-* - Datagram, if datagram was not negotiated at the QUIC level,
+* Over HTTP/3, WebTransport expects only two capsule types on the stream:
 * - Drain session,
 * - Close session.
-* 
+* HTTP Datagrams are always sent as QUIC DATAGRAM frames when running over
+* HTTP/3 (RFC 9297, Section 2.1); the DATAGRAM capsule is the fallback used
+* over transports without native datagram support, e.g. HTTP/2. Receiving
+* one here would be unexpected.
 */
 int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {

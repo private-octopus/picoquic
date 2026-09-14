@@ -51,6 +51,7 @@
 int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
+int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zero_stream_ctx_t* stream_ctx);
 
 wt_baton_app_ctx_t baton_test_ctx = {
     .nb_turns_required = 15
@@ -560,6 +561,133 @@ static int picowt_connect_protocol_test(picoquic_cnx_t* cnx)
     return ret;
 }
 
+/* picowt_connect_ex registers a stream prefix before checking that the peer's
+ * settings meet WebTransport requirements. If they don't -- here, deliberately
+ * leaving h3_datagram unset -- it must unwind that registration via
+ * picowt_abort_registration rather than leaving a dangling prefix behind. */
+static int picowt_connect_abort_test(picoquic_cnx_t* cnx)
+{
+    h3zero_callback_ctx_t h3_ctx = { 0 };
+    h3zero_stream_ctx_t* stream_ctx = NULL;
+    int ret = 0;
+
+    h3zero_init_stream_tree(&h3_ctx.h3_stream_tree);
+    h3_ctx.settings.settings_received = 1;
+    h3_ctx.settings.enable_connect_protocol = 1;
+    h3_ctx.settings.webtransport_enabled = 1;
+    cnx->remote_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
+    cnx->remote_parameters.is_reset_stream_at_enabled = 1;
+
+    stream_ctx = picowt_set_control_stream(cnx, &h3_ctx);
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        uint64_t stream_id = stream_ctx->stream_id;
+
+        ret = picowt_connect_ex(cnx, &h3_ctx, stream_ctx, PICOQUIC_TEST_SNI,
+            "/baton", picowt_noop_callback, NULL, PICOWT_BATON_ALPN_AVAILABLE, NULL, 0);
+
+        if (ret == 0) {
+            /* Requirements were unexpectedly met -- the abort path was not exercised. */
+            ret = -1;
+        }
+        else if (h3zero_find_stream_prefix(&h3_ctx, stream_id) != NULL) {
+            /* picowt_abort_registration should have removed the prefix it registered. */
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+
+        h3zero_delete_stream(cnx, &h3_ctx, stream_ctx);
+    }
+    h3zero_delete_all_stream_prefixes(cnx, &h3_ctx);
+
+    return ret;
+}
+
+static int picowt_get_authority_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    const uint8_t* test_authority = (const uint8_t*)"example.com";
+
+    memset(&stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+    stream_ctx.ps.stream_state.header.authority = test_authority;
+
+    if (picowt_get_authority(&stream_ctx) != (const char*)test_authority) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* h3zero_check_connect_protocol accepts an exact match against the path
+ * item's configured protocol, and leniently accepts either draft name
+ * ("webtransport" or "webtransport-h3") when the other side used the other
+ * one -- but must reject a protocol that is neither. Only the accept paths
+ * are exercised by the baton tests; the genuine-rejection path is not. */
+static int h3zero_check_connect_protocol_test(void)
+{
+    int ret = 0;
+    picohttp_server_path_item_t item = { 0 };
+    h3zero_stream_ctx_t stream_ctx;
+    char const* new_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
+    char const* old_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD;
+    char const* bogus_protocol = "not-a-webtransport-protocol";
+
+    item.connect_protocol = new_protocol;
+    item.connect_protocol_length = strlen(new_protocol);
+
+    /* Exact match: accepted */
+    memset(&stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+    stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)new_protocol;
+    stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+    if (h3zero_check_connect_protocol(&item, &stream_ctx) != 0) {
+        ret = -1;
+    }
+
+    /* Old draft name against a new-draft path item: lenient match, accepted */
+    if (ret == 0) {
+        stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)old_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(old_protocol);
+        if (h3zero_check_connect_protocol(&item, &stream_ctx) != 0) {
+            ret = -1;
+        }
+    }
+
+    /* Genuinely unrelated protocol: rejected */
+    if (ret == 0) {
+        stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)bogus_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(bogus_protocol);
+        if (h3zero_check_connect_protocol(&item, &stream_ctx) == 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* h3zero_origin_validator_allow_all is wired into the demo server's and the
+ * test path tables as the default origin_validator, but is only invoked from
+ * within h3zero_common.c's CONNECT dispatch when an incoming request actually
+ * carries an Origin header -- something none of the current test scenarios do.
+ * Call it directly, matching its trivial "always allow" contract. */
+static int picowt_origin_validator_test(void)
+{
+    int ret = 0;
+    const uint8_t test_origin[] = "https://example.com";
+    const uint8_t test_authority[] = "example.com";
+
+    if (h3zero_origin_validator_allow_all(test_origin, sizeof(test_origin) - 1,
+        test_authority, sizeof(test_authority) - 1, NULL) != 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 int picowt_tp_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -607,6 +735,18 @@ int picowt_tp_test(void)
     }
     if (ret == 0) {
         ret = picowt_connect_protocol_test(cnx);
+    }
+    if (ret == 0) {
+        ret = picowt_connect_abort_test(cnx);
+    }
+    if (ret == 0) {
+        ret = picowt_get_authority_test();
+    }
+    if (ret == 0) {
+        ret = picowt_origin_validator_test();
+    }
+    if (ret == 0) {
+        ret = h3zero_check_connect_protocol_test();
     }
 
     picoquic_set_callback(cnx, NULL, NULL);

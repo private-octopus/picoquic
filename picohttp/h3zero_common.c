@@ -371,20 +371,6 @@ const uint8_t* h3zero_load_frame_content(const uint8_t* bytes, const uint8_t* by
 	return bytes;
 }
 
-const uint8_t* h3zero_skip_frame_content(const uint8_t* bytes, const uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state)
-{
-	size_t available = bytes_max - bytes;
-
-	if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-		available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-	}
-	stream_state->current_frame_read += available;
-	bytes += available;
-
-	return bytes;
-}
-
 /* Parsing a control stream.
 * 
 * This requires:
@@ -1853,23 +1839,6 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 		}
 	}
 	return ret;
-}
-
-/* Arrival of a datagram capsule */
-void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx)
-{
-	if (stream_ctx == NULL) {
-		/* Application is not yet ready -- just ignore the datagram */
-	}
-	else {
-		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, stream_ctx->stream_id);
-		if ( prefix_ctx == NULL || prefix_ctx->function_call == NULL) {
-			/* Should signal the error HTTP_DATAGRAM_ERROR */
-		}
-		else {
-			prefix_ctx->function_call(cnx, capsule->capsule_buffer, capsule->capsule_length, picohttp_callback_post_datagram, stream_ctx, prefix_ctx->function_ctx);
-		}
-	}
 }
 
 typedef struct st_h3zero_prepare_datagram_ctx_t {
