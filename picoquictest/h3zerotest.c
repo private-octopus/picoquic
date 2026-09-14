@@ -1866,6 +1866,68 @@ int parse_demo_scenario_test(void)
     return ret;
 }
 
+/* The test cases above only exercise scenarios that parse successfully --
+ * the "text = NULL" error branches spread across demo_client_parse_stream_repeat,
+ * demo_client_parse_stream_number, demo_client_parse_stream_previous and
+ * demo_client_parse_post_size, and demo_client_parse_scenario_desc's own
+ * ret = -1, were never actually hit. Feed a handful of malformed scenarios,
+ * each targeting a distinct one of those branches, and check that parsing
+ * is reported as failed. */
+static char const* bad_demo_scenarios[] = {
+    "*3X:/;",  /* repeat count not followed by ':' */
+    "5X:/;",   /* stream number not followed by ':' */
+    "-X:/;",   /* '-' (previous stream marker) not followed by ':' */
+    "/:5X"     /* post_size digits followed by unexpected text */
+};
+
+static size_t nb_bad_demo_scenarios = sizeof(bad_demo_scenarios) / sizeof(char const*);
+
+int parse_demo_scenario_error_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_bad_demo_scenarios; i++) {
+        size_t nb_streams = 0;
+        picoquic_demo_stream_desc_t* desc = NULL;
+        int parse_ret = demo_client_parse_scenario_desc(bad_demo_scenarios[i], &nb_streams, &desc);
+
+        if (parse_ret == 0) {
+            DBG_PRINTF("Scenario \"%s\" unexpectedly parsed successfully", bad_demo_scenarios[i]);
+            ret = -1;
+        }
+        if (desc != NULL) {
+            demo_client_delete_scenario_desc(nb_streams, desc);
+        }
+    }
+
+    return ret;
+}
+
+/* h09_demo_client_prepare_stream_open_command must reject a buffer too
+ * small to hold the formatted command, for both the GET and the POST
+ * forms, instead of overflowing it. Neither of these calls should write
+ * anything to the (deliberately oversized, real) output buffer, since
+ * the size check happens before any byte is written. */
+int h09_prepare_stream_open_command_too_small_test(void)
+{
+    int ret = 0;
+    uint8_t command[64];
+    size_t consumed = 0;
+    uint8_t const* path = (uint8_t const*)"/some/path";
+    size_t path_len = strlen((char const*)path);
+
+    if (h09_demo_client_prepare_stream_open_command(command, 5, path, path_len, 0, NULL, &consumed) == 0) {
+        DBG_PRINTF("%s", "GET command unexpectedly fit in a too-small buffer");
+        ret = -1;
+    }
+    else if (h09_demo_client_prepare_stream_open_command(command, 5, path, path_len, 1000, "example.com", &consumed) == 0) {
+        DBG_PRINTF("%s", "POST command unexpectedly fit in a too-small buffer");
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /*
  * Set a connection between an H3 client and an H3 server over
  * network simulation.

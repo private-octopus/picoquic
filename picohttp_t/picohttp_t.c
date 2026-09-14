@@ -138,6 +138,8 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_stream_test", h3zero_stream_test },
     { "h3zero_stream_fuzz", h3zero_stream_fuzz_test },
     { "parse_demo_scenario", parse_demo_scenario_test },
+    { "parse_demo_scenario_error", parse_demo_scenario_error_test },
+    { "h09_prepare_stream_open_command_too_small", h09_prepare_stream_open_command_too_small_test },
     { "h3zero_server", h3zero_server_test },
     { "h3zero_migration_disabled", h3zero_migration_disabled_test },
     { "h09_server", h09_server_test },

@@ -3900,6 +3900,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(parse_demo_scenario_error) {
+            int ret = parse_demo_scenario_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_prepare_stream_open_command_too_small) {
+            int ret = h09_prepare_stream_open_command_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_server) {
             int ret = h3zero_server_test();
 

@@ -437,6 +437,8 @@ int h3zero_qpack_fuzz_test(void);
 int h3zero_stream_test(void);
 int h3zero_stream_fuzz_test(void);
 int parse_demo_scenario_test(void);
+int parse_demo_scenario_error_test(void);
+int h09_prepare_stream_open_command_too_small_test(void);
 int h3zero_server_test(void);
 int h3zero_migration_disabled_test(void);
 int h3zero_wt_protocol_response_test(void);
