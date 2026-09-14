@@ -371,20 +371,6 @@ const uint8_t* h3zero_load_frame_content(const uint8_t* bytes, const uint8_t* by
 	return bytes;
 }
 
-const uint8_t* h3zero_skip_frame_content(const uint8_t* bytes, const uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state)
-{
-	size_t available = bytes_max - bytes;
-
-	if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-		available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-	}
-	stream_state->current_frame_read += available;
-	bytes += available;
-
-	return bytes;
-}
-
 /* Parsing a control stream.
 * 
 * This requires:
@@ -1216,6 +1202,7 @@ int h3zero_process_request_frame(
 			if (path_item >= 0) {
 				/* TODO-POST: move this code to post-fin callback.*/
 				stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+				stream_ctx->path_callback_ctx = app_ctx->path_table[path_item].path_app_ctx;
 				stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
 					stream_ctx, stream_ctx->path_callback_ctx);
 			}
@@ -1267,6 +1254,7 @@ int h3zero_process_request_frame(
 				}
 				else {
 					stream_ctx->path_callback = item->path_callback;
+					stream_ctx->path_callback_ctx = item->path_app_ctx;
 					if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
 						stream_ctx, item->path_app_ctx) != 0) {
 						/* This callback is not supported */
@@ -1292,9 +1280,12 @@ int h3zero_process_request_frame(
 			}
 		}
 		else {
-			/* Duplicate request? Bytes after connect? Should they just be sent to the app? */
+			/* Duplicate CONNECT on an already-upgraded stream: not survivable
+			 * the way a bad GET/POST/CONNECT target is, so force the reset-
+			 * stream path below instead of sending a (near-empty) response. */
 			picoquic_log_app_message(cnx, "Duplicate request on stream: %"PRIu64, stream_ctx->stream_id);
 			ret = -1;
+			o_bytes = NULL;
 		}
 	}
 	else
@@ -1855,23 +1846,6 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 	return ret;
 }
 
-/* Arrival of a datagram capsule */
-void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx)
-{
-	if (stream_ctx == NULL) {
-		/* Application is not yet ready -- just ignore the datagram */
-	}
-	else {
-		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, stream_ctx->stream_id);
-		if ( prefix_ctx == NULL || prefix_ctx->function_call == NULL) {
-			/* Should signal the error HTTP_DATAGRAM_ERROR */
-		}
-		else {
-			prefix_ctx->function_call(cnx, capsule->capsule_buffer, capsule->capsule_length, picohttp_callback_post_datagram, stream_ctx, prefix_ctx->function_ctx);
-		}
-	}
-}
-
 typedef struct st_h3zero_prepare_datagram_ctx_t {
 	void* picoquic_context;
 	size_t picoquic_space;
@@ -2277,6 +2251,11 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		capsule->capsule_length = 0;
 		capsule->is_stored = 0;
 		capsule->is_length_known = 0;
+		/* value_read must also be reset: capsule_buffer/capsule_buffer_size are kept
+		 * across capsules to avoid a realloc, but if a shorter capsule follows one
+		 * that left value_read at its (larger) final count, "capsule_length -
+		 * value_read" below would underflow (both are size_t) into a huge memcpy. */
+		capsule->value_read = 0;
 	}
 	if (!capsule->is_length_known) {
 		size_t length_of_type = 0;
