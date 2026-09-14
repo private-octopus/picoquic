@@ -4268,6 +4268,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_client_media_stream) {
+            int ret = quicperf_client_media_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_client_media_datagram) {
+            int ret = quicperf_client_media_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_datagram_too_large) {
+            int ret = quicperf_datagram_too_large_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_datagram) {
             int ret = quicperf_datagram_test();
 

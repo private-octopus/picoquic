@@ -290,6 +290,10 @@ const quicperf_stream_desc_t qpsc_combo[4] = {
     }
 };
 
+/* Explicit "b" media type prefix: should parse identically to the implicit
+ * default (qpstr_batch), which is the path every other batch scenario uses. */
+#define qpstr_batch_explicit_b "b256:12345;"
+
 #define qpstr_upper_id "=AB:256:12345; -0:999;"
 
 const quicperf_stream_desc_t qpsc_upper_id[2] = {
@@ -337,6 +341,7 @@ typedef struct st_quicperf_test_line_t {
 
 const quicperf_test_line_t test_lines[] = {
     { qpsc_batch, 1, qpstr_batch },
+    { qpsc_batch, 1, qpstr_batch_explicit_b },
     { qpsc_batch100, 1, qpstr_batch100 },
     { qpsc_batch2, 2, qpstr_batch2 },
     { qpsc_video1, 1, qpstr_video1 },
@@ -465,7 +470,14 @@ int quicperf_scenario_error_test(void)
     static const char* bad_scenarios[] = {
         "0:400xyz;",  /* trailing garbage after an otherwise valid stream description */
         "0:abc;",     /* unparseable response size, no stream ID given */
-        "=ZZ:0:abc;"  /* unparseable response size, with a stream ID given */
+        "=ZZ:0:abc;", /* unparseable response size, with a stream ID given */
+        "*3Q:100:200;", /* stray character where a colon or ';' was expected, after a repeat count */
+        "*Q:100:200;",  /* '*' not followed by a digit, in the repeat count */
+        "=b1::200;",    /* post_size field left empty */
+        "=b1:-5:200;",  /* post_size given as a negative, non-zero number (only "-0" is meaningful there) */
+        "=v1:s300:n300:12345;",       /* media frequency out of the 0-255 range */
+        "=v1:s30:p999:n300:12345;",   /* media priority ('p') out of the 0-255 range */
+        "=v1:s30:n300:99999999;"      /* media frame_size larger than the 0xffffff limit */
     };
     size_t nb_bad_scenarios = sizeof(bad_scenarios) / sizeof(char const*);
 
@@ -826,6 +838,60 @@ int quicperf_infinite_test(void)
     };
 
     return quicperf_e2e_test(0xbf, infinite_scenario, 1200000, 1, &infinite_target);
+}
+
+int quicperf_client_media_stream_test(void)
+{
+    /* Client-initiated media streams are not implemented yet (see
+     * https://github.com/private-octopus/picoquic/issues/2171). The "C" flag
+     * on a media stream is valid syntax, so the parser accepts it -- but
+     * quicperf_init_streams_from_scenario must reject it cleanly at
+     * scenario-init time instead of crashing or hanging. */
+    quicperf_test_target_t target = {
+        0, /* nb_frames_received_min */
+        0, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0xc1, qpstr_video2, 500000, 1, &target);
+}
+
+int quicperf_client_media_datagram_test(void)
+{
+    /* Same "not implemented yet" rejection, for the datagram flavor of
+     * client-initiated media. */
+    char const* scenario = "=cd1:d50:C:n250:100;";
+    quicperf_test_target_t target = {
+        0, /* nb_frames_received_min */
+        0, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0xc2, scenario, 500000, 1, &target);
+}
+
+int quicperf_datagram_too_large_test(void)
+{
+    /* frame_size well above the negotiated max_datagram_frame_size (set to
+     * PICOQUIC_MAX_PACKET_SIZE by the test harness): must be rejected at
+     * scenario-init time instead of ever being sent. */
+    char const* scenario = "=dz1:d50:n250:100000;";
+    quicperf_test_target_t target = {
+        0, /* nb_frames_received_min */
+        0, /* nb_frames_received_max */
+        0, /* average_delay_min */
+        0, /* average_delay_max */
+        0, /* max_delay */
+        0, /* min_delay */
+    };
+
+    return quicperf_e2e_test(0xc3, scenario, 500000, 1, &target);
 }
 
 int quicperf_datagram_test(void)
