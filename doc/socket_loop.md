@@ -67,7 +67,10 @@ The `param` argument contains data to parameterize the packet loop:
   created for a family that has no entry, so setting one IPv4 address and
   one IPv6 address serves both families on those two addresses only.
   Every packet sent on a bound socket carries the bound address as its
-  source, whatever local address the path proposes; this pins the source
+  source, whatever local address the path proposes (on BSD systems, which
+  lack `IP_PKTINFO` and refuse `IP_SENDSRCADDR` on a bound IPv4 socket,
+  no source control message is sent and the kernel applies the bound
+  address itself); this pins the source
   address of every path on that socket, so `local_addr` cannot be
   combined with multipath across several local addresses. This is an
   address binding, not an interface binding: on systems with a weak host

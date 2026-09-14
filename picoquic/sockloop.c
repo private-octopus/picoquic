@@ -403,11 +403,19 @@ void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, st
     }
     if (s_ctx->bound_addr.ss_family == AF_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)local_addr;
+#ifndef IP_PKTINFO
+        /* Without IP_PKTINFO (BSD), the source is set with IP_SENDSRCADDR, and
+         * the kernel refuses that option with EINVAL on a socket bound to a
+         * specific address. Leave the source unspecified so that no control
+         * message is added: the kernel then sends from the bound address. */
+        memset(s4, 0, sizeof(struct sockaddr_in));
+#else
         uint16_t port = (local_addr->ss_family == AF_INET) ? s4->sin_port : s_ctx->n_port;
         memset(s4, 0, sizeof(struct sockaddr_in));
         s4->sin_family = AF_INET;
         s4->sin_port = port;
         s4->sin_addr = ((const struct sockaddr_in*)&s_ctx->bound_addr)->sin_addr;
+#endif
     }
     else {
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)local_addr;
