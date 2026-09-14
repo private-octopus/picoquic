@@ -1202,6 +1202,7 @@ int h3zero_process_request_frame(
 			if (path_item >= 0) {
 				/* TODO-POST: move this code to post-fin callback.*/
 				stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+				stream_ctx->path_callback_ctx = app_ctx->path_table[path_item].path_app_ctx;
 				stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
 					stream_ctx, stream_ctx->path_callback_ctx);
 			}
@@ -1253,6 +1254,7 @@ int h3zero_process_request_frame(
 				}
 				else {
 					stream_ctx->path_callback = item->path_callback;
+					stream_ctx->path_callback_ctx = item->path_app_ctx;
 					if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
 						stream_ctx, item->path_app_ctx) != 0) {
 						/* This callback is not supported */
@@ -1278,9 +1280,12 @@ int h3zero_process_request_frame(
 			}
 		}
 		else {
-			/* Duplicate request? Bytes after connect? Should they just be sent to the app? */
+			/* Duplicate CONNECT on an already-upgraded stream: not survivable
+			 * the way a bad GET/POST/CONNECT target is, so force the reset-
+			 * stream path below instead of sending a (near-empty) response. */
 			picoquic_log_app_message(cnx, "Duplicate request on stream: %"PRIu64, stream_ctx->stream_id);
 			ret = -1;
+			o_bytes = NULL;
 		}
 	}
 	else

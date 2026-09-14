@@ -3810,6 +3810,220 @@ int h3zero_find_path_item_test(void)
     return ret;
 }
 
+extern int h3zero_process_request_frame(picoquic_cnx_t* cnx,
+    h3zero_stream_ctx_t* stream_ctx, h3zero_callback_ctx_t* app_ctx);
+
+typedef struct st_h3zero_process_request_test_cb_ctx_t {
+    int result;
+    int called;
+} h3zero_process_request_test_cb_ctx_t;
+
+static int h3zero_process_request_test_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, picohttp_call_back_event_t fin_or_event,
+    h3zero_stream_ctx_t* stream_ctx, void* path_app_ctx)
+{
+    h3zero_process_request_test_cb_ctx_t* cb_ctx = (h3zero_process_request_test_cb_ctx_t*)path_app_ctx;
+    (void)cnx;
+    (void)bytes;
+    (void)length;
+    (void)fin_or_event;
+    (void)stream_ctx;
+    cb_ctx->called = 1;
+    return cb_ctx->result;
+}
+
+static int h3zero_origin_validator_test_reject(
+    const uint8_t* origin, size_t origin_length,
+    const uint8_t* authority, size_t authority_length,
+    void* origin_validator_ctx)
+{
+    (void)origin;
+    (void)origin_length;
+    (void)authority;
+    (void)authority_length;
+    (void)origin_validator_ctx;
+    return -1;
+}
+
+/* h3zero_process_request_frame is the server-side dispatcher for GET/POST/
+ * CONNECT requests. Several of its branches -- POST to a path that needs a
+ * fresh path_table lookup, and most of the CONNECT rejection paths (protocol
+ * mismatch, origin rejection, the app callback itself refusing, a duplicate
+ * CONNECT on an already-upgraded stream) -- are never reached by the
+ * existing WebTransport (accept-only) and GET-only test scenarios. Call the
+ * dispatcher directly with hand-built stream_ctx/app_ctx to exercise them,
+ * the same way h3zero_check_connect_protocol_test exercises the protocol
+ * check it eventually calls. */
+int h3zero_process_request_frame_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    uint64_t next_stream_id = 4;
+
+    static const char post_path[] = "/post";
+    static const char connect_path[] = "/connect";
+    static const char* new_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
+    static const char* other_protocol = "not-webtransport-at-all";
+    static const uint8_t test_origin[] = "https://example.com";
+    static const uint8_t test_authority[] = "example.com";
+
+    h3zero_process_request_test_cb_ctx_t post_cb_ctx = { 5, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_accept_cb_ctx = { 0, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_refuse_cb_ctx = { -1, 0 };
+
+    picohttp_server_path_item_t path_table[] = {
+        { post_path, sizeof(post_path) - 1, h3zero_process_request_test_callback, &post_cb_ctx,
+            NULL, 0, NULL, NULL, 0 },
+        { connect_path, sizeof(connect_path) - 1, h3zero_process_request_test_callback, &connect_accept_cb_ctx,
+            new_protocol, strlen(new_protocol), NULL, NULL, 0 }
+    };
+    h3zero_callback_ctx_t app_ctx = { 0 };
+
+    app_ctx.path_table = path_table;
+    app_ctx.path_table_nb = sizeof(path_table) / sizeof(picohttp_server_path_item_t);
+
+    /* POST to a registered path: exercises the path_table lookup that only
+     * runs the first time (path_callback == NULL && post_received == 0). */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_post;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)post_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(post_path) - 1;
+
+        if (h3zero_process_request_frame(cnx, &stream_ctx, &app_ctx) != 0 ||
+            !post_cb_ctx.called || stream_ctx.path_callback == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* CONNECT with a protocol the path item does not accept (and a custom
+     * error status, to also cover that formatting branch): rejected before
+     * the app is ever consulted. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.connect_error_status = 404;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)other_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(other_protocol);
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* CONNECT with a matching protocol but an origin_validator that rejects
+     * the request: also rejected before the app callback runs. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.origin_validator = h3zero_origin_validator_test_reject;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+        stream_ctx.ps.stream_state.header.origin = test_origin;
+        stream_ctx.ps.stream_state.header.origin_length = sizeof(test_origin) - 1;
+        stream_ctx.ps.stream_state.header.authority = test_authority;
+        stream_ctx.ps.stream_state.header.authority_length = sizeof(test_authority) - 1;
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* CONNECT that passes protocol and origin checks, but whose app callback
+     * itself refuses the connection. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.path_callback = h3zero_process_request_test_callback;
+        item.path_app_ctx = &connect_refuse_cb_ctx;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                !connect_refuse_cb_ctx.called || stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* A second CONNECT on a stream that already has a path_callback (i.e.
+     * already upgraded): logged as a duplicate request and left otherwise
+     * unhandled by design (see the "Duplicate request?" comment at the call
+     * site) -- the dispatcher's own "ret = -1" there is overwritten by the
+     * unconditional stream-write result just below it, since this branch
+     * doesn't also set o_bytes = NULL the way every other error path does.
+     * So the only currently-guaranteed behavior is "doesn't crash, and
+     * doesn't touch path_callback again". */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.path_callback = h3zero_process_request_test_callback;
+
+        (void)h3zero_process_request_frame(cnx, &stream_ctx, &app_ctx);
+        if (stream_ctx.path_callback != h3zero_process_request_test_callback) {
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int h3zero_get_content_type_by_path_test(void) {
     int ret = 0;
 

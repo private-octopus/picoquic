@@ -165,6 +165,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_settings", h3zero_settings_test },
     { "h3zero_get_content_type_by_path", h3zero_get_content_type_by_path_test },
     { "h3zero_find_path_item", h3zero_find_path_item_test },
+    { "h3zero_process_request_frame", h3zero_process_request_frame_test },
     { "http_stress", http_stress_test },
     { "http_corrupt", http_corrupt_test},
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},
