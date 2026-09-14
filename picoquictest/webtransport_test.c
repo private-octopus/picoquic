@@ -52,6 +52,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_st
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
 int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zero_stream_ctx_t* stream_ctx);
+int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 
 wt_baton_app_ctx_t baton_test_ctx = {
     .nb_turns_required = 15
@@ -607,6 +608,75 @@ static int picowt_connect_abort_test(picoquic_cnx_t* cnx)
     return ret;
 }
 
+/* picowt_abort_registration with a NULL h3_ctx -- e.g. the connection-level
+ * setup failed before any h3 context existed -- must still safely clear the
+ * stream_ctx's callback pointers and report that the caller owns freeing it,
+ * without touching any stream prefix table. */
+static int picowt_abort_registration_no_ctx_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+
+    memset(&stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+    stream_ctx.stream_id = 4;
+    stream_ctx.path_callback = picowt_noop_callback;
+
+    if (picowt_abort_registration(NULL, NULL, &stream_ctx) != 1 ||
+        stream_ctx.path_callback != NULL) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* picowt_process_pending_connect's rejection branch runs when settings
+ * finally arrive for a CONNECT that had to be deferred (sent before
+ * settings_received was set) but still don't meet WebTransport requirements.
+ * That's a different path from picowt_connect_ex's own immediate-failure
+ * check: it requires the CONNECT to have been deferred first, then settings
+ * to arrive and still fail the requirements check. Use a real callback so
+ * the connect_refused notification to the app is also exercised. */
+static int picowt_deferred_connect_reject_test(picoquic_cnx_t* cnx)
+{
+    h3zero_callback_ctx_t h3_ctx = { 0 };
+    h3zero_stream_ctx_t* stream_ctx = NULL;
+    int ret = 0;
+
+    h3zero_init_stream_tree(&h3_ctx.h3_stream_tree);
+    /* settings_received is left at 0, so picowt_connect_ex defers the CONNECT. */
+
+    stream_ctx = picowt_set_control_stream(cnx, &h3_ctx);
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picowt_connect_ex(cnx, &h3_ctx, stream_ctx, PICOQUIC_TEST_SNI,
+            "/baton", picowt_noop_callback, NULL, PICOWT_BATON_ALPN_AVAILABLE, NULL, 0);
+
+        if (ret != 0 || h3_ctx.pending_wt_connect != stream_ctx) {
+            /* Should have been deferred, not failed or sent outright. */
+            ret = -1;
+        }
+        else {
+            /* Settings "arrive" but still don't meet requirements (h3_datagram
+             * is left unset) -- the pending CONNECT must be gracefully rejected. */
+            h3_ctx.settings.settings_received = 1;
+            ret = picowt_process_pending_connect(cnx, &h3_ctx);
+
+            if (ret != 0 || h3_ctx.pending_wt_connect != NULL ||
+                h3zero_find_stream_prefix(&h3_ctx, stream_ctx->stream_id) != NULL) {
+                /* Rejection must clear the pending state and the prefix it had registered. */
+                ret = -1;
+            }
+        }
+
+        h3zero_delete_stream(cnx, &h3_ctx, stream_ctx);
+    }
+    h3zero_delete_all_stream_prefixes(cnx, &h3_ctx);
+
+    return ret;
+}
+
 static int picowt_get_authority_test(void)
 {
     int ret = 0;
@@ -667,6 +737,20 @@ static int h3zero_check_connect_protocol_test(void)
     }
 
     return ret;
+}
+
+/* h3zero_delete_stream_prefix on a prefix that was never declared (or already
+ * removed) must be a safe no-op that just logs, rather than touching the
+ * (empty, or unrelated) prefix list. */
+static int h3zero_delete_stream_prefix_not_found_test(picoquic_cnx_t* cnx)
+{
+    h3zero_callback_ctx_t h3_ctx = { 0 };
+
+    h3zero_init_stream_tree(&h3_ctx.h3_stream_tree);
+
+    h3zero_delete_stream_prefix(cnx, &h3_ctx, 12345);
+
+    return 0;
 }
 
 /* h3zero_origin_validator_allow_all is wired into the demo server's and the
@@ -740,6 +824,12 @@ int picowt_tp_test(void)
         ret = picowt_connect_abort_test(cnx);
     }
     if (ret == 0) {
+        ret = picowt_deferred_connect_reject_test(cnx);
+    }
+    if (ret == 0) {
+        ret = picowt_abort_registration_no_ctx_test();
+    }
+    if (ret == 0) {
         ret = picowt_get_authority_test();
     }
     if (ret == 0) {
@@ -747,6 +837,9 @@ int picowt_tp_test(void)
     }
     if (ret == 0) {
         ret = h3zero_check_connect_protocol_test();
+    }
+    if (ret == 0) {
+        ret = h3zero_delete_stream_prefix_not_found_test(cnx);
     }
 
     picoquic_set_callback(cnx, NULL, NULL);
@@ -873,6 +966,20 @@ static int picowt_drain_receive_capsule_test(void)
             capsule.error_msg_len != sizeof(close_msg) ||
             capsule.error_msg == NULL ||
             memcmp(capsule.error_msg, close_msg, sizeof(close_msg)) != 0) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Close capsule needs at least 4 bytes (the error code); a shorter one
+         * must be rejected rather than read past its declared length. */
+        static const uint8_t short_payload[] = { 1, 2 };
+
+        picowt_release_capsule(&capsule);
+        bytes = picowt_test_format_capsule(buffer, buffer + sizeof(buffer),
+            picowt_capsule_close_webtransport_session, short_payload, sizeof(short_payload));
+        if (bytes == NULL ||
+            picowt_receive_capsule(cnx, buffer, bytes, &capsule) == 0) {
             ret = -1;
         }
     }
