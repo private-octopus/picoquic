@@ -53,6 +53,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_st
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
 int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zero_stream_ctx_t* stream_ctx);
 int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected_protocol);
 
 wt_baton_app_ctx_t baton_test_ctx = {
     .nb_turns_required = 15
@@ -677,6 +678,67 @@ static int picowt_deferred_connect_reject_test(picoquic_cnx_t* cnx)
     return ret;
 }
 
+/* picowt_select_wt_protocol parses a comma-separated list of protocol names
+ * offered by the client. Two edge cases are not exercised by the baton
+ * tests, which only ever offer well-formed, short protocol lists:
+ * - a single candidate token so long it overflows the 254-byte scratch
+ *   buffer, which must be treated as "no match" rather than overrun it;
+ * - calling picowt_set_wt_protocol a second time on the same stream, which
+ *   must fail since a protocol was already selected. */
+static int picowt_select_wt_protocol_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    char oversized_protocol[300];
+
+    memset(oversized_protocol, 'x', sizeof(oversized_protocol) - 1);
+    oversized_protocol[sizeof(oversized_protocol) - 1] = 0;
+
+    memset(&stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+    stream_ctx.ps.stream_state.header.wt_available_protocols = (uint8_t const*)oversized_protocol;
+
+    if (picowt_select_wt_protocol(&stream_ctx, oversized_protocol) == 0) {
+        /* An oversized candidate must never be treated as a match. */
+        ret = -1;
+    }
+    else if (stream_ctx.ps.stream_state.wt_protocol != NULL) {
+        ret = -1;
+    }
+    else if (picowt_set_wt_protocol(&stream_ctx, H3ZERO_WEBTRANSPORT_H3_PROTOCOL) != 0 ||
+        stream_ctx.ps.stream_state.wt_protocol == NULL) {
+        ret = -1;
+    }
+    else if (picowt_set_wt_protocol(&stream_ctx, H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD) == 0) {
+        /* A protocol was already selected; re-selecting must fail. */
+        ret = -1;
+    }
+
+    free((void*)stream_ctx.ps.stream_state.wt_protocol);
+
+    return ret;
+}
+
+/* picowt_send_close_session_message must reject an error message too long to
+ * fit its fixed 512-byte encoding buffer, rather than overrun it. On that
+ * failure path neither cnx nor the stream state is touched further, so a
+ * minimal stack stream_ctx (with is_fin_sent left clear) is enough. */
+static int picowt_send_close_session_message_too_long_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t control_stream_ctx;
+    char long_err_msg[600];
+
+    memset(&control_stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+    memset(long_err_msg, 'e', sizeof(long_err_msg) - 1);
+    long_err_msg[sizeof(long_err_msg) - 1] = 0;
+
+    if (picowt_send_close_session_message(NULL, &control_stream_ctx, 0, long_err_msg) == 0) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
 static int picowt_get_authority_test(void)
 {
     int ret = 0;
@@ -828,6 +890,12 @@ int picowt_tp_test(void)
     }
     if (ret == 0) {
         ret = picowt_abort_registration_no_ctx_test();
+    }
+    if (ret == 0) {
+        ret = picowt_select_wt_protocol_test();
+    }
+    if (ret == 0) {
+        ret = picowt_send_close_session_message_too_long_test();
     }
     if (ret == 0) {
         ret = picowt_get_authority_test();
