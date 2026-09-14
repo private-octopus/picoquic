@@ -1269,12 +1269,14 @@ int sockloop_bind_addr_test(void)
     if (ret == 0) {
         ret = sockloop_bind_addr_send_source(AF_INET6);
     }
+#ifndef _WINDOWS
     if (ret == 0) {
         ret = sockloop_bind_addr_send_bound(AF_INET);
     }
     if (ret == 0) {
         ret = sockloop_bind_addr_send_bound(AF_INET6);
     }
+#endif
     if (ret == 0) {
         /* Full loop, server bound to 127.0.0.1 only, client connecting to it. */
         sockloop_test_spec_t spec;
