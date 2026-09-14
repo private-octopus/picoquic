@@ -4377,6 +4377,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_webtransport_requirements_met) {
+            int ret = picowt_webtransport_requirements_met_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_format_connect_frame) {
             int ret = picowt_format_connect_frame_test();
 

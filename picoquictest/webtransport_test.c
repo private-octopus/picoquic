@@ -1348,9 +1348,13 @@ static const picowt_select_wt_protocol_whitespace_test_case_t picowt_select_wt_p
      * candidate, then a match on the second -- exercises the whitespace
      * skip between a candidate and its separator. */
     { "foo , bar", "bar", 0 },
-    /* no comma or end after a candidate (a stray character instead): the
-     * list is malformed, but parsing must stop cleanly, not misbehave. */
-    { "xyz!rest", "bar", -1 }
+    /* a candidate ends at a space (not a comma), and what follows the
+     * trailing-whitespace skip is neither ',' nor the end of the string --
+     * an embedded character like '!' does NOT trigger this: it is just
+     * absorbed into the candidate token, since only {',', 0, ' ', '\t'}
+     * end one. Only a *space*-separated (not comma-separated) list hits
+     * the "a = NULL" malformed-list path. */
+    { "foo bar", "bar", -1 }
 };
 
 static const size_t nb_picowt_select_wt_protocol_whitespace_test_cases =
@@ -1376,6 +1380,117 @@ int picowt_select_wt_protocol_whitespace_test(void)
         }
         free((void*)stream_ctx.ps.stream_state.wt_protocol);
     }
+
+    return ret;
+}
+
+/* picowt_webtransport_requirements_met is internal to webtransport.c (not
+ * declared in pico_webtransport.h) but given external linkage, like the
+ * other internal helpers below, so it can be driven directly. It is a long
+ * short-circuit AND chain; picowt_deferred_connect_reject_test only ever
+ * exercises one failure (h3_datagram unset). This drives each condition's
+ * own false branch in turn, keeping every earlier condition true so the
+ * chain actually reaches it, plus the all-true success case. */
+int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
+
+int picowt_webtransport_requirements_met_test(void)
+{
+    int ret;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    h3zero_callback_ctx_t ctx;
+
+    ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Fully populated: the baseline every case below deviates from in
+     * exactly one place. */
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.settings.settings_received = 1;
+    ctx.settings.h3_datagram = 1;
+    ctx.settings.webtransport_enabled = 1;
+    ctx.settings.webtransport_max_sessions = 1;
+    ctx.settings.enable_connect_protocol = 1;
+    cnx->remote_parameters.max_datagram_frame_size = 1500;
+    cnx->remote_parameters.is_reset_stream_at_enabled = 1;
+
+    if (!picowt_webtransport_requirements_met(cnx, &ctx)) {
+        DBG_PRINTF("%s", "Fully populated requirements unexpectedly not met");
+        ret = -1;
+    }
+
+    if (ret == 0 && picowt_webtransport_requirements_met(cnx, NULL)) {
+        DBG_PRINTF("%s", "NULL ctx unexpectedly met requirements");
+        ret = -1;
+    }
+
+    if (ret == 0 && picowt_webtransport_requirements_met(NULL, &ctx)) {
+        DBG_PRINTF("%s", "NULL cnx unexpectedly met requirements");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ctx.settings.settings_received = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met without settings_received");
+            ret = -1;
+        }
+        ctx.settings.settings_received = 1;
+    }
+
+    if (ret == 0) {
+        ctx.settings.h3_datagram = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met without h3_datagram");
+            ret = -1;
+        }
+        ctx.settings.h3_datagram = 1;
+    }
+
+    if (ret == 0) {
+        /* Neither of the two ways to signal webtransport support is set. */
+        ctx.settings.webtransport_enabled = 0;
+        ctx.settings.webtransport_max_sessions = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met without any webtransport setting");
+            ret = -1;
+        }
+        ctx.settings.webtransport_enabled = 1;
+        ctx.settings.webtransport_max_sessions = 1;
+    }
+
+    if (ret == 0) {
+        /* webtransport_enabled is set, so enable_connect_protocol is now required too. */
+        ctx.settings.enable_connect_protocol = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met without enable_connect_protocol");
+            ret = -1;
+        }
+        ctx.settings.enable_connect_protocol = 1;
+    }
+
+    if (ret == 0) {
+        cnx->remote_parameters.max_datagram_frame_size = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met with a zero max_datagram_frame_size");
+            ret = -1;
+        }
+        cnx->remote_parameters.max_datagram_frame_size = 1500;
+    }
+
+    if (ret == 0) {
+        cnx->remote_parameters.is_reset_stream_at_enabled = 0;
+        if (picowt_webtransport_requirements_met(cnx, &ctx)) {
+            DBG_PRINTF("%s", "Requirements unexpectedly met without is_reset_stream_at_enabled");
+            ret = -1;
+        }
+        cnx->remote_parameters.is_reset_stream_at_enabled = 1;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
     return ret;
 }

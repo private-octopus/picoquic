@@ -758,6 +758,7 @@ int picowt_baton_overflow_test(void);
 int picowt_drain_test(void);
 int picowt_reset_stream_remote_unidir_test(void);
 int picowt_select_wt_protocol_whitespace_test(void);
+int picowt_webtransport_requirements_met_test(void);
 int picowt_format_connect_frame_test(void);
 int picowt_send_close_session_already_closed_test(void);
 int picowt_tp_test(void);

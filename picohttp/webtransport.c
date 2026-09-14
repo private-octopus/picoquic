@@ -349,7 +349,8 @@ static const char* picowt_connect_protocol_from_settings(const h3zero_settings_t
         H3ZERO_WEBTRANSPORT_H3_PROTOCOL : H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD;
 }
 
-static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+/* Not declared static because used in tests. */
+int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
     const picoquic_tp_t* remote_tp = (cnx == NULL) ? NULL : picoquic_get_transport_parameters(cnx, 0);
     int has_webtransport_settings = ctx != NULL &&

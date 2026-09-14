@@ -203,6 +203,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_drain", picowt_drain_test },
     { "picowt_reset_stream_remote_unidir", picowt_reset_stream_remote_unidir_test },
     { "picowt_select_wt_protocol_whitespace", picowt_select_wt_protocol_whitespace_test },
+    { "picowt_webtransport_requirements_met", picowt_webtransport_requirements_met_test },
     { "picowt_format_connect_frame", picowt_format_connect_frame_test },
     { "picowt_send_close_session_already_closed", picowt_send_close_session_already_closed_test },
     { "picowt_tp", picowt_tp_test },
