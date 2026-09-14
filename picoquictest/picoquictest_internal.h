@@ -279,6 +279,10 @@ extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
 
+extern test_skip_frames_t test_frame_error_list[];
+
+extern size_t nb_test_frame_error_list;
+
 typedef struct st_test_vary_link_spec_t {
     uint64_t duration;
     uint64_t bits_per_second_up;
@@ -386,6 +390,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
+int picoquic_check_json_well_formed(char const* fname);
 
 uint64_t picoquic_sum_text_file(char const* fname);
 

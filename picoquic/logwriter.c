@@ -35,9 +35,12 @@
 #include "picoquic_unified_log.h"
 #include "picoquic_binlog.h"
 
+/* Unlike picoquic_frames_fixed_skip/picoquic_frames_varint_skip, these accept a NULL
+ * "bytes" (returning NULL right back) so callers below can chain skips without an
+ * intermediate NULL check after every single field. */
 static const uint8_t* picoquic_log_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, size_t size)
 {
-    return bytes == NULL ? NULL : ((size <= (size_t)(bytes_max - bytes)) ? (bytes + size) : NULL);
+    return bytes == NULL ? NULL : picoquic_frames_fixed_skip(bytes, bytes_max, size);
 }
 
 static const uint8_t* picoquic_log_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)

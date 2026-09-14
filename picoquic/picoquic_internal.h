@@ -45,6 +45,7 @@ extern "C" {
 #define PICOQUIC_MIN_STREAM_DATA_FRAGMENT 512
 #define PICOQUIC_RETRY_SECRET_SIZE 64
 #define PICOQUIC_RETRY_TOKEN_PAD_SIZE 26
+#define PICOQUIC_NEW_TOKEN_MAX_LENGTH 256
 #define PICOQUIC_DEFAULT_0RTT_WINDOW (10*PICOQUIC_ENFORCED_INITIAL_MTU)
 #define PICOQUIC_NB_PATH_TARGET 8
 #define PICOQUIC_NB_PATH_DEFAULT 2
@@ -2146,7 +2147,6 @@ const uint8_t* picoquic_parse_ack_frequency_frame(const uint8_t* bytes, const ui
 uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_immediate_ack_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data);
 uint8_t* picoquic_format_time_stamp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, uint64_t current_time);
-size_t picoquic_encode_time_stamp_length(picoquic_cnx_t* cnx, uint64_t current_time);
 uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, picoquic_path_t* path_x, int* more_data, int * is_pure_ack);
 uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data,
     uint64_t path_id, uint64_t reason);
@@ -2170,9 +2170,11 @@ void picoquic_update_peer_addr(picoquic_path_t* path_x, const struct sockaddr* p
 int picoquic_skip_frame(const uint8_t* bytes, size_t bytes_max, size_t* consumed, int* pure_ack);
 const uint8_t* picoquic_skip_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_skip_path_available_or_backup_frame(const uint8_t* bytes, const uint8_t* bytes_max);
-int picoquic_is_path_challenging_packet(const uint8_t* bytes, size_t bytes_maxsize);
 int picoquic_queue_path_available_or_backup_frame(
     picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_status_enum status);
+int picoquic_queue_paths_blocked_frame(picoquic_cnx_t* cnx);
+int picoquic_queue_max_path_id_frame(picoquic_cnx_t* cnx);
+int picoquic_queue_path_cid_blocked_frame(picoquic_path_t* path_x);
 /* Internal only API, notify that next path is now allowed. */
 void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx);
 

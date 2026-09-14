@@ -664,8 +664,9 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
 void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len)
 {
     const uint8_t* end_bytes = bytes + len;
+    fprintf(f, "{");
     if ((len & 3) != 0 || len == 0) {
-        fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+        fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
     }
     else {
         fprintf(f, "\"chosen\": ");

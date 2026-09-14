@@ -905,10 +905,10 @@ int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config
             case 0x21: /* x25519 */
                 group_id = 0x001d;
                 break;
-            case 0x41: /* secp265r1 */
+            case 0x41: /* secp256r1 */
                 group_id = 0x0017;
                 break;
-            case 0x61: /* x25519 */
+            case 0x61: /* secp384r1 */
                 group_id = 0x0018;
                 break;
             default:

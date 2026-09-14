@@ -2138,7 +2138,7 @@ int reset_stream_at_test_one(reset_stream_at_test_enum rsat_spec)
         if (reliable_size > sent_limit) {
             reliable_size = sent_limit;
         }
-        
+
         if (reliable_size > 0) {
             ret = picoquic_reset_stream_at(test_ctx->cnx_server, 4, 0, reliable_size);
         }
