@@ -409,7 +409,6 @@ void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, st
          * specific address. Leave the source unspecified so that no control
          * message is added: the kernel then sends from the bound address. */
         memset(s4, 0, sizeof(struct sockaddr_in));
-        return;
 #else
         uint16_t port = (local_addr->ss_family == AF_INET) ? s4->sin_port : s_ctx->n_port;
         memset(s4, 0, sizeof(struct sockaddr_in));
