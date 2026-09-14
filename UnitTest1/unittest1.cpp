@@ -3960,6 +3960,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_server_parse_path) {
+            int ret = h3zero_server_parse_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_server_prepare_to_send) {
+            int ret = h3zero_server_prepare_to_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picohttp_find_path_item) {
+            int ret = picohttp_find_path_item_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(generic_server) {
             int ret = generic_server_test();
 
@@ -4343,6 +4361,30 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_drain) {
             int ret = picowt_drain_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_reset_stream_remote_unidir) {
+            int ret = picowt_reset_stream_remote_unidir_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_select_wt_protocol_whitespace) {
+            int ret = picowt_select_wt_protocol_whitespace_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_format_connect_frame) {
+            int ret = picowt_format_connect_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_send_close_session_already_closed) {
+            int ret = picowt_send_close_session_already_closed_test();
 
             Assert::AreEqual(ret, 0);
         }

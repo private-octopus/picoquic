@@ -367,7 +367,8 @@ static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_call
         remote_tp->is_reset_stream_at_enabled;
 }
 
-static int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
+/* Not declared static because used in tests. */
+int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, const char* connect_protocol,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length,
     size_t* connect_length)

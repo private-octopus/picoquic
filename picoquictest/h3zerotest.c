@@ -2699,6 +2699,112 @@ int h09_stop_sending_reset_test(void)
     return ret;
 }
 
+typedef struct st_h3zero_server_parse_path_test_case_t {
+    uint8_t const* path;
+    size_t path_length;
+    int expected_ret;
+    uint64_t expected_echo_size;
+} h3zero_server_parse_path_test_case_t;
+
+/* 27 digits: well past the 62-bit ("UINT64_MAX >> 2") limit h3zero_server_parse_path
+ * enforces on the numeric echo-size path, e.g. "GET /999...9". */
+static const uint8_t h3zero_parse_path_huge_number[] = "/999999999999999999999999999";
+
+static const h3zero_server_parse_path_test_case_t h3zero_server_parse_path_test_cases[] = {
+    { NULL, 0, -1, 0 },                                    /* no path at all */
+    { (uint8_t const*)"", 0, -1, 0 },                       /* empty path */
+    { (uint8_t const*)"no-leading-slash", 16, -1, 0 },      /* missing the leading '/' */
+    { (uint8_t const*)"/12345", 6, 0, 12345 },              /* ordinary numeric echo size */
+    { h3zero_parse_path_huge_number, sizeof(h3zero_parse_path_huge_number) - 1, -1, 0 }
+};
+
+static const size_t nb_h3zero_server_parse_path_test_cases =
+    sizeof(h3zero_server_parse_path_test_cases) / sizeof(h3zero_server_parse_path_test_cases[0]);
+
+/* h3zero_server_parse_path is called with web_folder == NULL throughout, so
+ * every case here exercises only the numeric "/<echo size>" path, not the
+ * on-disk file lookup in demo_server_try_file_path. */
+int h3zero_server_parse_path_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h3zero_server_parse_path_test_cases; i++) {
+        h3zero_server_parse_path_test_case_t const* c = &h3zero_server_parse_path_test_cases[i];
+        uint64_t echo_size = 0xbad;
+        char* file_path = NULL;
+        int file_error = 0;
+        int parse_ret = h3zero_server_parse_path(c->path, c->path_length, &echo_size, &file_path, NULL, &file_error);
+
+        if (parse_ret != c->expected_ret) {
+            DBG_PRINTF("Parse path case %zu: expected ret %d, got %d", i, c->expected_ret, parse_ret);
+            ret = -1;
+        }
+        else if (parse_ret == 0 && echo_size != c->expected_echo_size) {
+            DBG_PRINTF("Parse path case %zu: expected echo_size %" PRIu64 ", got %" PRIu64, i, c->expected_echo_size, echo_size);
+            ret = -1;
+        }
+        if (file_path != NULL) {
+            free(file_path);
+        }
+    }
+
+    return ret;
+}
+
+/* h3zero_server_prepare_to_send must report failure, not crash, when the
+ * file it is asked to (re)open no longer exists -- see the
+ * "stream_ctx->F == NULL && stream_ctx->file_path != NULL" branch. */
+int h3zero_server_prepare_to_send_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    uint8_t buffer[64];
+
+    memset(&stream_ctx, 0, sizeof(stream_ctx));
+    stream_ctx.file_path = (char*)"no_such_file_for_h3zero_server_prepare_to_send_test.bin";
+    stream_ctx.echo_length = 100;
+
+    if (h3zero_server_prepare_to_send(buffer, sizeof(buffer), &stream_ctx) == 0) {
+        DBG_PRINTF("%s", "Prepare to send unexpectedly succeeded opening a nonexistent file");
+        ret = -1;
+    }
+    else if (stream_ctx.F != NULL) {
+        DBG_PRINTF("%s", "Prepare to send left F non-NULL after a failed open");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* picohttp_find_path_item's loop must actually walk past a non-matching
+ * entry: every existing caller's path tables happen to either match on
+ * the first entry or have just one entry, thus this unit test */
+int picohttp_find_path_item_test(void)
+{
+    int ret = 0;
+    picohttp_server_path_item_t table[3] = {
+        { "/a", 2, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "/bb", 3, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "/ccc", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    int found;
+
+    found = picohttp_find_path_item((uint8_t const*)"/ccc", 4, table, 3);
+    if (found != 2) {
+        DBG_PRINTF("Find path item: expected match at index 2, got %d", found);
+        ret = -1;
+    }
+    else {
+        found = picohttp_find_path_item((uint8_t const*)"/zzz", 4, table, 3);
+        if (found != -1) {
+            DBG_PRINTF("Find path item: expected no match, got index %d", found);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 int generic_server_test(void)
 {
     char const* alpn_09 = PICOHTTP_ALPN_HQ_LATEST;

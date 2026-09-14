@@ -1303,3 +1303,171 @@ int picowt_drain_test(void)
 
     return ret;
 }
+
+/* picowt_reset_stream must refuse to reset a stream that is both remote and
+ * unidirectional: from this (client) cnx's perspective, such a stream is
+ * one it never had permission to write to or reset -- see the
+ * "!is_local && !is_bidir" branch. */
+int picowt_reset_stream_remote_unidir_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        /* bit0 = 1 (server/remote-initiated, from this client cnx's point of
+         * view), bit1 = 1 (unidirectional). */
+        stream_ctx.stream_id = 3;
+
+        if (picowt_reset_stream(cnx, &stream_ctx, 0) == 0) {
+            DBG_PRINTF("%s", "Reset of a remote unidirectional stream unexpectedly succeeded");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* Distinct from the existing picowt_select_wt_protocol_test above (oversized
+ * candidate token, double-select): these two cases target the trailing
+ * whitespace skip between a candidate and its separator, and a malformed
+ * list with no comma or end after a candidate. */
+typedef struct st_picowt_select_wt_protocol_whitespace_test_case_t {
+    char const* available;
+    char const* supported;
+    int expected_ret;
+} picowt_select_wt_protocol_whitespace_test_case_t;
+
+static const picowt_select_wt_protocol_whitespace_test_case_t picowt_select_wt_protocol_whitespace_test_cases[] = {
+    /* trailing space before the comma after a (non-matching) first
+     * candidate, then a match on the second -- exercises the whitespace
+     * skip between a candidate and its separator. */
+    { "foo , bar", "bar", 0 },
+    /* no comma or end after a candidate (a stray character instead): the
+     * list is malformed, but parsing must stop cleanly, not misbehave. */
+    { "xyz!rest", "bar", -1 }
+};
+
+static const size_t nb_picowt_select_wt_protocol_whitespace_test_cases =
+    sizeof(picowt_select_wt_protocol_whitespace_test_cases) / sizeof(picowt_select_wt_protocol_whitespace_test_cases[0]);
+
+int picowt_select_wt_protocol_whitespace_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_picowt_select_wt_protocol_whitespace_test_cases; i++) {
+        picowt_select_wt_protocol_whitespace_test_case_t const* c = &picowt_select_wt_protocol_whitespace_test_cases[i];
+        h3zero_stream_ctx_t stream_ctx;
+        int select_ret;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.ps.stream_state.header.wt_available_protocols = (uint8_t const*)c->available;
+
+        select_ret = picowt_select_wt_protocol(&stream_ctx, c->supported);
+        if (select_ret != c->expected_ret) {
+            DBG_PRINTF("Select wt protocol case %zu (\"%s\" vs \"%s\"): expected %d, got %d",
+                i, c->available, c->supported, c->expected_ret, select_ret);
+            ret = -1;
+        }
+        free((void*)stream_ctx.ps.stream_state.wt_protocol);
+    }
+
+    return ret;
+}
+
+/* picowt_format_connect_frame is internal to webtransport.c (not declared
+ * in pico_webtransport.h) but, like the quicperf.c/democlient.c/demoserver.c
+ * parsers, given external linkage so its buffer-management edge cases can
+ * be driven directly -- without needing to satisfy
+ * picowt_webtransport_requirements_met's negotiated-transport-parameters
+ * preconditions just to reach them through picowt_connect. */
+int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
+    const char* authority, const char* path, const char* connect_protocol,
+    char const* wt_available_protocols, uint8_t* extra, size_t extra_length,
+    size_t* connect_length);
+
+/* Exercises picowt_format_connect_frame's buffer-management branches: a
+ * minimal connect (short enough that the header length fits in a single
+ * length byte -- every existing test's connect happens to be long enough
+ * to need the two-byte form instead), an authority long enough to overflow
+ * the 1024-byte frame buffer inside h3zero_create_connect_header_frame,
+ * and an "extra" (capsule) payload that does not fit after the header. */
+int picowt_format_connect_frame_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    size_t connect_length = 0;
+
+    memset(&stream_ctx, 0, sizeof(stream_ctx));
+    if (picowt_format_connect_frame(&stream_ctx, "a", "/", H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+        NULL, NULL, 0, &connect_length) != 0) {
+        DBG_PRINTF("%s", "Minimal connect frame unexpectedly failed to format");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        char huge_authority[2000];
+        memset(huge_authority, 'a', sizeof(huge_authority) - 1);
+        huge_authority[sizeof(huge_authority) - 1] = 0;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        if (picowt_format_connect_frame(&stream_ctx, huge_authority, "/", H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+            NULL, NULL, 0, &connect_length) == 0) {
+            DBG_PRINTF("%s", "Oversized authority unexpectedly fit in the frame buffer");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        uint8_t extra[1024];
+        memset(extra, 'x', sizeof(extra));
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        if (picowt_format_connect_frame(&stream_ctx, "a", "/", H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+            NULL, extra, sizeof(extra), &connect_length) == 0) {
+            DBG_PRINTF("%s", "Oversized extra data unexpectedly fit in the frame buffer");
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* picowt_send_close_session_message must refuse to send on a control
+ * stream that has already sent its FIN, the same way
+ * picowt_send_drain_session_message does (see picowt_drain_test_one(1))
+ * -- exercised directly here instead of only through wt_baton_close_session,
+ * which happens to always check this itself before calling in. */
+int picowt_send_close_session_already_closed_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    h3zero_callback_ctx_t* h3_ctx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = h3zero_set_test_context(&quic, &cnx, &h3_ctx, &simulated_time);
+
+    if (ret == 0) {
+        h3zero_stream_ctx_t* control_stream_ctx = picowt_set_control_stream(cnx, h3_ctx);
+
+        if (control_stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            control_stream_ctx->ps.stream_state.is_fin_sent = 1;
+            if (picowt_send_close_session_message(cnx, control_stream_ctx, 0, "bye") == 0) {
+                DBG_PRINTF("%s", "Close session message unexpectedly sent after FIN");
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    h3zero_callback_delete_context(cnx, h3_ctx);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
