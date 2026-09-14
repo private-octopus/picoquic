@@ -541,8 +541,8 @@ int qpack_huffman_base_test(void)
         }
     }
 
-    /* Second, test a set of valid terminators */
-    for (size_t i = 1; ret == 0 && i < 4; i++) {
+    /* Test a set of valid terminators, up to 7 bytes of 0xFF so the chain reaches the index>=512 EOS test. */
+    for (size_t i = 1; ret == 0 && i < 8; i++) {
         input_length = 0;
         for (size_t l = 0; l < i; l++) {
             input[input_length++] = 0xFF;
@@ -566,6 +566,215 @@ int qpack_huffman_base_test(void)
     return ret;
 }
 
+/* h3zero_get_method_by_name, h3zero_get_content_type_by_name and h3zero_encode_content_type are
+ * internal to h3zero.c, given external linkage so tests can call them directly. */
+h3zero_method_enum h3zero_get_method_by_name(uint8_t* name, size_t name_length);
+h3zero_content_type_enum h3zero_get_content_type_by_name(uint8_t* name, size_t name_length);
+uint8_t* h3zero_encode_content_type(uint8_t* bytes, uint8_t* bytes_max, h3zero_content_type_enum content_type);
+
+int h3zero_name_lookup_test(void)
+{
+    int ret = 0;
+    h3zero_method_enum method = h3zero_get_method_by_name((uint8_t*)"POST", 4);
+    h3zero_content_type_enum content_type = h3zero_get_content_type_by_name((uint8_t*)"image/png", 9);
+
+    if (method != h3zero_method_post) {
+        DBG_PRINTF("h3zero_get_method_by_name(POST) returned %d", (int)method);
+        ret = -1;
+    }
+    else if (content_type != h3zero_content_type_image_png) {
+        DBG_PRINTF("h3zero_get_content_type_by_name(image/png) returned %d", (int)content_type);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* Test the "buffer too short" and "value not in static table" error paths of the QPACK
+ * encoding helpers, none of which are exercised by the normal encode/decode round trip tests. */
+int h3zero_qpack_encode_error_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[16];
+    uint8_t* bytes;
+
+    /* h3zero_qpack_int_encode: no room for even the prefix byte */
+    if (h3zero_qpack_int_encode(buffer, buffer, 0x7F, 10) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_int_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_int_encode: multi-byte value does not fit */
+    if (ret == 0 && h3zero_qpack_int_encode(buffer, buffer + 2, 0x7F, 1000000) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_int_encode did not detect a value that does not fit");
+        ret = -1;
+    }
+    /* h3zero_qpack_code_encode: no room for the prefix byte */
+    if (ret == 0 && h3zero_qpack_code_encode(buffer, buffer, 0xC0, 0x3F, 10) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_code_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: no room for the name prefix byte */
+    if (ret == 0 && h3zero_qpack_literal_plus_name_encode(buffer, buffer,
+        (uint8_t const*)"x", 1, (uint8_t const*)"y", 1) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: name length prefix fits in 1 byte, but the name content does not */
+    if (ret == 0 && h3zero_qpack_literal_plus_name_encode(buffer, buffer + 2,
+        (uint8_t const*)"abc", 3, (uint8_t const*)"y", 1) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a name that does not fit");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: value does not fit after name */
+    if (ret == 0) {
+        bytes = h3zero_qpack_literal_plus_name_encode(buffer, buffer + 3,
+            (uint8_t const*)"n", 1, (uint8_t const*)"longer-value", 12);
+        if (bytes != NULL) {
+            DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a value that does not fit");
+            ret = -1;
+        }
+    }
+    /* h3zero_encode_content_type: not one of the content types present in the static table */
+    if (ret == 0 && h3zero_encode_content_type(buffer, buffer + sizeof(buffer),
+        (h3zero_content_type_enum)0x1234) != NULL) {
+        DBG_PRINTF("%s", "h3zero_encode_content_type did not detect an unsupported content type");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* Each of h3zero_create_*_header_frame_ex checks up front that the buffer has room for the
+ * 2-byte block prefix, and some also have optional fields (origin, range) that are only
+ * encoded when non-NULL/non-zero -- none of that is exercised by the normal usage tests. */
+int h3zero_create_header_frame_error_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[512];
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint8_t const* path = (uint8_t const*)"/test";
+
+    if (h3zero_create_connect_header_frame(buffer, buffer + 1, "host", path, 5, "proto", NULL, NULL, NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_connect_header_frame did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_connect_header_frame(buffer, bytes_max, "host", path, 5, "proto",
+        "https://origin.example.com", NULL, NULL) == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_connect_header_frame failed to encode an origin value");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_post_header_frame_ex(buffer, buffer + 1, path, 5, NULL, 0, "host",
+        h3zero_content_type_text_plain, NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_post_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_post_header_frame_ex(buffer, bytes_max, path, 5,
+        (uint8_t const*)"bytes=0-99", 10, "host", h3zero_content_type_text_plain, NULL) == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_post_header_frame_ex failed to encode a range value");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_request_header_frame_ex(buffer, buffer + 1, path, 5, NULL, 0, "host", NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_request_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_response_header_frame_ex(buffer, buffer + 1,
+        h3zero_content_type_text_html, "server", NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_response_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_error_frame(buffer, buffer + 1, "404", "server") != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_error_frame did not detect a too small buffer");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* h3zero_parse_qpack_header_value_string and h3zero_parse_qpack_header_value are internal to
+ * h3zero.c, given external linkage so tests can drive their duplicate-header detection directly,
+ * without crafting a full QPACK header block for each of the ten header types involved. */
+uint8_t* h3zero_parse_qpack_header_value_string(uint8_t* bytes, uint8_t* decoded,
+    size_t decoded_length, const uint8_t** field, size_t* length);
+uint8_t* h3zero_parse_qpack_header_value(uint8_t* bytes, uint8_t* bytes_max,
+    http_header_enum_t header, h3zero_header_parts_t* parts);
+
+int h3zero_parse_duplicate_header_value_string_test(void)
+{
+    int ret = 0;
+    uint8_t decoded[] = { 'x' };
+    const uint8_t* field = decoded;
+    size_t length = 0;
+
+    if (h3zero_parse_qpack_header_value_string(decoded, decoded, 1, &field, &length) != NULL) {
+        DBG_PRINTF("%s", "h3zero_parse_qpack_header_value_string did not detect a duplicate field");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+typedef struct st_h3zero_duplicate_header_case_t {
+    http_header_enum_t header;
+    char const* name;
+} h3zero_duplicate_header_case_t;
+
+static h3zero_duplicate_header_case_t h3zero_duplicate_header_case[] = {
+    { http_pseudo_header_method, "method" },
+    { http_header_content_type, "content-type" },
+    { http_pseudo_header_status, "status" },
+    { http_pseudo_header_path, "path" },
+    { http_pseudo_header_authority, "authority" },
+    { http_header_origin, "origin" },
+    { http_header_range, "range" },
+    { http_pseudo_header_protocol, "protocol" },
+    { http_header_wt_available_protocols, "wt_available_protocols" },
+    { http_header_wt_protocol, "wt_protocol" }
+};
+
+static size_t nb_h3zero_duplicate_header_case = sizeof(h3zero_duplicate_header_case) / sizeof(h3zero_duplicate_header_case_t);
+
+int h3zero_parse_duplicate_header_test(void)
+{
+    int ret = 0;
+    uint8_t value[] = { 1, 'x' }; /* not huffman, length 1, content 'x' */
+
+    for (size_t i = 0; ret == 0 && i < nb_h3zero_duplicate_header_case; i++) {
+        h3zero_header_parts_t parts;
+        uint8_t* bytes;
+
+        memset(&parts, 0, sizeof(parts));
+        bytes = h3zero_parse_qpack_header_value(value, value + sizeof(value), h3zero_duplicate_header_case[i].header, &parts);
+        if (bytes == NULL) {
+            DBG_PRINTF("First %s value did not parse", h3zero_duplicate_header_case[i].name);
+            ret = -1;
+        }
+        else {
+            bytes = h3zero_parse_qpack_header_value(value, value + sizeof(value), h3zero_duplicate_header_case[i].header, &parts);
+            if (bytes != NULL) {
+                DBG_PRINTF("Duplicate %s value was not detected", h3zero_duplicate_header_case[i].name);
+                ret = -1;
+            }
+        }
+        h3zero_release_header_parts(&parts);
+    }
+
+    return ret;
+}
+
+int h3zero_varint_decode_error_test(void)
+{
+    int ret = 0;
+    uint8_t two_byte_prefix[] = { 0x40, 0x00 }; /* top bits 01 => a 2 byte varint */
+    uint64_t n64 = 0xFFFFFFFFFFFFFFFFull;
+    size_t length = h3zero_varint_decode(two_byte_prefix, 1, &n64);
+
+    if (length != 0 || n64 != 0) {
+        DBG_PRINTF("h3zero_varint_decode(too short) returned length=%d, n64=%d", (int)length, (int)n64);
+        ret = -1;
+    }
+
+    return ret;
+}
 
 #define QPACK_HUFFMAN_TXT "qpack_huffman.txt"
 

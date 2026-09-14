@@ -3840,6 +3840,42 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_name_lookup) {
+            int ret = h3zero_name_lookup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_qpack_encode_error) {
+            int ret = h3zero_qpack_encode_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_create_header_frame_error) {
+            int ret = h3zero_create_header_frame_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_parse_duplicate_header_value_string) {
+            int ret = h3zero_parse_duplicate_header_value_string_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_parse_duplicate_header) {
+            int ret = h3zero_parse_duplicate_header_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_varint_decode_error) {
+            int ret = h3zero_varint_decode_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_parse_qpack) {
             int ret = h3zero_parse_qpack_test();
 
