@@ -104,6 +104,49 @@ static int picowt_baton_test_bad_capsule(picoquic_cnx_t * cnx, uint64_t stream_i
     return ret;
 }
 
+/* Open a new local WT stream and immediately FIN it without ever sending
+ * the padding-length prefix and baton byte the peer expects on a baton
+ * data stream. The peer should recognize this as "FIN before baton" and
+ * close the session, instead of e.g. reading past the end of an empty
+ * buffer -- see wt_baton_stream_data's is_receiving/is_fin handling. */
+static int picowt_baton_test_fin_before_baton(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, uint64_t control_stream_id)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t* stream_ctx = picowt_create_local_stream(cnx, 0, h3_ctx, control_stream_id);
+
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id, NULL, 0, 1);
+    }
+    return ret;
+}
+
+/* Open a new local WT stream and write a partial baton message to it
+ * (a padding length, but not yet the padding or the baton byte that
+ * would complete it), without ever finishing it -- so the peer's one
+ * incoming slot for this lane count stays occupied. The caller is
+ * expected to invoke this twice, with only one lane configured (the
+ * default): the first call should be accepted normally, and the second
+ * should find every incoming slot already busy and get rejected as
+ * "data on wrong stream" -- see wt_baton_stream_data's receive_id /
+ * receive_available bookkeeping. */
+static int picowt_baton_test_extra_incoming_stream(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, uint64_t control_stream_id)
+{
+    int ret = 0;
+    uint8_t partial_baton_message[] = { 0x00 }; /* padding length = 0; the baton byte is deliberately withheld */
+    h3zero_stream_ctx_t* stream_ctx = picowt_create_local_stream(cnx, 0, h3_ctx, control_stream_id);
+
+    if (stream_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_add_to_stream(cnx, stream_ctx->stream_id, partial_baton_message, sizeof(partial_baton_message), 0);
+    }
+    return ret;
+}
+
 
 static int picowt_baton_test_one_ex(
     uint8_t test_id, const char* baton_path,
@@ -127,6 +170,9 @@ static int picowt_baton_test_one_ex(
     int capsule_needed = (test_id == 10);
     int stop_then_reset_needed = (test_id == 11);
     int stop_reset_sent_trial = -1;
+    int fin_before_baton_needed = (test_id == 15);
+    int extra_incoming_stream_needed = (test_id == 16);
+    int extra_incoming_stream_trial = -1;
 
     initial_cid.id[3] = test_id;
 
@@ -179,8 +225,20 @@ static int picowt_baton_test_one_ex(
         }
 
         if (ret == 0) {
+            /* Tests 12 and 13 check that the client rejects a bad path
+             * locally, in wt_baton_prepare_context, before ever sending a
+             * CONNECT -- that never exercises the server's own rejection in
+             * wt_baton_accept. Test 14 checks the server side instead: skip
+             * client-side validation by preparing with no path at all, then
+             * attach the bad path only afterwards, so it is the server that
+             * first parses and rejects it. */
+            int bypass_client_validation = (test_id == 14);
+
             ret = wt_baton_prepare_context(test_ctx->cnx_client, &baton_ctx, h3zero_cb,
-                control_stream_ctx, PICOQUIC_TEST_SNI, baton_path);
+                control_stream_ctx, PICOQUIC_TEST_SNI, (bypass_client_validation) ? NULL : baton_path);
+            if (ret == 0 && bypass_client_validation) {
+                baton_ctx.server_path = baton_path;
+            }
         }
 
         if (ret == 0) {
@@ -271,6 +329,26 @@ static int picowt_baton_test_one_ex(
             capsule_needed = 0;
         }
 
+        if (ret == 0 && baton_ctx.nb_turns > 2 && fin_before_baton_needed) {
+            ret = picowt_baton_test_fin_before_baton(test_ctx->cnx_client, h3zero_cb, control_stream_ctx->stream_id);
+            fin_before_baton_needed = 0;
+        }
+
+        if (ret == 0 && baton_ctx.nb_turns > 2 && extra_incoming_stream_needed) {
+            /* First call opens a stream and leaves it unfinished, occupying
+             * the connection's one incoming slot (the default lane count).
+             * The second call, a few trials later, opens another one while
+             * the first is still open, which the peer has no slot left for. */
+            ret = picowt_baton_test_extra_incoming_stream(test_ctx->cnx_client, h3zero_cb, control_stream_ctx->stream_id);
+            extra_incoming_stream_needed = 0;
+            extra_incoming_stream_trial = nb_trials;
+        }
+
+        if (ret == 0 && extra_incoming_stream_trial >= 0 && nb_trials > extra_incoming_stream_trial + 8) {
+            ret = picowt_baton_test_extra_incoming_stream(test_ctx->cnx_client, h3zero_cb, control_stream_ctx->stream_id);
+            extra_incoming_stream_trial = -1;
+        }
+
         if (ret == 0 && ++nb_trials > 100000) {
             DBG_PRINTF("Simulation not concluded after %d trials\n", nb_trials);
             ret = -1;
@@ -340,10 +418,14 @@ static int picowt_baton_test_one_ex(
 
     }
     /* verify that the bad capsule triggered an error, and symmetrically,
-     * that the bad connect params (test 12) also triggered an error --
-     * either way, a nonzero ret at this point is the expected outcome,
-     * and an unexpectedly clean ret == 0 is the actual failure. */
-    if (test_id == 10 || test_id == 12) {
+     * that the bad connect params -- rejected client-side, out of range
+     * (test 12) or unparseable (test 13), or rejected server-side (test 14)
+     * -- and the malformed-peer scenarios -- FIN before baton (test 15) or
+     * an incoming stream with no free lane (test 16) -- also triggered an
+     * error -- either way, a nonzero ret at this point is the expected
+     * outcome, and an unexpectedly clean ret == 0 is the actual failure. */
+    if (test_id == 10 || test_id == 12 || test_id == 13 || test_id == 14 ||
+        test_id == 15 || test_id == 16) {
         if (ret == 0) {
             DBG_PRINTF("Unexpected connection success for test: %d", test_id);
             ret = -1;
@@ -449,6 +531,58 @@ int picowt_baton_bad_params_test(void)
 {
     /* Check that a connect attempt with bad parameters is processed properly. */
     int ret = picowt_baton_test_one(12, "/baton?version=1", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_bad_params_syntax_test(void)
+{
+    /* Same as picowt_baton_bad_params_test, but the "version" value itself
+     * fails to parse as a number (wt_baton_ctx_path_params's first check),
+     * instead of parsing fine and then failing the range/version check
+     * (its second check, already covered by test 12). */
+    int ret = picowt_baton_test_one(13, "/baton?version=abc", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_server_reject_test(void)
+{
+    /* Tests 12 and 13 both use a bad path that the client itself refuses
+     * to send, via wt_baton_prepare_context's own call to
+     * wt_baton_ctx_path_params -- so the CONNECT never actually reaches
+     * the server, and wt_baton_accept's own rejection of a bad path
+     * (including the cleanup through picowt_abort_registration) is never
+     * exercised. Test 14 (handled by a special case in
+     * picowt_baton_test_one_ex) sends the same bad "version" value, but
+     * bypasses the client-side check so the server is the one to parse
+     * and reject it. */
+    int ret = picowt_baton_test_one(14, "/baton?version=1", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_fin_before_baton_test(void)
+{
+    /* A malformed peer opens a new baton data stream and FINs it
+     * immediately, without ever sending the padding length and baton
+     * byte the protocol requires. wt_baton must detect and reject this,
+     * not read past the incomplete buffer -- see
+     * picowt_baton_test_fin_before_baton and wt_baton_stream_data's
+     * "Error: FIN before baton on data stream" branch. */
+    int ret = picowt_baton_test_one(15, "/baton?baton=240", 0, 2000000, ".", ".");
+
+    return ret;
+}
+
+int picowt_baton_wrong_stream_test(void)
+{
+    /* A malformed peer opens a second baton data stream while the first
+     * is still incomplete. With the default lane count (1), the peer has
+     * no free incoming slot for it -- see
+     * picowt_baton_test_extra_incoming_stream and wt_baton_stream_data's
+     * "Received baton data on wrong stream" branch. */
+    int ret = picowt_baton_test_one(16, "/baton?baton=240", 0, 2000000, ".", ".");
 
     return ret;
 }

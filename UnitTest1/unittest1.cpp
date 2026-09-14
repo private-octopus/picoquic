@@ -4264,6 +4264,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_bad_params_syntax) {
+            int ret = picowt_baton_bad_params_syntax_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_server_reject) {
+            int ret = picowt_baton_server_reject_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_fin_before_baton) {
+            int ret = picowt_baton_fin_before_baton_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_wrong_stream) {
+            int ret = picowt_baton_wrong_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_wildcard) {
             int ret = picowt_baton_wildcard_test();
 
