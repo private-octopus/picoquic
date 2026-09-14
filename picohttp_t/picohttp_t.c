@@ -163,6 +163,8 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_multi_file_loss", h09_multi_file_loss_test },
     { "h09_multi_file_preemptive", h09_multi_file_preemptive_test },
     { "h3zero_settings", h3zero_settings_test },
+    { "h3zero_settings_components_decode", h3zero_settings_components_decode_test },
+    { "h3zero_settings_encode_too_short", h3zero_settings_encode_too_short_test },
     { "h3zero_get_content_type_by_path", h3zero_get_content_type_by_path_test },
     { "h3zero_find_path_item", h3zero_find_path_item_test },
     { "h3zero_process_request_frame", h3zero_process_request_frame_test },

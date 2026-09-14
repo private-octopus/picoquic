@@ -715,6 +715,8 @@ int h09_multi_file_test(void);
 int h09_multi_file_loss_test(void);
 int h09_multi_file_preemptive_test(void);
 int h3zero_settings_test(void);
+int h3zero_settings_components_decode_test(void);
+int h3zero_settings_encode_too_short_test(void);
 int h3zero_get_content_type_by_path_test(void);
 int h3zero_find_path_item_test(void);
 int h3zero_process_request_frame_test(void);

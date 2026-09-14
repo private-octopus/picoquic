@@ -3703,6 +3703,84 @@ int h3zero_settings_test(void)
     return ret;
 }
 
+/* h3zero_settings_components_decode: a setting key from the HTTP/2-only
+ * reserved list (RFC 9114 names 0, 2, 3, 4, 5 as errors if present in an H3
+ * SETTINGS frame) must abort decoding and return NULL, but only after any
+ * earlier, valid component in the same frame has already been applied. A
+ * key this code doesn't recognize at all (some future or vendor-specific
+ * value) must instead be silently skipped, with decoding continuing
+ * normally to whatever valid components follow it. */
+int h3zero_settings_components_decode_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[64];
+    uint8_t* bytes;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    h3zero_settings_t settings;
+
+    memset(&settings, 0, sizeof(settings));
+    bytes = buffer;
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_qpack_blocked_streams);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 42);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 2); /* ENABLE_PUSH: reserved, HTTP/2 only */
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1);
+
+    if (h3zero_settings_components_decode(buffer, bytes, &settings) != NULL ||
+        settings.blocked_streams != 42) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&settings, 0, sizeof(settings));
+        bytes = buffer;
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0x1234567); /* not a key this code knows */
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 999);
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_setting_h3_datagram);
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1);
+
+        if (h3zero_settings_components_decode(buffer, bytes, &settings) != bytes ||
+            settings.h3_datagram != 1) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* h3zero_settings_encode must fail cleanly (return NULL) whenever the
+ * buffer is too short to hold the encoding, at every possible truncation
+ * point, rather than overrun it. First encode into a generous buffer to
+ * learn the actual required length, then retry with every buffer length
+ * from 1 up to (but not including) that length -- each one exercises a
+ * different "ran out of room partway through" branch, either inside
+ * h3zero_settings_component_encode itself or in the final-length-patching
+ * logic that follows the component loop. */
+int h3zero_settings_encode_too_short_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[256];
+    uint8_t* bytes_end;
+    h3zero_settings_t settings = default_setting_expected;
+
+    bytes_end = h3zero_settings_encode(buffer, buffer + sizeof(buffer), &settings);
+    if (bytes_end == NULL) {
+        ret = -1;
+    }
+    else {
+        size_t required_length = bytes_end - buffer;
+
+        for (size_t len = 1; ret == 0 && len < required_length; len++) {
+            if (h3zero_settings_encode(buffer, buffer + len, &settings) != NULL) {
+                DBG_PRINTF("h3zero_settings_encode succeeded with %zu bytes, expected to need %zu",
+                    len, required_length);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 typedef struct st_h3zero_string_content_type_compar_list_t {
     const char *path;
     const h3zero_content_type_enum content_type;

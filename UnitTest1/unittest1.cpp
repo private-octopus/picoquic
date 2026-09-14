@@ -4001,6 +4001,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_settings_components_decode) {
+            int ret = h3zero_settings_components_decode_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_settings_encode_too_short) {
+            int ret = h3zero_settings_encode_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 	    TEST_METHOD(h3zero_get_content_type_by_path) {
             int ret = h3zero_get_content_type_by_path_test();
 
