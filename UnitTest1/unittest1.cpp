@@ -2695,6 +2695,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_ns_bad_scenario)
+        {
+            int ret = cc_ns_bad_scenario_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_no_connections)
+        {
+            int ret = cc_ns_no_connections_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_bad_link_scenario)
+        {
+            int ret = cc_ns_bad_link_scenario_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_bad_qperf_log)
+        {
+            int ret = cc_ns_bad_qperf_log_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_target_time_exceeded)
+        {
+            int ret = cc_ns_target_time_exceeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_connection_error)
+        {
+            int ret = cc_ns_connection_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_varylink_zero_rate)
+        {
+            int ret = cc_ns_varylink_zero_rate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(fastcc)
         {
             int ret = fastcc_test();

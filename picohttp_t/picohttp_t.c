@@ -229,7 +229,14 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_varylink", cc_ns_varylink_test },
     { "cc_ns_satellite", cc_ns_satellite_test },
     { "cc_ns_media", cc_ns_media_test },
-    { "cc_ns_media_repeat", cc_ns_media_repeat_test }
+    { "cc_ns_media_repeat", cc_ns_media_repeat_test },
+    { "cc_ns_bad_scenario", cc_ns_bad_scenario_test },
+    { "cc_ns_no_connections", cc_ns_no_connections_test },
+    { "cc_ns_bad_link_scenario", cc_ns_bad_link_scenario_test },
+    { "cc_ns_bad_qperf_log", cc_ns_bad_qperf_log_test },
+    { "cc_ns_target_time_exceeded", cc_ns_target_time_exceeded_test },
+    { "cc_ns_connection_error", cc_ns_connection_error_test },
+    { "cc_ns_varylink_zero_rate", cc_ns_varylink_zero_rate_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
