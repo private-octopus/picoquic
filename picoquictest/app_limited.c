@@ -703,6 +703,18 @@ int app_limited_bbr_test(void)
     return app_limited_test_one(&config);
 }
 
+int app_limited_bbr1_test(void)
+{
+    app_limited_test_config_t config;
+    app_limited_config_set_default(&config, 7);
+    config.ccalgo = picoquic_bbr1_algorithm;
+    config.min_bw_samples = 1;
+    config.min_app_limited_bw_samples = 1;
+    config.nb_losses_max = 20;
+
+    return app_limited_test_one(&config);
+}
+
 int app_limited_bbr_post_idle_test(void)
 {
     app_limited_test_config_t config;

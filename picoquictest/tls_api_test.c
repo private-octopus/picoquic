@@ -43,6 +43,7 @@
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
@@ -5272,6 +5273,12 @@ int mtu_drop_fast_test(void)
 int mtu_drop_newreno_test(void)
 {
     int ret = mtu_drop_cc_algotest(picoquic_newreno_algorithm, 11600000);
+    return ret;
+}
+
+int mtu_drop_bbr1_test(void)
+{
+    int ret = mtu_drop_cc_algotest(picoquic_bbr1_algorithm, 10000000);
     return ret;
 }
 
@@ -12270,23 +12277,25 @@ static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint
 
 int multi_segment_test(void)
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
+    picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
         picoquic_dcubic_algorithm,
         picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
+        picoquic_bbr_algorithm,
+        picoquic_bbr1_algorithm
     };
-    uint64_t algo_time[5] = {
+    uint64_t algo_time[6] = {
         1220000,
         1050000,
         1250000,
         1350000,
-        1280000
+        1280000,
+        1050000
     };
     int ret = 0;
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
+    for (int i = 0; i < 6 && ret == 0; i++) {
         ret = multi_segment_test_one(algo_list[i], algo_time[i], 65536);
         if (ret != 0) {
             DBG_PRINTF("Multi segment test fails for CC=%s", algo_list[i]->congestion_algorithm_id);

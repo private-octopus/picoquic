@@ -132,7 +132,14 @@ static void fastcc_notify_congestion(
 {
     if (fastcc_state->alg_state == picoquic_fastcc_freeze &&
         (!is_timeout || !fastcc_state->last_freeze_was_timeout) &&
+#if 0
+        /* last_freeze_was_not_delay is never actually read: is_delay is only ever 1 from the
+         * nb_cc_events threshold call site, which requires alg_state != freeze to be called at
+         * all, so whenever this guard's first clause is true, is_delay is already 0 here. */
         (!is_delay || !fastcc_state->last_freeze_was_not_delay)) {
+#else
+        !is_delay) {
+#endif
         /* Do not treat additional events during same freeze interval */
         return;
     }
