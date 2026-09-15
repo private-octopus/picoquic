@@ -1454,6 +1454,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(mtu_drop_bbr1)
+        {
+            int ret = mtu_drop_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(red_bbr)
         {
             int ret = red_bbr_test();
@@ -2863,6 +2870,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(l4s_bbr1)
+        {
+            int ret = l4s_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_bbr_updown)
         {
             int ret = l4s_bbr_updown_test();
@@ -3093,6 +3107,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limited_bbr1) {
+            int ret = app_limited_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_limited_cubic) {
             int ret = app_limited_cubic_test();
 
@@ -3113,6 +3133,16 @@ namespace UnitTest1
 
         TEST_METHOD(cwin_max) {
             int ret = cwin_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_seed_bdp) {
+            int ret = bbr1_seed_bdp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_ltbw) {
+            int ret = bbr1_ltbw_test();
 
             Assert::AreEqual(ret, 0);
         }
