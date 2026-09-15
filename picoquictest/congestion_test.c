@@ -1058,7 +1058,13 @@ int bbr1_seed_bdp_test(void)
         ret = -1;
     }
     else {
-        picoquic_set_congestion_algorithm(cnx, picoquic_bbr1_algorithm);
+        /* The wifi_shadow_rtt option exercises both the option-string parser and BBR1Inflight's
+         * shadow-RTT floor (rt_prop stays well below it in this test). */
+        picoquic_set_congestion_algorithm_ex(cnx, picoquic_bbr1_algorithm, "T5000000");
+
+        /* A large bandwidth_estimate on the first round pushes the computed pacing rate above
+         * the send_quantum clamp in BBR1SetSendQuantum. */
+        cnx->path[0]->bandwidth_estimate = 100000000;
 
         /* rtt_min above BBR1's long-RTT hystart threshold forces entry into startup_long_rtt */
         cnx->path[0]->rtt_min = 100000;
@@ -1076,6 +1082,50 @@ int bbr1_seed_bdp_test(void)
             DBG_PRINTF("BBR1 seed BDP did not set cwin as expected, cwin=%" PRIu64, cnx->path[0]->cwin);
             ret = -1;
         }
+
+        /* Exercise the explicit reset notification, e.g. sent on PMTU blackhole recovery. */
+        cnx->congestion_alg->alg_notify(cnx, cnx->path[0], picoquic_congestion_notification_reset,
+            &ack_state, simulated_time);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* The plain-startup half of the seed_cwin case (as opposed to the startup_long_rtt half covered
+ * by bbr1_seed_bdp_test above) only updates the pacing rate once a prior ACK has already given
+ * BBR1 a non-zero bandwidth estimate. Establish that baseline first, then seed with a larger
+ * estimate so the seed is applied and the pacing rate gets pushed to the sender. */
+int bbr1_seed_startup_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, picoquic_bbr1_algorithm);
+
+        /* First, a normal low-RTT ACK: stays in plain startup, establishes a baseline pacing rate. */
+        path_x->bandwidth_estimate = 1000000;
+        ack_state.rtt_measurement = 20000;
+        ack_state.nb_bytes_acknowledged = 1000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+            &ack_state, simulated_time);
+
+        /* Then a seed_cwin notification with a large enough acked count that the derived bandwidth
+         * estimate exceeds bandwidth_estimate_max, so BBR1 updates the pacing rate again. */
+        path_x->smoothed_rtt = 20000;
+        memset(&ack_state, 0, sizeof(ack_state));
+        ack_state.nb_bytes_acknowledged = 10000000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
     }
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
@@ -1115,6 +1165,64 @@ int bbr1_ltbw_test(void)
 
             ack_state.rtt_measurement = 20000;
             ack_state.nb_bytes_acknowledged = delivered_per_round;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+                &ack_state, simulated_time);
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* Two more early-return branches in BBR1ltbwSampling, past the point where losses are confirmed
+ * present: "no new data delivered since sampling started" (delivered frozen while losses still
+ * accumulate) and "sampling interval too short to be meaningful" (rounds advance current_time by
+ * under a microsecond each, so the 4-round interval never reaches the 1000-microsecond floor). */
+int bbr1_ltbw_edge_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, picoquic_bbr1_algorithm);
+
+        /* Losses accumulate every round, but delivered never advances: previous_sampling_delivered
+         * stays equal to delivered forever, so BBR1ltbwSampling returns before computing a ratio. */
+        for (int i = 0; i < 6; i++) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+
+            simulated_time += 10000;
+            path_x->delivered_last_packet = 1;
+            path_x->total_bytes_lost += 25000;
+            path_x->last_bw_estimate_path_limited = 0;
+
+            ack_state.rtt_measurement = 20000;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+                &ack_state, simulated_time);
+        }
+
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset, NULL, simulated_time);
+
+        /* This time delivered and losses both advance at a 25% ratio, satisfying the loss-ratio
+         * test, but current_time barely moves: the interval is under the 1000-microsecond floor. */
+        for (int i = 0; i < 6; i++) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+
+            simulated_time += 100;
+            path_x->delivered += 100000;
+            path_x->delivered_last_packet = path_x->delivered;
+            path_x->total_bytes_lost += 25000;
+            path_x->last_bw_estimate_path_limited = 0;
+
+            ack_state.rtt_measurement = 20000;
+            ack_state.nb_bytes_acknowledged = 100000;
             cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
                 &ack_state, simulated_time);
         }

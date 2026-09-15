@@ -3141,8 +3141,18 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(bbr1_seed_startup) {
+            int ret = bbr1_seed_startup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(bbr1_ltbw) {
             int ret = bbr1_ltbw_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_ltbw_edge) {
+            int ret = bbr1_ltbw_edge_test();
 
             Assert::AreEqual(ret, 0);
         }

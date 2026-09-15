@@ -1002,9 +1002,13 @@ void BBR1SetPacingRate(picoquic_bbr1_state_t* bbr1_state)
 }
 
 /* TODO: clarity on bytes vs packets  */
-void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, 
+void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
     uint64_t bytes_in_transit, uint64_t bytes_lost, uint64_t bytes_delivered)
 {
+#if 0
+    /* Not reachable: bytes_lost is hardcoded to 0 at the sole call site (see BBR1UpdateOnACK's
+     * caller), and packet_conservation is never set to 1 now that BBR1OnEnterFastRecovery is
+     * unreachable -- both conditions below are always false. */
     if (bytes_lost > 0) {
         if (path_x->cwin > bytes_lost) {
             path_x->cwin -= bytes_lost;
@@ -1018,6 +1022,13 @@ void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_pat
             path_x->cwin = bytes_in_transit + bytes_delivered;
         }
     }
+#else
+    (void)bbr1_state;
+    (void)path_x;
+    (void)bytes_in_transit;
+    (void)bytes_lost;
+    (void)bytes_delivered;
+#endif
 }
 
 void BBR1ModulateCwndForProbeRTT(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x)
