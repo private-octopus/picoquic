@@ -1234,7 +1234,9 @@ int bbr1_ltbw_edge_test(void)
 
 /* Exercise the fastcc notifications that no other test reaches: an explicit reset (e.g. sent on
  * PMTU blackhole recovery), a direct ECN-CE reaction (no test currently pairs fastcc with an L4S
- * or ECN-marking scenario), and the spurious-repeat "undo" of a prior congestion-event count. */
+ * or ECN-marking scenario), the spurious-repeat "undo" of a prior congestion-event count, and
+ * both branches of picoquic_fastcc_seed_cwin (outside vs inside the initial state, and with
+ * bytes_in_flight below vs above the current cwin). */
 int fastcc_notify_test(void)
 {
     int ret = 0;
@@ -1255,19 +1257,44 @@ int fastcc_notify_test(void)
         cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_ecn_ec,
             &ack_state, simulated_time);
 
-        /* Explicit reset, e.g. sent on PMTU blackhole recovery. */
+        /* Seed while frozen (not the initial state): picoquic_fastcc_seed_cwin is a no-op. */
+        ack_state.nb_bytes_acknowledged = 1000000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
+
+        /* Explicit reset, e.g. sent on PMTU blackhole recovery: back to the initial state. */
         cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
             &ack_state, simulated_time);
 
-        /* First RTT sample after reset always trusts rtt_min, so it cannot raise nb_cc_events. */
-        ack_state.rtt_measurement = 20000;
+        /* Seed in the initial state with a bytes_in_flight above cwin: cwin is raised. */
+        ack_state.nb_bytes_acknowledged = 1000000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
+        if (path_x->cwin != 1000000) {
+            DBG_PRINTF("fastcc seed_cwin did not raise cwin as expected, cwin=%" PRIu64, path_x->cwin);
+            ret = -1;
+        }
+
+        /* Seed again, this time below the now-raised cwin: cwin is left unchanged. */
+        ack_state.nb_bytes_acknowledged = 100;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
+        if (path_x->cwin != 1000000) {
+            DBG_PRINTF("fastcc seed_cwin lowered cwin unexpectedly, cwin=%" PRIu64, path_x->cwin);
+            ret = -1;
+        }
+
+        /* First RTT sample after reset always trusts rtt_min, so delta_rtt is forced to 0 --
+         * that may or may not clear delay_threshold, so nb_cc_events could be 0 or 1 here. */
+        ack_state.rtt_measurement = 1000;
         cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_rtt_measurement,
             &ack_state, simulated_time);
 
-        /* A much larger RTT sample now exceeds the delay threshold, raising nb_cc_events to 1
-         * (short of the freeze threshold of 4). */
+        /* A huge jump in RTT is always well above the delay threshold (capped at 25000
+         * microseconds regardless of rtt_min), so this reliably raises nb_cc_events by 1,
+         * to at least 1 and at most 2 -- short of the freeze threshold of 4 either way. */
         simulated_time += 20000;
-        ack_state.rtt_measurement = 50000;
+        ack_state.rtt_measurement = 501000;
         cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_rtt_measurement,
             &ack_state, simulated_time);
 
