@@ -3156,6 +3156,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(fastcc_notify) {
+            int ret = fastcc_notify_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(initial_race) {
             int ret = initial_race_test();
 

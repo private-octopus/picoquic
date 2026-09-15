@@ -1231,3 +1231,51 @@ int bbr1_ltbw_edge_test(void)
 
     return ret;
 }
+
+/* Exercise the fastcc notifications that no other test reaches: an explicit reset (e.g. sent on
+ * PMTU blackhole recovery), a direct ECN-CE reaction (no test currently pairs fastcc with an L4S
+ * or ECN-marking scenario), and the spurious-repeat "undo" of a prior congestion-event count. */
+int fastcc_notify_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, picoquic_fastcc_algorithm);
+
+        /* Direct ECN-CE reaction: freezes the congestion window. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_ecn_ec,
+            &ack_state, simulated_time);
+
+        /* Explicit reset, e.g. sent on PMTU blackhole recovery. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
+            &ack_state, simulated_time);
+
+        /* First RTT sample after reset always trusts rtt_min, so it cannot raise nb_cc_events. */
+        ack_state.rtt_measurement = 20000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_rtt_measurement,
+            &ack_state, simulated_time);
+
+        /* A much larger RTT sample now exceeds the delay threshold, raising nb_cc_events to 1
+         * (short of the freeze threshold of 4). */
+        simulated_time += 20000;
+        ack_state.rtt_measurement = 50000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_rtt_measurement,
+            &ack_state, simulated_time);
+
+        /* Spurious repeat: undoes one pending congestion event. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_spurious_repeat,
+            &ack_state, simulated_time);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}

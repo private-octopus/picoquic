@@ -594,6 +594,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr1_seed_startup", bbr1_seed_startup_test },
     { "bbr1_ltbw", bbr1_ltbw_test },
     { "bbr1_ltbw_edge", bbr1_ltbw_edge_test },
+    { "fastcc_notify", fastcc_notify_test },
     { "initial_race", initial_race_test },
     { "aegis_cipher_suite", aegis_cipher_suite_test },
     { "aegis_hp_vector", aegis_hp_vector_test },
