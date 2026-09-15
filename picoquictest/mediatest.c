@@ -748,9 +748,6 @@ int mediatest_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
             break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
             if (cnx_ctx->mt_ctx->datagram_data_requested > 0 && !cnx_ctx->is_server) {

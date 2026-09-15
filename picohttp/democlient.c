@@ -578,20 +578,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             fprintf(stdout, "\n");
         }
         break;
-    case picoquic_callback_stream_gap:
-        /* Gap indication, when unreliable streams are supported */
-        fprintf(stdout, "Received a gap indication.\n");
-        if (stream_ctx == NULL) {
-            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
-        }
-        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
-            fin_stream_id = stream_id;
-            fprintf(stdout, "Stream %d reset after %d bytes\n",
-                (int)stream_id, (int)stream_ctx->received_length);
-        }
-        /* TODO: Define what error. Stop sending? */
-        picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-        break;
     case picoquic_callback_prepare_to_send:
         /* Used on client when posting data */
             /* Used for active streams */
