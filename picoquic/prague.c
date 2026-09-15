@@ -115,10 +115,12 @@ typedef struct st_picoquic_prague_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
 
+/* Re-entry into slow start, e.g. after a PMTU blackhole reset: restart CWND growth from
+ * scratch, but keep the previously learned ssthresh ceiling instead of resetting it to
+ * infinity, so a repeated reset does not keep forgetting what was already learned. */
 static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     pr_state->alg_state = picoquic_prague_alg_slow_start;
-    pr_state->ssthresh = UINT64_MAX;
     pr_state->alpha = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
@@ -133,6 +135,8 @@ void picoquic_prague_init(picoquic_path_t* path_x, char const* UNUSED(option_str
 
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
+        /* ssthresh is only ever set to infinity here, on the very first run. */
+        pr_state->ssthresh = UINT64_MAX;
         path_x->congestion_alg_state = (void*)pr_state;
         picoquic_prague_init_reno(pr_state, path_x);
     }
@@ -220,6 +224,9 @@ static void picoquic_prague_update_alpha(picoquic_path_t* path_x, picoquic_pragu
         frac = 0;
     }
 
+#if 0
+    /* Not reachable: l4s_update_sent is initialized to 0 and never assigned anywhere else in
+     * this file, so this guard's first clause is always false. */
     if (pr_state->l4s_update_sent != 0 && frac >= 512 && pr_state->alpha < 128 &&
         current_time - pr_state->recovery_stamp > path_x->smoothed_rtt) {
         /*
@@ -230,6 +237,7 @@ static void picoquic_prague_update_alpha(picoquic_path_t* path_x, picoquic_pragu
         is_suspect = 1;
         frac = 128;
     }
+#endif
 
     if (delta_ce > 0 || delta_ect1 > 0) {
         if (frac > pr_state->alpha && (frac >= 512 || is_suspect)) {
@@ -308,7 +316,8 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
     else {
         path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
 
-        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA. On the very first run, ssthresh is
+         * infinite and this never fires; after a reset, it holds the previously learned value. */
         if (path_x->cwin >= pr_state->ssthresh) {
             pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
             picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);

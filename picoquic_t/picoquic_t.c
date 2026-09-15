@@ -597,6 +597,8 @@ static const picoquic_test_def_t test_table[] = {
     { "fastcc_notify", fastcc_notify_test },
     { "c4_notify", c4_notify_test },
     { "c4_seed_resuming", c4_seed_resuming_test },
+    { "prague_notify", prague_notify_test },
+    { "prague_ecn_recovery", prague_ecn_recovery_test },
     { "initial_race", initial_race_test },
     { "aegis_cipher_suite", aegis_cipher_suite_test },
     { "aegis_hp_vector", aegis_hp_vector_test },

@@ -1395,3 +1395,90 @@ int c4_seed_resuming_test(void)
 
     return ret;
 }
+
+/* Exercise two prague paths that no other test reaches: the per-path packet context used in
+ * multipath mode (picoquic_prague_get_pkt_ctx's alternate branch), and an explicit reset
+ * notification (e.g. sent on PMTU blackhole recovery). */
+int prague_notify_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, picoquic_prague_algorithm);
+
+        /* Multipath mode: get_pkt_ctx reads the per-path context instead of the connection's. */
+        cnx->is_multipath_enabled = 1;
+
+        /* Explicit reset, e.g. sent on PMTU blackhole recovery. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
+            &ack_state, simulated_time);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_prague_process_ack's ECN-driven congestion-avoidance path (as opposed to the
+ * slow-start path covered by ordinary use) is only reached after a first congestion event moves
+ * prague out of slow start. Drive three losses to trigger that (picoquic_cc_hystart_loss_test
+ * needs a sustained ~15% smoothed drop rate, which three consecutive losses clears), then feed
+ * repeated CE-marked eras to walk the congestion window all the way down to its floor. */
+int prague_ecn_recovery_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 10000000;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+
+        picoquic_set_congestion_algorithm(cnx, picoquic_prague_algorithm);
+
+        for (uint64_t lost = 1; lost <= 3; lost++) {
+            ack_state.lost_packet_number = lost;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_repeat,
+                &ack_state, simulated_time);
+        }
+
+        /* Past this point, prague is in congestion_avoidance. A new era only starts once packets
+         * sent after the previous era began have been acked -- i.e. roughly one RTT -- which is
+         * what next_sequence > recovery_sequence (picoquic_prague_process_ack) actually tests:
+         * this is prague's "ignore repeated congestion signals within the same RTT" guard. So
+         * each round below advances send_sequence (packets sent this era) and then
+         * highest_acknowledged to match (those packets now acked), simulating one real RTT per
+         * era; simply bumping highest_acknowledged without ever moving send_sequence forward
+         * would trigger a new era on every single call, defeating that guard. Zero
+         * nb_bytes_acknowledged keeps the unrelated per-packet CWND-growth term out of the way. */
+        memset(&ack_state, 0, sizeof(ack_state));
+        for (int i = 0; i < 15; i++) {
+            pkt_ctx->send_sequence += 10;
+            pkt_ctx->highest_acknowledged = pkt_ctx->send_sequence;
+            pkt_ctx->ecn_ce_total_remote += 100;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+                &ack_state, simulated_time);
+        }
+
+        if (path_x->cwin != PICOQUIC_CWIN_MINIMUM) {
+            DBG_PRINTF("prague ECN-driven cwin did not reach the floor, cwin=%" PRIu64, path_x->cwin);
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
