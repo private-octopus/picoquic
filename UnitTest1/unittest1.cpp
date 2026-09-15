@@ -3161,6 +3161,16 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(c4_notify) {
+            int ret = c4_notify_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(c4_seed_resuming) {
+            int ret = c4_seed_resuming_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(initial_race) {
             int ret = initial_race_test();
 

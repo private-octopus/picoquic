@@ -543,6 +543,8 @@ int bbr1_seed_startup_test(void);
 int bbr1_ltbw_test(void);
 int bbr1_ltbw_edge_test(void);
 int fastcc_notify_test(void);
+int c4_notify_test(void);
+int c4_seed_resuming_test(void);
 int initial_race_test(void);
 int pacing_test(void);
 int pacing_repeat_test(void);

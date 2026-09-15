@@ -1306,3 +1306,92 @@ int fastcc_notify_test(void)
 
     return ret;
 }
+
+/* Exercise two c4 notifications that no other test reaches: c4_era_check's early return before
+ * the connection reaches the ready state (c4_handle_ack's era-based state transitions are
+ * otherwise unreachable before then -- this needs a non-initial state, since c4_initial_handle_ack
+ * never consults era_check directly, so seed the CWIN first to reach c4_resuming), and an
+ * explicit reset notification (e.g. sent on PMTU blackhole recovery). */
+int c4_notify_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, c4_algorithm);
+
+        /* cnx_state is well before "ready" here: era_check will return 0 immediately below. */
+        ack_state.nb_bytes_acknowledged = 200000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
+
+        memset(&ack_state, 0, sizeof(ack_state));
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+            &ack_state, simulated_time);
+
+        /* Explicit reset, e.g. sent on PMTU blackhole recovery. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
+            &ack_state, simulated_time);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* c4's "careful resume" feature -- c4_seed_cwin, c4_enter_resuming, c4_on_resuming_ack and
+ * c4_on_resuming_era_end -- was entirely unreached by any other test: no test seeds a c4
+ * connection with a remembered CWIN/rate pair. Drive it directly: seed while in the initial
+ * state (the only state c4_seed_cwin acts on), then feed two era-ending ACKs to exercise both
+ * branches of c4_on_resuming_era_end (one more era to wait, then exit to recovery). */
+int c4_seed_resuming_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t seeded_bdp = 200000;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, c4_algorithm);
+        cnx->cnx_state = picoquic_state_ready;
+
+        /* Seed the CWIN/rate: c4 is in its default initial state after set_congestion_algorithm. */
+        ack_state.nb_bytes_acknowledged = seeded_bdp;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+            &ack_state, simulated_time);
+        if (path_x->cwin != seeded_bdp) {
+            DBG_PRINTF("c4 seed did not set cwin as expected, cwin=%" PRIu64, path_x->cwin);
+            ret = -1;
+        }
+
+        /* c4_era_check requires the lowest unacked sequence number to have moved past the
+         * sequence number recorded when entering resuming (0, since nothing was ever sent). */
+        cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged = 1000;
+
+        /* First era end while resuming: one more era to wait before validating the seed. */
+        memset(&ack_state, 0, sizeof(ack_state));
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+            &ack_state, simulated_time);
+
+        /* Second era end while resuming: exits to recovery. */
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+            &ack_state, simulated_time);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
