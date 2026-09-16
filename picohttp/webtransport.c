@@ -349,7 +349,8 @@ static const char* picowt_connect_protocol_from_settings(const h3zero_settings_t
         H3ZERO_WEBTRANSPORT_H3_PROTOCOL : H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD;
 }
 
-static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+/* Not declared static because used in tests. */
+int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
     const picoquic_tp_t* remote_tp = (cnx == NULL) ? NULL : picoquic_get_transport_parameters(cnx, 0);
     int has_webtransport_settings = ctx != NULL &&
@@ -367,7 +368,8 @@ static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_call
         remote_tp->is_reset_stream_at_enabled;
 }
 
-static int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
+/* Not declared static because used in tests. */
+int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, const char* connect_protocol,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length,
     size_t* connect_length)
@@ -706,11 +708,13 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 
 
 /* Receive a WT capsule.
-* With web transport, we expect three types of capsule:
-* - Datagram, if datagram was not negotiated at the QUIC level,
+* Over HTTP/3, WebTransport expects only two capsule types on the stream:
 * - Drain session,
 * - Close session.
-* 
+* HTTP Datagrams are always sent as QUIC DATAGRAM frames when running over
+* HTTP/3 (RFC 9297, Section 2.1); the DATAGRAM capsule is the fallback used
+* over transports without native datagram support, e.g. HTTP/2. Receiving
+* one here would be unexpected.
 */
 int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {

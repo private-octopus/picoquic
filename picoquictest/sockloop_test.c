@@ -1176,7 +1176,8 @@ static int sockloop_bind_addr_send_bound(int af)
     int ret = 0;
     picoquic_packet_loop_param_t param = { 0 };
     picoquic_socket_ctx_t s_ctx[4] = { 0 };
-    picoquic_socket_ctx_t r_ctx[4] = { 0 };
+    SOCKET_TYPE r_fd = INVALID_SOCKET;
+    struct sockaddr_storage r_addr = { 0 };
     struct sockaddr_storage local_addr = { 0 };
     struct sockaddr_storage peer_addr = { 0 };
     struct sockaddr_storage addr_from = { 0 };
@@ -1192,19 +1193,31 @@ static int sockloop_bind_addr_send_bound(int af)
 
     for (int i = 0; i < 4; i++) {
         s_ctx[i].fd = INVALID_SOCKET;
-        r_ctx[i].fd = INVALID_SOCKET;
     }
     ret = sockloop_test_addr_config(&param.local_addr[0], af, 0);
     if (ret == 0) {
         param.do_not_use_gso = 1;
-        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1 ||
-            picoquic_packet_loop_open_sockets(&param, r_ctx, 0) != 1) {
-            DBG_PRINTF("%s", "Cannot open the bound sockets");
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open the bound socket");
             ret = -1;
         }
     }
     if (ret == 0) {
-        ret = sockloop_test_addr_config(&peer_addr, af, r_ctx[0].port);
+        /* The receiver is a plain socket, not a packet loop socket: on Windows,
+         * a packet loop socket already has an overlapped WSARecvMsg pending,
+         * which would consume the datagram before picoquic_select sees it. */
+        r_fd = picoquic_open_client_socket(af);
+        if (r_fd == INVALID_SOCKET ||
+            picoquic_bind_to_address(r_fd, af, 0, (struct sockaddr*)&param.local_addr[0]) != 0 ||
+            picoquic_get_local_address(r_fd, &r_addr) != 0) {
+            DBG_PRINTF("%s", "Cannot open the receiving socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        uint16_t r_port = (af == AF_INET6) ? ntohs(((struct sockaddr_in6*)&r_addr)->sin6_port) :
+            ntohs(((struct sockaddr_in*)&r_addr)->sin_port);
+        ret = sockloop_test_addr_config(&peer_addr, af, r_port);
     }
     if (ret == 0) {
         picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
@@ -1216,7 +1229,7 @@ static int sockloop_bind_addr_send_bound(int af)
         }
     }
     if (ret == 0) {
-        sock_ret = picoquic_select(&r_ctx[0].fd, 1, &addr_from, &addr_dest, &dest_if, &received_ecn,
+        sock_ret = picoquic_select(&r_fd, 1, &addr_from, &addr_dest, &dest_if, &received_ecn,
             received, (int)sizeof(received), 1000000, &current_time);
         (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
         if (sock_ret != (int)sizeof(buffer)) {
@@ -1230,7 +1243,9 @@ static int sockloop_bind_addr_send_bound(int af)
     }
     for (int i = 0; i < 4; i++) {
         picoquic_packet_loop_close_socket(&s_ctx[i]);
-        picoquic_packet_loop_close_socket(&r_ctx[i]);
+    }
+    if (r_fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(r_fd);
     }
     return ret;
 }
@@ -1240,8 +1255,18 @@ int sockloop_bind_addr_test(void)
     const int af_v4[1] = { AF_INET };
     const int af_v6[1] = { AF_INET6 };
     const int af_both[2] = { AF_INET, AF_INET6 };
-    int ret = sockloop_bind_addr_one(af_v4, 1);
+    int ret = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
 
+    /* The sub-tests open sockets directly, without going through the packet
+     * loop that would otherwise initialize Winsock. */
+    ret = WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    if (ret == 0) {
+        ret = sockloop_bind_addr_one(af_v4, 1);
+    }
     if (ret == 0) {
         ret = sockloop_bind_addr_one(af_v6, 1);
     }
@@ -1269,14 +1294,12 @@ int sockloop_bind_addr_test(void)
     if (ret == 0) {
         ret = sockloop_bind_addr_send_source(AF_INET6);
     }
-#ifndef _WINDOWS
     if (ret == 0) {
         ret = sockloop_bind_addr_send_bound(AF_INET);
     }
     if (ret == 0) {
         ret = sockloop_bind_addr_send_bound(AF_INET6);
     }
-#endif
     if (ret == 0) {
         /* Full loop, server bound to 127.0.0.1 only, client connecting to it. */
         sockloop_test_spec_t spec;
@@ -1646,9 +1669,6 @@ int sockloop_qmux_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
-            break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
             break;
         case picoquic_callback_almost_ready:
             DBG_PRINTF("Almost ready, client_mode: %d", cnx->client_mode);

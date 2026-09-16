@@ -152,7 +152,6 @@ int quicwind_callback(picoquic_cnx_t* cnx,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
 {
     int ret = 0;
-    uint64_t fin_stream_id = PICOQUIC_DEMO_STREAM_ID_INITIAL;
 
     quicwind_callback_ctx_t* ctx = (quicwind_callback_ctx_t*)callback_ctx;
     quicwind_stream_ctx_t* stream_ctx;
@@ -230,18 +229,6 @@ int quicwind_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_version_negotiation: /* Received version negotiation */
         AppendText(_T("Received a version negotiation request.\n"));
-        break;
-    case picoquic_callback_stream_gap:
-        /* Gap indication, when unreliable streams are supported */
-        AppendText(_T("Received a gap indication.\r\n"));
-        stream_ctx = quicwind_find_stream(ctx, stream_id);
-        if (stream_ctx != NULL && stream_ctx->F != NULL) {
-            stream_ctx->F = picoquic_file_close(stream_ctx->F);
-            ctx->nb_open_streams--;
-            fin_stream_id = stream_id;
-        }
-        /* TODO: Define what error. Stop sending? */
-        picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
         break;
     case picoquic_callback_prepare_to_send:
         /* Used for active streams -- never used on client */

@@ -2702,6 +2702,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_ns_bad_scenario)
+        {
+            int ret = cc_ns_bad_scenario_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_no_connections)
+        {
+            int ret = cc_ns_no_connections_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_bad_link_scenario)
+        {
+            int ret = cc_ns_bad_link_scenario_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_bad_qperf_log)
+        {
+            int ret = cc_ns_bad_qperf_log_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_target_time_exceeded)
+        {
+            int ret = cc_ns_target_time_exceeded_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_connection_error)
+        {
+            int ret = cc_ns_connection_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_ns_varylink_zero_rate)
+        {
+            int ret = cc_ns_varylink_zero_rate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(fastcc)
         {
             int ret = fastcc_test();
@@ -3643,6 +3692,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_demoted_path0_null_cnxid) {
+            int ret = multipath_demoted_path0_null_cnxid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_back0) {
             int ret = multipath_back0_test();
 
@@ -3856,6 +3911,42 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_name_lookup) {
+            int ret = h3zero_name_lookup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_qpack_encode_error) {
+            int ret = h3zero_qpack_encode_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_create_header_frame_error) {
+            int ret = h3zero_create_header_frame_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_parse_duplicate_header_value_string) {
+            int ret = h3zero_parse_duplicate_header_value_string_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_parse_duplicate_header) {
+            int ret = h3zero_parse_duplicate_header_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_varint_decode_error) {
+            int ret = h3zero_varint_decode_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_parse_qpack) {
             int ret = h3zero_parse_qpack_test();
 
@@ -3916,6 +4007,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(parse_demo_scenario_error) {
+            int ret = parse_demo_scenario_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_prepare_stream_open_command_too_small) {
+            int ret = h09_prepare_stream_open_command_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_server) {
             int ret = h3zero_server_test();
 
@@ -3936,6 +4039,48 @@ namespace UnitTest1
         
         TEST_METHOD(h09_header) {
             int ret = h09_header_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_parse_method) {
+            int ret = h09_parse_method_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_parse_protocol) {
+            int ret = h09_parse_protocol_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_parse_commandline) {
+            int ret = h09_parse_commandline_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h09_stop_sending_reset) {
+            int ret = h09_stop_sending_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_server_parse_path) {
+            int ret = h3zero_server_parse_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_server_prepare_to_send) {
+            int ret = h3zero_server_prepare_to_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picohttp_find_path_item) {
+            int ret = picohttp_find_path_item_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -4066,8 +4211,32 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_settings_components_decode) {
+            int ret = h3zero_settings_components_decode_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_settings_encode_too_short) {
+            int ret = h3zero_settings_encode_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 	    TEST_METHOD(h3zero_get_content_type_by_path) {
             int ret = h3zero_get_content_type_by_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+	    TEST_METHOD(h3zero_find_path_item) {
+            int ret = h3zero_find_path_item_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+	    TEST_METHOD(h3zero_process_request_frame) {
+            int ret = h3zero_process_request_frame_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -4244,6 +4413,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_baton_bad_params_syntax) {
+            int ret = picowt_baton_bad_params_syntax_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_server_reject) {
+            int ret = picowt_baton_server_reject_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_fin_before_baton) {
+            int ret = picowt_baton_fin_before_baton_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_baton_wrong_stream) {
+            int ret = picowt_baton_wrong_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_wildcard) {
             int ret = picowt_baton_wildcard_test();
 
@@ -4279,6 +4472,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_reset_stream_remote_unidir) {
+            int ret = picowt_reset_stream_remote_unidir_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_select_wt_protocol_whitespace) {
+            int ret = picowt_select_wt_protocol_whitespace_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_webtransport_requirements_met) {
+            int ret = picowt_webtransport_requirements_met_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_format_connect_frame) {
+            int ret = picowt_format_connect_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_send_close_session_already_closed) {
+            int ret = picowt_send_close_session_already_closed_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_tp) {
             int ret = picowt_tp_test();
 
@@ -4291,8 +4514,38 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_scenario_error) {
+            int ret = quicperf_scenario_error_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_batch) {
             int ret = quicperf_batch_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_infinite) {
+            int ret = quicperf_infinite_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_client_media_stream) {
+            int ret = quicperf_client_media_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_client_media_datagram) {
+            int ret = quicperf_client_media_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicperf_datagram_too_large) {
+            int ret = quicperf_datagram_too_large_test();
 
             Assert::AreEqual(ret, 0);
         }

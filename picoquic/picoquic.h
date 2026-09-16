@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.52.0"
+#define PICOQUIC_VERSION "1.1.53.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -402,7 +402,7 @@ typedef enum {
     picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
-    picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_stream_gap,  /* Deprecated: picoquic never emits this callback, kept only so old code that switches on it still compiles */
     picoquic_callback_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */

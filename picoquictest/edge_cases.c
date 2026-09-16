@@ -1886,9 +1886,6 @@ int reset_loop_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
             break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
             break;

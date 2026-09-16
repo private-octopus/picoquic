@@ -86,7 +86,7 @@ static void picoquic_h09_server_callback_delete_context(picoquic_h09_server_call
 }
 
 
-static int picoquic_h09_server_parse_method(uint8_t* command, size_t command_length, size_t * consumed)
+int picoquic_h09_server_parse_method(uint8_t* command, size_t command_length, size_t * consumed)
 {
     int byte_index = 0;
     int ret = -1;
@@ -106,7 +106,7 @@ static int picoquic_h09_server_parse_method(uint8_t* command, size_t command_len
     return ret;
 }
 
-static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_length, int * proto, size_t * consumed)
+void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_length, int * proto, size_t * consumed)
 {
     size_t byte_index = (command_length > 0)?command_length -1:0;
     size_t last_proto_index;
@@ -180,18 +180,14 @@ static void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_
     }
 }
 
-static int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, h3zero_stream_ctx_t* stream_ctx)
+int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, h3zero_stream_ctx_t* stream_ctx)
 {
     int ret = 0;
     size_t consumed;
 
-    /* Find first line of command, ignore the rest */
-    for (size_t i = 0; i < command_length; i++) {
-        if (command[i] == '\r' || command[i] == '\n') {
-            command_length = i;
-            break;
-        }
-    }
+    /* The caller (picoquic_h09_server_process_data_header) always hands us
+     * just the first line, with any \r or \n already stripped -- so unlike
+     * that caller, there is no need to scan for one here. */
 
     /* Parse protocol version and strip white spaces at the end of the command */
     picoquic_h09_server_parse_protocol(command, command_length, &stream_ctx->ps.hq.proto, &consumed);
@@ -573,14 +569,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         break;
     }
 
-    if (fin_or_event == picoquic_callback_stream_gap) {
-        /* We do not support this, yet */
-        stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
-        return 0;
-    }
-    else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
+    if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
         /* Data processing includes setting up post/get callback if needed */
         if (picoquic_h09_server_process_data(cnx, stream_id, bytes, length, fin_or_event, ctx, stream_ctx)) {
             /* something bad happened. */
