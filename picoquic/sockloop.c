@@ -127,6 +127,7 @@
 #include "picoquic_qlog.h"
 #include "performance_log.h"
 #include "picoquic_packet_loop.h"
+#include "picoquic_af_xdp.h"
 #include "picoquic_unified_log.h"
 #include "picoqmux.h"
 
@@ -2413,7 +2414,8 @@ int picoquic_packet_loop_do_udp_send(
     size_t send_msg_size,
     size_t** send_msg_ptr,
     picoquic_connection_id_t* log_cid,
-    uint64_t current_time)
+    uint64_t current_time,
+    picoquic_network_thread_ctx_t* thread_ctx)
 {
     int ret = 0;
     int sock_ret = 0;
@@ -2433,9 +2435,18 @@ int picoquic_packet_loop_do_udp_send(
             DBG_PRINTF("Simulating EIO, send length = %zu", send_length);
         }
         else {
-            sock_ret = picoquic_sendmsg(send_socket,
-                (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
-                (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            sock_ret = -1;
+            sock_err = 0;
+            if (thread_ctx != NULL && thread_ctx->af_xdp != NULL) {
+                sock_ret = picoquic_af_xdp_send(thread_ctx->af_xdp,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
+                    (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            }
+            if (sock_ret <= 0) {
+                sock_ret = picoquic_sendmsg(send_socket,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
+                    (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            }
         }
     }
     if (sock_ret <= 0) {
@@ -2590,6 +2601,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 ret = picoquic_packet_loop_open_qmux_cnx_sockets(qmux, sqmux_ctx, &nb_qmux_sockets, max_qmux_sockets);
             }
         }
+    }
+    if (ret == 0) {
+        thread_ctx->tx_method = picoquic_tx_method_sendmsg;
+        thread_ctx->tx_method_reason[0] = 0;
+        thread_ctx->af_xdp = picoquic_af_xdp_create(param->use_af_xdp, param->dest_if,
+            s_ctx[0].fd, &thread_ctx->tx_method, thread_ctx->tx_method_reason,
+            sizeof(thread_ctx->tx_method_reason));
     }
     if (ret == 0 && loop_callback != NULL) {
         struct sockaddr_storage l_addr;
@@ -2916,7 +2934,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, send_socket, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index,
-                        send_msg_size, &send_msg_ptr, &log_cid, current_time);
+                        send_msg_size, &send_msg_ptr, &log_cid, current_time, thread_ctx);
                 }
                 else {
                     break;
@@ -2948,6 +2966,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
         /* Normal termination requested by the application, returns no error */
         ret = 0;
+    }
+
+    if (thread_ctx->af_xdp != NULL) {
+        picoquic_af_xdp_delete(thread_ctx->af_xdp);
+        thread_ctx->af_xdp = NULL;
     }
 
     /* Close the sockets */

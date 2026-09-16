@@ -126,6 +126,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sim_link.c
     picoquic/siphash.c
     picoquic/sockloop.c
+    picoquic/picoquic_af_xdp.c
     picoquic/spinbit.c
     picoquic/streams.c
     picoquic/ticket_store.c
@@ -142,6 +143,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
+     picoquic/picoquic_af_xdp.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
