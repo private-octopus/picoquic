@@ -1,8 +1,10 @@
 /*
  * AF_XDP transmit path for picoquic. RX stays on the UDP sockets.
  * GSO buffers (UDP_SEGMENT) are split into one XDP frame per segment and
- * submitted as a single TX-ring batch. If AF_XDP cannot be opened, callers
- * use sendmsg, which still carries UDP_SEGMENT.
+ * submitted as a single TX-ring batch. Copy mode is used so a NIC queue is
+ * not stolen from the kernel; another process can therefore bind a different
+ * UDP port on the same interface. If AF_XDP cannot be opened, callers use
+ * sendmsg, which still carries UDP_SEGMENT.
  */
 
 #ifndef PICOQUIC_AF_XDP_H

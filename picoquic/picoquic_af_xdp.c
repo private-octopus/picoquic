@@ -1080,11 +1080,14 @@ static int xdp_open_xsk(picoquic_af_xdp_t* x, int flags);
 static int
 xdp_try_open_xsk(picoquic_af_xdp_t* x)
 {
-    if (xdp_open_xsk(x, XDP_ZEROCOPY | XDP_USE_NEED_WAKEUP) == 0) {
-        x->method = picoquic_tx_method_af_xdp_zerocopy;
-        x->zerocopy = 1;
-        return 0;
-    }
+    /*
+     * TX-only, copy mode. Zero-copy takes exclusive ownership of a NIC
+     * queue pair on many drivers, so the kernel UDP sockets no longer
+     * receive on that RSS queue. A second process on another UDP port
+     * then goes silent when its 4-tuple hashes onto the stolen queue.
+     * Copy mode keeps RX on the stack; bind is still one AF_XDP socket
+     * per queue, so a second process uses the next free queue or sendmsg.
+     */
     if (xdp_open_xsk(x, XDP_COPY | XDP_USE_NEED_WAKEUP) == 0 ||
         xdp_open_xsk(x, XDP_COPY) == 0) {
         x->method = picoquic_tx_method_af_xdp_copy;
