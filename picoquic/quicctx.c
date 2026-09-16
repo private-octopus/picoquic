@@ -2153,54 +2153,67 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     }
 }
 
-/* 
+/*
  * Demote path, compute the effective time for demotion.
+ *
+ * If multipath is enabled and path_index is 0, first look for another path
+ * that still holds a valid remote CID and swap it into slot 0, so path[0]
+ * stays usable. If no such path exists, path 0 cannot be demoted without
+ * leaving the connection with no usable path while it still believes
+ * itself ready to send: close the connection instead of marking it
+ * demoted with a CID that would later be found valid, but stuck behind a
+ * demoted-and-CID-less path that has yet to be physically deleted.
  */
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason)
 {
     if (!cnx->path[path_index]->path_is_demoted) {
-        uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
+        int can_demote = 1;
 
-        if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER &&
-            !cnx->is_multipath_enabled) {
-            demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
+        if (cnx->is_multipath_enabled && path_index == 0) {
+            int alt_path0 = 0;
+            for (int i = 1; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
+                    alt_path0 = i;
+                    break;
+                }
+            }
+            if (alt_path0 != 0) {
+                picoquic_path_t* path_x = cnx->path[0];
+                cnx->path[0] = cnx->path[alt_path0];
+                cnx->path[alt_path0] = path_x;
+                path_index = alt_path0;
+            }
+            else {
+                can_demote = 0;
+            }
         }
 
-        cnx->path[path_index]->path_is_demoted = 1;
-        cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
-        cnx->path_demotion_needed = 1;
+        if (!can_demote) {
+            picoquic_log_app_message(cnx, "Cannot demote path index 0, unique_id %" PRIu64", was reason % " PRIu64,
+                cnx->path[0]->unique_path_id, reason);
+            picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_APPLICATION_ABANDON,
+                picoquic_frame_type_path_abandon, "no path left to replace demoted path 0");
+        }
+        else {
+            uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
 
-        /* TODO: add suspended callback */
-        if (cnx->is_multipath_enabled) {
-             /* Special case for path 0: we want to reorder the paths so the path[0]
-             * is always a valid path.
-             */
-            if (path_index == 0) {
-                int alt_path0 = 0;
-                for (int i = 1; i < cnx->nb_paths; i++) {
-                    if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
-                        alt_path0 = i;
-                        break;
-                    }
-                }
-                if (alt_path0 != 0) {
-                    picoquic_path_t* path_x = cnx->path[0];
-                    cnx->path[0] = cnx->path[alt_path0];
-                    cnx->path[alt_path0] = path_x;
-                    path_index = alt_path0;
-                }
+            if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER &&
+                !cnx->is_multipath_enabled) {
+                demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
             }
-            if (path_index == 0) {
-                picoquic_log_app_message(cnx, "Cannot demote path index 0, unique_id %" PRIu64", was reason % " PRIu64,
-                    cnx->path[path_index]->unique_path_id, reason);
-            }
-            else if (!cnx->path[path_index]->path_abandon_sent) {
+
+            cnx->path[path_index]->path_is_demoted = 1;
+            cnx->path[path_index]->demotion_time = current_time + 3 * demote_timer;
+            cnx->path_demotion_needed = 1;
+
+            /* TODO: add suspended callback */
+            if (cnx->is_multipath_enabled && !cnx->path[path_index]->path_abandon_sent) {
                 uint64_t path_id = cnx->path[path_index]->unique_path_id;
                 if (picoquic_queue_path_abandon_frame(cnx, path_id, reason) == 0){
-                    picoquic_remote_cnxid_stash_t* remote_cnxid_stash = 
-                        picoquic_find_or_create_remote_cnxid_stash(cnx, 
+                    picoquic_remote_cnxid_stash_t* remote_cnxid_stash =
+                        picoquic_find_or_create_remote_cnxid_stash(cnx,
                             cnx->path[path_index]->unique_path_id, 0);
-                    if (remote_cnxid_stash != NULL && path_index != 0) {
+                    if (remote_cnxid_stash != NULL) {
                         cnx->path[path_index]->first_tuple->p_remote_cnxid = NULL;
                         picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
                     }

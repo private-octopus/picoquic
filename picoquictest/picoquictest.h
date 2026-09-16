@@ -623,6 +623,7 @@ int multipath_abandon_test(void);
 int multipath_abandon_last_test(void);
 int multipath_abandon_last_by_peer_test(void);
 int multipath_last_path_validation_fails_test(void);
+int multipath_demoted_path0_null_cnxid_test(void);
 int multipath_back0_test(void);
 int multipath_back1_test(void);
 int multipath_perf_test(void);
