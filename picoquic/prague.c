@@ -44,6 +44,65 @@
  * 
  */
 
+/* TODO:
+* Prague is specified in
+* https://www.ietf.org/archive/id/draft-briscoe-iccrg-prague-congestion-control-01.html
+* 
+* 
+* Prague should be treated for QUIC as an extension of RFC 9002.
+* RFC 9002 describes 3 states: slow start, congestion avoidance, and recovery,
+* but in practice the differentiation does not need a state variable.
+* There are two main actions in RFC 9002:
+* - increase the congestion window on ACK
+* - decrease the congestion window on loss
+* The increase depends on whether CWND is below or above ssthresh:
+* - if below SSTHRESH, the increase is the number of bytes acknowledged,
+* 
+*   except during "application limited" periods.
+* - if above SSTHRESH, the increase is the ratio:
+*   number of bytes ackowledged * MSS / CWND
+* The decrease of the congestion window only happens if the loss is detected
+* outside of the recovery period, i.e., if a packet sent during recovery
+* has been acked. The effect is to reset ssthresh to:
+*   max(flight_size / 2, 2 * MSS),
+* while the congestion window is set to 2 packets
+* 
+* On top of that, RFC 9002 defines a persistent congestion period, which
+* is defined as a period of time during which no packet was acked.
+* 
+* The main effect of Prague is to modify the increase and decrease functions,
+* based on the coefficient alpha:
+* 
+* - instead of dropping ssthresh to half the flight size, it is dropped to:
+*   ssthresh = (1 - alpha/2) * cwnd;
+*   ... per the draft. This should probably be changed to:
+*   ssthresh = (1 - alpha/2) * flight_size;
+*   This would be the same as Reno if alpha == 1.
+* 
+* - in recovery, a Prague CC applies additive increase irrespective of its
+*   CWR state, but only for bytes that have been ACK'd without ECN feedback.
+* 
+* - otherwise, the increase is the same as in Reno, but may be scaled
+*   by (1 - alpha/2).
+* 
+* Properly computing alpha is tricky. The spec says:
+* 
+* - update at most every RTT, based on the number of CE and ECT1 packets
+*   received in the last RTT. This means maintaining a last epoch indication,
+*   i.e., the packet number that started the epoch, and a counter of
+*   marks received at that time.
+* - when we receive an ACK >= last epoch, we compute the change in CE and ECT1
+*   marks and update the ratio.
+* - On the first ever ECN/CE notification, alpha should initialized to 1.
+* - There is a complicated rule on detecting "sudden onset of congestion",
+*   which the code does not properly implement.
+* 
+* Compared to Reno (or RFC 9002), Prague will enter recovery more often,
+* but will reduce the congestion window by smaller amounts. There will be
+* a "saw tooth" effectas for Reno, but the saw tooth will be smaller and
+* more frequent.
+/
+
 /* Observations and issues:
  *
  * Exit hystart one RTT too late. Hystart ends when the first EC markings appear.

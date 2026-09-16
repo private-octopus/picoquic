@@ -299,7 +299,9 @@ typedef struct st_picoquic_bbr1_state_t {
 } picoquic_bbr1_state_t;
 
 void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, uint64_t current_time);
+#if 0
 static void BBR1ResetProbeBwMode(picoquic_bbr1_state_t* bbr1_state, uint64_t current_time);
+#endif
 
 static uint64_t BBR1GetBtlBW(picoquic_bbr1_state_t* bbr1_state)
 {
