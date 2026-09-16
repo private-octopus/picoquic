@@ -101,7 +101,7 @@
 * but will reduce the congestion window by smaller amounts. There will be
 * a "saw tooth" effectas for Reno, but the saw tooth will be smaller and
 * more frequent.
-/
+*/
 
 /* Observations and issues:
  *
