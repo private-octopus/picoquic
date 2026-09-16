@@ -3627,6 +3627,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_demoted_path0_null_cnxid) {
+            int ret = multipath_demoted_path0_null_cnxid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_back0) {
             int ret = multipath_back0_test();
 
