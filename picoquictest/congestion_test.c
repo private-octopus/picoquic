@@ -1482,3 +1482,136 @@ int prague_ecn_recovery_test(void)
 
     return ret;
 }
+
+/* picoquic_congestion_notification_reset fires on path migration (RFC 9002): the new path's
+ * characteristics are unknown, so a compliant algorithm must discard everything it learned and
+ * restart as if the connection were brand new -- in particular path_x->cwin should return to
+ * PICOQUIC_CWIN_INITIAL, not stay at whatever elevated value slow-start growth reached before
+ * the reset. Run a short, realistic ramp-up (enough ACK/RTT-measurement rounds to grow cwin well
+ * past its initial value under ordinary slow-start growth, for every algorithm), then reset, and
+ * check that cwin actually came back down. */
+/* Run 20 rounds of ACK/RTT-measurement notifications, simulating a short but real ramp-up. */
+static void cc_algo_reset_ramp_up(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t* simulated_time)
+{
+    for (int i = 0; i < 20; i++) {
+        picoquic_per_ack_state_t ack_state = { 0 };
+
+        *simulated_time += 20000;
+        path_x->bandwidth_estimate = 10000000;
+        path_x->last_time_acked_data_frame_sent = *simulated_time;
+        ack_state.rtt_measurement = 20000;
+        ack_state.nb_bytes_acknowledged = 5000;
+        ack_state.nb_bytes_delivered_since_packet_sent = 5000;
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_rtt_measurement,
+            &ack_state, *simulated_time);
+        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement,
+            &ack_state, *simulated_time);
+    }
+}
+
+static int cc_algo_reset_test_one(picoquic_congestion_algorithm_t* ccalgo)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t cwin_fresh;
+    uint64_t cwin_before_reset;
+    uint64_t cwin_after_reset;
+
+    /* Reference: what a brand new connection reaches after the same ramp-up, with no prior
+     * history at all. Some algorithms (e.g. BBR) do not zero cwin synchronously inside the reset
+     * notification itself -- cwin is a value they derive from other state (pacing gain, round
+     * counting, full-pipe detection, ...) on the next real event, all of which the reset call
+     * does clear. So the meaningful check is not "is cwin exactly PICOQUIC_CWIN_INITIAL right
+     * after reset", but "does cwin converge back to what a fresh connection would reach, instead
+     * of staying anchored to what the old path could sustain". */
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_congestion_algorithm(cnx, ccalgo);
+        cnx->cnx_state = picoquic_state_ready;
+        /* Not app-limited: required for reno/cubic/prague's slow-start growth (cc_common.c's
+         * picoquic_cc_slow_start_increase) and for fastcc's own growth gate. */
+        cnx->cwin_blocked = 1;
+        cc_algo_reset_ramp_up(cnx, cnx->path[0], &simulated_time);
+        cwin_fresh = cnx->path[0]->cwin;
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    if (ret == 0 &&
+        picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else if (ret == 0) {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, ccalgo);
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->cwin_blocked = 1;
+
+        /* Run the connection for a short while, so there is real learned state to discard. */
+        cc_algo_reset_ramp_up(cnx, path_x, &simulated_time);
+
+        cwin_before_reset = path_x->cwin;
+        if (cwin_before_reset <= PICOQUIC_CWIN_INITIAL) {
+            DBG_PRINTF("%s: cwin did not grow before reset, cwin=%" PRIu64, ccalgo->congestion_algorithm_id, cwin_before_reset);
+            ret = -1;
+        }
+
+        /* Simulate a path migration: the algorithm must forget what it learned. */
+        if (ret == 0) {
+            picoquic_per_ack_state_t ack_state = { 0 };
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
+                &ack_state, simulated_time);
+
+            /* Let the new path settle, exactly as for the fresh-connection reference above. */
+            cc_algo_reset_ramp_up(cnx, path_x, &simulated_time);
+            cwin_after_reset = path_x->cwin;
+
+            /* cwin_after_reset should land close to cwin_fresh: a few sender-MTUs of absolute
+             * slack, to allow for minor implementation-specific rounding, but nowhere near the
+             * full amount that a whole extra ramp-up's worth of carried-over state would add. */
+            {
+                uint64_t tolerance = 4 * PICOQUIC_CWIN_INITIAL;
+                uint64_t delta = (cwin_after_reset > cwin_fresh) ?
+                    cwin_after_reset - cwin_fresh : cwin_fresh - cwin_after_reset;
+
+                if (delta > tolerance) {
+                    DBG_PRINTF("%s: cwin after reset+settle (%" PRIu64 ") is not close to a fresh start (%" PRIu64
+                        "), pre-reset value was %" PRIu64,
+                        ccalgo->congestion_algorithm_id, cwin_after_reset, cwin_fresh, cwin_before_reset);
+                    ret = -1;
+                }
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int cc_algo_reset_test(void)
+{
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_newreno_algorithm,
+        picoquic_cubic_algorithm,
+        picoquic_dcubic_algorithm,
+        picoquic_bbr_algorithm,
+        picoquic_bbr1_algorithm,
+        picoquic_fastcc_algorithm,
+        c4_algorithm,
+        picoquic_prague_algorithm
+    };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
+        if (cc_algo_reset_test_one(ccalgos[i]) != 0) {
+            DBG_PRINTF("CC algo reset test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}

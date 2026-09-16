@@ -174,12 +174,14 @@ typedef struct st_picoquic_prague_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } picoquic_prague_state_t;
 
-/* Re-entry into slow start, e.g. after a PMTU blackhole reset: restart CWND growth from
- * scratch, but keep the previously learned ssthresh ceiling instead of resetting it to
- * infinity, so a repeated reset does not keep forgetting what was already learned. */
+/* picoquic_congestion_notification_reset fires on path migration (RFC 9002): the new path's
+ * characteristics are unknown, so all learned state -- including ssthresh -- must go back to
+ * its just-created-connection defaults. This is called on both the true first-ever init and on
+ * every subsequent reset. */
 static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoquic_path_t* path_x)
 {
     pr_state->alg_state = picoquic_prague_alg_slow_start;
+    pr_state->ssthresh = UINT64_MAX;
     pr_state->alpha = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
 }
@@ -194,8 +196,6 @@ void picoquic_prague_init(picoquic_path_t* path_x, char const* UNUSED(option_str
 
     if (pr_state != NULL) {
         memset(pr_state, 0, sizeof(picoquic_prague_state_t));
-        /* ssthresh is only ever set to infinity here, on the very first run. */
-        pr_state->ssthresh = UINT64_MAX;
         path_x->congestion_alg_state = (void*)pr_state;
         picoquic_prague_init_reno(pr_state, path_x);
     }
@@ -375,12 +375,17 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
     else {
         path_x->cwin += picoquic_cc_slow_start_increase_ex2(path_x, ack_state->nb_bytes_acknowledged, 0, pr_state->alpha);
 
-        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA. On the very first run, ssthresh is
-         * infinite and this never fires; after a reset, it holds the previously learned value. */
+#if 0
+        /* Not reachable: ssthresh is always UINT64_MAX whenever this function runs (it is only
+         * called while alg_state == slow_start, and every assignment of a finite ssthresh --
+         * enter_recovery, the HyStart branch below -- also moves alg_state to
+         * congestion_avoidance in the same breath), so cwin can never reach it. */
+        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
         if (path_x->cwin >= pr_state->ssthresh) {
             pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
             picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
         }
+#endif
     }
 }
 

@@ -569,6 +569,7 @@ int c4_notify_test(void);
 int c4_seed_resuming_test(void);
 int prague_notify_test(void);
 int prague_ecn_recovery_test(void);
+int cc_algo_reset_test(void);
 int initial_race_test(void);
 int pacing_test(void);
 int pacing_repeat_test(void);

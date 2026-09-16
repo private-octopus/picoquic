@@ -522,6 +522,10 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_state->running_min_rtt = UINT64_MAX;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_set_options(c4_state);
+    /* c4_enter_initial falls back to path_x->cwin for initial_cwnd when nominal_rate is 0 (as it
+     * always is here, just after the memset above) -- reset cwin first, so a reset (e.g. on path
+     * migration) does not carry forward what the old path could sustain. */
+    path_x->cwin = PICOQUIC_CWIN_INITIAL;
     c4_enter_initial(path_x, c4_state);
 }
 
