@@ -403,8 +403,11 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
 
-            /* Process to receive the stream */
-            if (ret == 0) {
+            /* Process to receive the stream. receive_id stays SIZE_MAX when
+             * the "wrong stream" branch above ran: wt_baton_close_session
+             * commonly returns 0 (a graceful close was successfully queued),
+             * so ret == 0 alone does not mean a lane was assigned. */
+            if (ret == 0 && receive_id != SIZE_MAX) {
                 wt_baton_incoming_t* incoming_ctx = &baton_ctx->incoming[receive_id];
 
                 if (length > 0) {
@@ -914,37 +917,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             /* Todo: undo init. */
         }
         return ret;
-}
-
-int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, const uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event,
-    h3zero_stream_ctx_t* stream_ctx,
-    wt_baton_ctx_t* baton_ctx)
-{
-    int ret = 0;
-
-    if (stream_ctx == NULL) {
-        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, baton_ctx->h3_ctx, 1, 1);
-        picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
-    }
-    if (stream_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        const uint8_t* bytes_max = bytes + length;
-
-        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx, cnx);
-
-        if (bytes == NULL) {
-            picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
-            ret = -1;
-        }
-        else if (bytes < bytes_max) {
-            ret = h3zero_post_data_or_fin(cnx, bytes, bytes_max - bytes, fin_or_event, stream_ctx);
-        }
-    }
-    return ret;
 }
 
 /*
