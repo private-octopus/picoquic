@@ -2060,10 +2060,6 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 				fprintf(stdout, "\n");
 			}
 			break;
-		case picoquic_callback_stream_gap:
-			/* Gap indication, when unreliable streams are supported */
-			ret = -1;
-			break;
 		case picoquic_callback_prepare_to_send:
 			ret = h3zero_callback_prepare_to_send(cnx, stream_id, stream_ctx, (void*)bytes, length, ctx);
 			break;

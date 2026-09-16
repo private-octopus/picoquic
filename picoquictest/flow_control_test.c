@@ -210,10 +210,6 @@ int fctest_callback(picoquic_cnx_t* cnx,
 			/* Not expected in this test */
 			ret = -1;
 			break;
-		case picoquic_callback_stream_gap:
-			/* Gap indication, when unreliable streams are supported */
-			ret = -1;
-			break;
 		case picoquic_callback_prepare_to_send:
 			/* On the client, prepare the expected amount of data. Mark
 			* active until the expected amount is received. */

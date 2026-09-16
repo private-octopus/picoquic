@@ -569,14 +569,7 @@ int picoquic_h09_server_callback(picoquic_cnx_t* cnx,
         break;
     }
 
-    if (fin_or_event == picoquic_callback_stream_gap) {
-        /* We do not support this, yet */
-        stream_ctx->ps.hq.status = picohttp_server_stream_status_finished;
-        picoquic_reset_stream(cnx, stream_id, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION);
-        picoquic_log_app_message(cnx, "Server CB, Stream: %" PRIu64 ", RESET, stream gaps not supported\n", stream_id);
-        return 0;
-    }
-    else if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
+    if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
         /* Data processing includes setting up post/get callback if needed */
         if (picoquic_h09_server_process_data(cnx, stream_id, bytes, length, fin_or_event, ctx, stream_ctx)) {
             /* something bad happened. */

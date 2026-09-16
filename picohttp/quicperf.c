@@ -1579,9 +1579,6 @@ int quicperf_callback(picoquic_cnx_t* cnx,
         break;
     case picoquic_callback_version_negotiation: /* Not something we would want... */
         break;
-    case picoquic_callback_stream_gap:
-        /* TODO: Define what error. Stop sending? */
-        break;
     case picoquic_callback_almost_ready:
     case picoquic_callback_ready:
         picoquic_cnx_set_pmtud_required(cnx, 1);
