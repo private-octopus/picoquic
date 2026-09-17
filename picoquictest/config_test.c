@@ -50,6 +50,68 @@ int config_option_letters_test(void)
         ret = -1;
     }
 
+    /* A buffer too small to hold the first option's letter and its ':' marker
+     * must be reported as an error, not silently truncated. */
+    if (ret == 0) {
+        char small_buffer[2];
+        size_t small_length = 0;
+
+        if (picoquic_config_option_letters(small_buffer, sizeof(small_buffer), &small_length) == 0) {
+            DBG_PRINTF("%s", "picoquic_config_option_letters did not report a too-small buffer");
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* Exercise picoquic_config_command_line_ex directly, beyond what the "two dash"
+ * end-to-end test in config_option_test covers:
+ * - single-letter options ("-c") are also accepted through this entry point.
+ * - an unrecognized option must be reported as an error (regression test for a bug where
+ *   the "Unknown option" branch printed a message but left ret at its initial 0).
+ * - an option that requires more trailing arguments than are actually available must be
+ *   reported as an error, not read past the end of argv. */
+int config_command_line_index_test(void)
+{
+    int ret = 0;
+    picoquic_quic_config_t config;
+
+    {
+        const char* argv[] = { "-c", "cert.pem" };
+        int opt_ind = 1;
+        picoquic_config_init(&config);
+        if (picoquic_config_command_line_ex(argv[0], &opt_ind, 2, argv, argv[1], &config) != 0 ||
+            config.server_cert_file == NULL || strcmp(config.server_cert_file, "cert.pem") != 0) {
+            DBG_PRINTF("%s", "picoquic_config_command_line_ex did not accept a single-letter option");
+            ret = -1;
+        }
+        picoquic_config_clear(&config);
+    }
+
+    if (ret == 0) {
+        const char* argv[] = { "--totally_bogus_option" };
+        int opt_ind = 1;
+        picoquic_config_init(&config);
+        if (picoquic_config_command_line_ex(argv[0], &opt_ind, 1, argv, NULL, &config) == 0) {
+            DBG_PRINTF("%s", "picoquic_config_command_line_ex accepted an unrecognized option");
+            ret = -1;
+        }
+        picoquic_config_clear(&config);
+    }
+
+    if (ret == 0) {
+        /* --ech_s requires 2 arguments; only one is available in argv. */
+        const char* argv[] = { "--ech_s", "keyfile_only" };
+        int opt_ind = 2;
+        picoquic_config_init(&config);
+        if (picoquic_config_command_line_ex(argv[0], &opt_ind, 2, argv, argv[1], &config) == 0) {
+            DBG_PRINTF("%s", "picoquic_config_command_line_ex accepted an option missing a trailing argument");
+            ret = -1;
+        }
+        picoquic_config_clear(&config);
+    }
+
     return ret;
 }
 
@@ -301,6 +363,13 @@ typedef struct st_config_error_test_t {
     char const* err_args[2];
 } config_error_test_t;
 
+/* An option value longer than the 256-byte display buffer used when formatting error
+ * messages (e.g. "Invalid port: %s"), to exercise the truncation path. */
+#define CONFIG_TOO_LONG_VALUE \
+    "111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999" \
+    "111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999" \
+    "111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999"
+
 static config_error_test_t config_errors[] = {
     { 1, { "-A"}},
     { 1, { "-S" }},
@@ -336,6 +405,10 @@ static config_error_test_t config_errors[] = {
     { 2, { "-d", "idle" }},
     { 1, { "-Z" }},
     { 2, { "-Z", "0123456789abcdexyedcba9876543210" }},
+    { 2, { "-v", "XY000012" }},
+    { 2, { "-J", "3" }},
+    { 1, { "-h" }},
+    { 2, { "-p", CONFIG_TOO_LONG_VALUE }},
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif
@@ -605,6 +678,7 @@ int config_set_option_test_one(void)
 {
     int ret = 0;
     char const* ticket_store = "ticket_store.bin";
+    char const* ticket_store2 = "ticket_store2.bin";
     char const* token_store = "ticket_store.bin";
 
     picoquic_quic_config_t config = { 0 };
@@ -622,6 +696,40 @@ int config_set_option_test_one(void)
         (config.token_file_name == NULL || strcmp(config.token_file_name, token_store) != 0)) {
         ret = -1;
     }
+    /* Setting an already-set string option again must free the previous value first. */
+    if (ret == 0) {
+        ret = picoquic_config_set_option(&config, picoquic_option_Ticket_File_Name, ticket_store2);
+    }
+    if (ret == 0 &&
+        (config.ticket_file_name == NULL || strcmp(config.ticket_file_name, ticket_store2) != 0)) {
+        ret = -1;
+    }
+    /* A string option set with no value (opt_val == NULL) must be rejected. */
+    if (ret == 0 &&
+        picoquic_config_set_option(&config, picoquic_option_Ticket_File_Name, NULL) == 0) {
+        ret = -1;
+    }
+    /* The ECH client option accepts "-" as a sentinel meaning "no target". */
+    if (ret == 0 &&
+        (picoquic_config_set_option(&config, picoquic_option_ECH_client, "-") != 0 ||
+            config.ech_target != NULL || config.ech_target_len != SIZE_MAX)) {
+        ret = -1;
+    }
+    /* The ECH client option must reject a value that is not valid base64. */
+    if (ret == 0 &&
+        picoquic_config_set_option(&config, picoquic_option_ECH_client, "not valid base64!!") == 0) {
+        ret = -1;
+    }
+    /* The ECH client option requires exactly one parameter. */
+    if (ret == 0 &&
+        picoquic_config_set_option(&config, picoquic_option_ECH_client, NULL) == 0) {
+        ret = -1;
+    }
+    /* The HELP option always reports an error, so the caller stops and prints usage. */
+    if (ret == 0 &&
+        picoquic_config_set_option(&config, picoquic_option_HELP, NULL) == 0) {
+        ret = -1;
+    }
     picoquic_config_clear(&config);
 
     return (ret);
@@ -629,9 +737,15 @@ int config_set_option_test_one(void)
 
 int config_option_test(void)
 {
-    int ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
+    int ret = config_set_option_test_one();
     if (ret != 0) {
-        DBG_PRINTF("First config option test returns %d", ret);
+        DBG_PRINTF("config_set_option test returns %d", ret);
+    }
+    if (ret == 0) {
+        ret = config_parse_command_line_test(&param1, config_argv1, (int)(sizeof(config_argv1) / sizeof(char const*)) - 1);
+        if (ret != 0) {
+            DBG_PRINTF("First config option test returns %d", ret);
+        }
     }
     if (ret == 0) {
         ret = config_parse_command_line_test(&param2, config_argv2, (int)(sizeof(config_argv2) / sizeof(char const*)) - 1);
@@ -789,6 +903,124 @@ int config_quic_test(void)
     return ret;
 }
 
+/* picoquic_create_and_configure treats a handful of bad values as non-fatal: it prints a
+ * warning and falls back to a default, rather than failing the whole configuration. None of
+ * that is reachable through the command-line parser, since config_set_option already rejects
+ * out-of-range values before they ever reach picoquic_create_and_configure -- so these fields
+ * are set directly on the config struct, bypassing the CLI layer, the same way a program using
+ * the config API programmatically could. */
+int config_quic_context_edge_test(void)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+
+    config_test_register_cc_algorithms();
+
+    if ((ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file),
+        picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT)) != 0 ||
+        (ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file),
+            picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY)) != 0) {
+        DBG_PRINTF("%s", "Could not find test cert/key files");
+    }
+
+    /* Out of range connection ID length: warning, but the context is still created. */
+    if (ret == 0) {
+        picoquic_quic_config_t config;
+        picoquic_quic_t* quic;
+
+        picoquic_config_init(&config);
+        config.server_cert_file = test_server_cert_file;
+        config.server_key_file = test_server_key_file;
+        config.cnx_id_length = PICOQUIC_CONNECTION_ID_MAX_SIZE + 1;
+        quic = picoquic_create_and_configure(&config, NULL, NULL, 0, NULL);
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "Out of range cnx_id_length unexpectedly failed context creation");
+            ret = -1;
+        }
+        else {
+            picoquic_free(quic);
+        }
+        config.server_cert_file = NULL;
+        config.server_key_file = NULL;
+        picoquic_config_clear(&config);
+    }
+
+    /* Unrecognized congestion control algorithm: warning, falls back to BBR. */
+    if (ret == 0) {
+        picoquic_quic_config_t config;
+        picoquic_quic_t* quic;
+
+        picoquic_config_init(&config);
+        config.server_cert_file = test_server_cert_file;
+        config.server_key_file = test_server_key_file;
+        config.cc_algo_id = "not_a_real_cc_algorithm";
+        quic = picoquic_create_and_configure(&config, NULL, NULL, 0, NULL);
+        if (quic == NULL || quic->default_congestion_alg != picoquic_bbr_algorithm) {
+            DBG_PRINTF("%s", "Unrecognized cc_algo_id did not fall back to BBR");
+            ret = -1;
+        }
+        if (quic != NULL) {
+            picoquic_free(quic);
+        }
+        config.server_cert_file = NULL;
+        config.server_key_file = NULL;
+        config.cc_algo_id = NULL;
+        picoquic_config_clear(&config);
+    }
+
+    /* Every non-default cipher suite ID branch, plus one that matches none of them. */
+    if (ret == 0) {
+        const int cipher_suite_ids[] = { 128, 256, 1306, 1307, 999 };
+
+        for (size_t i = 0; ret == 0 && i < sizeof(cipher_suite_ids) / sizeof(int); i++) {
+            picoquic_quic_config_t config;
+            picoquic_quic_t* quic;
+
+            picoquic_config_init(&config);
+            config.server_cert_file = test_server_cert_file;
+            config.server_key_file = test_server_key_file;
+            config.cipher_suite_id = cipher_suite_ids[i];
+            quic = picoquic_create_and_configure(&config, NULL, NULL, 0, NULL);
+            if (quic == NULL) {
+                DBG_PRINTF("cipher_suite_id %d unexpectedly failed context creation", cipher_suite_ids[i]);
+                ret = -1;
+            }
+            else {
+                picoquic_free(quic);
+            }
+            config.server_cert_file = NULL;
+            config.server_key_file = NULL;
+            picoquic_config_clear(&config);
+        }
+    }
+
+    /* ECH: a public name with no key file is rejected up front (no file gets written). */
+    if (ret == 0) {
+        picoquic_quic_config_t config;
+        picoquic_quic_t* quic;
+
+        picoquic_config_init(&config);
+        config.server_cert_file = test_server_cert_file;
+        config.server_key_file = test_server_key_file;
+        config.ech_public_name = "example.com";
+        quic = picoquic_create_and_configure(&config, NULL, NULL, 0, NULL);
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "ECH public name with no key file unexpectedly failed context creation");
+            ret = -1;
+        }
+        else {
+            picoquic_free(quic);
+        }
+        config.server_cert_file = NULL;
+        config.server_key_file = NULL;
+        config.ech_public_name = NULL;
+        picoquic_config_clear(&config);
+    }
+
+    return ret;
+}
+
 /*
 * Testing that the QMux instance is properly created from
 * the configuration data */
@@ -935,6 +1167,12 @@ int config_usage_test(void)
     if (ret == 0 && (F = picoquic_file_open(CONFIG_USAGE_TXT, "wt")) != NULL){
         picoquic_config_usage_file(F);
         F = picoquic_file_close(F);
+    }
+
+    /* picoquic_config_usage is just picoquic_config_usage_file(stderr); call it directly
+     * for coverage, since the file-based variant above is what is actually checked. */
+    if (ret == 0) {
+        picoquic_config_usage();
     }
 
     if (ret == 0) {

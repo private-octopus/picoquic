@@ -3761,6 +3761,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(config_command_line_index) {
+            int ret = config_command_line_index_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(config_option) {
             int ret = config_option_test();
 
@@ -3769,6 +3775,12 @@ namespace UnitTest1
 
         TEST_METHOD(config_quic) {
             int ret = config_quic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_quic_context_edge) {
+            int ret = config_quic_context_edge_test();
 
             Assert::AreEqual(ret, 0);
         }
