@@ -1384,6 +1384,62 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(token_store_format_zero_ip)
+        {
+            int ret = token_store_format_zero_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_serialize_too_small)
+        {
+            int ret = token_store_serialize_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_deserialize_short)
+        {
+            int ret = token_store_deserialize_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_store_invalid_params)
+        {
+            int ret = token_store_store_invalid_params_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_oversized_record)
+        {
+            int ret = token_store_load_oversized_record_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_record_size_overflow)
+        {
+            int ret = token_store_load_record_size_overflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_truncated)
+        {
+            int ret = token_store_load_truncated_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_padded_record)
+        {
+            int ret = token_store_load_padded_record_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(token_reuse_api)
         {
             int ret = token_reuse_api_test();

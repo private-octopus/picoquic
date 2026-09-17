@@ -23,6 +23,7 @@
 #include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 
 static char const* test_ticket_file_name = "ticket_store_test.bin";
 static char const* test_token_file_name = "token_store_test.bin";
@@ -857,6 +858,259 @@ int ticket_seed_test(void) {
 
 
 int ticket_seed_from_bdp_frame_test(void) {
-    
+
    return ticket_seed_test_one(2);
+}
+
+/* Direct-call tests for token_store.c internal functions and malformed-input branches
+ * not reachable through the normal store/get/save/load API surface exercised above. */
+picoquic_stored_token_t* picoquic_format_token(uint64_t time_valid_until,
+    char const* sni, uint16_t sni_length, uint8_t const* ip_addr, uint8_t ip_addr_length,
+    uint8_t const* token, uint16_t token_length);
+int picoquic_serialize_token(const picoquic_stored_token_t* token, uint8_t* bytes, size_t bytes_max, size_t* consumed);
+int picoquic_deserialize_token(picoquic_stored_token_t** token, uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+static char const* test_token_store_file_name2 = "token_store_test2.bin";
+
+/* picoquic_format_token skips the ip_addr copy when ip_addr_length is zero -- never
+ * exercised, since every test token in this file uses a non-empty test_ip_addr entry. */
+int token_store_format_zero_ip_test(void)
+{
+    int ret = 0;
+    uint8_t token_bytes[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    picoquic_stored_token_t* stored = picoquic_format_token(12345, "example.com", 11, NULL, 0, token_bytes, sizeof(token_bytes));
+
+    if (stored == NULL) {
+        ret = -1;
+    }
+    else {
+        if (stored->ip_addr_length != 0) {
+            ret = -1;
+        }
+        free(stored);
+    }
+    return ret;
+}
+
+/* picoquic_serialize_token rejects a buffer too small to hold the serialized token --
+ * never exercised, since the caller (picoquic_save_tokens) always uses a 2048 byte buffer. */
+int token_store_serialize_too_small_test(void)
+{
+    int ret = 0;
+    uint8_t token_bytes[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    uint8_t buffer[8];
+    size_t consumed = 0xffffffff;
+    picoquic_stored_token_t* stored = picoquic_format_token(12345, "example.com", 11,
+        test_addr1, (uint8_t)sizeof(test_addr1), token_bytes, sizeof(token_bytes));
+
+    if (stored == NULL) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_serialize_token(stored, buffer, sizeof(buffer), &consumed) != PICOQUIC_ERROR_FRAME_BUFFER_TOO_SMALL) {
+            DBG_PRINTF("%s", "picoquic_serialize_token did not reject a too-small buffer");
+            ret = -1;
+        }
+        free(stored);
+    }
+    return ret;
+}
+
+/* picoquic_deserialize_token rejects a buffer too short to hold the fixed header --
+ * never exercised, since every loaded record was written by picoquic_save_tokens itself. */
+int token_store_deserialize_short_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[8] = { 0 };
+    picoquic_stored_token_t* token = NULL;
+    size_t consumed = 0xffffffff;
+
+    if (picoquic_deserialize_token(&token, buffer, sizeof(buffer), &consumed) != PICOQUIC_ERROR_INVALID_TOKEN) {
+        DBG_PRINTF("%s", "picoquic_deserialize_token did not reject a too-short buffer");
+        ret = -1;
+    }
+    else if (token != NULL) {
+        ret = -1;
+    }
+    return ret;
+}
+
+/* picoquic_store_token rejects a zero-length token, a NULL sni, or a zero-length sni --
+ * never exercised, since every test call in this file supplies valid values. */
+int token_store_store_invalid_params_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    uint8_t token_bytes[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_store_token(quic, "example.com", 11, test_addr1, (uint8_t)sizeof(test_addr1),
+            token_bytes, 0) != PICOQUIC_ERROR_INVALID_TOKEN) {
+            DBG_PRINTF("%s", "picoquic_store_token did not reject a zero-length token");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_store_token(quic, NULL, 0, test_addr1, (uint8_t)sizeof(test_addr1),
+            token_bytes, sizeof(token_bytes)) != PICOQUIC_ERROR_INVALID_TOKEN) {
+            DBG_PRINTF("%s", "picoquic_store_token did not reject a NULL sni");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_store_token(quic, "example.com", 0, test_addr1, (uint8_t)sizeof(test_addr1),
+            token_bytes, sizeof(token_bytes)) != PICOQUIC_ERROR_INVALID_TOKEN) {
+            DBG_PRINTF("%s", "picoquic_store_token did not reject a zero-length sni");
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
+/* picoquic_load_tokens rejects a record whose declared storage_size is over the
+ * 2048 byte buffer, or whose header-adjusted record_size overflows past it -- neither
+ * is ever exercised, since every existing test file is written by picoquic_save_tokens
+ * itself, which never produces an oversized record. */
+int token_store_load_oversized_record_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        FILE* F = picoquic_file_open(test_token_store_file_name2, "wb");
+        uint32_t storage_size = 5000;
+
+        if (F == NULL || fwrite(&storage_size, 4, 1, F) != 1) {
+            ret = -1;
+        }
+        if (F != NULL) {
+            picoquic_file_close(F);
+        }
+        if (ret == 0 && picoquic_load_tokens(quic, test_token_store_file_name2) != PICOQUIC_ERROR_INVALID_FILE) {
+            DBG_PRINTF("%s", "picoquic_load_tokens did not reject an oversized storage_size");
+            ret = -1;
+        }
+        picoquic_free_tokens(&quic->p_first_token);
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
+int token_store_load_record_size_overflow_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        FILE* F = picoquic_file_open(test_token_store_file_name2, "wb");
+        size_t header_offset = offsetof(struct st_picoquic_stored_token_t, time_valid_until);
+        uint32_t storage_size = (uint32_t)(2048 - header_offset + 8);
+
+        if (F == NULL || fwrite(&storage_size, 4, 1, F) != 1) {
+            ret = -1;
+        }
+        if (F != NULL) {
+            picoquic_file_close(F);
+        }
+        if (ret == 0 && picoquic_load_tokens(quic, test_token_store_file_name2) != PICOQUIC_ERROR_INVALID_FILE) {
+            DBG_PRINTF("%s", "picoquic_load_tokens did not reject a storage_size that overflows the record buffer");
+            ret = -1;
+        }
+        picoquic_free_tokens(&quic->p_first_token);
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
+/* picoquic_load_tokens rejects a record whose payload is shorter than its declared
+ * storage_size (truncated file) -- never exercised for the same reason as above. */
+int token_store_load_truncated_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        FILE* F = picoquic_file_open(test_token_store_file_name2, "wb");
+        uint32_t storage_size = 20;
+        uint8_t partial[5] = { 0 };
+
+        if (F == NULL || fwrite(&storage_size, 4, 1, F) != 1 || fwrite(partial, 1, sizeof(partial), F) != sizeof(partial)) {
+            ret = -1;
+        }
+        if (F != NULL) {
+            picoquic_file_close(F);
+        }
+        if (ret == 0 && picoquic_load_tokens(quic, test_token_store_file_name2) != PICOQUIC_ERROR_INVALID_FILE) {
+            DBG_PRINTF("%s", "picoquic_load_tokens did not reject a truncated record");
+            ret = -1;
+        }
+        picoquic_free_tokens(&quic->p_first_token);
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
+/* picoquic_load_tokens rejects a record padded with trailing bytes beyond what the
+ * serialized token actually needs (storage_size larger than the deserializer's consumed
+ * count) -- never exercised, since picoquic_save_tokens always writes an exact-size record. */
+int token_store_load_padded_record_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t token_bytes[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        picoquic_stored_token_t* stored = picoquic_format_token(simulated_time + 1000000, "example.com", 11,
+            test_addr1, (uint8_t)sizeof(test_addr1), token_bytes, sizeof(token_bytes));
+        uint8_t buffer[128] = { 0 };
+        size_t consumed = 0;
+
+        if (stored == NULL || picoquic_serialize_token(stored, buffer, sizeof(buffer), &consumed) != 0) {
+            ret = -1;
+        }
+        else {
+            FILE* F = picoquic_file_open(test_token_store_file_name2, "wb");
+            uint32_t storage_size = (uint32_t)consumed + 8;
+
+            if (F == NULL || fwrite(&storage_size, 4, 1, F) != 1 ||
+                fwrite(buffer, 1, storage_size, F) != storage_size) {
+                ret = -1;
+            }
+            if (F != NULL) {
+                picoquic_file_close(F);
+            }
+            if (ret == 0 && picoquic_load_tokens(quic, test_token_store_file_name2) != PICOQUIC_ERROR_INVALID_FILE) {
+                DBG_PRINTF("%s", "picoquic_load_tokens did not reject a padded record");
+                ret = -1;
+            }
+        }
+        if (stored != NULL) {
+            free(stored);
+        }
+        picoquic_free_tokens(&quic->p_first_token);
+        picoquic_free(quic);
+    }
+    return ret;
 }
