@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "tls_api.h"
@@ -209,7 +210,8 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
     else {
         for (size_t i = 0; i < params[x].length; i++) {
             int c = params[x].param[i] - '0';
-            if (c < 0 || c > 9) {
+            if (c < 0 || c > 9 || v > (INT_MAX - c) / 10) {
+                /* Invalid digit, or the multiply-and-add below would overflow int. */
                 v = -1;
                 *ret = -1;
                 break;
@@ -238,23 +240,23 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
         p++;
     }
     while (*p >= '0' && *p <= '9') {
-        p1 *= 10;
-        p1 += (*p - '0');
+        int c = *p - '0';
+        p1 = (p1 > (INT_MAX - c) / 10) ? INT_MAX : p1 * 10 + c;
         p++;
     }
     if (*p == ':') {
         p++;
         while (*p >= '0' && *p <= '9') {
-            p2 *= 10;
-            p2 += (*p - '0');
+            int c = *p - '0';
+            p2 = (p2 > (INT_MAX - c) / 10) ? INT_MAX : p2 * 10 + c;
             p++;
         }
     }
     if (*p == '*') {
         p++;
         while (*p >= '0' && *p <= '9') {
-            nb_threads *= 10;
-            nb_threads += (*p - '0');
+            int c = *p - '0';
+            nb_threads = (nb_threads > (INT_MAX - c) / 10) ? INT_MAX : nb_threads * 10 + c;
             p++;
         }
     }

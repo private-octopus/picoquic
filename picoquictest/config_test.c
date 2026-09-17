@@ -409,6 +409,7 @@ static config_error_test_t config_errors[] = {
     { 2, { "-J", "3" }},
     { 1, { "-h" }},
     { 2, { "-p", CONFIG_TOO_LONG_VALUE }},
+    { 2, { "-d", CONFIG_TOO_LONG_VALUE }},
 #ifdef PICOQUIC_WITHOUT_SSLKEYLOG
     { 1, {"-8"}},
 #endif
