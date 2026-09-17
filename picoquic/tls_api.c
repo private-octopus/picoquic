@@ -140,7 +140,7 @@ uint16_t picoquic_key_exchanges_default_order[] = {
     /* rarely used groups, not very useful */
     ,PTLS_GROUP_SECP384R1 /* CNSA 1.0 compliance */
     ,PTLS_GROUP_SECP384R1MLKEM1024
-    ,PTLS_GROUP_NAME_SECP384R1MLKEM1024
+    ,PTLS_GROUP_SECP384R1MLKEM1024
     ,PTLS_GROUP_MLKEM768
     ,PTLS_GROUP_MLKEM512
 #endif
