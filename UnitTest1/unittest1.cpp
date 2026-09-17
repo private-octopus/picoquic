@@ -3400,6 +3400,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(scone_padding_short_length) {
+            int ret = scone_padding_short_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_padding_indicator_already_sent) {
+            int ret = scone_padding_indicator_already_sent_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_format_packet_too_small) {
+            int ret = scone_format_packet_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_prepare_format_failure) {
+            int ret = scone_prepare_format_failure_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_report_guards) {
+            int ret = scone_report_guards_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 
         TEST_METHOD(stream_ack) {
             int ret = stream_ack_test();
