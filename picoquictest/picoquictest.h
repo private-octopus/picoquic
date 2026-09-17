@@ -135,6 +135,8 @@ int app_message_overflow_test(void);
 int socket_test(void);
 int test_stateless_blowback(void);
 int ticket_store_test(void);
+int ticket_store_save_wrappers_test(void);
+int ticket_store_too_short_test(void);
 int ticket_seed_test(void);
 int ticket_seed_from_bdp_frame_test(void);
 int token_store_test(void);

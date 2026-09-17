@@ -1349,6 +1349,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ticket_store_save_wrappers)
+        {
+            int ret = ticket_store_save_wrappers_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ticket_store_too_short)
+        {
+            int ret = ticket_store_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ticket_seed)
         {
             int ret = ticket_seed_test();

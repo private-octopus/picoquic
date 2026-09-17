@@ -264,6 +264,60 @@ int ticket_store_test(void)
     return ret;
 }
 
+/* picoquic_store_ticket rejects a ticket shorter than the 19-byte fixed header -- never
+ * exercised, since every existing test builds well-formed tickets via create_test_ticket. */
+int ticket_store_too_short_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    uint8_t short_ticket[10] = { 0 };
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_store_ticket(quic, "example.com", 11, "hq09", 4, 0,
+            NULL, 0, NULL, 0, short_ticket, sizeof(short_ticket), NULL) != PICOQUIC_ERROR_INVALID_TICKET) {
+            DBG_PRINTF("%s", "picoquic_store_ticket did not reject a too-short ticket");
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* picoquic_save_session_tickets and picoquic_save_retry_tokens are thin public wrappers
+ * (declared in picoquic.h, for applications that want to save on demand) around
+ * picoquic_save_tickets/picoquic_save_tokens -- picoquic itself, and the rest of the test
+ * suite, only ever calls the inner functions directly. */
+int ticket_store_save_wrappers_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_save_session_tickets(quic, "ticket_store_save_wrapper_test.bin") != 0) {
+            DBG_PRINTF("%s", "picoquic_save_session_tickets failed");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_save_retry_tokens(quic, "token_store_save_wrapper_test.bin") != 0) {
+            DBG_PRINTF("%s", "picoquic_save_retry_tokens failed");
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
 /*
  * The token store is extremely similar to the ticket store.
  */

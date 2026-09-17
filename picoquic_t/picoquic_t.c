@@ -310,6 +310,8 @@ static const picoquic_test_def_t test_table[] = {
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
+    { "ticket_store_save_wrappers", ticket_store_save_wrappers_test },
+    { "ticket_store_too_short", ticket_store_too_short_test },
     { "ticket_seed", ticket_seed_test },
     { "ticket_seed_from_bdp_frame", ticket_seed_from_bdp_frame_test },
     { "token_store", token_store_test },
