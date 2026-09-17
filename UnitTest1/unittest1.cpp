@@ -139,6 +139,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(util_debug_pop_stream)
+        {
+            int ret = util_debug_pop_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(util_uint8_to_str)
         {
             int ret = util_uint8_to_str_test();
@@ -160,9 +167,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wait_thread)
+        {
+            int ret = util_wait_thread_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(is_path_sane)
         {
             int ret = util_is_path_sane_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(set_addr_port)
+        {
+            int ret = util_set_addr_port_test();
 
             Assert::AreEqual(ret, 0);
         }

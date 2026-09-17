@@ -355,6 +355,28 @@ int util_debug_print_test(void)
     return ret;
 }
 
+/* debug_printf_pop_stream is the counterpart to debug_printf_push_stream, for an
+ * application that pushed a stream and now wants to release it. Whether debug_out is
+ * already set here depends on the test harness (picoquic_t.c pushes stderr at process
+ * startup, but UnitTest1 does not), so force a known non-NULL state first with
+ * debug_set_stream -- which has no push/pop bookkeeping of its own -- rather than relying
+ * on ambient state; debug_printf_pop_stream would otherwise hit its "no current stream"
+ * error path and exit(1) the whole test process. Save and restore the original value so
+ * later tests' debug output is undisturbed either way. */
+int util_debug_pop_stream_test(void)
+{
+    int ret = 0;
+    FILE* old_debug_file = get_debug_out();
+
+    debug_set_stream(stderr);
+    debug_printf_pop_stream();
+    if (get_debug_out() != NULL) {
+        ret = -1;
+    }
+    debug_set_stream(old_debug_file);
+    return ret;
+}
+
 /* Testing the minimal thread support.
  *
  * We create one mutex and one event to synchronize two threads: one as a mutex demo,
@@ -455,6 +477,46 @@ int util_threading_test(void)
     return ret;
 }
 
+static picoquic_thread_return_t wait_thread_test_function(void* vctx)
+{
+    int* p_done = (int*)vctx;
+    *p_done = 1;
+    picoquic_thread_do_return;
+}
+
+/* picoquic_wait_thread is a standalone alternative to picoquic_delete_thread for an
+ * application that wants to block until a thread finishes without also releasing the
+ * thread handle in the same call -- never exercised elsewhere, since picoquic_delete_thread
+ * does its own platform-specific wait internally. Joins with picoquic_wait_thread only, then
+ * releases the handle directly, mirroring what picoquic_delete_thread does on Windows;
+ * calling picoquic_delete_thread too would join the same pthread twice on Linux, which is
+ * undefined behavior. */
+int util_wait_thread_test(void)
+{
+    int ret = 0;
+    int done = 0;
+    picoquic_thread_t thread;
+
+    ret = picoquic_create_thread(&thread, wait_thread_test_function, &done);
+    if (ret != 0) {
+        DBG_PRINTF("Create thread returns %d (0x%x)", ret, ret);
+    }
+    else {
+        ret = picoquic_wait_thread(thread);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait for thread, ret = %d (0x%x)", ret, ret);
+        }
+        else if (!done) {
+            ret = -1;
+        }
+#ifdef _WINDOWS
+        CloseHandle(thread);
+#endif
+    }
+
+    return ret;
+}
+
 /* picoquic_is_path_sane rejects traversal and other unsafe path components;
  * a leading '/' is accepted but not required, so both URL paths (h3zero) and 
  * bare relative file names (the sample server) validate correctly. */
@@ -483,6 +545,33 @@ int util_is_path_sane_test(void)
     for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
         if (picoquic_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
             DBG_PRINTF("Found bad path not bad: %s\n", bad[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* picoquic_set_addr_port is a public utility with no callers anywhere in the codebase --
+ * exercised here directly, for both the IPv4 and IPv6 sockaddr layouts it branches on. */
+int util_set_addr_port_test(void)
+{
+    int ret = 0;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    picoquic_set_addr_port((struct sockaddr*)&addr4, 1234);
+    if (addr4.sin_port != 1234) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&addr6, 0, sizeof(addr6));
+        addr6.sin6_family = AF_INET6;
+        picoquic_set_addr_port((struct sockaddr*)&addr6, 5678);
+        if (addr6.sin6_port != 5678) {
             ret = -1;
         }
     }
