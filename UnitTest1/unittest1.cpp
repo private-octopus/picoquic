@@ -2528,6 +2528,42 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_skip_qx_ping_frame)
+        {
+            int ret = qmux_skip_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_parse_qx_ping_frame)
+        {
+            int ret = qmux_parse_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_decode_qx_ping_frame)
+        {
+            int ret = qmux_decode_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_format_qx_ping_frame)
+        {
+            int ret = qmux_format_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_format_qmux_tp_frame_too_small)
+        {
+            int ret = qmux_format_qmux_tp_frame_too_small_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_decode_qmux_tp_frame_too_long)
+        {
+            int ret = qmux_decode_qmux_tp_frame_too_long_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();
