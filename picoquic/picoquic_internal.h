@@ -1632,7 +1632,12 @@ int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
 int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx);
+#if 0
+/* Not called anywhere: its logic (requeue a demoted path's pending packets for retransmission
+ * elsewhere) is already inlined directly in the path-demotion code, not shared through this
+ * function. Kept as documentation, not wired in, to avoid refactoring the demote code now. */
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+#endif
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_tuple_challenge(picoquic_tuple_t* tuple, uint64_t current_time, int use_constant_challenges);

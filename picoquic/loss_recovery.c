@@ -1023,6 +1023,10 @@ static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
 
 }
 
+#if 0
+/* Not called anywhere: its logic (requeue a demoted path's pending packets for retransmission
+ * elsewhere) is already inlined directly in the path-demotion code, not shared through this
+ * function. Kept as documentation, not wired in, to avoid refactoring the demote code now. */
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint64_t current_time)
 {
@@ -1040,6 +1044,7 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
         }
     }
 }
+#endif
 
 
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
