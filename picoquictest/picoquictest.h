@@ -560,6 +560,8 @@ int cwin_max_test(void);
 int initial_race_test(void);
 int pacing_test(void);
 int pacing_repeat_test(void);
+int packet_names_test(void);
+int picoquic_ptls_fusion_test(void);
 int aegis_cipher_suite_test(void);
 int aegis_hp_vector_test(void);
 int aegis128l_test(void);
