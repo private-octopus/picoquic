@@ -234,6 +234,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/qlog_test.c
     picoquictest/qmux_test.c
     picoquictest/quic_tester.c
+    picoquictest/quicctx_test.c
     picoquictest/red_aqm.c
     picoquictest/rctl_aqm.c
     picoquictest/sacktest.c

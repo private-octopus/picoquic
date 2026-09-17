@@ -2561,7 +2561,9 @@ int picoquic_probe_new_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struc
     /* TODO: check whether that tuple already exists */
 
     /* Verify that a CID is available */
-    ret = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id);
+    if (ret == 0) {
+        ret = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id);
+    }
 
     if (ret == 0) {
         picoquic_tuple_t * tuple = picoquic_create_tuple(path_x, addr_local, addr_peer, if_index);

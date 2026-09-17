@@ -196,6 +196,7 @@
     <ClCompile Include="qmux_test.c" />
     <ClCompile Include="quicperf_test.c" />
     <ClCompile Include="quic_tester.c" />
+    <ClCompile Include="quicctx_test.c" />
     <ClCompile Include="rctl_aqm.c" />
     <ClCompile Include="red_aqm.c" />
     <ClCompile Include="sacktest.c" />

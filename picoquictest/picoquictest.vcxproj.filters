@@ -147,6 +147,9 @@
     <ClCompile Include="quic_tester.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="quicctx_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="cpu_limited.c">
       <Filter>Source Files</Filter>
     </ClCompile>

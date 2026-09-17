@@ -2564,6 +2564,66 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicctx_context_from_epoch)
+        {
+            int ret = quicctx_context_from_epoch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_adjust_max_connections)
+        {
+            int ret = quicctx_adjust_max_connections_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_set_default_address_discovery_mode)
+        {
+            int ret = quicctx_set_default_address_discovery_mode_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_is_local_cid)
+        {
+            int ret = quicctx_is_local_cid_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_get_path_addr)
+        {
+            int ret = quicctx_get_path_addr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_set_stream_path_affinity)
+        {
+            int ret = quicctx_set_stream_path_affinity_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_verify_proposed_tuple_family_mismatch)
+        {
+            int ret = quicctx_verify_proposed_tuple_family_mismatch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_probe_new_tuple_family_mismatch)
+        {
+            int ret = quicctx_probe_new_tuple_family_mismatch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_remember_issued_ticket_oversized_addr)
+        {
+            int ret = quicctx_remember_issued_ticket_oversized_addr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_check_new_path_allowed_limit)
+        {
+            int ret = quicctx_check_new_path_allowed_limit_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();
