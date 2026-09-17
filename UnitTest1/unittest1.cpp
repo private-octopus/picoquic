@@ -76,6 +76,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(perflog_param_name)
+        {
+            int ret = perflog_param_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(perflog_file_is_empty)
+        {
+            int ret = perflog_file_is_empty_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(perflog_multi_cnx)
+        {
+            int ret = perflog_multi_cnx_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bytestream)
         {
             int ret = bytestream_test();

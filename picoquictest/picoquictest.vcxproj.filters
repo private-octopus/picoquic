@@ -195,6 +195,9 @@
     <ClCompile Include="picolog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="performance_log_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="memlog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>

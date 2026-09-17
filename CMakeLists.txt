@@ -225,6 +225,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/pacing_test.c
     picoquictest/packet_names_test.c
     picoquictest/parseheadertest.c
+    picoquictest/performance_log_test.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
     picoquictest/picoquic_ptls_fusion_test.c

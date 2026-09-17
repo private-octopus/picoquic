@@ -185,6 +185,7 @@
     <ClCompile Include="pacing_test.c" />
     <ClCompile Include="packet_names_test.c" />
     <ClCompile Include="parseheadertest.c" />
+    <ClCompile Include="performance_log_test.c" />
     <ClCompile Include="picolog_test.c" />
     <ClCompile Include="picomask_test.c" />
     <ClCompile Include="picoquic_lb_test.c" />
