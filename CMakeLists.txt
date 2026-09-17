@@ -378,7 +378,12 @@ int main(void)
     list(APPEND PICOQUIC_CRYPTO_EXTRA_LIBRARIES ${AEGIS_LIBRARIES})
 endif()
 
-OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
+# Fusion's do_encrypt_v and the streaming do_encrypt_init/update/final are still unimplemented
+# stubs (assert(!"FIXME")) in the vendored picotls Fusion backend, and picotls's own record-layer
+# code (e.g. NewSessionTicket) calls do_encrypt_v -- so enabling Fusion crashes real connections.
+# Default it OFF everywhere until that is fixed upstream; explicitly pass -DPTLS_WITH_FUSION=ON
+# to override for local experimentation.
+OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" OFF)
 if(PTLS_WITH_FUSION)
     message(STATUS "PTLS Fusion is enabled")
 else()
