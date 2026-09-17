@@ -55,6 +55,9 @@ int picoquic_ech_create_config_from_public_key(uint8_t** config, size_t* config_
 int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config_len, char const* private_key_file, char const* public_name);
 int picoquic_ech_save_config(uint8_t* config, size_t config_len, char const* file_name);
 int picoquic_ech_create_config_file(char const* public_name, char const* private_key_file, char const* ech_config_file);
+int picoquic_ech_get_kem_from_curve(ptls_hpke_kem_t** kem, uint16_t group_id);
+int picoquic_ech_get_ciphers_from_kem(ptls_hpke_cipher_suite_t** cipher_vec, size_t cipher_vec_nb_max, uint16_t kem_id);
+int picoquic_ech_create_config_from_binary(uint8_t** config, size_t* config_len, ptls_iovec_t public_key_asn1, char const* public_name);
 
 int ech_test_check_buf(uint8_t* config, size_t config_len, char const* ref_file_name)
 {
@@ -736,4 +739,306 @@ int ech_bad_config_whitespace_test(void)
 int ech_bad_config_too_short_test(void)
 {
     return ech_bad_config_test_one(0, 1);
+}
+
+/* picoquic_ech_read_config's file-open failure and base64-decode-error branches are not
+ * reached by ech_bad_config_test_one above: that helper always writes a file that opens
+ * fine, with content that is valid-but-incomplete base64, not outright invalid base64. */
+int ech_bad_config_missing_file_test(void)
+{
+    int ret = 0;
+    ptls_buffer_t config_buf;
+
+    ptls_buffer_init(&config_buf, "", 0);
+    ret = picoquic_ech_read_config(&config_buf, "ech_config_file_does_not_exist.txt");
+    if (ret == 0) {
+        DBG_PRINTF("%s", "picoquic_ech_read_config reported success for a nonexistent file");
+        ret = -1;
+    }
+    else {
+        ret = 0;
+    }
+    ptls_buffer_dispose(&config_buf);
+    return ret;
+}
+
+int ech_bad_config_invalid_base64_test(void)
+{
+    int ret = 0;
+    char const* bad_config_file = "ech_bad_config_invalid_base64_test.txt";
+    FILE* F = picoquic_file_open(bad_config_file, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        fprintf(F, "!!!!!!!!\n");
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ptls_buffer_t config_buf;
+
+        ptls_buffer_init(&config_buf, "", 0);
+        ret = picoquic_ech_read_config(&config_buf, bad_config_file);
+        if (ret == 0) {
+            DBG_PRINTF("%s", "picoquic_ech_read_config reported success for invalid base64 content");
+            ret = -1;
+        }
+        else {
+            ret = 0;
+        }
+        ptls_buffer_dispose(&config_buf);
+    }
+    return ret;
+}
+
+/* picoquic_ech_get_kem_from_curve and picoquic_ech_get_ciphers_from_kem are small lookup
+ * helpers, directly reachable through the public API, whose "not found"/edge-case paths are
+ * never hit by the E2E config-creation tests above (those only ever look up curves and KEMs
+ * that picoquic actually registers). */
+int ech_kem_lookup_test(void)
+{
+    int ret = 0;
+    ptls_hpke_kem_t* kem = NULL;
+    ptls_hpke_cipher_suite_t* cipher_vec[4] = { NULL, NULL, NULL, NULL };
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    /* An unregistered curve group ID must be reported as "not found". */
+    if (picoquic_ech_get_kem_from_curve(&kem, 0xffff) == 0) {
+        DBG_PRINTF("%s", "picoquic_ech_get_kem_from_curve found a KEM for a bogus group ID");
+        ret = -1;
+    }
+
+    /* A cipher_vec buffer too small to hold even the mandatory default entry is rejected. */
+    if (ret == 0 && picoquic_ech_get_ciphers_from_kem(cipher_vec, 1, PTLS_HPKE_KEM_P256_SHA256) == 0) {
+        DBG_PRINTF("%s", "picoquic_ech_get_ciphers_from_kem accepted a too-small buffer");
+        ret = -1;
+    }
+
+    /* An unrecognized KEM ID falls back to the same default target as P256, rather than
+     * failing -- since AES128-GCM-SHA256 is always picoquic's baseline registered suite. */
+    if (ret == 0 &&
+        (picoquic_ech_get_ciphers_from_kem(cipher_vec, 4, 0xffff) != 0 || cipher_vec[0] == NULL)) {
+        DBG_PRINTF("%s", "picoquic_ech_get_ciphers_from_kem found no cipher for an unrecognized KEM ID");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static uint8_t* ech_find_bytes(uint8_t* base, size_t base_len, const uint8_t* pattern, size_t pattern_len)
+{
+    if (pattern_len == 0 || base_len < pattern_len) {
+        return NULL;
+    }
+    for (size_t i = 0; i + pattern_len <= base_len; i++) {
+        if (memcmp(base + i, pattern, pattern_len) == 0) {
+            return base + i;
+        }
+    }
+    return NULL;
+}
+
+/* picoquic_parse_public_key_asn1's error branches (unsupported algorithm OID, unsupported
+ * SecP curve OID, declared length past the end of the buffer) are never reached by the
+ * "happy path" config-creation tests above, which only ever feed it real, well-formed
+ * public keys. Rather than hand-building ASN.1 from scratch, take a real key and corrupt
+ * it in targeted ways, and check that the parser rejects each corruption. */
+int ech_pubkey_asn1_test(void)
+{
+    int ret = 0;
+    char test_server_pub_key_file[512];
+    const char* public_name = "test.example.com";
+    ptls_iovec_t public_key_asn1 = ptls_iovec_init(NULL, 0);
+    size_t pub_key_objects = 0;
+    static const uint8_t oid_algo_secp[] = { 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01 };
+    static const uint8_t oid_pr_secp256r1[] = { 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07 };
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    if ((ret = picoquic_get_input_path(test_server_pub_key_file, sizeof(test_server_pub_key_file),
+        picoquic_solution_dir, PICOQUIC_TEST_ECH_PUB_KEY)) != 0) {
+        DBG_PRINTF("Cannot find pub_key file in <%s>, err: %d (0x%x)", picoquic_solution_dir, ret, ret);
+    }
+    else {
+        ret = ptls_load_pem_objects(test_server_pub_key_file, "PUBLIC KEY", &public_key_asn1, 1, &pub_key_objects);
+    }
+
+    if (ret == 0) {
+        uint8_t* config = NULL;
+        size_t config_len = 0;
+        uint8_t* algo_oid;
+        uint8_t* curve_oid;
+
+        /* Sanity check: the real key must parse successfully, and must contain the OID
+         * bytes this test is about to corrupt -- otherwise the corruptions below would
+         * silently become no-ops. */
+        if (picoquic_ech_create_config_from_binary(&config, &config_len, public_key_asn1, public_name) != 0) {
+            DBG_PRINTF("%s", "The reference public key unexpectedly failed to parse");
+            ret = -1;
+        }
+        if (config != NULL) {
+            free(config);
+        }
+
+        algo_oid = ech_find_bytes(public_key_asn1.base, public_key_asn1.len, oid_algo_secp, sizeof(oid_algo_secp));
+        curve_oid = ech_find_bytes(public_key_asn1.base, public_key_asn1.len, oid_pr_secp256r1, sizeof(oid_pr_secp256r1));
+        if (ret == 0 && (algo_oid == NULL || curve_oid == NULL)) {
+            DBG_PRINTF("%s", "Could not locate the expected OID bytes in the reference public key");
+            ret = -1;
+        }
+
+        /* Corrupt the algorithm OID: neither secp nor X25519 any more. */
+        if (ret == 0) {
+            uint8_t saved = algo_oid[sizeof(oid_algo_secp) - 1];
+            uint8_t* bad_config = NULL;
+            size_t bad_config_len = 0;
+
+            algo_oid[sizeof(oid_algo_secp) - 1] ^= 0xff;
+            if (picoquic_ech_create_config_from_binary(&bad_config, &bad_config_len, public_key_asn1, public_name) == 0) {
+                DBG_PRINTF("%s", "Parser accepted a public key with a corrupted algorithm OID");
+                ret = -1;
+            }
+            if (bad_config != NULL) {
+                free(bad_config);
+            }
+            algo_oid[sizeof(oid_algo_secp) - 1] = saved;
+        }
+
+        /* Corrupt the curve OID: still a SecP algorithm, but neither secp256r1 nor secp384r1. */
+        if (ret == 0) {
+            uint8_t saved = curve_oid[sizeof(oid_pr_secp256r1) - 1];
+            uint8_t* bad_config = NULL;
+            size_t bad_config_len = 0;
+
+            curve_oid[sizeof(oid_pr_secp256r1) - 1] ^= 0xff;
+            if (picoquic_ech_create_config_from_binary(&bad_config, &bad_config_len, public_key_asn1, public_name) == 0) {
+                DBG_PRINTF("%s", "Parser accepted a public key with a corrupted curve OID");
+                ret = -1;
+            }
+            if (bad_config != NULL) {
+                free(bad_config);
+            }
+            curve_oid[sizeof(oid_pr_secp256r1) - 1] = saved;
+        }
+
+        /* Truncate the buffer: the outer SEQUENCE's declared length no longer fits. */
+        if (ret == 0) {
+            ptls_iovec_t truncated = ptls_iovec_init(public_key_asn1.base, public_key_asn1.len - 1);
+            uint8_t* bad_config = NULL;
+            size_t bad_config_len = 0;
+
+            if (picoquic_ech_create_config_from_binary(&bad_config, &bad_config_len, truncated, public_name) == 0) {
+                DBG_PRINTF("%s", "Parser accepted a truncated public key");
+                ret = -1;
+            }
+            if (bad_config != NULL) {
+                free(bad_config);
+            }
+        }
+    }
+
+    if (public_key_asn1.base != NULL) {
+        free(public_key_asn1.base);
+    }
+
+    return ret;
+}
+
+/* picoquic_ech_create_config_from_public_key's "cannot load pubkey" branch is never
+ * reached by the tests above, which only ever load real, existing key files. */
+int ech_pubkey_missing_file_test(void)
+{
+    int ret = 0;
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    if (picoquic_ech_create_config_from_public_key(&config, &config_len,
+        "ech_pubkey_file_does_not_exist.pem", "test.example.com") == 0) {
+        DBG_PRINTF("%s", "picoquic_ech_create_config_from_public_key succeeded for a nonexistent file");
+        ret = -1;
+    }
+    if (config != NULL) {
+        free(config);
+    }
+    return ret;
+}
+
+/* picoquic_ech_get_kem_from_curve and picoquic_ech_get_ciphers_from_kem "not found" paths
+ * (including their loop-exhaustion break) are never reached in a normal build, since
+ * picoquic always registers all 3 standard curves and at least one cipher suite. Force
+ * them by temporarily clearing the registration arrays, then restore the real values. */
+int ech_registration_failure_test(void)
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    const char* public_name = "test.example.com";
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+    ptls_hpke_kem_t* saved_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1];
+    ptls_hpke_cipher_suite_t* saved_ciphers[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    }
+
+    if (ret == 0) {
+        size_t i;
+
+        for (i = 0; i < PICOQUIC_HPKE_KEM_NB_MAX + 1; i++) {
+            saved_kems[i] = picoquic_hpke_kems[i];
+            picoquic_hpke_kems[i] = NULL;
+        }
+
+        if (picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name) == 0) {
+            DBG_PRINTF("%s", "Config creation succeeded with no registered KEM");
+            ret = -1;
+        }
+        if (config != NULL) {
+            free(config);
+            config = NULL;
+        }
+        for (i = 0; i < PICOQUIC_HPKE_KEM_NB_MAX + 1; i++) {
+            picoquic_hpke_kems[i] = saved_kems[i];
+        }
+    }
+
+    if (ret == 0) {
+        size_t i;
+
+        for (i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1; i++) {
+            saved_ciphers[i] = picoquic_hpke_cipher_suites[i];
+            picoquic_hpke_cipher_suites[i] = NULL;
+        }
+
+        if (picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name) == 0) {
+            DBG_PRINTF("%s", "Config creation succeeded with no registered cipher suite");
+            ret = -1;
+        }
+        if (config != NULL) {
+            free(config);
+            config = NULL;
+        }
+        for (i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1; i++) {
+            picoquic_hpke_cipher_suites[i] = saved_ciphers[i];
+        }
+    }
+
+    return ret;
 }
