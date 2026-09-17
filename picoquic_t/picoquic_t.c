@@ -735,6 +735,8 @@ static const picoquic_test_def_t test_table[] = {
     { "ech_bad_config_invalid_base64", ech_bad_config_invalid_base64_test },
     { "ech_kem_lookup", ech_kem_lookup_test },
     { "ech_pubkey_asn1", ech_pubkey_asn1_test },
+    { "ech_pubkey_missing_file", ech_pubkey_missing_file_test },
+    { "ech_registration_failure", ech_registration_failure_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },

@@ -704,6 +704,8 @@ int ech_bad_config_missing_file_test(void);
 int ech_bad_config_invalid_base64_test(void);
 int ech_kem_lookup_test(void);
 int ech_pubkey_asn1_test(void);
+int ech_pubkey_missing_file_test(void);
+int ech_registration_failure_test(void);
 int getter_test(void);
 int grease_quic_bit_test(void);
 int grease_quic_bit_one_way_test(void);

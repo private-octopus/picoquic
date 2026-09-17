@@ -950,3 +950,95 @@ int ech_pubkey_asn1_test(void)
 
     return ret;
 }
+
+/* picoquic_ech_create_config_from_public_key's "cannot load pubkey" branch is never
+ * reached by the tests above, which only ever load real, existing key files. */
+int ech_pubkey_missing_file_test(void)
+{
+    int ret = 0;
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    if (picoquic_ech_create_config_from_public_key(&config, &config_len,
+        "ech_pubkey_file_does_not_exist.pem", "test.example.com") == 0) {
+        DBG_PRINTF("%s", "picoquic_ech_create_config_from_public_key succeeded for a nonexistent file");
+        ret = -1;
+    }
+    if (config != NULL) {
+        free(config);
+    }
+    return ret;
+}
+
+/* picoquic_ech_get_kem_from_curve and picoquic_ech_get_ciphers_from_kem "not found" paths
+ * (including their loop-exhaustion break) are never reached in a normal build, since
+ * picoquic always registers all 3 standard curves and at least one cipher suite. Force
+ * them by temporarily clearing the registration arrays, then restore the real values. */
+int ech_registration_failure_test(void)
+{
+    int ret = 0;
+    char test_server_key_file[512];
+    const char* public_name = "test.example.com";
+    uint8_t* config = NULL;
+    size_t config_len = 0;
+    ptls_hpke_kem_t* saved_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1];
+    ptls_hpke_cipher_suite_t* saved_ciphers[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
+
+    if (picoquic_hpke_kems[0] == NULL) {
+        picoquic_tls_api_init();
+    }
+
+    ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+        PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    if (ret != 0) {
+        DBG_PRINTF("Cannot locate %s", PICOQUIC_TEST_ECH_PRIVATE_KEY);
+    }
+
+    if (ret == 0) {
+        size_t i;
+
+        for (i = 0; i < PICOQUIC_HPKE_KEM_NB_MAX + 1; i++) {
+            saved_kems[i] = picoquic_hpke_kems[i];
+            picoquic_hpke_kems[i] = NULL;
+        }
+
+        if (picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name) == 0) {
+            DBG_PRINTF("%s", "Config creation succeeded with no registered KEM");
+            ret = -1;
+        }
+        if (config != NULL) {
+            free(config);
+            config = NULL;
+        }
+        for (i = 0; i < PICOQUIC_HPKE_KEM_NB_MAX + 1; i++) {
+            picoquic_hpke_kems[i] = saved_kems[i];
+        }
+    }
+
+    if (ret == 0) {
+        size_t i;
+
+        for (i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1; i++) {
+            saved_ciphers[i] = picoquic_hpke_cipher_suites[i];
+            picoquic_hpke_cipher_suites[i] = NULL;
+        }
+
+        if (picoquic_ech_create_config_from_private_key(&config, &config_len, test_server_key_file, public_name) == 0) {
+            DBG_PRINTF("%s", "Config creation succeeded with no registered cipher suite");
+            ret = -1;
+        }
+        if (config != NULL) {
+            free(config);
+            config = NULL;
+        }
+        for (i = 0; i < PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1; i++) {
+            picoquic_hpke_cipher_suites[i] = saved_ciphers[i];
+        }
+    }
+
+    return ret;
+}
