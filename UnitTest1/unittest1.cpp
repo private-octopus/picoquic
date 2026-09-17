@@ -1159,6 +1159,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(tls_api_dispose_certificate_verifier)
+        {
+            int ret = tls_api_dispose_certificate_verifier_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_remove_ticket)
+        {
+            int ret = tls_api_remove_ticket_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_null_arg_checks)
+        {
+            int ret = tls_api_null_arg_checks_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_server_decrypt_short_token)
+        {
+            int ret = tls_api_server_decrypt_short_token_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_set_key_exchange_no_master)
+        {
+            int ret = tls_api_set_key_exchange_no_master_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_set_key_log_file_twice)
+        {
+            int ret = tls_api_set_key_log_file_twice_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_verify_retry_protection_short)
+        {
+            int ret = tls_api_verify_retry_protection_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_wrong_alpn)
 		{
 			int ret = tls_api_wrong_alpn_test();
@@ -1380,6 +1429,13 @@ namespace UnitTest1
         TEST_METHOD(ticket_store_too_short)
         {
             int ret = ticket_store_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ticket_store_load_padded_record)
+        {
+            int ret = ticket_store_load_padded_record_test();
 
             Assert::AreEqual(ret, 0);
         }

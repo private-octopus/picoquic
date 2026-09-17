@@ -343,6 +343,66 @@ static test_token_store_addr_t test_ip_addr[] = {
 
 static size_t nb_test_ip_addr = sizeof(test_ip_addr) / sizeof(test_token_store_addr_t);
 
+picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
+    char const* sni, uint16_t sni_length, char const* alpn, uint16_t alpn_length,
+    uint32_t version, const uint8_t* ip_addr, uint8_t ip_addr_length,
+    const uint8_t* ip_addr_client, uint8_t ip_addr_client_length,
+    uint8_t* ticket, uint16_t ticket_length, picoquic_tp_t const* tp);
+int picoquic_serialize_ticket(const picoquic_stored_ticket_t* ticket, uint8_t* bytes, size_t bytes_max, size_t* consumed);
+
+static char const* test_ticket_store_file_name2 = "ticket_store_test2.bin";
+
+/* picoquic_load_tickets rejects a record padded with trailing bytes beyond what the
+ * serialized ticket actually needs (storage_size larger than the deserializer's consumed
+ * count) -- never exercised, since picoquic_save_tickets always writes an exact-size record.
+ * Same code shape, same gap, and same free(next) leak fix as picoquic_load_tokens; see
+ * token_store_load_padded_record_test below for the token-store twin of this test. */
+int ticket_store_load_padded_record_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 50000000000ull;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t ticket_bytes[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        picoquic_stored_ticket_t* stored = picoquic_format_ticket(simulated_time + 1000000,
+            "example.com", 11, "hq09", 4, 1, test_addr1, (uint8_t)sizeof(test_addr1),
+            NULL, 0, ticket_bytes, sizeof(ticket_bytes), NULL);
+        uint8_t buffer[256] = { 0 };
+        size_t consumed = 0;
+
+        if (stored == NULL || picoquic_serialize_ticket(stored, buffer, sizeof(buffer), &consumed) != 0) {
+            ret = -1;
+        }
+        else {
+            FILE* F = picoquic_file_open(test_ticket_store_file_name2, "wb");
+            uint32_t storage_size = (uint32_t)consumed + 8;
+
+            if (F == NULL || fwrite(&storage_size, 4, 1, F) != 1 ||
+                fwrite(buffer, 1, storage_size, F) != storage_size) {
+                ret = -1;
+            }
+            if (F != NULL) {
+                picoquic_file_close(F);
+            }
+            if (ret == 0 && picoquic_load_tickets(quic, test_ticket_store_file_name2) != PICOQUIC_ERROR_INVALID_FILE) {
+                DBG_PRINTF("%s", "picoquic_load_tickets did not reject a padded record");
+                ret = -1;
+            }
+        }
+        if (stored != NULL) {
+            free(stored);
+        }
+        picoquic_free_tickets(&quic->p_first_ticket);
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
 static int create_test_token(uint64_t current_time, uint32_t ttl, uint8_t* buf, uint16_t len)
 {
     int ret = 0;
