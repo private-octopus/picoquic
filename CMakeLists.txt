@@ -317,6 +317,7 @@ if(WITH_AEGIS AND PICOQUIC_FETCH_AEGIS)
     set(AEGIS_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
     set(aegis_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
 endif()
+
 if(PICOQUIC_FETCH_PTLS)
     if(WITH_AEGIS)
         FetchContent_Declare(picotls
@@ -390,6 +391,16 @@ else()
     message(STATUS "PTLS compiled without support for Fusion")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
+
+
+OPTION(PQC_RECOMMENDED_ONLY "only support recommended post quantum algorithms" ON)
+if(PQC_RECOMMENDED_ONLY)
+    message(STATUS "Only recommended PQC algorithms are enabled.")
+else()
+    message(STATUS "All PQC algorithms are enabled.")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_ALL_PQC_ALGORITHMS)
+endif()
+
 
 if(WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)

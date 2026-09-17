@@ -1096,6 +1096,20 @@ namespace UnitTest1
 			Assert::AreEqual(ret, 0);
 		}
 
+        TEST_METHOD(tls_x25519)
+        {
+            int ret = tls_x25519_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_x25519mlkem)
+        {
+            int ret = tls_x25519mlkem_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_wrong_alpn)
 		{
 			int ret = tls_api_wrong_alpn_test();
@@ -1464,6 +1478,13 @@ namespace UnitTest1
         TEST_METHOD(mtu_drop_newreno)
         {
             int ret = mtu_drop_newreno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(mtu_drop_bbr1)
+        {
+            int ret = mtu_drop_bbr1_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2926,6 +2947,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(l4s_bbr1)
+        {
+            int ret = l4s_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_bbr_updown)
         {
             int ret = l4s_bbr_updown_test();
@@ -3156,6 +3184,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limited_bbr1) {
+            int ret = app_limited_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(app_limited_cubic) {
             int ret = app_limited_cubic_test();
 
@@ -3176,6 +3210,61 @@ namespace UnitTest1
 
         TEST_METHOD(cwin_max) {
             int ret = cwin_max_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_seed_bdp) {
+            int ret = bbr1_seed_bdp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_seed_startup) {
+            int ret = bbr1_seed_startup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_ltbw) {
+            int ret = bbr1_ltbw_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(bbr1_ltbw_edge) {
+            int ret = bbr1_ltbw_edge_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(fastcc_notify) {
+            int ret = fastcc_notify_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(c4_notify) {
+            int ret = c4_notify_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(c4_seed_resuming) {
+            int ret = c4_seed_resuming_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(prague_notify) {
+            int ret = prague_notify_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(prague_ecn_recovery) {
+            int ret = prague_ecn_recovery_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(cc_algo_reset) {
+            int ret = cc_algo_reset_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+        TEST_METHOD(cc_common_slow_start_increase) {
+            int ret = cc_common_slow_start_increase_test();
 
             Assert::AreEqual(ret, 0);
         }
