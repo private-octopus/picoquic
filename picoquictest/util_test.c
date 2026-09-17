@@ -355,14 +355,7 @@ int util_debug_print_test(void)
     return ret;
 }
 
-/* debug_printf_pop_stream is the counterpart to debug_printf_push_stream, for an
- * application that pushed a stream and now wants to release it. Whether debug_out is
- * already set here depends on the test harness (picoquic_t.c pushes stderr at process
- * startup, but UnitTest1 does not), so force a known non-NULL state first with
- * debug_set_stream -- which has no push/pop bookkeeping of its own -- rather than relying
- * on ambient state; debug_printf_pop_stream would otherwise hit its "no current stream"
- * error path and exit(1) the whole test process. Save and restore the original value so
- * later tests' debug output is undisturbed either way. */
+/* Make sure that debug_set_stream and debug_printf_pop_stream are tested at least once.  */
 int util_debug_pop_stream_test(void)
 {
     int ret = 0;
@@ -484,13 +477,8 @@ static picoquic_thread_return_t wait_thread_test_function(void* vctx)
     picoquic_thread_do_return;
 }
 
-/* picoquic_wait_thread is a standalone alternative to picoquic_delete_thread for an
- * application that wants to block until a thread finishes without also releasing the
- * thread handle in the same call -- never exercised elsewhere, since picoquic_delete_thread
- * does its own platform-specific wait internally. Joins with picoquic_wait_thread only, then
- * releases the handle directly, mirroring what picoquic_delete_thread does on Windows;
- * calling picoquic_delete_thread too would join the same pthread twice on Linux, which is
- * undefined behavior. */
+/* Exercise util_wait_thread_test, which is not used in the current
+* test suite. */
 int util_wait_thread_test(void)
 {
     int ret = 0;
