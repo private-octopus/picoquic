@@ -35,6 +35,7 @@
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 #include "picoquic_c4.h"
+#include "cc_common.h"
 
 static test_api_stream_desc_t test_scenario_congestion[] = {
     { 4, 0, 257, 1000000 },
@@ -1612,6 +1613,58 @@ int cc_algo_reset_test(void)
             ret = -1;
         }
     }
+
+    return ret;
+}
+
+/* picoquic_cc_slow_start_increase_ex's in_css branch (HyStart++ Consecutive Slow Start) is not
+ * exercised by any current caller: cubic.c and prague.c (via _ex2) always pass in_css=0. It is
+ * a live, directly reachable public function though, not dead code, so exercise it directly. */
+int cc_common_slow_start_increase_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        uint64_t delta;
+
+        /* App limited: no growth, regardless of in_css. */
+        cnx->cwin_blocked = 0;
+        delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 0);
+        if (delta != 0) {
+            DBG_PRINTF("App limited traditional slow start returns %" PRIu64 ", expected 0", delta);
+            ret = -1;
+        }
+        delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 1);
+        if (ret == 0 && delta != 0) {
+            DBG_PRINTF("App limited HyStart++ CSS slow start returns %" PRIu64 ", expected 0", delta);
+            ret = -1;
+        }
+
+        /* Not app limited: traditional slow start grows by the full delivered amount. */
+        cnx->cwin_blocked = 1;
+        delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 0);
+        if (ret == 0 && delta != 4000) {
+            DBG_PRINTF("Traditional slow start returns %" PRIu64 ", expected 4000", delta);
+            ret = -1;
+        }
+
+        /* HyStart++ CSS grows by 1/PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR of the delivered amount. */
+        delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 1);
+        if (ret == 0 && delta != 4000 / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR) {
+            DBG_PRINTF("HyStart++ CSS slow start returns %" PRIu64 ", expected %" PRIu64,
+                delta, (uint64_t)(4000 / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR));
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
 
     return ret;
 }

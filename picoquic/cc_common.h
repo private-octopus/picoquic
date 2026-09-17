@@ -96,8 +96,6 @@ uint64_t picoquic_cc_slow_start_increase(picoquic_path_t* path_x, uint64_t nb_de
 
 uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css);
 
-uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha);
-
 /*
  * Returns CWIN based on bandwidth estimation if larger than current CWIN. Otherwise, returns current CWIN.
  */

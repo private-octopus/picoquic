@@ -3235,6 +3235,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(cc_common_slow_start_increase) {
+            int ret = cc_common_slow_start_increase_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(initial_race) {
             int ret = initial_race_test();
 

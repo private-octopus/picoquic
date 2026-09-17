@@ -600,6 +600,7 @@ static const picoquic_test_def_t test_table[] = {
     { "prague_notify", prague_notify_test },
     { "prague_ecn_recovery", prague_ecn_recovery_test },
     { "cc_algo_reset", cc_algo_reset_test },
+    { "cc_common_slow_start_increase", cc_common_slow_start_increase_test },
     { "initial_race", initial_race_test },
     { "aegis_cipher_suite", aegis_cipher_suite_test },
     { "aegis_hp_vector", aegis_hp_vector_test },
