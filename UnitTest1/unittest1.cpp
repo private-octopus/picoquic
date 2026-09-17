@@ -4303,6 +4303,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ech_bad_config_missing_file) {
+            int ret = ech_bad_config_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_invalid_base64) {
+            int ret = ech_bad_config_invalid_base64_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_kem_lookup) {
+            int ret = ech_kem_lookup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_pubkey_asn1) {
+            int ret = ech_pubkey_asn1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(getter) {
             int ret = getter_test();
 
