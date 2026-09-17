@@ -69,6 +69,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(logger_textlog_malformed_frame)
+        {
+            int ret = logger_textlog_malformed_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bytestream)
         {
             int ret = bytestream_test();

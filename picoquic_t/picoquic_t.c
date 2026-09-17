@@ -127,6 +127,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picohash_bytes", picohash_bytes_test },
     { "siphash", siphash_test },
     { "picolog_basic", picolog_basic_test },
+    { "logger_textlog_malformed_frame", logger_textlog_malformed_frame_test },
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },
     { "sockloop_eio", sockloop_eio_test },

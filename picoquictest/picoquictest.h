@@ -48,6 +48,7 @@ int picohash_bytes_test(void);
 int siphash_test(void);
 int picohash_embedded_test(void);
 int picolog_basic_test(void);
+int logger_textlog_malformed_frame_test(void);
 int bytestream_test(void);
 int create_cnx_test(void);
 int create_quic_test(void);
