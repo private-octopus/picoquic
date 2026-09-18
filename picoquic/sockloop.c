@@ -33,6 +33,10 @@
  * TODO: support the QuicDoq scenario, manage extra socket.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <limits.h>
 
 #ifdef _WINDOWS
@@ -69,6 +73,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K
@@ -362,7 +367,207 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
         s_ctx->recv_buffer = NULL;
     }
 #endif
+    if (s_ctx->recv_batch != NULL) {
+        free(s_ctx->recv_batch);
+        s_ctx->recv_batch = NULL;
+    }
 }
+
+
+#ifndef _WINDOWS
+static int picoquic_packet_loop_set_nonblocking(SOCKET_TYPE fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+}
+
+static int picoquic_packet_loop_would_block(void)
+{
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+}
+
+#if defined(__linux__)
+#ifndef PICOQUIC_RECV_BATCH
+#define PICOQUIC_RECV_BATCH 32
+#endif
+#ifndef PICOQUIC_RECV_PKT_MAX
+#define PICOQUIC_RECV_PKT_MAX 1536
+#endif
+#ifndef PICOQUIC_RECV_CMSG
+#define PICOQUIC_RECV_CMSG 256
+#endif
+
+typedef struct st_picoquic_recv_batch {
+    int count;
+    int next;
+    int primed;
+    int disabled;
+    struct mmsghdr msgs[PICOQUIC_RECV_BATCH];
+    struct iovec iov[PICOQUIC_RECV_BATCH];
+    struct sockaddr_storage names[PICOQUIC_RECV_BATCH];
+    char cmsg[PICOQUIC_RECV_BATCH][PICOQUIC_RECV_CMSG];
+    uint8_t buf[PICOQUIC_RECV_BATCH][PICOQUIC_RECV_PKT_MAX];
+} picoquic_recv_batch_t;
+
+static void
+picoquic_recv_batch_prime(picoquic_recv_batch_t* b)
+{
+    int i;
+    if (b->primed) {
+        return;
+    }
+    for (i = 0; i < PICOQUIC_RECV_BATCH; i++) {
+        memset(&b->msgs[i], 0, sizeof(b->msgs[i]));
+        b->iov[i].iov_base = b->buf[i];
+        b->iov[i].iov_len = PICOQUIC_RECV_PKT_MAX;
+        b->msgs[i].msg_hdr.msg_name = &b->names[i];
+        b->msgs[i].msg_hdr.msg_namelen = sizeof(b->names[i]);
+        b->msgs[i].msg_hdr.msg_iov = &b->iov[i];
+        b->msgs[i].msg_hdr.msg_iovlen = 1;
+        b->msgs[i].msg_hdr.msg_control = b->cmsg[i];
+        b->msgs[i].msg_hdr.msg_controllen = sizeof(b->cmsg[i]);
+    }
+    b->primed = 1;
+}
+
+static int
+picoquic_recv_batch_pending(picoquic_socket_ctx_t* s_ctx)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    return b != NULL && !b->disabled && b->next < b->count;
+}
+
+static int
+picoquic_recv_batch_take(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    int i;
+    int bytes;
+    if (b == NULL || b->next >= b->count) {
+        return 0;
+    }
+    i = b->next++;
+    bytes = (int)b->msgs[i].msg_len;
+    if (bytes <= 0) {
+        return 0;
+    }
+    if (bytes > buffer_max) {
+        bytes = buffer_max;
+    }
+    memcpy(buffer, b->buf[i], (size_t)bytes);
+    if (addr_from != NULL) {
+        memcpy(addr_from, &b->names[i], sizeof(*addr_from));
+    }
+    if (dest_if != NULL) {
+        *dest_if = 0;
+    }
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+    picoquic_socks_cmsg_parse(&b->msgs[i].msg_hdr, addr_dest, dest_if, received_ecn, NULL);
+    return bytes;
+}
+
+static int
+picoquic_recv_batch_fill(picoquic_socket_ctx_t* s_ctx)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    int i;
+    int n;
+    if (b == NULL || b->disabled) {
+        return -1;
+    }
+    picoquic_recv_batch_prime(b);
+    for (i = 0; i < PICOQUIC_RECV_BATCH; i++) {
+        b->msgs[i].msg_hdr.msg_namelen = sizeof(b->names[i]);
+        b->msgs[i].msg_hdr.msg_controllen = sizeof(b->cmsg[i]);
+        b->msgs[i].msg_hdr.msg_flags = 0;
+        b->iov[i].iov_len = PICOQUIC_RECV_PKT_MAX;
+    }
+    n = recvmmsg(s_ctx->fd, b->msgs, PICOQUIC_RECV_BATCH, MSG_DONTWAIT, NULL);
+    if (n <= 0) {
+        if (n < 0 && (errno == ENOSYS || errno == EOPNOTSUPP)) {
+            b->disabled = 1;
+        }
+        if (n == 0) {
+            errno = EAGAIN;
+        }
+        b->count = 0;
+        b->next = 0;
+        return -1;
+    }
+    b->count = n;
+    b->next = 0;
+    return n;
+}
+
+static int
+picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    if (b != NULL && !b->disabled) {
+        if (b->next < b->count) {
+            return picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+                received_ecn, buffer, buffer_max);
+        }
+        if (picoquic_recv_batch_fill(s_ctx) > 0) {
+            return picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+                received_ecn, buffer, buffer_max);
+        }
+        if (b->disabled) {
+            return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
+                received_ecn, buffer, buffer_max);
+        }
+        return -1;
+    }
+    return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
+        received_ecn, buffer, buffer_max);
+}
+
+static void
+picoquic_recv_batch_alloc(picoquic_socket_ctx_t* s_ctx)
+{
+    if (s_ctx->recv_batch == NULL) {
+        s_ctx->recv_batch = calloc(1, sizeof(picoquic_recv_batch_t));
+    }
+}
+#else
+static int
+picoquic_recv_batch_pending(picoquic_socket_ctx_t* s_ctx)
+{
+    (void)s_ctx;
+    return 0;
+}
+
+static int
+picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
+        received_ecn, buffer, buffer_max);
+}
+
+static void
+picoquic_recv_batch_alloc(picoquic_socket_ctx_t* s_ctx)
+{
+    (void)s_ctx;
+}
+#endif
+#endif
 
 /* Optional bind addresses: at most one per address family. */
 static int picoquic_packet_loop_has_local_addr(const picoquic_packet_loop_param_t* param)
@@ -562,6 +767,11 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
             ret = picoquic_packet_set_windows_socket(send_coalesced, recv_coalesced, s_ctx);
         }
 #endif
+#ifndef _WINDOWS
+        if (ret == 0) {
+            picoquic_recv_batch_alloc(s_ctx);
+        }
+#endif
     }
 
     return ret;
@@ -659,8 +869,7 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
 #ifndef _WINDOWS
 static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
 {
-    int flags = fcntl(fd, F_GETFL, 0);
-    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+    return picoquic_packet_loop_set_nonblocking(fd);
 }
 #endif
 
@@ -1787,6 +1996,93 @@ void picoquic_packet_loop_set_fds(
     }
 }
 
+
+#ifndef _WINDOWS
+/*
+ * When the next wake delay is below poll's 1ms resolution, skip poll() and
+ * try a nonblocking recv instead. Streams marked active already updated
+ * picoquic wake time, so the loop should send without waiting.
+ */
+static int picoquic_packet_loop_try_recv(
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    picoquic_packet_loop_action_enum* action,
+    int* socket_rank)
+{
+    int bytes_recv = 0;
+    int have_pending = 0;
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+    *action = picoquic_packet_loop_action_timeout;
+
+    for (int i = 0; i < nb_sockets; i++) {
+        if (picoquic_recv_batch_pending(&s_ctx[i])) {
+            have_pending = 1;
+            bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+                addr_dest, dest_if, received_ecn,
+                buffer, buffer_max);
+            if (bytes_recv > 0) {
+                if (addr_dest->ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                }
+                else if (addr_dest->ss_family == AF_INET) {
+                    ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                }
+                *socket_rank = i;
+                *action = picoquic_packet_loop_action_udp_received;
+                return bytes_recv;
+            }
+        }
+    }
+
+    if (thread_ctx->wake_up_defined && !have_pending) {
+        uint8_t eventbuf[8];
+        int pipe_recv = (int)read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf));
+        if (pipe_recv > 0) {
+            *action = picoquic_packet_loop_action_wake_up;
+            return 0;
+        }
+        if (pipe_recv < 0 && !picoquic_packet_loop_would_block()) {
+            DBG_PRINTF("Error: read pipe returns %d\n", errno);
+            return -1;
+        }
+    }
+
+    for (int i = 0; i < nb_sockets; i++) {
+        bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+            addr_dest, dest_if, received_ecn,
+            buffer, buffer_max);
+        if (bytes_recv > 0) {
+            if (addr_dest->ss_family == AF_INET6) {
+                ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+            }
+            else if (addr_dest->ss_family == AF_INET) {
+                ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+            }
+            *socket_rank = i;
+            *action = picoquic_packet_loop_action_udp_received;
+            return bytes_recv;
+        }
+        if (bytes_recv < 0 && !picoquic_packet_loop_would_block()) {
+            DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                i, (int)s_ctx[i].fd);
+            return -1;
+        }
+        bytes_recv = 0;
+    }
+
+    return 0;
+}
+#endif
+
 int picoquic_packet_loop_poll(
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
@@ -1817,6 +2113,25 @@ int picoquic_packet_loop_poll(
     int delta_t_ms = (int)((delta_t + 500) / 1000);
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
+
+    for (int i = 0; i < nb_sockets; i++) {
+        if (picoquic_recv_batch_pending(&s_ctx[i])) {
+            bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+                addr_dest, dest_if, received_ecn,
+                buffer, buffer_max);
+            if (bytes_recv > 0) {
+                if (addr_dest->ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                }
+                else if (addr_dest->ss_family == AF_INET) {
+                    ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                }
+                *socket_rank = i;
+                *action = picoquic_packet_loop_action_udp_received;
+                return bytes_recv;
+            }
+        }
+    }
     int i_qmux_poll = i_poll + nb_sockets;
     int poll_max = i_qmux_poll + nb_qmux_sockets;
     int ret_poll;
@@ -1854,24 +2169,35 @@ int picoquic_packet_loop_poll(
             DBG_PRINTF("Waking up -- defined: %d, nb_sockets: %d",
                 (thread_ctx->wake_up_defined) ? 1 : 0, nb_sockets);
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
-                bytes_recv = -1;
-                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                if (picoquic_packet_loop_would_block()) {
+                    /* Pipe already drained; fall through to UDP sockets. */
+                }
+                else {
+                    bytes_recv = -1;
+                    DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                }
             }
             else {
-                DBG_PRINTF("Waking up -- received: %d", pipe_recv); 
+                DBG_PRINTF("Waking up -- received: %d", pipe_recv);
                 *action = picoquic_packet_loop_action_wake_up;
             }
         }
-        else
+        if (bytes_recv >= 0 && *action != picoquic_packet_loop_action_wake_up)
         {
             /* Find the first UDP event */
             for (int i = 0; i < nb_sockets; i++) {
                 if (poll_list[i+i_poll].revents != 0) {
                     *socket_rank = i;
-                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                    bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
                         addr_dest, dest_if, received_ecn,
                         buffer, buffer_max);
                     if (bytes_recv <= 0) {
+#ifndef _WINDOWS
+                        if (picoquic_packet_loop_would_block()) {
+                            bytes_recv = 0;
+                            continue;
+                        }
+#endif
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
                         break;
@@ -1998,24 +2324,35 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             uint8_t eventbuf[8];
             int pipe_recv;
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
-                bytes_recv = -1;
-                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                if (picoquic_packet_loop_would_block()) {
+                    /* Pipe already drained; fall through to UDP sockets. */
+                }
+                else {
+                    bytes_recv = -1;
+                    DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                }
             }
             else {
                 *action = picoquic_packet_loop_action_wake_up;
             }
         }
-        else
+        if (bytes_recv >= 0 && *action != picoquic_packet_loop_action_wake_up)
         {
             /* return the first UDP socket that is ready to receive */
             for (int i = 0; i < nb_sockets; i++) {
                 if (FD_ISSET(s_ctx[i].fd, &readfds)) {
                     *socket_rank = i;
-                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                    bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
                         addr_dest, dest_if, received_ecn,
                         buffer, buffer_max);
 
                     if (bytes_recv <= 0) {
+#ifndef _WINDOWS
+                        if (picoquic_packet_loop_would_block()) {
+                            bytes_recv = 0;
+                            continue;
+                        }
+#endif
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
                         break;
@@ -2741,12 +3078,23 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             &addr_from, &addr_to, &if_index_to, &received_ecn,
             &received_buffer, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
-        bytes_recv = picoquic_packet_loop_poll(
-            s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets, current_time,
-            poll_list, poll_list_size, &addr_from, &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer), delta_t, thread_ctx,
-            &action, &socket_rank);
+        /* poll() is millisecond resolution. If picoquic already has send-ready
+         * streams (delta_t < 1ms), skip it and try a nonblocking recv so ACKs
+         * still land while we keep sending. QMux still needs poll for TCP events. */
+        if (delta_t < 1000 && nb_qmux_sockets == 0) {
+            bytes_recv = picoquic_packet_loop_try_recv(
+                s_ctx, nb_sockets_available,
+                &addr_from, &addr_to, &if_index_to, &received_ecn,
+                buffer, sizeof(buffer), thread_ctx,
+                &action, &socket_rank);
+        } else {
+            bytes_recv = picoquic_packet_loop_poll(
+                s_ctx, nb_sockets_available,
+                sqmux_ctx, nb_qmux_sockets, current_time,
+                poll_list, poll_list_size, &addr_from, &addr_to, &if_index_to, &received_ecn,
+                buffer, sizeof(buffer), delta_t, thread_ctx,
+                &action, &socket_rank);
+        }
         received_buffer = buffer;
 #else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
@@ -3120,6 +3468,12 @@ static void picoquic_open_network_wake_up(picoquic_network_thread_ctx_t* thread_
     if (pipe(thread_ctx->wake_up_pipe_fd) != 0) {
         *ret = errno;
     }
+    else if (picoquic_packet_loop_set_nonblocking(thread_ctx->wake_up_pipe_fd[0]) != 0 ||
+        picoquic_packet_loop_set_nonblocking(thread_ctx->wake_up_pipe_fd[1]) != 0) {
+        *ret = errno;
+        (void)close(thread_ctx->wake_up_pipe_fd[0]);
+        (void)close(thread_ctx->wake_up_pipe_fd[1]);
+    }
     else
     {
         thread_ctx->wake_up_defined = 1;
@@ -3261,6 +3615,10 @@ int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
         if ((written = write(thread_ctx->wake_up_pipe_fd[1], &ret, 1)) != 1) {
             if (written == 0) {
                 ret = EPIPE;
+            }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                /* Pipe already has a wake byte; the loop will notice. */
+                ret = 0;
             }
             else {
                 ret = errno;
