@@ -24,6 +24,12 @@ that means support for identifiers 0 to N, including N -- thus N+1 paths.
 In particular, if both endpoints set the maximum path ID 0, the
 connection will manage just one path, with ID 0.
 
+Note that picoquic deviates from the draft in an important manner.
+The draft allows advertising initial_max_path_id = 0 to negotiate multipath
+and permit additional paths later. Picoquic omits the parameter when zero
+and only enables multipath when both values are positive.
+Someone using zero as a starting limit would disable the capability instead.
+
 ### Management of the number of paths
 
 If multipath support is negotiated, each endpoint can increment their
@@ -99,15 +105,31 @@ state of each path through specialized callbacks.
 
 ### Creating new paths
 
-The "probe new path" API attempts to validate a new path. If multipath is enabled,
-the new path will come in addition to the set of existing paths; if not,
-the new path when validated will replace the default path.
+Per the multipath draft, only the client endpoint can create paths, using
+the `picoquic_probe_new_path_ex` API:
 
+```
+int picoquic_probe_new_path_ex(picoquic_cnx_t* cnx, const struct sockaddr* addr_peer,
+    const struct sockaddr* addr_local, int if_index, uint64_t current_time, int to_preferred_address);
+```
 
 Like all user-level networking API, the "probe new path" API assumes that the
 port numbers in the socket addresses structures are expressed in network order.
+The `if_index` argument, if not set to 0, indicates the network interface
+over which the new path will operate. The `to_preferred_address` indicates that
+this is a path creation in response to the `preferred_address` transport
+parameter set by the server -- this is handled internally by
+picoquic.
 
-If an error occurs during a call to picoquic_probe_new_path_ex,
+The `picoquic_probe_new_path_ex` API attempts to validate a new path
+If multipath is enabled,
+the new path will come in addition to the set of existing paths; if not,
+the API will default to associating a new tuple for the default path,
+and after validation migrating the default transmission to that tuple.
+
+
+
+If an error occurs during a call to `picoquic_probe_new_path_ex`,
 the function returns an error code describing the issue:
 
 - PICOQUIC_ERROR_PATH_DUPLICATE: there is already an existing path with
@@ -141,10 +163,17 @@ the function returns an error code describing the issue:
 
 The errors PICOQUIC_ERROR_PATH_ID_BLOCKED, PICOQUIC_ERROR_PATH_CID_BLOCKED.
 PICOQUIC_ERROR_PATH_NOT_READY and PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED are transient.
-The application can use the `picoquic_check_new_path_allowed` API to check whether
-a new path may be created. This function will return 1 if the path creation
-can be attempted immediately, 0 otherwise. If the return code is 0, the stack
-will issue a callback `picoquic_callback_next_path_ready` when the transient
+
+The application can use the `picoquic_subscribe_new_path_allowed` API to check whether
+a new path may be created:
+```
+int picoquic_subscribe_new_path_allowed(picoquic_cnx_t* cnx, int* is_already_allowed);
+```
+This function will return 0 if a new path can be subscribed to eventually.
+The argument `is_already_allowed` will be set to 1 if a call to
+`picoquic_probe_new_path_ex` would succeed, and 0 if this call would
+result in a transient error. In that case, the stack
+will issue a callback `picoquic_callback_next_path_allowed` when the transient
 issues are resolved and `picoquic_probe_new_path_ex` could be called
 again.
 
@@ -212,16 +241,47 @@ if that path resumes after a long silence: using
 a new connection ID in these conditions makes correlation of old and new
 connection data harder in case of NAT traversal.
 
-## Scheduling transmission on paths
+## Path Status
 
 The multipath draft says very little about scheduling transmission on multiple paths.
 This silence reflects the state of the art at the time of writing: we could only
 find examples of the "backup" scenario, where one path is used in reserve and
-only starts carrying traffic when the "active" path breaks. The draft
-specifies that paths can have two states: available, or standby. If data is available,
-it is only sent on one of the available path, unless no path is available,
-in which case the code picks and promotes one of the standby paths.
-The draft does not say how to manage transmission on multiple paths.
+only starts carrying traffic when the "active" path breaks. 
+
+The draft enables endpoint to signal to path states: available, or standby.
+Each endpoint can issue path status frames.
+
+### Standard handling of status
+
+The draft does not specify how the status affects data transmission. According
+to the draft, the status is merely a suggestion. An endpoint setting
+the status to "available" suggests to the peer that it is ready to
+receive data on that path, and an endpoint setting the status to
+"standby" suggests that it would prefer receiving data through other paths.
+
+The draft explicitly states that an endpoint could override the peer's
+preference, for example sending on any of the "standby" paths when
+there is no "available" path.
+
+### Handling path status in picoquic
+
+Picoquic encodes the status of the path using a single boolean in the
+path context, "is_path_backup". On path creation, "is_path_backup"
+is initialized to 0 (false), meaning the path is considered
+available by default.
+
+The application can at any time change the status using the API:
+```
+int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
+```
+The enum has just two value: available(0) and backup(1). If the API causes
+a change in status, picoquic will send inform the peer, sending either
+a PATH_STATUS_AVAILABLE or a PATH_STATUS_STANDBY frame depending on the new status.
+
+Upon reception from the peer of a PATH_STATUS_AVAILABLE or a PATH_STATUS_STANDBY frame,
+the local status is updated accordingly. 
+
+## Scheduling transmission on paths
 
 When asked to "prepare a packet", picoquic has to find a path that is ready to send something,
 and then find what to send on that path. Find the path is done in `picoquic_select_next_path_mp`,
@@ -246,29 +306,33 @@ It will only be used to send upon "probe timeout". If this path was the only
 path with "available" status, picoquic will start scheduling data in one of the paths
 with "standby" status.
 
-### Updating the path status
-
-Picoquic provides the API `picoquic_set_path_status` to update the status of a
-path:
-```
-int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
-```
-This has a direct impact on scheduling. 
-
-### Path affinity
+### Path affinity {#affinity}
 
 By default, stream data is sent on any of the available paths. This enables picoquic to
 use the capacity of all available paths, and thus speed up transmission of large streams.
 The downside is that if a stream is sent on many paths, the stream frames can be received
 out of order and have to be reordered before delivering the data to the application.
+This "out of order" behavior will be very detrimental if the stream carries "real time"
+data, for example a succession of video frames for a video stream.
+
 This can be remedied using the "stream path affinity" API: 
 
 ```
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 ```
 
-If the path affinity is set, the stream data will only be sent on the selected
-path, unless that path is not available.
+If the path affinity is set and the path exists, the data will be sent on the
+selected path, regardless of its "available" or "backup" status.
+If the affinity path is deleted, the path affinity will be removed and the data
+will be sent on any available path.
+Sending on the affinity path will only happen if congestion control
+authorizes it.
+
+If the affinity path is blocked by transient issues such as repeated
+losses, sending on the stream will only resume when the transient issues
+are resolved, or when the stream is deleted. Applications can mitigate
+this issue by calling `picoquic_set_stream_path_affinity` again, setting
+the `unique_path_id` argument to `UINT64_MAX` to remove the affinity.
 
 ### Multipath scheduling
 
@@ -294,9 +358,16 @@ at least one of three conditions are true:
 3. The path is not blocked by pacing or congestion control and has
    data to send.
 
+The "data to send" consideration incorporates the evaluation of path
+status and of steram affinity (see {{affinity}}). A path is deemed
+to have data to send if its status is "available" and there is
+data ready to be sent with no affinity to any other path, or
+regardless of status if a stream marked as having affinity to the path
+as data to send.
+
 This selection has to account for temporary unavailability of paths due to
 loss detection. If a path is experiencing high loss and can only send
-probes on time out, it should only be scheduled if when the probe timer
+probes on time out, it should only be scheduled when the probe timer
 expires. If all available paths are marked temporary unavailable, one
 of the standby paths will be scheduled.
 
@@ -309,5 +380,16 @@ with affinity to an available path, or if control frames need to be sent.
 
 Once a path is selected, the regular preparation process will
 select the frames to send on that path.
+
+### Feedback from deployments
+
+The path selection algorithm implemented in picoquic is
+a work in progress. Feedback from experience is very much welcome.
+As of this writing, this feedback has suggested two possible features:
+
+* sending QUIC datagrams with affinity to a stream.
+* specifying that a path can be used for redundancy, maybe through
+  a variation of the stream affinity API.
+
 
 
