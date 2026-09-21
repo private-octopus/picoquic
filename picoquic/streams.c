@@ -421,6 +421,28 @@ void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id)
     }
 }
 
+static int picoquic_queue_reset_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream)
+{
+    uint8_t buffer[128];
+    uint8_t* bytes = NULL;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    int more_data = 0;
+    int is_pure_ack = 0;
+    int ret = 0;
+
+    bytes = (stream->reliable_size > 0) ? picoquic_format_reset_stream_at_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack) :
+        picoquic_format_reset_stream_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack);
+    if (bytes == NULL || more_data != 0) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        ret = picoquic_queue_misc_frame(cnx, buffer, bytes - buffer, is_pure_ack, picoquic_packet_context_application);
+        picoquic_update_output_stream(cnx, stream);
+    }
+
+    return ret;
+}
+
 int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error, uint64_t reliable_size)
 {
@@ -440,12 +462,6 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
             ret = PICOQUIC_ERROR_STREAM_ALREADY_CLOSED;
         }
         else if (!stream->reset_requested) {
-            uint8_t buffer[128];
-            uint8_t* bytes = NULL;
-            uint8_t* bytes_max = buffer + sizeof(buffer);
-            int more_data = 0;
-            int is_pure_ack = 0;
-
             if (reliable_size > stream->sent_offset) {
                 ret = PICOQUIC_ERROR_OFFSET_TOO_BIG;
             }
@@ -453,19 +469,14 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
                 stream->reliable_size = reliable_size;
                 stream->local_error = local_stream_error;
                 stream->reset_requested = 1;
-                bytes = (reliable_size > 0) ? picoquic_format_reset_stream_at_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack) :
-                    picoquic_format_reset_stream_frame(stream, buffer, bytes_max, &more_data, &is_pure_ack);
-                if (bytes == NULL || more_data != 0) {
-                    ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
-                    stream->reset_requested = 0;
+
+                if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode) &&
+                    STREAM_RANK_FROM_ID(stream_id) > ((IS_BIDIR_STREAM_ID(stream_id)) ?
+                        cnx->max_streams_bidir_remote : cnx->max_streams_unidir_remote)) {
+                    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
                 }
                 else {
-                    ret = picoquic_queue_misc_frame(cnx, buffer, bytes - buffer, is_pure_ack, picoquic_packet_context_application);
-                    if (ret == 0) {
-                        stream->reset_sent = 1;
-                        picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
-                    }
-                    picoquic_update_output_stream(cnx, stream);
+                    ret = picoquic_queue_reset_stream_frame(cnx, stream);
                 }
             }
         }
@@ -856,7 +867,15 @@ void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64
                 break;
             }
             if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir) {
-                picoquic_insert_output_stream(cnx, stream);
+                if (stream->reset_requested && !stream->reset_sent) {
+                    if (picoquic_queue_reset_stream_frame(cnx, stream) != 0) {
+                        (void)picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+                        break;
+                    }
+                }
+                else {
+                    picoquic_insert_output_stream(cnx, stream);
+                }
             }
         }
         stream = picoquic_next_stream(stream);
