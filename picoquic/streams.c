@@ -866,6 +866,8 @@ void picoquic_add_output_streams(picoquic_cnx_t* cnx, uint64_t old_limit, uint64
             if (new_rank > new_limit) {
                 break;
             }
+            /* The is_bidir argument says whether the increase in max_streams applies to
+            * unidir or bidir stream. If it does not apply to the current stream, do nothing. */
             if (IS_LOCAL_STREAM_ID(stream->stream_id, cnx->client_mode) && IS_BIDIR_STREAM_ID(stream->stream_id) == is_bidir) {
                 if (stream->reset_requested && !stream->reset_sent) {
                     if (picoquic_queue_reset_stream_frame(cnx, stream) != 0) {
