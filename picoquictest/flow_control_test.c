@@ -672,6 +672,7 @@ int stream_uni_blocked_test(void)
 typedef struct st_uniblock_reset_ctx_t {
 	uint64_t first_stream_id;
 	uint64_t blocked_stream_id;
+	int is_bidir;
 	int first_stream_prepared;
 	int blocked_stream_prepared;
 	int reset_received;
@@ -692,6 +693,11 @@ static int uniblock_reset_callback(picoquic_cnx_t* cnx,
 	}
 
 	switch (fin_or_event) {
+	case picoquic_callback_stream_fin:
+		if (!cnx->client_mode && ctx->is_bidir && stream_id == ctx->first_stream_id) {
+			ret = picoquic_add_to_stream(cnx, stream_id, NULL, 0, 1);
+		}
+		break;
 	case picoquic_callback_prepare_to_send:
 		if (cnx->client_mode && stream_id == ctx->first_stream_id) {
 			uint8_t* buffer = picoquic_provide_stream_data_buffer(bytes, 8, 0, 0);
@@ -720,7 +726,7 @@ static int uniblock_reset_callback(picoquic_cnx_t* cnx,
 	return ret;
 }
 
-int stream_uni_blocked_reset_test(void)
+static int stream_blocked_reset_one(int is_bidir)
 {
 	int ret = 0;
 	uint64_t simulated_time = 0;
@@ -733,6 +739,7 @@ int stream_uni_blocked_reset_test(void)
 	picoquic_connection_id_t initial_cid = { { 0xb1, 0x0e, 0, 0, 0, 0, 0, 0 }, 8 };
 
 	memset(&ctx, 0, sizeof(ctx));
+	ctx.is_bidir = is_bidir;
 
 	ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
 		PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
@@ -744,7 +751,12 @@ int stream_uni_blocked_reset_test(void)
 	if (ret == 0) {
 		memset(&server_parameters, 0, sizeof(picoquic_tp_t));
 		picoquic_init_transport_parameters(&server_parameters);
-		server_parameters.initial_max_stream_id_unidir = 1;
+		if (is_bidir) {
+			server_parameters.initial_max_stream_id_bidir = 1;
+		}
+		else {
+			server_parameters.initial_max_stream_id_unidir = 1;
+		}
 		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
 		picoquic_set_default_callback(test_ctx->qserver, uniblock_reset_callback, &ctx);
@@ -758,12 +770,12 @@ int stream_uni_blocked_reset_test(void)
 	}
 
 	if (ret == 0) {
-		ctx.first_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, 1);
+		ctx.first_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, !is_bidir);
 		ret = picoquic_mark_active_stream(test_ctx->cnx_client, ctx.first_stream_id, 1, NULL);
 	}
 
 	if (ret == 0) {
-		ctx.blocked_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, 1);
+		ctx.blocked_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, !is_bidir);
 		ret = picoquic_mark_active_stream(test_ctx->cnx_client, ctx.blocked_stream_id, 1, NULL);
 	}
 
@@ -830,6 +842,17 @@ int stream_uni_blocked_reset_test(void)
 
 	if (test_ctx != NULL) {
 		tls_api_delete_ctx(test_ctx);
+	}
+
+	return ret;
+}
+
+int stream_blocked_reset_test(void)
+{
+	int ret = stream_blocked_reset_one(0);
+
+	if (ret == 0) {
+		ret = stream_blocked_reset_one(1);
 	}
 
 	return ret;

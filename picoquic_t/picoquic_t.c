@@ -502,7 +502,7 @@ static const picoquic_test_def_t test_table[] = {
     { "flow_control", flow_control_test },
     { "flow_control_open_max", flow_control_open_max_test },
     { "stream_uni_blocked", stream_uni_blocked_test },
-    { "stream_uni_blocked_reset", stream_uni_blocked_reset_test },
+    { "stream_blocked_reset", stream_blocked_reset_test },
     { "stream_uni_reactivate", stream_uni_reactivate_test },
     { "bbr", bbr_test },
     { "bbr_jitter", bbr_jitter_test },
