@@ -152,7 +152,7 @@ int picoquic_cc_hystart_loss_volume_test(picoquic_min_max_rtt_t* rtt_track, pico
     }
 
     switch (event) {
-    case picoquic_congestion_notification_acknowledgement:
+    case picoquic_congestion_notification_repeat:
         ret = rtt_track->smoothed_drop_rate > PICOQUIC_SMOOTHED_LOSS_THRESHOLD;
         break;
     case picoquic_congestion_notification_timeout:
@@ -230,29 +230,6 @@ uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t * path_x, uint64_t n
 
     /* Fallback to traditional Slow Start. */
     return picoquic_cc_slow_start_increase(path_x, nb_delivered); /* nb_delivered; */
-}
-
-uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
-    if (prague_alpha != 0) { /* monitoring of ECN */
-        uint64_t delta = nb_delivered;
-
-        /* Calculate delta based on prague_ahpha. */
-        if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
-            /* smoothed_rtt <= 100ms */
-            delta *= (1024 - prague_alpha);
-            delta /= 1024;
-        } else {
-            delta *= path_x->smoothed_rtt;
-            delta *= (1024 - prague_alpha);
-            delta /= PICOQUIC_TARGET_RENO_RTT;
-            delta /= 1024;
-        }
-
-        return picoquic_cc_slow_start_increase_ex(path_x, delta, in_css);
-    }
-
-    /* Fallback to HyStart++ Consecutive Slow Start. */
-    return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
 }
 
 uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {

@@ -1672,7 +1672,8 @@ uint8_t * picoquic_format_one_blocked_frame(picoquic_cnx_t* cnx, uint8_t* bytes,
     uint8_t* bytes_max, int* more_data, int* is_pure_ack, picoquic_stream_head_t* stream)
 {
     if (stream->is_active ||
-        (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset)) {
+        (stream->send_queue != NULL && stream->send_queue->length > stream->send_queue->offset) ||
+        (stream->reset_requested && !stream->reset_sent)) {
         /* The stream has some data to send */
         /* if the stream is not active yet, verify that it fits under
             * the max stream id limit, which depends of the type of stream */

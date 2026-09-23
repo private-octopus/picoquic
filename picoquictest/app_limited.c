@@ -336,9 +336,6 @@ int app_limited_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
             break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
             /* should mark the first stream as ready, create it if necessary */
@@ -699,6 +696,18 @@ int app_limited_bbr_test(void)
     config.ccalgo = picoquic_bbr_algorithm;
     config.min_bw_samples = 1;
     config.min_app_limited_bw_samples = 1;
+
+    return app_limited_test_one(&config);
+}
+
+int app_limited_bbr1_test(void)
+{
+    app_limited_test_config_t config;
+    app_limited_config_set_default(&config, 7);
+    config.ccalgo = picoquic_bbr1_algorithm;
+    config.min_bw_samples = 1;
+    config.min_app_limited_bw_samples = 1;
+    config.nb_losses_max = 20;
 
     return app_limited_test_one(&config);
 }

@@ -403,6 +403,10 @@ void start_windowed_max_filter_period(uint64_t* filter, unsigned int cycle, unsi
     filter[cycle % filterLen] = 0;
 }
 
+#if 0
+/* Not called anywhere: no windowed-minimum quantity is tracked in BBRv3, unlike its sibling
+ * update_windowed_max_filter (MaxBwFilter, ExtraACKedFilter). Kept as a reminder in case this
+ * reflects a missing piece of the BBRv3 port rather than a genuinely unneeded helper. */
 uint64_t update_windowed_min_filter(uint64_t* filter, uint64_t v, unsigned int cycle, unsigned int filterLen)
 {
     filter[cycle % filterLen] = v;
@@ -413,6 +417,7 @@ uint64_t update_windowed_min_filter(uint64_t* filter, uint64_t v, unsigned int c
     }
     return v;
 }
+#endif
 
 
 /* Init per connection random state.
