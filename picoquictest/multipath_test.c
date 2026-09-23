@@ -1658,6 +1658,127 @@ int multipath_abandon_last_by_peer_test(void)
     return ret;
 }
 
+/* Verify that picoquic_delete_abandoned_paths() cannot leave path[0] with a
+ * NULL remote CID while the connection is still picoquic_state_ready -- doing
+ * that could lead to a crash if the code reference a partially deleted version
+ * of path[0]. 
+ */
+int multipath_demoted_path0_null_cnxid_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_tp_t server_parameters;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        test_ctx->c_to_s_link->queue_delay_max = 2 * test_ctx->c_to_s_link->microsec_latency;
+        test_ctx->s_to_c_link->queue_delay_max = 2 * test_ctx->s_to_c_link->microsec_latency;
+        /* Set the multipath option at both client and server */
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        (void)picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    /* establish the connection */
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
+            test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    /* Add a second path, and wait until both sides have validated it. */
+    if (ret == 0) {
+        ret = multipath_test_add_links(test_ctx, 0);
+    }
+    if (ret == 0) {
+        ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+            (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+    }
+    if (ret == 0) {
+        ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_client->nb_paths != 2) {
+        DBG_PRINTF("Expected 2 paths on the client, got %d", test_ctx->cnx_client->nb_paths);
+        ret = -1;
+    }
+
+    /* Demote path 1, with a long retransmit timer so its demotion is far in
+     * the future. This is normal, supported usage: two paths are available,
+     * so the call succeeds, path 1's remote CID is released right away, and
+     * path 1 itself stays in the path array until its demotion timer
+     * expires. */
+    if (ret == 0) {
+        test_ctx->cnx_client->path[1]->retransmit_timer = 10000000;
+        ret = picoquic_abandon_path(test_ctx->cnx_client, 1, 0, simulated_time);
+        if (ret != 0) {
+            DBG_PRINTF("Could not abandon path 1, ret=%d", ret);
+        }
+        else if (!test_ctx->cnx_client->path[1]->path_is_demoted ||
+            test_ctx->cnx_client->path[1]->first_tuple->p_remote_cnxid != NULL) {
+            DBG_PRINTF("%s", "Demoting path 1 did not release its remote CID as expected.");
+            ret = -1;
+        }
+    }
+
+    /* Path 0 is now the only path not yet marked for demotion. Simulate its
+     * challenge having failed -- the state picoquic_prepare_tuple_challenge_frames()
+     * (paths.c) reaches on its own after PICOQUIC_CHALLENGE_REPEAT_MAX
+     * unanswered challenges -- with a short retransmit timer, then run the
+     * same cleanup a live connection performs before sending. This exercises
+     * picoquic_delete_abandoned_paths()'s own direct call into
+     * picoquic_demote_path(), not the guarded picoquic_abandon_path() path.
+     * Since path 1 already released its CID, picoquic_demote_path() has no
+     * path left to swap into slot 0: it must close the connection rather
+     * than mark path 0 demoted while leaving it in slot 0 with a valid CID. */
+    if (ret == 0) {
+        uint64_t next_wake_time = simulated_time;
+
+        test_ctx->cnx_client->path[0]->retransmit_timer = 1000;
+        test_ctx->cnx_client->path[0]->first_tuple->challenge_failed = 1;
+
+        picoquic_delete_abandoned_paths(test_ctx->cnx_client, simulated_time, &next_wake_time);
+
+        if (test_ctx->cnx_client->cnx_state < picoquic_state_disconnecting) {
+            DBG_PRINTF("Client cnx_state is %d after path 0 could not be demoted; the connection should be closing.",
+                test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_paths != 2 || test_ctx->cnx_client->path[0] == NULL) {
+            DBG_PRINTF("Client left with %d paths, path[0] = %p.",
+                test_ctx->cnx_client->nb_paths, (void*)test_ctx->cnx_client->path[0]);
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->path[0]->path_is_demoted ||
+            test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid == NULL) {
+            DBG_PRINTF("%s", "Path 0 should have been left alone -- not demoted, CID still valid -- "
+                "when the connection closed instead.");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 typedef struct st_multipath_close_test_ctx_t {
     int close_received;
 } multipath_close_test_ctx_t;

@@ -541,8 +541,8 @@ int qpack_huffman_base_test(void)
         }
     }
 
-    /* Second, test a set of valid terminators */
-    for (size_t i = 1; ret == 0 && i < 4; i++) {
+    /* Test a set of valid terminators, up to 7 bytes of 0xFF so the chain reaches the index>=512 EOS test. */
+    for (size_t i = 1; ret == 0 && i < 8; i++) {
         input_length = 0;
         for (size_t l = 0; l < i; l++) {
             input[input_length++] = 0xFF;
@@ -566,6 +566,215 @@ int qpack_huffman_base_test(void)
     return ret;
 }
 
+/* h3zero_get_method_by_name, h3zero_get_content_type_by_name and h3zero_encode_content_type are
+ * internal to h3zero.c, given external linkage so tests can call them directly. */
+h3zero_method_enum h3zero_get_method_by_name(uint8_t* name, size_t name_length);
+h3zero_content_type_enum h3zero_get_content_type_by_name(uint8_t* name, size_t name_length);
+uint8_t* h3zero_encode_content_type(uint8_t* bytes, uint8_t* bytes_max, h3zero_content_type_enum content_type);
+
+int h3zero_name_lookup_test(void)
+{
+    int ret = 0;
+    h3zero_method_enum method = h3zero_get_method_by_name((uint8_t*)"POST", 4);
+    h3zero_content_type_enum content_type = h3zero_get_content_type_by_name((uint8_t*)"image/png", 9);
+
+    if (method != h3zero_method_post) {
+        DBG_PRINTF("h3zero_get_method_by_name(POST) returned %d", (int)method);
+        ret = -1;
+    }
+    else if (content_type != h3zero_content_type_image_png) {
+        DBG_PRINTF("h3zero_get_content_type_by_name(image/png) returned %d", (int)content_type);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* Test the "buffer too short" and "value not in static table" error paths of the QPACK
+ * encoding helpers, none of which are exercised by the normal encode/decode round trip tests. */
+int h3zero_qpack_encode_error_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[16];
+    uint8_t* bytes;
+
+    /* h3zero_qpack_int_encode: no room for even the prefix byte */
+    if (h3zero_qpack_int_encode(buffer, buffer, 0x7F, 10) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_int_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_int_encode: multi-byte value does not fit */
+    if (ret == 0 && h3zero_qpack_int_encode(buffer, buffer + 2, 0x7F, 1000000) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_int_encode did not detect a value that does not fit");
+        ret = -1;
+    }
+    /* h3zero_qpack_code_encode: no room for the prefix byte */
+    if (ret == 0 && h3zero_qpack_code_encode(buffer, buffer, 0xC0, 0x3F, 10) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_code_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: no room for the name prefix byte */
+    if (ret == 0 && h3zero_qpack_literal_plus_name_encode(buffer, buffer,
+        (uint8_t const*)"x", 1, (uint8_t const*)"y", 1) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a zero-length buffer");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: name length prefix fits in 1 byte, but the name content does not */
+    if (ret == 0 && h3zero_qpack_literal_plus_name_encode(buffer, buffer + 2,
+        (uint8_t const*)"abc", 3, (uint8_t const*)"y", 1) != NULL) {
+        DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a name that does not fit");
+        ret = -1;
+    }
+    /* h3zero_qpack_literal_plus_name_encode: value does not fit after name */
+    if (ret == 0) {
+        bytes = h3zero_qpack_literal_plus_name_encode(buffer, buffer + 3,
+            (uint8_t const*)"n", 1, (uint8_t const*)"longer-value", 12);
+        if (bytes != NULL) {
+            DBG_PRINTF("%s", "h3zero_qpack_literal_plus_name_encode did not detect a value that does not fit");
+            ret = -1;
+        }
+    }
+    /* h3zero_encode_content_type: not one of the content types present in the static table */
+    if (ret == 0 && h3zero_encode_content_type(buffer, buffer + sizeof(buffer),
+        (h3zero_content_type_enum)0x1234) != NULL) {
+        DBG_PRINTF("%s", "h3zero_encode_content_type did not detect an unsupported content type");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* Each of h3zero_create_*_header_frame_ex checks up front that the buffer has room for the
+ * 2-byte block prefix, and some also have optional fields (origin, range) that are only
+ * encoded when non-NULL/non-zero -- none of that is exercised by the normal usage tests. */
+int h3zero_create_header_frame_error_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[512];
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    uint8_t const* path = (uint8_t const*)"/test";
+
+    if (h3zero_create_connect_header_frame(buffer, buffer + 1, "host", path, 5, "proto", NULL, NULL, NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_connect_header_frame did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_connect_header_frame(buffer, bytes_max, "host", path, 5, "proto",
+        "https://origin.example.com", NULL, NULL) == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_connect_header_frame failed to encode an origin value");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_post_header_frame_ex(buffer, buffer + 1, path, 5, NULL, 0, "host",
+        h3zero_content_type_text_plain, NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_post_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_post_header_frame_ex(buffer, bytes_max, path, 5,
+        (uint8_t const*)"bytes=0-99", 10, "host", h3zero_content_type_text_plain, NULL) == NULL) {
+        DBG_PRINTF("%s", "h3zero_create_post_header_frame_ex failed to encode a range value");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_request_header_frame_ex(buffer, buffer + 1, path, 5, NULL, 0, "host", NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_request_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_response_header_frame_ex(buffer, buffer + 1,
+        h3zero_content_type_text_html, "server", NULL) != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_response_header_frame_ex did not detect a too small buffer");
+        ret = -1;
+    }
+    if (ret == 0 && h3zero_create_error_frame(buffer, buffer + 1, "404", "server") != NULL) {
+        DBG_PRINTF("%s", "h3zero_create_error_frame did not detect a too small buffer");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* h3zero_parse_qpack_header_value_string and h3zero_parse_qpack_header_value are internal to
+ * h3zero.c, given external linkage so tests can drive their duplicate-header detection directly,
+ * without crafting a full QPACK header block for each of the ten header types involved. */
+uint8_t* h3zero_parse_qpack_header_value_string(uint8_t* bytes, uint8_t* decoded,
+    size_t decoded_length, const uint8_t** field, size_t* length);
+uint8_t* h3zero_parse_qpack_header_value(uint8_t* bytes, uint8_t* bytes_max,
+    http_header_enum_t header, h3zero_header_parts_t* parts);
+
+int h3zero_parse_duplicate_header_value_string_test(void)
+{
+    int ret = 0;
+    uint8_t decoded[] = { 'x' };
+    const uint8_t* field = decoded;
+    size_t length = 0;
+
+    if (h3zero_parse_qpack_header_value_string(decoded, decoded, 1, &field, &length) != NULL) {
+        DBG_PRINTF("%s", "h3zero_parse_qpack_header_value_string did not detect a duplicate field");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+typedef struct st_h3zero_duplicate_header_case_t {
+    http_header_enum_t header;
+    char const* name;
+} h3zero_duplicate_header_case_t;
+
+static h3zero_duplicate_header_case_t h3zero_duplicate_header_case[] = {
+    { http_pseudo_header_method, "method" },
+    { http_header_content_type, "content-type" },
+    { http_pseudo_header_status, "status" },
+    { http_pseudo_header_path, "path" },
+    { http_pseudo_header_authority, "authority" },
+    { http_header_origin, "origin" },
+    { http_header_range, "range" },
+    { http_pseudo_header_protocol, "protocol" },
+    { http_header_wt_available_protocols, "wt_available_protocols" },
+    { http_header_wt_protocol, "wt_protocol" }
+};
+
+static size_t nb_h3zero_duplicate_header_case = sizeof(h3zero_duplicate_header_case) / sizeof(h3zero_duplicate_header_case_t);
+
+int h3zero_parse_duplicate_header_test(void)
+{
+    int ret = 0;
+    uint8_t value[] = { 1, 'x' }; /* not huffman, length 1, content 'x' */
+
+    for (size_t i = 0; ret == 0 && i < nb_h3zero_duplicate_header_case; i++) {
+        h3zero_header_parts_t parts;
+        uint8_t* bytes;
+
+        memset(&parts, 0, sizeof(parts));
+        bytes = h3zero_parse_qpack_header_value(value, value + sizeof(value), h3zero_duplicate_header_case[i].header, &parts);
+        if (bytes == NULL) {
+            DBG_PRINTF("First %s value did not parse", h3zero_duplicate_header_case[i].name);
+            ret = -1;
+        }
+        else {
+            bytes = h3zero_parse_qpack_header_value(value, value + sizeof(value), h3zero_duplicate_header_case[i].header, &parts);
+            if (bytes != NULL) {
+                DBG_PRINTF("Duplicate %s value was not detected", h3zero_duplicate_header_case[i].name);
+                ret = -1;
+            }
+        }
+        h3zero_release_header_parts(&parts);
+    }
+
+    return ret;
+}
+
+int h3zero_varint_decode_error_test(void)
+{
+    int ret = 0;
+    uint8_t two_byte_prefix[] = { 0x40, 0x00 }; /* top bits 01 => a 2 byte varint */
+    uint64_t n64 = 0xFFFFFFFFFFFFFFFFull;
+    size_t length = h3zero_varint_decode(two_byte_prefix, 1, &n64);
+
+    if (length != 0 || n64 != 0) {
+        DBG_PRINTF("h3zero_varint_decode(too short) returned length=%d, n64=%d", (int)length, (int)n64);
+        ret = -1;
+    }
+
+    return ret;
+}
 
 #define QPACK_HUFFMAN_TXT "qpack_huffman.txt"
 
@@ -984,7 +1193,7 @@ int h3zero_parse_qpack_test(void)
 int h3zero_prepare_qpack_test(void)
 {
     int ret = 0;
-    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 13, 20, -1 };
+    int qpack_compare_test[] = { 0, 2, 4, 7, 8, 9, 13, 20, -1 };
     
     for (int i = 0; ret == 0 && qpack_compare_test[i] >= 0; i++) {
         uint8_t buffer[256];
@@ -995,11 +1204,19 @@ int h3zero_prepare_qpack_test(void)
         if (qpack_test_case[j].parts.path != NULL) {
             if (qpack_test_case[j].parts.method == h3zero_method_get)
             {
-                /* Create a request header */
-                bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
-                    qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
-                    qpack_test_case[j].parts.range, qpack_test_case[j].parts.range_length,
-                    "example.com", NULL);
+                if (qpack_test_case[j].parts.range_length == 0) {
+                    /* Create a request header, using the plain wrapper (fixed UA, no range) */
+                    bytes = h3zero_create_request_header_frame(buffer, bytes_max,
+                        qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
+                        "example.com");
+                }
+                else {
+                    /* Create a request header */
+                    bytes = h3zero_create_request_header_frame_ex(buffer, bytes_max,
+                        qpack_test_case[j].parts.path, qpack_test_case[j].parts.path_length,
+                        qpack_test_case[j].parts.range, qpack_test_case[j].parts.range_length,
+                        "example.com", NULL);
+                }
             }
             else  if (qpack_test_case[j].parts.method == h3zero_method_post)
             {
@@ -1858,6 +2075,68 @@ int parse_demo_scenario_test(void)
     return ret;
 }
 
+/* The test cases above only exercise scenarios that parse successfully --
+ * the "text = NULL" error branches spread across demo_client_parse_stream_repeat,
+ * demo_client_parse_stream_number, demo_client_parse_stream_previous and
+ * demo_client_parse_post_size, and demo_client_parse_scenario_desc's own
+ * ret = -1, were never actually hit. Feed a handful of malformed scenarios,
+ * each targeting a distinct one of those branches, and check that parsing
+ * is reported as failed. */
+static char const* bad_demo_scenarios[] = {
+    "*3X:/;",  /* repeat count not followed by ':' */
+    "5X:/;",   /* stream number not followed by ':' */
+    "-X:/;",   /* '-' (previous stream marker) not followed by ':' */
+    "/:5X"     /* post_size digits followed by unexpected text */
+};
+
+static size_t nb_bad_demo_scenarios = sizeof(bad_demo_scenarios) / sizeof(char const*);
+
+int parse_demo_scenario_error_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_bad_demo_scenarios; i++) {
+        size_t nb_streams = 0;
+        picoquic_demo_stream_desc_t* desc = NULL;
+        int parse_ret = demo_client_parse_scenario_desc(bad_demo_scenarios[i], &nb_streams, &desc);
+
+        if (parse_ret == 0) {
+            DBG_PRINTF("Scenario \"%s\" unexpectedly parsed successfully", bad_demo_scenarios[i]);
+            ret = -1;
+        }
+        if (desc != NULL) {
+            demo_client_delete_scenario_desc(nb_streams, desc);
+        }
+    }
+
+    return ret;
+}
+
+/* h09_demo_client_prepare_stream_open_command must reject a buffer too
+ * small to hold the formatted command, for both the GET and the POST
+ * forms, instead of overflowing it. Neither of these calls should write
+ * anything to the (deliberately oversized, real) output buffer, since
+ * the size check happens before any byte is written. */
+int h09_prepare_stream_open_command_too_small_test(void)
+{
+    int ret = 0;
+    uint8_t command[64];
+    size_t consumed = 0;
+    uint8_t const* path = (uint8_t const*)"/some/path";
+    size_t path_len = strlen((char const*)path);
+
+    if (h09_demo_client_prepare_stream_open_command(command, 5, path, path_len, 0, NULL, &consumed) == 0) {
+        DBG_PRINTF("%s", "GET command unexpectedly fit in a too-small buffer");
+        ret = -1;
+    }
+    else if (h09_demo_client_prepare_stream_open_command(command, 5, path, path_len, 1000, "example.com", &consumed) == 0) {
+        DBG_PRINTF("%s", "POST command unexpectedly fit in a too-small buffer");
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /*
  * Set a connection between an H3 client and an H3 server over
  * network simulation.
@@ -2150,7 +2429,14 @@ User - Agent: curl / 7.16.3 libcurl / 7.16.3 OpenSSL / 0.9.7l zlib / 1.2.3\n\
 Host : www.example.com\n\
 Accept - Language : en, mi",
     148, picohttp_server_stream_status_header, 0, 1, "/hello.txt", 23 },
-    { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
+    { "Abracadabra", 0, picohttp_server_stream_status_none, -1, 0, "", 0 },
+    /* Trailing spaces before the CRLF, and an explicit "HTTP/0.9" marker --
+     * neither is exercised by the other cases above, which either have no
+     * protocol suffix at all or use "HTTP/1.1" with no trailing spaces. */
+    { "GET /test.html HTTP/0.9  \r\n", 27, picohttp_server_stream_status_crlf, 0, 0, "/test.html", 25 },
+    /* A method with no path at all: picohttp_server_parse_commandline must
+     * reject it instead of treating the empty remainder as the path. */
+    { "GET\r\n", 0, picohttp_server_stream_status_none, -1, 0, "", 0 }
 };
 
 static size_t nb_h09_header_data_test_cases = sizeof(h09_header_data_test_case) / sizeof(h09_header_test_data_t);
@@ -2316,6 +2602,414 @@ int h09_header_test(void)
         }
     }
 
+
+    return ret;
+}
+
+/* picoquic_h09_server_parse_method, picoquic_h09_server_parse_protocol and
+ * picohttp_server_parse_commandline are internal to demoserver.c and are not
+ * declared in demoserver.h, but -- like the quicperf.c and democlient.c
+ * scenario parsers -- they have external linkage specifically so tests can
+ * drive them directly, instead of only indirectly through
+ * picoquic_h09_server_process_data_header. */
+int picoquic_h09_server_parse_method(uint8_t* command, size_t command_length, size_t* consumed);
+void picoquic_h09_server_parse_protocol(uint8_t* command, size_t command_length, int* proto, size_t* consumed);
+int picohttp_server_parse_commandline(uint8_t* command, size_t command_length, h3zero_stream_ctx_t* stream_ctx);
+
+typedef struct st_h09_parse_method_test_case_t {
+    char const* command;
+    int expected_method;
+    size_t expected_consumed;
+} h09_parse_method_test_case_t;
+
+static const h09_parse_method_test_case_t h09_parse_method_test_cases[] = {
+    { "GET /", 0, 3 },
+    { "get /", 0, 3 },
+    { "GeT /", 0, 3 },
+    { "POST /bla", 1, 4 },
+    { "post /bla", 1, 4 },
+    { "PoSt /bla", 1, 4 },
+    { "GE", -1, 0 },            /* too short to be GET */
+    { "PO", -1, 0 },            /* too short to be GET or POST */
+    { "GOT /", -1, 0 },         /* GET-length, wrong letters */
+    { "PAST /", -1, 0 },        /* POST-length, wrong 2nd letter */
+    { "POKE /", -1, 0 },        /* POST-length, wrong 3rd letter */
+    { "", -1, 0 }               /* empty command */
+};
+
+static const size_t nb_h09_parse_method_test_cases = sizeof(h09_parse_method_test_cases) / sizeof(h09_parse_method_test_cases[0]);
+
+int h09_parse_method_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_method_test_cases; i++) {
+        size_t consumed = 0xbad;
+        int method = picoquic_h09_server_parse_method((uint8_t*)h09_parse_method_test_cases[i].command,
+            strlen(h09_parse_method_test_cases[i].command), &consumed);
+
+        if (method != h09_parse_method_test_cases[i].expected_method) {
+            DBG_PRINTF("Parse method \"%s\": expected method %d, got %d",
+                h09_parse_method_test_cases[i].command, h09_parse_method_test_cases[i].expected_method, method);
+            ret = -1;
+        }
+        else if (consumed != h09_parse_method_test_cases[i].expected_consumed) {
+            DBG_PRINTF("Parse method \"%s\": expected consumed %zu, got %zu",
+                h09_parse_method_test_cases[i].command, h09_parse_method_test_cases[i].expected_consumed, consumed);
+            ret = -1;
+        }
+    }
+
+    /* The "consumed" output is optional; no existing caller passes NULL,
+     * so exercise that branch directly here. */
+    if (ret == 0) {
+        int method = picoquic_h09_server_parse_method((uint8_t*)"GET /", 5, NULL);
+        if (method != 0) {
+            DBG_PRINTF("Parse method with NULL consumed: expected method 0, got %d", method);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+typedef struct st_h09_parse_protocol_test_case_t {
+    char const* command;
+    int expected_proto;
+    size_t expected_consumed;
+} h09_parse_protocol_test_case_t;
+
+static const h09_parse_protocol_test_case_t h09_parse_protocol_test_cases[] = {
+    /* Recognized versions, each preceded by exactly one separating space. */
+    { "GET /test.html HTTP/1.1", 1, 9 },
+    { "GET /test.html HTTP/1.0", 1, 9 },
+    { "GET /test.html HTTP/0.9", 0, 9 },
+    /* An "HTTP/x.y"-shaped suffix with an unrecognized version: bad_version
+     * is set, so it is left in place rather than stripped. */
+    { "GET /test.html HTTP/1.5", 0, 0 },
+    { "GET /test.html HTTP/2.0", 0, 0 },
+    /* No protocol suffix at all: the 7-char-span pattern match itself fails. */
+    { "GET /test.html", 0, 0 },
+    /* The protocol token spans the entire command, starting at index 0 --
+     * exercises the "byte_index > 0" check being false after the match. */
+    { "HTTP/1.1", 1, 8 },
+    /* Nothing but trailing whitespace: exercises the space-skip loop's
+     * byte_index == 0 exit, taken instead of the byte_index-- path. */
+    { "   ", 0, 3 },
+    /* Multiple spaces on both sides of the protocol token: exercises the
+     * final space-trim loop running more than once. */
+    { "GET  /x   HTTP/1.0", 1, 11 }
+};
+
+static const size_t nb_h09_parse_protocol_test_cases = sizeof(h09_parse_protocol_test_cases) / sizeof(h09_parse_protocol_test_cases[0]);
+
+int h09_parse_protocol_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_protocol_test_cases; i++) {
+        int proto = -1;
+        size_t consumed = 0xbad;
+        char const* command = h09_parse_protocol_test_cases[i].command;
+
+        picoquic_h09_server_parse_protocol((uint8_t*)command, strlen(command), &proto, &consumed);
+
+        if (proto != h09_parse_protocol_test_cases[i].expected_proto) {
+            DBG_PRINTF("Parse protocol \"%s\": expected proto %d, got %d",
+                command, h09_parse_protocol_test_cases[i].expected_proto, proto);
+            ret = -1;
+        }
+        else if (consumed != h09_parse_protocol_test_cases[i].expected_consumed) {
+            DBG_PRINTF("Parse protocol \"%s\": expected consumed %zu, got %zu",
+                command, h09_parse_protocol_test_cases[i].expected_consumed, consumed);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+typedef struct st_h09_parse_commandline_test_case_t {
+    char const* command;
+    int expected_ret;
+    int expected_method;
+    int expected_proto;
+    char const* expected_path; /* not checked if expected_ret != 0 */
+} h09_parse_commandline_test_case_t;
+
+static const h09_parse_commandline_test_case_t h09_parse_commandline_test_cases[] = {
+    { "GET /", 0, 0, 0, "/" },
+    { "get /bla", 0, 0, 0, "/bla" },
+    { "POST /bla", 0, 1, 0, "/bla" },
+    { "GET /test.html HTTP/1.1", 0, 0, 1, "/test.html" },
+    /* An unrecognized HTTP version is not stripped, so it becomes (and
+     * stays) part of the path -- see h09_parse_protocol_test above. */
+    { "GET /test.html HTTP/2.0", 0, 0, 0, "/test.html HTTP/2.0" },
+    /* Protocol token only, no method at all. */
+    { "HTTP/1.1", -1, 0, 0, NULL },
+    /* Nothing but whitespace. */
+    { "   ", -1, 0, 0, NULL },
+    /* A method with no path, or only trailing spaces where a path would be. */
+    { "GET", -1, 0, 0, NULL },
+    { "GET   ", -1, 0, 0, NULL },
+    /* Empty command. */
+    { "", -1, 0, 0, NULL }
+};
+
+static const size_t nb_h09_parse_commandline_test_cases = sizeof(h09_parse_commandline_test_cases) / sizeof(h09_parse_commandline_test_cases[0]);
+
+int h09_parse_commandline_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h09_parse_commandline_test_cases; i++) {
+        h09_parse_commandline_test_case_t const* c = &h09_parse_commandline_test_cases[i];
+        h3zero_stream_ctx_t stream_ctx;
+        int parse_ret;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+
+        parse_ret = picohttp_server_parse_commandline((uint8_t*)c->command, strlen(c->command), &stream_ctx);
+
+        if (parse_ret != c->expected_ret) {
+            DBG_PRINTF("Parse commandline \"%s\": expected ret %d, got %d",
+                c->command, c->expected_ret, parse_ret);
+            ret = -1;
+        }
+        else if (parse_ret == 0) {
+            if (stream_ctx.ps.hq.method != c->expected_method) {
+                DBG_PRINTF("Parse commandline \"%s\": expected method %d, got %d",
+                    c->command, c->expected_method, stream_ctx.ps.hq.method);
+                ret = -1;
+            }
+            else if (stream_ctx.ps.hq.proto != c->expected_proto) {
+                DBG_PRINTF("Parse commandline \"%s\": expected proto %d, got %d",
+                    c->command, c->expected_proto, stream_ctx.ps.hq.proto);
+                ret = -1;
+            }
+            else if (stream_ctx.ps.hq.path_length != strlen(c->expected_path) ||
+                memcmp(stream_ctx.ps.hq.path, c->expected_path, stream_ctx.ps.hq.path_length) != 0) {
+                DBG_PRINTF("Parse commandline \"%s\": expected path \"%s\", got \"%.*s\"",
+                    c->command, c->expected_path, (int)stream_ctx.ps.hq.path_length, stream_ctx.ps.hq.path);
+                ret = -1;
+            }
+        }
+
+        if (stream_ctx.ps.hq.path != NULL) {
+            free((void*)stream_ctx.ps.hq.path);
+        }
+    }
+
+    return ret;
+}
+
+/* picoquic_h09_server_callback's picoquic_callback_stop_sending and
+ * picoquic_callback_stream_reset cases were never exercised by any
+ * existing test: a third-party HTTP/0.9 client can trigger either one
+ * just by abandoning a request (STOP_SENDING) or aborting one it already
+ * sent (RESET_STREAM), so picoquic_ns and demo_server_test's own
+ * well-behaved clients never happen to hit them. Drive the callback
+ * directly, on a minimal (unconnected) cnx -- as with
+ * h3zero_process_request_frame_test above -- rather than orchestrating a
+ * full simulated connection just to deliver two specific stream events. */
+#define H09_STOP_SENDING_RESET_TEST_FILE "h09_stop_sending_reset_test.txt"
+
+int h09_stop_sending_reset_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    picoquic_h09_server_callback_ctx_t* app_ctx = NULL;
+    uint64_t stream_id = 4;
+
+    if (ret == 0) {
+        app_ctx = (picoquic_h09_server_callback_ctx_t*)malloc(sizeof(picoquic_h09_server_callback_ctx_t));
+        if (app_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(app_ctx, 0, sizeof(picoquic_h09_server_callback_ctx_t));
+            h3zero_init_stream_tree(&app_ctx->h3_stream_tree);
+        }
+    }
+
+    /* STOP_SENDING: the peer no longer wants the response the server is
+     * (or is about to start) sending. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_h09_server_callback(cnx, stream_id, NULL, 0,
+            picoquic_callback_stop_sending, app_ctx, stream_ctx) != 0) {
+            DBG_PRINTF("%s", "picoquic_callback_stop_sending returned an error");
+            ret = -1;
+        }
+        else if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+            DBG_PRINTF("Stop sending: expected status %d, got %d",
+                picohttp_server_stream_status_finished, stream_ctx->ps.hq.status);
+            ret = -1;
+        }
+        stream_id += 4;
+    }
+
+    /* RESET_STREAM: the peer aborts a request it already sent. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_h09_server_callback(cnx, stream_id, NULL, 0,
+            picoquic_callback_stream_reset, app_ctx, stream_ctx) != 0) {
+            DBG_PRINTF("%s", "picoquic_callback_stream_reset returned an error");
+            ret = -1;
+        }
+        else if (stream_ctx->ps.hq.status != picohttp_server_stream_status_finished) {
+            DBG_PRINTF("Stream reset: expected status %d, got %d",
+                picohttp_server_stream_status_finished, stream_ctx->ps.hq.status);
+            ret = -1;
+        }
+    }
+
+    /* A stream that already has an open file must have it closed, not
+     * leaked, by either event. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t* stream_ctx = h3zero_find_or_create_stream(cnx, stream_id + 4, app_ctx, 1, 0);
+
+        if (stream_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx->F = picoquic_file_open(H09_STOP_SENDING_RESET_TEST_FILE, "w");
+            if (stream_ctx->F == NULL) {
+                DBG_PRINTF("Cannot open %s", H09_STOP_SENDING_RESET_TEST_FILE);
+                ret = -1;
+            }
+            else if (picoquic_h09_server_callback(cnx, stream_id + 4, NULL, 0,
+                picoquic_callback_stop_sending, app_ctx, stream_ctx) != 0) {
+                ret = -1;
+            }
+            else if (stream_ctx->F != NULL) {
+                DBG_PRINTF("%s", "Stop sending did not close the open file");
+                ret = -1;
+            }
+        }
+    }
+
+    if (app_ctx != NULL) {
+        picosplay_empty_tree(&app_ctx->h3_stream_tree);
+        free(app_ctx);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+typedef struct st_h3zero_server_parse_path_test_case_t {
+    uint8_t const* path;
+    size_t path_length;
+    int expected_ret;
+    uint64_t expected_echo_size;
+} h3zero_server_parse_path_test_case_t;
+
+/* 27 digits: well past the 62-bit ("UINT64_MAX >> 2") limit h3zero_server_parse_path
+ * enforces on the numeric echo-size path, e.g. "GET /999...9". */
+static const uint8_t h3zero_parse_path_huge_number[] = "/999999999999999999999999999";
+
+static const h3zero_server_parse_path_test_case_t h3zero_server_parse_path_test_cases[] = {
+    { NULL, 0, -1, 0 },                                    /* no path at all */
+    { (uint8_t const*)"", 0, -1, 0 },                       /* empty path */
+    { (uint8_t const*)"no-leading-slash", 16, -1, 0 },      /* missing the leading '/' */
+    { (uint8_t const*)"/12345", 6, 0, 12345 },              /* ordinary numeric echo size */
+    { h3zero_parse_path_huge_number, sizeof(h3zero_parse_path_huge_number) - 1, -1, 0 }
+};
+
+static const size_t nb_h3zero_server_parse_path_test_cases =
+    sizeof(h3zero_server_parse_path_test_cases) / sizeof(h3zero_server_parse_path_test_cases[0]);
+
+/* h3zero_server_parse_path is called with web_folder == NULL throughout, so
+ * every case here exercises only the numeric "/<echo size>" path, not the
+ * on-disk file lookup in demo_server_try_file_path. */
+int h3zero_server_parse_path_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_h3zero_server_parse_path_test_cases; i++) {
+        h3zero_server_parse_path_test_case_t const* c = &h3zero_server_parse_path_test_cases[i];
+        uint64_t echo_size = 0xbad;
+        char* file_path = NULL;
+        int file_error = 0;
+        int parse_ret = h3zero_server_parse_path(c->path, c->path_length, &echo_size, &file_path, NULL, &file_error);
+
+        if (parse_ret != c->expected_ret) {
+            DBG_PRINTF("Parse path case %zu: expected ret %d, got %d", i, c->expected_ret, parse_ret);
+            ret = -1;
+        }
+        else if (parse_ret == 0 && echo_size != c->expected_echo_size) {
+            DBG_PRINTF("Parse path case %zu: expected echo_size %" PRIu64 ", got %" PRIu64, i, c->expected_echo_size, echo_size);
+            ret = -1;
+        }
+        if (file_path != NULL) {
+            free(file_path);
+        }
+    }
+
+    return ret;
+}
+
+/* h3zero_server_prepare_to_send must report failure, not crash, when the
+ * file it is asked to (re)open no longer exists -- see the
+ * "stream_ctx->F == NULL && stream_ctx->file_path != NULL" branch. */
+int h3zero_server_prepare_to_send_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    uint8_t buffer[64];
+
+    memset(&stream_ctx, 0, sizeof(stream_ctx));
+    stream_ctx.file_path = (char*)"no_such_file_for_h3zero_server_prepare_to_send_test.bin";
+    stream_ctx.echo_length = 100;
+
+    if (h3zero_server_prepare_to_send(buffer, sizeof(buffer), &stream_ctx) == 0) {
+        DBG_PRINTF("%s", "Prepare to send unexpectedly succeeded opening a nonexistent file");
+        ret = -1;
+    }
+    else if (stream_ctx.F != NULL) {
+        DBG_PRINTF("%s", "Prepare to send left F non-NULL after a failed open");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* picohttp_find_path_item's loop must actually walk past a non-matching
+ * entry: every existing caller's path tables happen to either match on
+ * the first entry or have just one entry, thus this unit test */
+int picohttp_find_path_item_test(void)
+{
+    int ret = 0;
+    picohttp_server_path_item_t table[3] = {
+        { "/a", 2, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "/bb", 3, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "/ccc", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    int found;
+
+    found = picohttp_find_path_item((uint8_t const*)"/ccc", 4, table, 3);
+    if (found != 2) {
+        DBG_PRINTF("Find path item: expected match at index 2, got %d", found);
+        ret = -1;
+    }
+    else {
+        found = picohttp_find_path_item((uint8_t const*)"/zzz", 4, table, 3);
+        if (found != -1) {
+            DBG_PRINTF("Find path item: expected no match, got index %d", found);
+            ret = -1;
+        }
+    }
 
     return ret;
 }
@@ -3695,6 +4389,84 @@ int h3zero_settings_test(void)
     return ret;
 }
 
+/* h3zero_settings_components_decode: a setting key from the HTTP/2-only
+ * reserved list (RFC 9114 names 0, 2, 3, 4, 5 as errors if present in an H3
+ * SETTINGS frame) must abort decoding and return NULL, but only after any
+ * earlier, valid component in the same frame has already been applied. A
+ * key this code doesn't recognize at all (some future or vendor-specific
+ * value) must instead be silently skipped, with decoding continuing
+ * normally to whatever valid components follow it. */
+int h3zero_settings_components_decode_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[64];
+    uint8_t* bytes;
+    uint8_t* bytes_max = buffer + sizeof(buffer);
+    h3zero_settings_t settings;
+
+    memset(&settings, 0, sizeof(settings));
+    bytes = buffer;
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_qpack_blocked_streams);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 42);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 2); /* ENABLE_PUSH: reserved, HTTP/2 only */
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1);
+
+    if (h3zero_settings_components_decode(buffer, bytes, &settings) != NULL ||
+        settings.blocked_streams != 42) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&settings, 0, sizeof(settings));
+        bytes = buffer;
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0x1234567); /* not a key this code knows */
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 999);
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, h3zero_setting_h3_datagram);
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1);
+
+        if (h3zero_settings_components_decode(buffer, bytes, &settings) != bytes ||
+            settings.h3_datagram != 1) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* h3zero_settings_encode must fail cleanly (return NULL) whenever the
+ * buffer is too short to hold the encoding, at every possible truncation
+ * point, rather than overrun it. First encode into a generous buffer to
+ * learn the actual required length, then retry with every buffer length
+ * from 1 up to (but not including) that length -- each one exercises a
+ * different "ran out of room partway through" branch, either inside
+ * h3zero_settings_component_encode itself or in the final-length-patching
+ * logic that follows the component loop. */
+int h3zero_settings_encode_too_short_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[256];
+    uint8_t* bytes_end;
+    h3zero_settings_t settings = default_setting_expected;
+
+    bytes_end = h3zero_settings_encode(buffer, buffer + sizeof(buffer), &settings);
+    if (bytes_end == NULL) {
+        ret = -1;
+    }
+    else {
+        size_t required_length = bytes_end - buffer;
+
+        for (size_t len = 1; ret == 0 && len < required_length; len++) {
+            if (h3zero_settings_encode(buffer, buffer + len, &settings) != NULL) {
+                DBG_PRINTF("h3zero_settings_encode succeeded with %zu bytes, expected to need %zu",
+                    len, required_length);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 typedef struct st_h3zero_string_content_type_compar_list_t {
     const char *path;
     const h3zero_content_type_enum content_type;
@@ -3715,6 +4487,12 @@ char const css_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'c', 's', 's', 
 
 char const double_dot_path_str[] = { '/', 's', 't', 'y', 'l', 'e', '.', 'e', 'x', 't', '.', 'h', 't', 'm', 'l', 0 };
 
+/* A path whose only '.' is its very first character (e.g. no leading '/').
+ * strrchr finds it, but "dot != path" must reject it as a real extension --
+ * a name that's entirely "dot + text", like a dotfile, has no basename
+ * before the dot and shouldn't be treated as having that extension. */
+char const dot_first_path_str[] = { '.', 'h', 't', 'm', 'l', 0 };
+
 static const h3zero_string_content_type_compare_list_t h3zero_string_content_type_compare_list[] = {
     /* Invalid paths and paths without extensions. */
     { NULL, h3zero_content_type_text_plain },
@@ -3734,13 +4512,281 @@ static const h3zero_string_content_type_compare_list_t h3zero_string_content_typ
     { css_path_str, h3zero_content_type_text_css },
 
     /* Special cases but valid. */
-    { double_dot_path_str, h3zero_content_type_text_html }
+    { double_dot_path_str, h3zero_content_type_text_html },
+    { dot_first_path_str, h3zero_content_type_text_plain }
     /* TODO Add more test cases.
      * e.g. query string?
      */
 };
 
 static size_t nb_h3zero_string_content_type_compare = sizeof(h3zero_string_content_type_compare_list) / sizeof(h3zero_string_content_type_compare_list_t);
+
+extern int h3zero_find_path_item(const uint8_t* path, size_t path_length,
+    const picohttp_server_path_item_t* path_table, size_t path_table_nb);
+
+/* h3zero_find_path_item matches a request path against a server's path
+ * table: an exact match, a match followed by '?' (query string), or a
+ * fallback '*' wildcard entry. Coverage showed two untested branches:
+ * - a path that is a proper prefix of a table entry but continues with
+ *   something other than '?' (e.g. "/foobar" against a "/foo" entry) must
+ *   NOT match -- it should fall through to the next entry or the wildcard;
+ * - a length-1, non-wildcard table entry (path[0] != '*') must not be
+ *   mistaken for the wildcard marker. */
+int h3zero_find_path_item_test(void)
+{
+    int ret = 0;
+    static const picohttp_server_path_item_t table_no_wildcard[] = {
+        { "/foo", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    static const picohttp_server_path_item_t table_with_wildcard[] = {
+        { "/foo", 4, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "*", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+    static const picohttp_server_path_item_t table_short_entry_first[] = {
+        { "x", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 },
+        { "*", 1, NULL, NULL, NULL, 0, NULL, NULL, 0 }
+    };
+
+    /* Exact match */
+    if (h3zero_find_path_item((const uint8_t*)"/foo", 4, table_no_wildcard, 1) != 0) {
+        ret = -1;
+    }
+    /* Match followed by query string */
+    else if (h3zero_find_path_item((const uint8_t*)"/foo?x=1", 8, table_no_wildcard, 1) != 0) {
+        ret = -1;
+    }
+    /* Longer path that only shares a prefix: must not match, and there is
+     * no wildcard to fall back on. */
+    else if (h3zero_find_path_item((const uint8_t*)"/foobar", 7, table_no_wildcard, 1) >= 0) {
+        ret = -1;
+    }
+    /* Same non-matching prefix case, but with a wildcard present: falls
+     * back to the wildcard entry. */
+    else if (h3zero_find_path_item((const uint8_t*)"/foobar", 7, table_with_wildcard, 2) != 1) {
+        ret = -1;
+    }
+    /* A length-1, non-'*' entry ahead of the real wildcard must not be
+     * mistaken for it, and must still fall through to the wildcard. */
+    else if (h3zero_find_path_item((const uint8_t*)"y", 1, table_short_entry_first, 2) != 1) {
+        ret = -1;
+    }
+
+    return ret;
+}
+
+extern int h3zero_process_request_frame(picoquic_cnx_t* cnx,
+    h3zero_stream_ctx_t* stream_ctx, h3zero_callback_ctx_t* app_ctx);
+
+typedef struct st_h3zero_process_request_test_cb_ctx_t {
+    int result;
+    int called;
+} h3zero_process_request_test_cb_ctx_t;
+
+static int h3zero_process_request_test_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length, picohttp_call_back_event_t fin_or_event,
+    h3zero_stream_ctx_t* stream_ctx, void* path_app_ctx)
+{
+    h3zero_process_request_test_cb_ctx_t* cb_ctx = (h3zero_process_request_test_cb_ctx_t*)path_app_ctx;
+    (void)cnx;
+    (void)bytes;
+    (void)length;
+    (void)fin_or_event;
+    (void)stream_ctx;
+    cb_ctx->called = 1;
+    return cb_ctx->result;
+}
+
+static int h3zero_origin_validator_test_reject(
+    const uint8_t* origin, size_t origin_length,
+    const uint8_t* authority, size_t authority_length,
+    void* origin_validator_ctx)
+{
+    (void)origin;
+    (void)origin_length;
+    (void)authority;
+    (void)authority_length;
+    (void)origin_validator_ctx;
+    return -1;
+}
+
+/* h3zero_process_request_frame is the server-side dispatcher for GET/POST/
+ * CONNECT requests. Several of its branches -- POST to a path that needs a
+ * fresh path_table lookup, and most of the CONNECT rejection paths (protocol
+ * mismatch, origin rejection, the app callback itself refusing, a duplicate
+ * CONNECT on an already-upgraded stream) -- are never reached by the
+ * existing WebTransport (accept-only) and GET-only test scenarios. Call the
+ * dispatcher directly with hand-built stream_ctx/app_ctx to exercise them,
+ * the same way h3zero_check_connect_protocol_test exercises the protocol
+ * check it eventually calls. */
+int h3zero_process_request_frame_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+    uint64_t next_stream_id = 4;
+
+    static const char post_path[] = "/post";
+    static const char connect_path[] = "/connect";
+    static const char* new_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
+    static const char* other_protocol = "not-webtransport-at-all";
+    static const uint8_t test_origin[] = "https://example.com";
+    static const uint8_t test_authority[] = "example.com";
+
+    h3zero_process_request_test_cb_ctx_t post_cb_ctx = { 5, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_accept_cb_ctx = { 0, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_refuse_cb_ctx = { -1, 0 };
+
+    picohttp_server_path_item_t path_table[] = {
+        { post_path, sizeof(post_path) - 1, h3zero_process_request_test_callback, &post_cb_ctx,
+            NULL, 0, NULL, NULL, 0 },
+        { connect_path, sizeof(connect_path) - 1, h3zero_process_request_test_callback, &connect_accept_cb_ctx,
+            new_protocol, strlen(new_protocol), NULL, NULL, 0 }
+    };
+    h3zero_callback_ctx_t app_ctx = { 0 };
+
+    app_ctx.path_table = path_table;
+    app_ctx.path_table_nb = sizeof(path_table) / sizeof(picohttp_server_path_item_t);
+
+    /* POST to a registered path: exercises the path_table lookup that only
+     * runs the first time (path_callback == NULL && post_received == 0). */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_post;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)post_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(post_path) - 1;
+
+        if (h3zero_process_request_frame(cnx, &stream_ctx, &app_ctx) != 0 ||
+            !post_cb_ctx.called || stream_ctx.path_callback == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* CONNECT with a protocol the path item does not accept (and a custom
+     * error status, to also cover that formatting branch): rejected before
+     * the app is ever consulted. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.connect_error_status = 404;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)other_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(other_protocol);
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* CONNECT with a matching protocol but an origin_validator that rejects
+     * the request: also rejected before the app callback runs. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.origin_validator = h3zero_origin_validator_test_reject;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+        stream_ctx.ps.stream_state.header.origin = test_origin;
+        stream_ctx.ps.stream_state.header.origin_length = sizeof(test_origin) - 1;
+        stream_ctx.ps.stream_state.header.authority = test_authority;
+        stream_ctx.ps.stream_state.header.authority_length = sizeof(test_authority) - 1;
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* CONNECT that passes protocol and origin checks, but whose app callback
+     * itself refuses the connection. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.path_callback = h3zero_process_request_test_callback;
+        item.path_app_ctx = &connect_refuse_cb_ctx;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                !connect_refuse_cb_ctx.called || stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* A second CONNECT on a stream that already has a path_callback (i.e.
+     * already upgraded): logged as a duplicate request and left otherwise
+     * unhandled by design (see the "Duplicate request?" comment at the call
+     * site) -- the dispatcher's own "ret = -1" there is overwritten by the
+     * unconditional stream-write result just below it, since this branch
+     * doesn't also set o_bytes = NULL the way every other error path does.
+     * So the only currently-guaranteed behavior is "doesn't crash, and
+     * doesn't touch path_callback again". */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.path_callback = h3zero_process_request_test_callback;
+
+        (void)h3zero_process_request_frame(cnx, &stream_ctx, &app_ctx);
+        if (stream_ctx.path_callback != h3zero_process_request_test_callback) {
+            ret = -1;
+        }
+    }
+
+    picoquic_set_callback(cnx, NULL, NULL);
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
 
 int h3zero_get_content_type_by_path_test(void) {
     int ret = 0;

@@ -112,7 +112,6 @@ typedef struct st_picoquic_ns_ctx_t {
     uint64_t simulated_time;
     int nb_connections;
     picoquic_ns_link_spec_t* vary_link_spec;
-    int vary_link_is_user_provided;
     size_t vary_link_nb;
     uint64_t next_vary_link_time;
     size_t vary_link_index;
@@ -335,9 +334,29 @@ int picoquic_ns_create_link_spec(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t* 
     int ret = 0;
 
     if (spec->vary_link_nb > 0) {
-        cc_ctx->vary_link_is_user_provided = 1;
-        cc_ctx->vary_link_nb = spec->vary_link_nb;
-        cc_ctx->vary_link_spec = spec->vary_link_spec;
+        /* Copy the caller's array instead of aliasing it, so a zero rate
+         * left in one of its entries can be filled with the same default
+         * that picoquic_ns_create_default_link_spec applies -- otherwise
+         * picoquic_ns_simlink_reset would read that zero as "suspend this
+         * link" instead of "rate unspecified", the first time
+         * picoquic_ns_vary_link transitions to it. */
+        cc_ctx->vary_link_spec = (picoquic_ns_link_spec_t*)malloc(spec->vary_link_nb * sizeof(picoquic_ns_link_spec_t));
+        if (cc_ctx->vary_link_spec == NULL) {
+            ret = -1;
+        }
+        else {
+            cc_ctx->vary_link_nb = spec->vary_link_nb;
+            memcpy(cc_ctx->vary_link_spec, spec->vary_link_spec, spec->vary_link_nb * sizeof(picoquic_ns_link_spec_t));
+            for (size_t i = 0; i < cc_ctx->vary_link_nb; i++) {
+                picoquic_ns_link_spec_t* link_spec = &cc_ctx->vary_link_spec[i];
+                if (link_spec->data_rate_in_gbps_down == 0) {
+                    link_spec->data_rate_in_gbps_down = (spec->data_rate_in_gbps == 0) ? 0.01 : spec->data_rate_in_gbps;
+                }
+                if (link_spec->data_rate_in_gbps_up == 0) {
+                    link_spec->data_rate_in_gbps_up = (spec->data_rate_up_in_gbps == 0) ? link_spec->data_rate_in_gbps_down : spec->data_rate_up_in_gbps;
+                }
+            }
+        }
     }
     else {
         switch (spec->link_scenario) {
@@ -474,9 +493,7 @@ void picoquic_ns_delete_ctx(picoquic_ns_ctx_t* cc_ctx)
 
     /* delete the link specifications */
     if (cc_ctx->vary_link_spec != NULL) {
-        if (!cc_ctx->vary_link_is_user_provided) {
-            free(cc_ctx->vary_link_spec);
-        }
+        free(cc_ctx->vary_link_spec);
         cc_ctx->vary_link_spec = NULL;
         cc_ctx->vary_link_nb = 0;
     }

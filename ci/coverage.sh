@@ -76,7 +76,7 @@ echo "Running picoquic_ct"
 PICOQUIC_STATUS=$?
 
 echo "Running picohttp_ct"
-(cd "$BUILD_DIR" && ./picohttp_ct -S "$REPO_ROOT" -n -r -x http_corrupt)
+(cd "$BUILD_DIR" && ./picohttp_ct -S "$REPO_ROOT" -n -r)
 PICOHTTP_STATUS=$?
 
 if [ "$PICOQUIC_STATUS" -ne 0 ] || [ "$PICOHTTP_STATUS" -ne 0 ]; then

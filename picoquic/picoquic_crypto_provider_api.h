@@ -83,9 +83,8 @@ extern "C" {
 
     extern struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
-#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
+#define PICOQUIC_KEY_EXCHANGES_NB_MAX 8
     extern ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-    extern ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
 #define PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX 4
     extern ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
 #define PICOQUIC_HPKE_KEM_NB_MAX 3

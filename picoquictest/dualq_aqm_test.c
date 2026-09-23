@@ -280,6 +280,169 @@ int dualq_submit_test(void)
     return(ret);
 }
 
+/* Configure test: dualq_test_get_ctx always configures with a fixed l4s_max (5000), which
+ * never exercises the l4s_max==0 (use defaults) or l4s_max<=1200 (low threshold) branches
+ * of dualq_params_init. Check both directly. */
+int dualq_configure_defaults_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquictest_sim_link_t* link = picoquictest_sim_link_create(0.01, 25000, NULL, 50000, simulated_time);
+
+    if (link == NULL) {
+        ret = -1;
+    }
+    else {
+        if ((ret = dualq_configure(link, 0)) == 0) {
+            dualq_state_t* dqs = (dualq_state_t*)link->aqm_state;
+            if (dqs->maxTh != 1200 || dqs->minTh != 800) {
+                DBG_PRINTF("dualq l4s_max=0 defaults wrong: maxTh=%" PRIu64 ", minTh=%" PRIu64, dqs->maxTh, dqs->minTh);
+                ret = -1;
+            }
+        }
+        picoquictest_sim_link_delete(link);
+    }
+
+    if (ret == 0 &&
+        (link = picoquictest_sim_link_create(0.01, 25000, NULL, 50000, simulated_time)) == NULL) {
+        ret = -1;
+    }
+    else if (ret == 0) {
+        if ((ret = dualq_configure(link, 600)) == 0) {
+            dualq_state_t* dqs = (dualq_state_t*)link->aqm_state;
+            if (dqs->maxTh != 600 || dqs->minTh != 200) {
+                DBG_PRINTF("dualq l4s_max=600 low-threshold wrong: maxTh=%" PRIu64 ", minTh=%" PRIu64, dqs->maxTh, dqs->minTh);
+                ret = -1;
+            }
+        }
+        picoquictest_sim_link_delete(link);
+    }
+
+    return ret;
+}
+
+/* Configure test: calling dualq_configure twice on the same link should recognize the
+ * existing dualq state via its function-pointer signature and reuse it, rather than
+ * releasing and recreating it. */
+int dualq_configure_reuse_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquictest_sim_link_t* link = picoquictest_sim_link_create(0.01, 25000, NULL, 50000, simulated_time);
+
+    if (link == NULL) {
+        ret = -1;
+    }
+    else {
+        if ((ret = dualq_configure(link, 5000)) == 0) {
+            void* first_aqm_state = link->aqm_state;
+            if ((ret = dualq_configure(link, 5000)) == 0 &&
+                link->aqm_state != first_aqm_state) {
+                DBG_PRINTF("%s", "dualq_configure did not reuse the existing state on a matching re-configure");
+                ret = -1;
+            }
+        }
+        picoquictest_sim_link_delete(link);
+    }
+
+    return ret;
+}
+
+/* Overload test: force the "overload saturation" branches of dualq_dequeue_one -- for the
+ * L4S queue (p_CL >= p_Lmax) and for the Classic queue (an already ECN-capable packet) --
+ * neither of which is reached by the other tests, since none of them drive the classic
+ * queue's own drop probability, nor the coupled L4S probability, up to saturation. */
+int dualq_overload_test(void)
+{
+    dualq_test_ctx dqt_ctx;
+    int ret = dualq_test_get_ctx(&dqt_ctx);
+
+    if (ret == 0) {
+        dualq_state_t* dqs = dqt_ctx.dqs;
+        int should_drop = 0;
+        picoquictest_sim_packet_t* packet;
+
+        /* L4S queue overload: p_CL >= p_Lmax forces the "else" (overload) branch. */
+        dqs->p_Lmax = 0.5;
+        dqs->p_CL = 1.0;
+        dqs->p_C = 0.2;
+        dqs->lq.sum_p = 0.85; /* + p_C (0.2) = 1.05 > 1.0: first packet is squared-dropped. */
+
+        dualq_enqueue_queue(&dqs->lq, dualq_test_get_packet(PICOQUIC_ECN_ECT_1, 1000));
+        packet = dualq_dequeue_one(dqs, dqt_ctx.simulated_time, &should_drop);
+        if (packet == NULL || !should_drop) {
+            DBG_PRINTF("%s", "L4S overload did not drop the first packet as expected");
+            ret = -1;
+        }
+        free(packet);
+
+        /* sum_p is now 0.05; + p_C (0.2) = 0.25 (no drop); + p_CL (1.0) = 1.25 > 1.0: marked. */
+        dualq_enqueue_queue(&dqs->lq, dualq_test_get_packet(PICOQUIC_ECN_ECT_1, 1000));
+        packet = dualq_dequeue_one(dqs, dqt_ctx.simulated_time, &should_drop);
+        if (ret == 0 && (packet == NULL || should_drop || packet->ecn_mark != PICOQUIC_ECN_CE)) {
+            DBG_PRINTF("%s", "L4S overload did not CE-mark the second packet as expected");
+            ret = -1;
+        }
+        free(packet);
+
+        /* Classic queue overload: an unmarked packet gets squared-dropped... */
+        dqs->p_Cmax = 0.25;
+        dqs->p_C = 0.2;
+        dqs->cq.sum_p = 0.9; /* + p_C (0.2) = 1.1 > 1.0: recur triggers. */
+
+        dualq_enqueue_queue(&dqs->cq, dualq_test_get_packet(0, 1000));
+        packet = dualq_dequeue_one(dqs, dqt_ctx.simulated_time, &should_drop);
+        if (ret == 0 && (packet == NULL || !should_drop)) {
+            DBG_PRINTF("%s", "Classic overload did not drop the unmarked packet as expected");
+            ret = -1;
+        }
+        free(packet);
+
+        /* ... while one that already carries an ECN mark gets squared-marked instead,
+         * since p_C (0.2) stays below p_Cmax (0.25). */
+        dqs->cq.sum_p = 0.9; /* + p_C (0.2) = 1.1 > 1.0: recur triggers again. */
+        dualq_enqueue_queue(&dqs->cq, dualq_test_get_packet(PICOQUIC_ECN_ECT_0, 1000));
+        packet = dualq_dequeue_one(dqs, dqt_ctx.simulated_time, &should_drop);
+        if (ret == 0 && (packet == NULL || should_drop || packet->ecn_mark != PICOQUIC_ECN_CE)) {
+            DBG_PRINTF("%s", "Classic overload did not CE-mark the ECN-capable packet as expected");
+            ret = -1;
+        }
+        free(packet);
+    }
+
+    dualq_test_release_ctx(&dqt_ctx);
+
+    return ret;
+}
+
+/* PI2 update test: force pprime, and its coupled p_CL, above 1.0 in a single update tick to
+ * exercise both upper-bound clamps in dualq_pi2_update -- not reached by any other test,
+ * since normal PI2 gains never drive pprime that high in one tick. */
+int dualq_pi2_clamp_test(void)
+{
+    dualq_test_ctx dqt_ctx;
+    int ret = dualq_test_get_ctx(&dqt_ctx);
+
+    if (ret == 0) {
+        dualq_state_t* dqs = dqt_ctx.dqs;
+
+        dqs->pi2_alpha = 0;
+        dqs->pi2_beta = 0;
+        dqs->pprime = 1.5;
+
+        dualq_pi2_update(dqs, dqt_ctx.simulated_time);
+
+        if (dqs->pprime != 1.0 || dqs->p_CL != 1.0) {
+            DBG_PRINTF("dualq pi2 clamp: pprime=%f, p_CL=%f, expected 1.0/1.0", dqs->pprime, dqs->p_CL);
+            ret = -1;
+        }
+    }
+
+    dualq_test_release_ctx(&dqt_ctx);
+
+    return ret;
+}
+
 /* Dual Q end to end test. Assume that packets arrive in batches and
  * are retrieved as soon as available. Check that the interval between
  * submission and retrieval is what we expect */
@@ -426,6 +589,22 @@ int dualq_aqm_test(void)
 
     if (ret == 0) {
         ret = dualq_submit_test();
+    }
+
+    if (ret == 0) {
+        ret = dualq_configure_defaults_test();
+    }
+
+    if (ret == 0) {
+        ret = dualq_configure_reuse_test();
+    }
+
+    if (ret == 0) {
+        ret = dualq_overload_test();
+    }
+
+    if (ret == 0) {
+        ret = dualq_pi2_clamp_test();
     }
 
     if (ret == 0) {

@@ -578,20 +578,6 @@ int picoquic_demo_client_callback(picoquic_cnx_t* cnx,
             fprintf(stdout, "\n");
         }
         break;
-    case picoquic_callback_stream_gap:
-        /* Gap indication, when unreliable streams are supported */
-        fprintf(stdout, "Received a gap indication.\n");
-        if (stream_ctx == NULL) {
-            stream_ctx = picoquic_demo_client_find_stream(ctx, stream_id);
-        }
-        if (picoquic_demo_client_close_stream(cnx, ctx, stream_ctx)) {
-            fin_stream_id = stream_id;
-            fprintf(stdout, "Stream %d reset after %d bytes\n",
-                (int)stream_id, (int)stream_ctx->received_length);
-        }
-        /* TODO: Define what error. Stop sending? */
-        picoquic_reset_stream(cnx, stream_id, H3ZERO_INTERNAL_ERROR);
-        break;
     case picoquic_callback_prepare_to_send:
         /* Used on client when posting data */
             /* Used for active streams */
@@ -964,21 +950,26 @@ char const * demo_client_parse_stream_desc(char const * text, uint64_t default_s
     return text;
 }
 
+static void demo_client_delete_stream_desc_content(picoquic_demo_stream_desc_t * desc)
+{
+    if (desc->f_name != desc->doc_name && desc->f_name != NULL) {
+        free((char*)desc->f_name);
+        *(char**)(&desc->f_name) = NULL;
+    }
+    if (desc->doc_name != NULL) {
+        free((char*)desc->doc_name);
+        *(char**)(&desc->doc_name) = NULL;
+    }
+    if (desc->range != NULL) {
+        free((char*)desc->range);
+        *(char**)(&desc->range) = NULL;
+    }
+}
+
 void demo_client_delete_scenario_desc(size_t nb_streams, picoquic_demo_stream_desc_t * desc)
 {
     for (size_t i = 0; i < nb_streams; i++) {
-        if (desc[i].f_name != desc[i].doc_name && desc[i].f_name != NULL) {
-            free((char*)desc[i].f_name);
-            *(char**)(&desc[i].f_name) = NULL;
-        }
-        if (desc[i].doc_name != NULL) {
-            free((char*)desc[i].doc_name);
-            *(char**)(&desc[i].doc_name) = NULL;
-        }
-        if (desc[i].range != NULL) {
-            free((char*)desc[i].range);
-            *(char**)(&desc[i].range) = NULL;
-        }
+        demo_client_delete_stream_desc_content(&desc[i]);
     }
     free(desc);
 }
@@ -1034,6 +1025,14 @@ int demo_client_parse_scenario_desc(char const * text, size_t * nb_streams, pico
                     stream_id = stream_desc->stream_id + 4;
                     previous = stream_desc->stream_id;
                     i++;
+                }
+                else {
+                    /* The failed entry is not counted in *nb_streams, so the
+                     * caller's demo_client_delete_scenario_desc will never
+                     * reach it -- free whatever it already allocated (e.g.
+                     * doc_name/f_name from a path that parsed fine before a
+                     * later field failed) here instead. */
+                    demo_client_delete_stream_desc_content(stream_desc);
                 }
             }
         }
