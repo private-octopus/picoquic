@@ -60,7 +60,7 @@ NAT rebinding -- see {{paths-and-tuples}}.
 ### Paths and tuples
 
 The multipath draft maintains support for the NAT rebinding and
-path migration functions defined in [RFC 9000]{https://www.rfc-editor.org/rfc/rfc9000.html}.
+path migration functions defined in [RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html).
 because of that support, a path identified by a unique path ID can
 use different IP addresses and UDP port numbers over time. Each pair
 of source and destination IP address and UDP port number is managed
