@@ -34,7 +34,7 @@ Someone using zero as a starting limit would disable the capability instead.
 
 If multipath support is negotiated, each endpoint can increment their
 maximum supported path value over time by exchanging MAX_PATH_ID frames.
-At any point in type, the maximum usable path ID is the minimum of
+At any point in time, the maximum usable path ID is the minimum of
 the values announced by two endpoints.
 
 A picoquic endpoint automatically increments the maximum path ID that it
@@ -42,8 +42,8 @@ supports as paths are created and deleted, so that the number of
 available paths corresponds to the local value of the
 local `initial_max_path_id`.
 
-Note: the API `picoquic_set_default_multipath_option` is mot currently
-beaving correctly. Please just set the `initial_max_path_id`
+Note: the API `picoquic_set_default_multipath_option` is not currently
+behaving correctly. Please just set the `initial_max_path_id`
 parameter as discussed above.
 
 ### Connection identifiers
@@ -195,7 +195,7 @@ it simply results in the connection being closed.
 
 Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
 This can be set as the default for new connections by calling
-"picoquic_enable_path_callbacks_default". If enabled, the folling events
+"picoquic_enable_path_callbacks_default". If enabled, the following events
 will be signalled by callbacks:
 
  - picoquic_callback_path_available: 
@@ -372,7 +372,7 @@ expires. If all available paths are marked temporary unavailable, one
 of the standby paths will be scheduled.
 
 The selection will try to visit each path, so that the usage of a path is
-only gated by the path capacity, as discovered through congetsion control.
+only gated by the path capacity, as discovered through congestion control.
 The 3rd condition, "has data to send", is affected by the affinity process.
 A path has data to send if there is data available on a stream marked
 with affinity on that path, if there is data available on stream not marked
