@@ -339,6 +339,9 @@ char const* quicperf_parse_media_desc(char const* text, quicperf_stream_desc_t* 
 
 char const* quicperf_parse_stream_desc(char const* text, quicperf_stream_desc_t* desc)
 {
+    if (text != NULL) {
+        text = quicperf_parse_priority(quicperf_parse_stream_spaces(text), &desc->priority);
+    }
 
     if (text != NULL) {
         text = quicperf_parse_post_size(quicperf_parse_stream_spaces(text), 0, &desc->post_size);
@@ -647,6 +650,10 @@ quicperf_stream_ctx_t* quicperf_init_batch_stream_from_scenario(picoquic_cnx_t* 
         stream_ctx->rep_number = rep_number;
         stream_ctx->post_size = stream_desc->post_size;
         stream_ctx->response_size = stream_desc->response_size;
+        stream_ctx->priority = stream_desc->priority;
+        if (stream_ctx->priority != 0) {
+            (void)picoquic_set_stream_priority(cnx, stream_x, stream_ctx->priority);
+        }
 
         if (stream_desc->is_infinite) {
             stream_ctx->stop_for_fin = 1;

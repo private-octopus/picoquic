@@ -64,6 +64,7 @@ details of what is expected:
 * repeat count,
 * type of stream and frequency,
 * for batch streams:
+   - priority of the client stream,
    - post size (bytes sent by the client) and
    - response size (bytes sent by the server)
 * For media or datagram streams:
@@ -84,6 +85,9 @@ Many of these fields are optional:
 * if a repeat count is specified, the client will try to initiate as many
   copies of the stream in parallel. If not, just one stream.
 * if the priority is not specified, the default value for picoquic will be used.
+  The media requests use that default priority on the client side, so an uplink
+  batch stream at the default priority is sent before the media requests. Set its
+  priority to a higher number, e.g., `p10`, to run it in parallel with media streams.
 * if the number of frames is not specified, there will be just one frame.
 * if the number of frames per group is not specified, there will be
   just one group.
@@ -104,7 +108,7 @@ id = alphanumeric-string | '-'
 
 previous-stream-id = alphanumeric-string
 
-batch_stream = post_size ':' response_size
+batch_stream = [ 'b' ] [ 'p' priority ':' ] post_size ':' response_size
 
 media_stream = 'm' media_description
 
@@ -124,6 +128,7 @@ reset_delay = ['D' reset_delay_in_ms ]
 Examples of scenarios could be:
 ~~~
 batch_scenario = "=b1:*1:397:1000000;"
+uplink_and_media_scenario = "=b1:p10:2000000:128;=a1:d50:p2:S:n600:80;"
 datagram_scenario = "=a1:d50:n250:100;"
 media_scenario = "=v1:s30:n150:2000:G30:I20000;"
 multimedia_scenario = "=a1:d50:p2:S:n250:80; \

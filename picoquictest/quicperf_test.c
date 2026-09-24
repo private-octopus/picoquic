@@ -333,6 +333,28 @@ const quicperf_stream_desc_t qpsc_upper_id[2] = {
     }
 };
 
+#define qpstr_batch_priority "=b1:p10:256:12345;"
+
+const quicperf_stream_desc_t qpsc_batch_priority[1] = {
+    {
+        { 'b', '1', 0 }, /* id */
+        { 0, 0 }, /* previous id */
+        1, /* repeat_count */
+        quicperf_media_batch, /* media_type */
+        0, /* frequency */
+        256, /* post_size */
+        12345, /* response_size */
+        0, /* nb_frames */
+        0, /* frame_size */
+        0, /* group_size */
+        0, /* first_frame_size */
+        0, /* reset_delay */
+        10, /* priority */
+        0, /* is_infinite */
+        0, /*  is_client_media */
+    }
+};
+
 typedef struct st_quicperf_test_line_t {
     const quicperf_stream_desc_t* sc;
     size_t nb_sc;
@@ -350,7 +372,8 @@ const quicperf_test_line_t test_lines[] = {
     { qpsc_video4, 1, qpstr_video4 },
     { qpsc_audio, 1, qpstr_audio },
     { qpsc_combo, 4, qpstr_combo },
-    { qpsc_upper_id, 2, qpstr_upper_id }
+    { qpsc_upper_id, 2, qpstr_upper_id },
+    { qpsc_batch_priority, 1, qpstr_batch_priority }
 };
 
 const size_t nb_test_lines = sizeof(test_lines) / sizeof(quicperf_test_line_t);
@@ -759,12 +782,12 @@ static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t 
 
         if (target->nb_frames_received_min != 0 &&
             report->nb_frames_received < target->nb_frames_received_min) {
-            DBG_PRINTF("Scenario %zu, expected at least %" PRIu64 "frames, got % PRIu64", i, target->nb_frames_received_min, report->nb_frames_received);
+            DBG_PRINTF("Scenario %zu, expected at least %" PRIu64 " frames, got %" PRIu64, i, target->nb_frames_received_min, report->nb_frames_received);
             ret = -1;
         }
         else if (target->nb_frames_received_max != 0 &&
             report->nb_frames_received > target->nb_frames_received_max) {
-            DBG_PRINTF("Scenario %zu, expected at most %" PRIu64 "frames, got % PRIu64", i, target->nb_frames_received_max, report->nb_frames_received);
+            DBG_PRINTF("Scenario %zu, expected at most %" PRIu64 " frames, got %" PRIu64, i, target->nb_frames_received_max, report->nb_frames_received);
             ret = -1;
         }
         else if (report->nb_frames_received > 0) {
@@ -772,22 +795,22 @@ static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t 
 
             if (target->average_delay_min != 0 &&
                 average_delay < target->average_delay_min) {
-                DBG_PRINTF("Scenario %zu, expected average delay >= %" PRIu64 ", got % PRIu64", i, target->average_delay_min, average_delay);
+                DBG_PRINTF("Scenario %zu, expected average delay >= %" PRIu64 ", got %" PRIu64, i, target->average_delay_min, average_delay);
                 ret = -1;
             }
             else if (target->average_delay_max != 0 &&
                 average_delay > target->average_delay_max) {
-                DBG_PRINTF("Scenario %zu, expected average delay <= %" PRIu64 ", got % PRIu64", i, target->average_delay_max, average_delay);
+                DBG_PRINTF("Scenario %zu, expected average delay <= %" PRIu64 ", got %" PRIu64, i, target->average_delay_max, average_delay);
                 ret = -1;
             }
             else if (target->max_delay != 0 &&
                 report->max_delays > target->max_delay) {
-                DBG_PRINTF("Scenario %zu, expected max delay <= %" PRIu64 ", got % PRIu64", i, target->max_delay, report->max_delays);
+                DBG_PRINTF("Scenario %zu, expected max delay <= %" PRIu64 ", got %" PRIu64, i, target->max_delay, report->max_delays);
                 ret = -1;
             }
             else if (target->min_delay != 0 &&
                 report->min_delays < target->min_delay) {
-                DBG_PRINTF("Scenario %zu, expected min delay >= %" PRIu64 ", got % PRIu64", i, target->min_delay, report->min_delays);
+                DBG_PRINTF("Scenario %zu, expected min delay >= %" PRIu64 ", got %" PRIu64, i, target->min_delay, report->min_delays);
                 ret = -1;
             }
         }
@@ -1223,6 +1246,22 @@ int quicperf_server_timer_leak_test(void)
     }
 
     return ret;
+}
+
+int quicperf_batch_priority_test(void)
+{
+    /* Uplink batch at lower priority must not delay the media streams. */
+    char const* scenario = "=b1:p10:2000000:128;=a1:d50:p2:S:n600:80;\
+=vlow:s30:p4:S:n360:1600:G30:I16000;=vmid:s30:p6:S:n360:6250:G30:I62500:D250000;";
+    quicperf_test_target_t targets[4] = {
+        { 0, 0, 0, 0, 0, 0 },
+        { 600, 600, 0, 40000, 0, 0 },
+        { 360, 360, 0, 0, 0, 0 },
+        { 360, 360, 0, 0, 0, 0 }
+    };
+
+    return quicperf_e2e_test_ex(0xbe, scenario, 13000000, 4, targets,
+        0, quicperf_mp_probe_immediate, 0, 2000000, 128);
 }
 
 int quicperf_server_timer_batch_test(void)

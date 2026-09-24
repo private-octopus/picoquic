@@ -4568,6 +4568,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(quicperf_batch_priority) {
+            int ret = quicperf_batch_priority_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(quicperf_client_media_stream) {
             int ret = quicperf_client_media_stream_test();
 
