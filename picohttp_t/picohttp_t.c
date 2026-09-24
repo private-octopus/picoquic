@@ -217,6 +217,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicperf_scenario_error", quicperf_scenario_error_test },
     { "quicperf_batch", quicperf_batch_test },
     { "quicperf_infinite", quicperf_infinite_test },
+    { "quicperf_batch_post", quicperf_batch_post_test },
+    { "quicperf_server_timer_batch", quicperf_server_timer_batch_test },
     { "quicperf_client_media_stream", quicperf_client_media_stream_test },
     { "quicperf_client_media_datagram", quicperf_client_media_datagram_test },
     { "quicperf_datagram_too_large", quicperf_datagram_too_large_test },

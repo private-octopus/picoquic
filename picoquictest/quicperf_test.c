@@ -540,7 +540,8 @@ typedef enum {
 
 static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t completion_target,
     size_t nb_targets, quicperf_test_target_t* targets,
-    int use_multipath, quicperf_mp_probe_timing_t probe_timing, uint64_t probe_delay_us)
+    int use_multipath, quicperf_mp_probe_timing_t probe_timing, uint64_t probe_delay_us,
+    uint64_t expected_data_sent, uint64_t expected_data_received)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -743,6 +744,15 @@ static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t 
         }
     }
 
+    if (ret == 0 && expected_data_sent != 0 && quicperf_ctx->data_sent != expected_data_sent) {
+        DBG_PRINTF("Expected %" PRIu64 " bytes sent, got %" PRIu64, expected_data_sent, quicperf_ctx->data_sent);
+        ret = -1;
+    }
+    else if (ret == 0 && expected_data_received != 0 && quicperf_ctx->data_received != expected_data_received) {
+        DBG_PRINTF("Expected %" PRIu64 " bytes received, got %" PRIu64, expected_data_received, quicperf_ctx->data_received);
+        ret = -1;
+    }
+
     for (size_t i = 0; ret == 0 && i < nb_targets; i++) {
         quicperf_test_target_t* target = &targets[i];
         quicperf_stream_report_t* report = &quicperf_ctx->reports[i];
@@ -796,7 +806,7 @@ static int quicperf_e2e_test_ex(uint8_t test_id, char const* scenario, uint64_t 
 int quicperf_e2e_test(uint8_t test_id, char const *scenario, uint64_t completion_target, size_t nb_targets, quicperf_test_target_t * targets)
 {
     return quicperf_e2e_test_ex(test_id, scenario, completion_target, nb_targets, targets,
-        0, quicperf_mp_probe_immediate, 0);
+        0, quicperf_mp_probe_immediate, 0, 0, 0);
 }
 
 int quicperf_e2e_test_multipath(uint8_t test_id, char const* scenario, uint64_t completion_target,
@@ -804,7 +814,7 @@ int quicperf_e2e_test_multipath(uint8_t test_id, char const* scenario, uint64_t 
     quicperf_mp_probe_timing_t probe_timing, uint64_t probe_delay_us)
 {
     return quicperf_e2e_test_ex(test_id, scenario, completion_target, nb_targets, targets,
-        1, probe_timing, probe_delay_us);
+        1, probe_timing, probe_delay_us, 0, 0);
 }
 
 int quicperf_batch_test(void)
@@ -838,6 +848,16 @@ int quicperf_infinite_test(void)
     };
 
     return quicperf_e2e_test(0xbf, infinite_scenario, 1200000, 1, &infinite_target);
+}
+
+int quicperf_batch_post_test(void)
+{
+    /* The server must receive the whole post before responding. */
+    char const* post_scenario = "=b1:1000000:10000;";
+    quicperf_test_target_t post_target = { 0, 0, 0, 0, 0, 0 };
+
+    return quicperf_e2e_test_ex(0xbd, post_scenario, 5000000, 1, &post_target,
+        0, quicperf_mp_probe_immediate, 0, 1000000, 10000);
 }
 
 int quicperf_client_media_stream_test(void)
@@ -1040,6 +1060,7 @@ int quicperf_server_timer_wakeup_test(void)
         else {
             /* Datagram stream due at t=1000. */
             datagram_ctx->is_datagram = 1;
+            datagram_ctx->is_fin_received = 1;
             datagram_ctx->nb_frames = 250;
             datagram_ctx->nb_frames_sent = 10;
             datagram_ctx->frequency = 50;
@@ -1048,6 +1069,7 @@ int quicperf_server_timer_wakeup_test(void)
             /* Non-datagram stream, resting between frames, due at t=2000. */
             video_ctx->is_datagram = 0;
             video_ctx->is_activated = 0;
+            video_ctx->is_fin_received = 1;
             video_ctx->next_frame_time = 2000;
 
             /* current_time = 100: neither is due yet. */
@@ -1187,6 +1209,64 @@ int quicperf_server_timer_leak_test(void)
             if (ret == 0 &&
                 (quicperf_find_stream_ctx(ctx, 0) != NULL || quicperf_find_stream_ctx(ctx, 4) != NULL)) {
                 DBG_PRINTF("%s", "One closed stream context leaked: only the last one found was deleted");
+                ret = -1;
+            }
+        }
+    }
+
+    if (ctx != NULL) {
+        quicperf_delete_ctx(ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int quicperf_server_timer_batch_test(void)
+{
+    /* Verify that quicperf_server_timer does not activate a batch stream
+     * before the client FIN is received: the server must receive the
+     * whole post before sending the response. */
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    quicperf_ctx_t* ctx = NULL;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, "perf", &simulated_time, NULL, NULL, 0, 1, 0, NULL);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        DBG_PRINTF("%s", "No server connection after handshake");
+        ret = -1;
+    }
+
+    if (ret == 0 && (ctx = quicperf_create_ctx(NULL, NULL)) == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        quicperf_stream_ctx_t* batch_ctx = quicperf_create_stream_ctx(ctx, 0);
+
+        if (batch_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Batch stream, header received, rest of the post still pending. */
+            batch_ctx->nb_post_bytes = 1000;
+            batch_ctx->response_size = 10000;
+
+            ret = quicperf_server_timer(test_ctx->cnx_server, ctx, 100);
+
+            if (ret == 0 && batch_ctx->is_activated) {
+                DBG_PRINTF("%s", "Batch stream activated before the client FIN");
                 ret = -1;
             }
         }

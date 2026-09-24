@@ -1152,18 +1152,20 @@ int quicperf_receive_data_from_client(picoquic_cnx_t* cnx, quicperf_stream_ctx_t
     stream_ctx->nb_post_bytes += (length - byte_index);
 
     if (fin_or_event == picoquic_callback_stream_fin) {
+        stream_ctx->is_fin_received = 1;
         if (stream_ctx->nb_post_bytes < 8 || (stream_ctx->is_media && stream_ctx->nb_post_bytes < 16)) {
             stream_ctx->response_size = 0;
             stream_ctx->is_media = 0;
             stream_ctx->is_datagram = 0;
         }
-        else if (stream_ctx->is_datagram) {
+        if (stream_ctx->is_datagram) {
             uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
             ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);
             picoquic_set_app_wake_time(cnx, current_time);
         }
         else {
             ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+            stream_ctx->is_activated = 1;
         }
     }
     return ret;
@@ -1431,7 +1433,7 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                 /* remove the stream context! */
                 picosplay_delete_hint(&ctx->quicperf_stream_tree, stream_node);
             }
-            else if (!stream_ctx->is_activated) {
+            else if (!stream_ctx->is_activated && stream_ctx->is_fin_received) {
                 if (stream_ctx->is_datagram) {
                     while (stream_ctx->next_frame_time <= current_time && stream_ctx->nb_frames_sent < stream_ctx->nb_frames) {
                         ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);

@@ -789,6 +789,8 @@ int quicperf_parse_test(void);
 int quicperf_scenario_error_test(void);
 int quicperf_batch_test(void);
 int quicperf_infinite_test(void);
+int quicperf_batch_post_test(void);
+int quicperf_server_timer_batch_test(void);
 int quicperf_client_media_stream_test(void);
 int quicperf_client_media_datagram_test(void);
 int quicperf_datagram_too_large_test(void);

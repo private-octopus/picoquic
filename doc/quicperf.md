@@ -10,7 +10,9 @@ The original Quic Perf protocol was very simple. The client opens QUIC connectio
 the LPN set to "perf", and then it opens bidirectional streams.
 The first 8 bytes sent by the client on each stream
 encode the size of the data that the server will send
-on the return stream. This can be used to measure batch performance, simply requesting
+on the return stream. The client may send more data after these 8 bytes, up
+to the specified post size. The server reads all the data until the FIN of the
+client stream, and only then starts sending its response. This can be used to measure batch performance, simply requesting
 a large amount of data and measuring how long it takes to get the result. It can also
 be used to measure transactional applications: open a large number of streams,
 require a small amount of data on each, and measure how long it takes to process
@@ -219,7 +221,8 @@ The performance logs are formatted as CSV file, with the following columns:
 
 The standard Perf protocol uses bidirectional streams in a very simple way: the client
 opens a stream and starts sending data; the server reads the number of required bytes in
-the first 8 bytes of the client stream, and sends that many bytes to the client. We extend
+the first 8 bytes of the client stream, receives the rest of the client data until the
+FIN of the client stream, and then sends that many bytes to the client. We extend
 this protocol by using unidirectional streams and datagrams.
 
 The extended Perf protocol also uses bidirectional streams. The first 16 bytes sent by the

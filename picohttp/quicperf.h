@@ -120,6 +120,7 @@ typedef struct st_quicperf_stream_ctx {
     unsigned int stop_for_fin : 1;
     unsigned int is_stopped : 1;
     unsigned int is_closed : 1;
+    unsigned int is_fin_received : 1; /* Server: client request complete */
 } quicperf_stream_ctx_t;
 
 typedef struct st_quicperf_ctx_t {
