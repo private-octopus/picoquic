@@ -284,11 +284,11 @@ the local status is updated accordingly.
 ## Scheduling transmission on paths
 
 When asked to "prepare a packet", picoquic has to find a path that is ready to send something,
-and then find what to send on that path. Find the path is done in `picoquic_select_next_path_mp`,
+and then find what to send on that path. Find the path is done in `picoquic_select_next_path_tuple`,
 find what to send is done in `picoquic_prepare_packet_ready`.
 The two are actually tied, but the ties are implicit:
 
-- picoquic_select_next_path_mp checks which path could send something if given the turn,
+- picoquic_select_next_path_tuple checks which path could send something if given the turn,
   whether acknowledgement or data. It checks whether congestion control will allow sending of data,
   whether pacing will allow sending ACKs, which path has the lowest delays if ACKs need to be sent.
   It combines that with the status of the path, available or standby, and with the state of the path,
