@@ -29,6 +29,10 @@ jobs:
           cmake -S . -B build \
             -DPICOQUIC_FETCH_PTLS:BOOL=ON \
             -DBUILD_SHARED_LIBS:BOOL=${{ matrix.link == 'shared' && 'ON' || 'OFF' }} \
+            -DBUILD_TESTING:BOOL=OFF \
+            -DBUILD_DEMO:BOOL=OFF \
+            -DBUILD_PQBENCH:BOOL=OFF \
+            -DBUILD_LOGREADER:BOOL=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
