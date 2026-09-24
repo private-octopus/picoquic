@@ -223,14 +223,18 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/openssl_test.c
     picoquictest/p2p_test.c
     picoquictest/pacing_test.c
+    picoquictest/packet_names_test.c
     picoquictest/parseheadertest.c
+    picoquictest/performance_log_test.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
+    picoquictest/picoquic_ptls_fusion_test.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
     picoquictest/qmux_test.c
     picoquictest/quic_tester.c
+    picoquictest/quicctx_test.c
     picoquictest/red_aqm.c
     picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
@@ -377,7 +381,12 @@ int main(void)
     list(APPEND PICOQUIC_CRYPTO_EXTRA_LIBRARIES ${AEGIS_LIBRARIES})
 endif()
 
-OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
+# Fusion's do_encrypt_v and the streaming do_encrypt_init/update/final are still unimplemented
+# stubs (assert(!"FIXME")) in the vendored picotls Fusion backend, and picotls's own record-layer
+# code (e.g. NewSessionTicket) calls do_encrypt_v -- so enabling Fusion crashes real connections.
+# Default it OFF everywhere until that is fixed upstream; explicitly pass -DPTLS_WITH_FUSION=ON
+# to override for local experimentation.
+OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" OFF)
 if(PTLS_WITH_FUSION)
     message(STATUS "PTLS Fusion is enabled")
 else()

@@ -69,6 +69,34 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(logger_textlog_malformed_frame)
+        {
+            int ret = logger_textlog_malformed_frame_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(perflog_param_name)
+        {
+            int ret = perflog_param_name_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(perflog_file_is_empty)
+        {
+            int ret = perflog_file_is_empty_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(perflog_multi_cnx)
+        {
+            int ret = perflog_multi_cnx_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bytestream)
         {
             int ret = bytestream_test();
@@ -111,6 +139,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(util_debug_pop_stream)
+        {
+            int ret = util_debug_pop_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(util_uint8_to_str)
         {
             int ret = util_uint8_to_str_test();
@@ -132,9 +167,23 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wait_thread)
+        {
+            int ret = util_wait_thread_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(is_path_sane)
         {
             int ret = util_is_path_sane_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(set_addr_port)
+        {
+            int ret = util_set_addr_port_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -762,6 +811,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(packet_names)
+        {
+            int ret = packet_names_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picoquic_ptls_fusion)
+        {
+            int ret = picoquic_ptls_fusion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();
@@ -1096,6 +1159,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(tls_api_dispose_certificate_verifier)
+        {
+            int ret = tls_api_dispose_certificate_verifier_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_remove_ticket)
+        {
+            int ret = tls_api_remove_ticket_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_null_arg_checks)
+        {
+            int ret = tls_api_null_arg_checks_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_server_decrypt_short_token)
+        {
+            int ret = tls_api_server_decrypt_short_token_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_set_key_exchange_no_master)
+        {
+            int ret = tls_api_set_key_exchange_no_master_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_set_key_log_file_twice)
+        {
+            int ret = tls_api_set_key_log_file_twice_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(tls_api_verify_retry_protection_short)
+        {
+            int ret = tls_api_verify_retry_protection_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api_wrong_alpn)
 		{
 			int ret = tls_api_wrong_alpn_test();
@@ -1307,6 +1419,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ticket_store_save_wrappers)
+        {
+            int ret = ticket_store_save_wrappers_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ticket_store_too_short)
+        {
+            int ret = ticket_store_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ticket_store_load_padded_record)
+        {
+            int ret = ticket_store_load_padded_record_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ticket_seed)
         {
             int ret = ticket_seed_test();
@@ -1324,6 +1457,62 @@ namespace UnitTest1
         TEST_METHOD(token_store)
         {
             int ret = token_store_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_format_zero_ip)
+        {
+            int ret = token_store_format_zero_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_serialize_too_small)
+        {
+            int ret = token_store_serialize_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_deserialize_short)
+        {
+            int ret = token_store_deserialize_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_store_invalid_params)
+        {
+            int ret = token_store_store_invalid_params_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_oversized_record)
+        {
+            int ret = token_store_load_oversized_record_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_record_size_overflow)
+        {
+            int ret = token_store_load_record_size_overflow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_truncated)
+        {
+            int ret = token_store_load_truncated_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(token_store_load_padded_record)
+        {
+            int ret = token_store_load_padded_record_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2339,6 +2528,102 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_skip_qx_ping_frame)
+        {
+            int ret = qmux_skip_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_parse_qx_ping_frame)
+        {
+            int ret = qmux_parse_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_decode_qx_ping_frame)
+        {
+            int ret = qmux_decode_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_format_qx_ping_frame)
+        {
+            int ret = qmux_format_qx_ping_frame_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_format_qmux_tp_frame_too_small)
+        {
+            int ret = qmux_format_qmux_tp_frame_too_small_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_decode_qmux_tp_frame_too_long)
+        {
+            int ret = qmux_decode_qmux_tp_frame_too_long_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_context_from_epoch)
+        {
+            int ret = quicctx_context_from_epoch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_adjust_max_connections)
+        {
+            int ret = quicctx_adjust_max_connections_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_set_default_address_discovery_mode)
+        {
+            int ret = quicctx_set_default_address_discovery_mode_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_is_local_cid)
+        {
+            int ret = quicctx_is_local_cid_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_get_path_addr)
+        {
+            int ret = quicctx_get_path_addr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_set_stream_path_affinity)
+        {
+            int ret = quicctx_set_stream_path_affinity_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_verify_proposed_tuple_family_mismatch)
+        {
+            int ret = quicctx_verify_proposed_tuple_family_mismatch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_probe_new_tuple_family_mismatch)
+        {
+            int ret = quicctx_probe_new_tuple_family_mismatch_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_remember_issued_ticket_oversized_addr)
+        {
+            int ret = quicctx_remember_issued_ticket_oversized_addr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(quicctx_check_new_path_allowed_limit)
+        {
+            int ret = quicctx_check_new_path_allowed_limit_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(perflog)
         {
             int ret = perflog_test();
@@ -3115,6 +3400,36 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(scone_padding_short_length) {
+            int ret = scone_padding_short_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_padding_indicator_already_sent) {
+            int ret = scone_padding_indicator_already_sent_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_format_packet_too_small) {
+            int ret = scone_format_packet_too_small_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_prepare_format_failure) {
+            int ret = scone_prepare_format_failure_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(scone_report_guards) {
+            int ret = scone_report_guards_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 
         TEST_METHOD(stream_ack) {
             int ret = stream_ack_test();
@@ -3836,6 +4151,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(config_command_line_index) {
+            int ret = config_command_line_index_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(config_option) {
             int ret = config_option_test();
 
@@ -3844,6 +4165,12 @@ namespace UnitTest1
 
         TEST_METHOD(config_quic) {
             int ret = config_quic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(config_quic_context_edge) {
+            int ret = config_quic_context_edge_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -4362,6 +4689,42 @@ namespace UnitTest1
 
         TEST_METHOD(ech_bad_config_too_short) {
             int ret = ech_bad_config_too_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_missing_file) {
+            int ret = ech_bad_config_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_bad_config_invalid_base64) {
+            int ret = ech_bad_config_invalid_base64_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_kem_lookup) {
+            int ret = ech_kem_lookup_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_pubkey_asn1) {
+            int ret = ech_pubkey_asn1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_pubkey_missing_file) {
+            int ret = ech_pubkey_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ech_registration_failure) {
+            int ret = ech_registration_failure_test();
 
             Assert::AreEqual(ret, 0);
         }

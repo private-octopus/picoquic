@@ -81,8 +81,6 @@ typedef struct st_qlog_fns_context_t {
 
 #define QLOG_DECLARE_CONTEXT(ctx, cnx) qlog_fns_context_t * ctx = (qlog_fns_context_t*)cnx->qlog_ctx
 
-const char* picoquic_packet_type_name(uint64_t ptype);
-
 /* Helper: write a binary string parameter */
 const uint8_t* qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l);
 /* Log the frames of a packet */
