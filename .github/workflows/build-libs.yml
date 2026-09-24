@@ -1,0 +1,78 @@
+---
+name: "BuildLibs"
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build (${{ matrix.link }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        link: [static, shared]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Compute short SHA
+        run: echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DPICOQUIC_FETCH_PTLS:BOOL=ON \
+            -DBUILD_SHARED_LIBS:BOOL=${{ matrix.link == 'shared' && 'ON' || 'OFF' }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
+
+      - name: Build
+        run: cmake --build build --config Release -j
+
+      - name: Install
+        run: cmake --install build
+
+      - name: Package
+        run: |
+          cd install
+          tar -czf ../picoquic-picotls-${{ matrix.link }}-${{ env.SHA }}.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: picoquic-picotls-${{ matrix.link }}-${{ env.SHA }}
+          path: picoquic-picotls-${{ matrix.link }}-${{ env.SHA }}.tar.gz
+          retention-days: 90
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Compute short SHA
+        run: echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: picoquic-picotls-*-${{ env.SHA }}
+          merge-multiple: true
+
+      - name: Create/update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ env.SHA }}
+          name: build-${{ env.SHA }}
+          files: dist/*.tar.gz
