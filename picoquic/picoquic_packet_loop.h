@@ -38,6 +38,8 @@ extern "C" {
 #endif
 #define PICOQUIC_PACKET_LOOP_SEND_DELAY_MAX 2500
 
+typedef struct st_picoquic_network_thread_ctx_t picoquic_network_thread_ctx_t;
+
 typedef struct st_picoquic_socket_ctx_t {
     SOCKET_TYPE fd;
     int af;
@@ -205,6 +207,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int qmux_is_port_shared; /* public qmux port is shared with other threads, e.g., port 443 between several H3 threads */
     int socket_buffer_size;
     int do_not_use_gso;
+    int use_af_xdp; /* Linux: try AF_XDP TX (GSO as a TX-ring batch). Fall back to sendmsg. */
     int extra_socket_required;
     int prefer_extra_socket;
     int simulate_eio;
@@ -239,7 +242,9 @@ void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, st
  * handle send errors: an error implying that the destination is unreachable
  * is reported to last_cnx, and on EIO the batch is resent packet by packet
  * and GSO is disabled for the rest of the loop by clearing *send_msg_ptr and
- * the segment size it points to. send_msg_ptr may be NULL. */
+ * the segment size it points to. send_msg_ptr may be NULL. If thread_ctx has
+ * an AF_XDP handle, TX is attempted there first; sendmsg is the fallback.
+ * thread_ctx may be NULL. */
 int picoquic_packet_loop_do_udp_send(
     picoquic_quic_t* quic,
     picoquic_cnx_t* last_cnx,
@@ -253,7 +258,8 @@ int picoquic_packet_loop_do_udp_send(
     size_t send_msg_size,
     size_t** send_msg_ptr,
     picoquic_connection_id_t* log_cid,
-    uint64_t current_time);
+    uint64_t current_time,
+    picoquic_network_thread_ctx_t* thread_ctx);
 
 int picoquic_packet_loop_v2(picoquic_quic_t* quic,
     picoquic_packet_loop_param_t * param,
@@ -297,11 +303,19 @@ void* picoquic_packet_loop_v3(void* v_ctx);
 * picoquic_close_network_thread, passing the thread context as an argument.
 * The network thread context will be freed during that call.
 */
+typedef enum {
+    picoquic_tx_method_sendmsg = 0,
+    picoquic_tx_method_af_xdp_copy = 1,
+    picoquic_tx_method_af_xdp_zerocopy = 2
+} picoquic_tx_method_enum;
+
+const char* picoquic_tx_method_to_string(int method);
+
 typedef int (*picoquic_custom_thread_create_fn)(void** thread_id, picoquic_thread_fn thread_fn, void* arg);
 typedef void (*picoquic_custom_thread_setname_fn)(char const* thread_name);
 typedef void (*picoquic_custom_thread_delete_fn)(void** thread_id);
 
-typedef struct st_picoquic_network_thread_ctx_t {
+struct st_picoquic_network_thread_ctx_t {
     picoquic_quic_t* quic;
     picoquic_quic_t* qmux;
     picoquic_packet_loop_param_t* param;
@@ -327,7 +341,10 @@ typedef struct st_picoquic_network_thread_ctx_t {
     volatile int thread_should_close;
     volatile int thread_is_closed;
     int return_code;
-} picoquic_network_thread_ctx_t;
+    int tx_method;
+    char tx_method_reason[160];
+    void* af_xdp;
+};
 
 picoquic_network_thread_ctx_t* picoquic_start_network_thread(
     picoquic_quic_t* quic,

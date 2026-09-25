@@ -2278,7 +2278,13 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
             else {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
 
-                save_ticket->cb = picoquic_client_save_ticket_call_back;
+                /* Newer picotls appends a ticket-properties argument. This callback
+                 * does not use it. Copy the pointer so both signatures compile. */
+                {
+                    int (*save_ticket_cb)(ptls_save_ticket_t*, ptls_t*, ptls_iovec_t) =
+                        picoquic_client_save_ticket_call_back;
+                    memcpy(&save_ticket->cb, &save_ticket_cb, sizeof(save_ticket->cb));
+                }
                 ctx->save_ticket = save_ticket;
                 *ppquic = quic;
             }
