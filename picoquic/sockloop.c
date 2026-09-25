@@ -3305,10 +3305,6 @@ int picoquic_server_set_context(picoquic_quic_t** qserver,
 
             picoquic_use_unique_log_names(*qserver, 1);
 
-            if (config->qlog_dir != NULL)
-            {
-                picoquic_set_qlog(*qserver, config->qlog_dir);
-            }
             if (config->performance_log != NULL)
             {
                 ret = picoquic_perflog_setup(*qserver, config->performance_log);

@@ -29,6 +29,8 @@ option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
+# Surfaces the standard BUILD_SHARED_LIBS variable as a discoverable option.
+option(BUILD_SHARED_LIBS "Build picoquic libraries as shared libraries" OFF)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -587,6 +589,20 @@ if (BUILD_HTTP)
     set_picoquic_compile_settings(wt_baton)
 endif()
 
+# VERSION/SOVERSION give shared objects conventional versioned names
+# (libpicoquic-core.so.<major> etc.); WINDOWS_EXPORT_ALL_SYMBOLS makes DLL
+# builds produce import libraries despite the unannotated headers.
+if(BUILD_SHARED_LIBS)
+    foreach(picoquic_public_lib picoquic-core picoquic-log picohttp-core)
+        if(TARGET ${picoquic_public_lib})
+            set_target_properties(${picoquic_public_lib} PROPERTIES
+                VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}
+                SOVERSION ${PROJECT_VERSION_MAJOR}
+                WINDOWS_EXPORT_ALL_SYMBOLS ON)
+        endif()
+    endforeach()
+endif()
+
 if (BUILD_DEMO)
     add_executable(picoquicdemo
         picoquicfirst/picoquicdemo.c
@@ -773,6 +789,8 @@ if (TARGET picohttp-core)
     install(TARGETS picohttp-core
         EXPORT picoquic-targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES
         ${PICOHTTP_HEADERS}
@@ -788,6 +806,8 @@ if (TARGET picoquic-log)
     install(TARGETS picoquic-log
         EXPORT picoquic-targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     install(FILES
@@ -799,20 +819,34 @@ endif()
 install(TARGETS picoquic-core
     EXPORT picoquic-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+# The exported LIB_PATH must name the artifacts that were actually built:
+# static archives by default, shared objects when BUILD_SHARED_LIBS is ON.
+if(BUILD_SHARED_LIBS)
+    set(_picoquic_lib_prefix "${CMAKE_SHARED_LIBRARY_PREFIX}")
+    set(_picoquic_lib_suffix "${CMAKE_SHARED_LIBRARY_SUFFIX}")
+else()
+    set(_picoquic_lib_prefix "${CMAKE_STATIC_LIBRARY_PREFIX}")
+    set(_picoquic_lib_suffix "${CMAKE_STATIC_LIBRARY_SUFFIX}")
+endif()
+
 if(PICOQUIC_FETCH_PTLS)
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}picoquic-core${_picoquic_lib_suffix}")
     foreach(_ptls_lib ${PTLS_LIBRARIES})
-        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/lib${_ptls_lib}.a")
+        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}${_ptls_lib}${_picoquic_lib_suffix}")
     endforeach()
     set(LIB_PATH "${LIB_PATH}" CACHE PATH "Path of library files")
 
     install(TARGETS ${PTLS_LIBRARIES}
         EXPORT picoquic-targets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 else()
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}picoquic-core${_picoquic_lib_suffix}" CACHE PATH "Path of library file")
 endif()
 
 install(EXPORT picoquic-targets
