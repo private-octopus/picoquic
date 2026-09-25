@@ -1442,22 +1442,8 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
  * the "save ticket" callback in the client's quic context.
  */
 
-/*
- * Newer picotls passes ticket properties into save_ticket. The Windows CI pin
- * (bfa67875) predates both that argument and PTLS_MAX_SIGNATURE_ALGORITHMS.
- */
-#if defined(PTLS_MAX_SIGNATURE_ALGORITHMS)
-#define PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES 1
-#else
-#define PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES 0
-#endif
-
 int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
-    ptls_t* tls, ptls_iovec_t input
-#if PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES
-    , const ptls_save_ticket_properties_t* properties
-#endif
-)
+    ptls_t* tls, ptls_iovec_t input)
 {
     int ret = 0;
     picoquic_quic_t* quic = *((picoquic_quic_t**)(((char*)save_ticket_ctx) + sizeof(ptls_save_ticket_t)));
@@ -1465,10 +1451,6 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     const char* alpn = ptls_get_negotiated_protocol(tls);
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)*ptls_get_data_ptr(tls);
     uint32_t version = picoquic_supported_versions[cnx->version_index].version;
-
-#if PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES
-    (void)properties;
-#endif
 
     if (alpn == NULL && quic != NULL) {
         alpn = quic->default_alpn;
@@ -2296,7 +2278,13 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
             else {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
 
-                save_ticket->cb = picoquic_client_save_ticket_call_back;
+                /* Newer picotls appends a ticket-properties argument. This callback
+                 * does not use it. Copy the pointer so both signatures compile. */
+                {
+                    int (*save_ticket_cb)(ptls_save_ticket_t*, ptls_t*, ptls_iovec_t) =
+                        picoquic_client_save_ticket_call_back;
+                    memcpy(&save_ticket->cb, &save_ticket_cb, sizeof(save_ticket->cb));
+                }
                 ctx->save_ticket = save_ticket;
                 *ppquic = quic;
             }
