@@ -4,7 +4,20 @@ Picoquic supports the QUIC extensions for managing multiple paths for a QUIC con
 defined in the [QUIC Multipath draft](https://datatracker.ietf.org/doc/draft-ietf-quic-multipath/).
 That draft is in the final stages of processing before publication as an RFC.
 
-## Multiple paths
+This document presents the key concepts of the path extensions (see {{multiple-paths}}),
+how packet numbers and loss detection are handled for multipath (see {{pn-and-losses}}),
+path management events and API (see {{path-management}}), 
+and how the path status is handled  and data sent over multiple paths (see {{path-status}}).
+Each of these section presents the concepts in the draft and the corresponding APIs
+in picoquic.
+
+Deployment of the multipath extension of QUIC is still in the early stage. The draft is
+stable, but we are still learning how to use it. Different application will use it
+differently. For example, we already learned that real time application cannot
+use a scheduling system designed for maximum bandwidth, because it also creates
+diorder and delays (see {{affinity}}). There is much more to be learned.
+
+## Multiple paths {#multiple-paths}
 
 The QUIC Multipath Draft defines how to create, manage and abandon "paths",
 each of which is defined by a unique path identifier.
@@ -34,7 +47,7 @@ Someone using zero as a starting limit would disable the capability instead.
 
 If multipath support is negotiated, each endpoint can increment their
 maximum supported path value over time by exchanging MAX_PATH_ID frames.
-At any point in type, the maximum usable path ID is the minimum of
+At any point in time, the maximum usable path ID is the minimum of
 the values announced by two endpoints.
 
 A picoquic endpoint automatically increments the maximum path ID that it
@@ -42,8 +55,8 @@ supports as paths are created and deleted, so that the number of
 available paths corresponds to the local value of the
 local `initial_max_path_id`.
 
-Note: the API `picoquic_set_default_multipath_option` is mot currently
-beaving correctly. Please just set the `initial_max_path_id`
+Note: the API `picoquic_set_default_multipath_option` is not currently
+behaving correctly. Please just set the `initial_max_path_id`
 parameter as discussed above.
 
 ### Connection identifiers
@@ -57,10 +70,10 @@ Picoquic will automatically generate up to PICOQUIC_NB_TUPLE_TARGET
 connection IDs per path, so as to facilitate path migration and
 NAT rebinding -- see {{paths-and-tuples}}.
 
-### Paths and tuples
+### Paths and tuples {#paths-and-tuples}
 
 The multipath draft maintains support for the NAT rebinding and
-path migration functions defined in [RFC 9000]{https://www.rfc-editor.org/rfc/rfc9000.html}.
+path migration functions defined in [RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html).
 because of that support, a path identified by a unique path ID can
 use different IP addresses and UDP port numbers over time. Each pair
 of source and destination IP address and UDP port number is managed
@@ -77,7 +90,7 @@ Picoquic itself will only create new path tuples for a path as
 part of the "preferred address" feature specified in RFC 9000,
 or in response to a detected NAT rebinding.
 
-## Packet numbers and loss detection
+## Packet numbers and loss detection {#pn-and-losses}
 
 Per the multipath draft, each path identified by a unique path identifier
 is associated with a separate "packet number space". The packets are
@@ -98,7 +111,7 @@ Pacing and congestion control are performed independently for each path.
 Picoquic uses the per path congestion control to determine the
 available capacity of each path.
 
-## Path management events and API
+## Path management events and API {#path-management}
 
 Picoquic manages paths according to the multipath drafts, and reports the
 state of each path through specialized callbacks.
@@ -126,8 +139,6 @@ If multipath is enabled,
 the new path will come in addition to the set of existing paths; if not,
 the API will default to associating a new tuple for the default path,
 and after validation migrating the default transmission to that tuple.
-
-
 
 If an error occurs during a call to `picoquic_probe_new_path_ex`,
 the function returns an error code describing the issue:
@@ -195,7 +206,7 @@ it simply results in the connection being closed.
 
 Path event callbacks can be enabled by calling "picoquic_enable_path_callbacks".
 This can be set as the default for new connections by calling
-"picoquic_enable_path_callbacks_default". If enabled, the folling events
+"picoquic_enable_path_callbacks_default". If enabled, the following events
 will be signalled by callbacks:
 
  - picoquic_callback_path_available: 
@@ -284,17 +295,17 @@ the local status is updated accordingly.
 ## Scheduling transmission on paths
 
 When asked to "prepare a packet", picoquic has to find a path that is ready to send something,
-and then find what to send on that path. Find the path is done in `picoquic_select_next_path_mp`,
+and then find what to send on that path. Find the path is done in `picoquic_select_next_path_tuple`,
 find what to send is done in `picoquic_prepare_packet_ready`.
 The two are actually tied, but the ties are implicit:
 
-- picoquic_select_next_path_mp checks which path could send something if given the turn,
+- `picoquic_select_next_path_tuple` checks which path could send something if given the turn,
   whether acknowledgement or data. It checks whether congestion control will allow sending of data,
   whether pacing will allow sending ACKs, which path has the lowest delays if ACKs need to be sent.
   It combines that with the status of the path, available or standby, and with the state of the path,
   nominal or experiencing losses. It tries to ensure that all paths are used.
 
-- picoquic_prepare_packet_ready looks for what messages can be sent on the path based on pacing
+- `picoquic_prepare_packet_ready` looks for what messages can be sent on the path based on pacing
   and congestion control, selects which stream has the highest priority on that path, whether
   there are control messages to send, etc.
 
@@ -372,7 +383,7 @@ expires. If all available paths are marked temporary unavailable, one
 of the standby paths will be scheduled.
 
 The selection will try to visit each path, so that the usage of a path is
-only gated by the path capacity, as discovered through congetsion control.
+only gated by the path capacity, as discovered through congestion control.
 The 3rd condition, "has data to send", is affected by the affinity process.
 A path has data to send if there is data available on a stream marked
 with affinity on that path, if there is data available on stream not marked
