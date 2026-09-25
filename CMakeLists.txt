@@ -29,11 +29,7 @@ option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
-# The picoquic-core, picoquic-log, and picohttp-core targets are declared
-# without a STATIC/SHARED keyword, so the standard BUILD_SHARED_LIBS variable
-# selects the library type. Surface it as an option for discoverability; the
-# default (OFF) preserves static builds. Internal helper libraries used only
-# by tests and samples (picoquic-test, wt_baton) remain static either way.
+# Surfaces the standard BUILD_SHARED_LIBS variable as a discoverable option.
 option(BUILD_SHARED_LIBS "Build picoquic libraries as shared libraries" OFF)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
@@ -535,30 +531,7 @@ if (BUILD_DEMO OR BUILD_LOGREADER OR (BUILD_TESTING AND picoquic_BUILD_TESTS))
 endif()
 
 if (BUILD_LOGLIB)
-    if (BUILD_SHARED_LIBS)
-        # picoquic/sockloop.c (part of picoquic-core) calls picoquic_set_qlog(),
-        # implemented in loglib/qlog_fns.c, while the loglib depends on
-        # picoquic-core: the two libraries are mutually dependent. Static
-        # archives resolve this at the final link, but mutually dependent
-        # shared libraries cannot be built (each needs the other to exist
-        # first), and leaving the reference undefined in libpicoquic-core
-        # breaks executable links whenever the log library is ordered earlier
-        # on the command line or pruned by --as-needed (the default on several
-        # distributions). For shared builds, compile the loglib sources into
-        # libpicoquic-core itself and keep picoquic-log as a thin library that
-        # links picoquic-core, so both link interfaces keep working and every
-        # symbol has exactly one home.
-        target_sources(picoquic-core PRIVATE ${LOGLIB_LIBRARY_FILES})
-        target_include_directories(picoquic-core PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/loglib)
-        file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/picoquic-log-shim.c
-            "/* Generated: in shared builds the loglib objects live in\n"
-            " * libpicoquic-core (see BUILD_LOGLIB in CMakeLists.txt). */\n"
-            "void picoquic_log_shared_build_shim(void) { }\n")
-        add_library(picoquic-log ${CMAKE_CURRENT_BINARY_DIR}/picoquic-log-shim.c)
-    else()
-        add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
-    endif()
+    add_library(picoquic-log ${LOGLIB_LIBRARY_FILES})
     add_library(picoquic::picoquic-log ALIAS picoquic-log)
     target_link_libraries(picoquic-log PUBLIC picoquic-core)
     target_include_directories(picoquic-log
@@ -607,12 +580,9 @@ if (BUILD_HTTP)
     set_picoquic_compile_settings(wt_baton)
 endif()
 
-# Shared-library housekeeping for the public library targets. VERSION and
-# SOVERSION give the shared objects conventional versioned file names
+# VERSION/SOVERSION give shared objects conventional versioned names
 # (libpicoquic-core.so.<major> etc.); WINDOWS_EXPORT_ALL_SYMBOLS makes DLL
-# builds produce import libraries despite the headers carrying no dllexport
-# annotations (global data symbols would still need __declspec(dllimport) on
-# the consumer side). None of these properties affect static builds.
+# builds produce import libraries despite the unannotated headers.
 if(BUILD_SHARED_LIBS)
     foreach(picoquic_public_lib picoquic-core picoquic-log picohttp-core)
         if(TARGET ${picoquic_public_lib})
@@ -622,17 +592,6 @@ if(BUILD_SHARED_LIBS)
                 WINDOWS_EXPORT_ALL_SYMBOLS ON)
         endif()
     endforeach()
-
-    # picoquic-core carries the loglib objects in shared builds (see
-    # BUILD_LOGLIB above). Without the loglib, libpicoquic-core is left with
-    # an unresolved reference to picoquic_set_qlog from picoquic/sockloop.c;
-    # static builds have the same latent gap at final link.
-    if(NOT TARGET picoquic-log)
-        message(WARNING
-            "BUILD_SHARED_LIBS=ON without BUILD_LOGLIB: libpicoquic-core "
-            "carries an unresolved reference to picoquic_set_qlog, and "
-            "executables using picoquic_create_and_configure() will not link.")
-    endif()
 endif()
 
 if (BUILD_DEMO)
