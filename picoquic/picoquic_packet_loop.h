@@ -475,7 +475,7 @@ struct st_picoquic_network_thread_ctx_t* picoquic_get_thread_ctx(picoquic_quic_t
 
 /* Set a server context, using more parameters than the simple
 * creation from configuration.
-* config->qlog_dir is set; call picoquic_set_qlog() on *qserver
+*
 * afterwards if needed (see loglib/autoqlog.h).
 */
 int picoquic_server_set_context(picoquic_quic_t** qserver,
