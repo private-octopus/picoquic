@@ -14261,3 +14261,254 @@ int tls_x25519mlkem_test(void)
 {
     return(tls_key_exchange_test_one(PTLS_GROUP_X25519MLKEM768));
 }
+
+ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx* p_free_certificate_verifier_fn);
+void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier);
+
+/* picoquic_dispose_certificate_verifier is a public wrapper with no callers anywhere in the
+ * codebase -- picoquic itself disposes a verify_certificate callback by invoking the captured
+ * function pointer directly (see picoquic_dispose_verify_certificate_callback_ctx in
+ * tls_api.c), never through this wrapper. Exercised here by obtaining a real verifier from
+ * whichever crypto provider is active and disposing it through the public API.
+ * A picoquic_quic_t must be created first: crypto provider registration (which sets
+ * picoquic_get_certificate_verifier_fn) is a one-time lazy init triggered by the first
+ * picoquic_create call in the process, not something this test can assume already ran when
+ * it is invoked in isolation (e.g. by test name). */
+int tls_api_dispose_certificate_verifier_test(void)
+{
+    int ret = 0;
+    unsigned int is_cert_store_not_empty = 0;
+    picoquic_free_verify_certificate_ctx free_fn = NULL;
+    ptls_verify_certificate_t* verifier;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        verifier = picoquic_get_certificate_verifier(NULL, &is_cert_store_not_empty, &free_fn);
+
+        if (verifier == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_dispose_certificate_verifier(verifier);
+        }
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* picoquic_tlscontext_remove_ticket has no callers anywhere in the codebase -- exercised
+ * here directly on a minimal client connection's TLS context. */
+int tls_api_remove_ticket_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+        uint8_t dummy_ticket[1] = { 0 };
+
+        ctx->handshake_properties.client.session_ticket.base = dummy_ticket;
+        ctx->handshake_properties.client.session_ticket.len = sizeof(dummy_ticket);
+
+        picoquic_tlscontext_remove_ticket(cnx);
+
+        if (ctx->handshake_properties.client.session_ticket.base != NULL ||
+            ctx->handshake_properties.client.session_ticket.len != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* A batch of simple public-API guard-clause branches that no existing test hits, because
+ * every existing caller always supplies well-formed arguments. Grouped into one test since
+ * each is a single trivial NULL/bad-argument check with no state setup. */
+int tls_api_null_arg_checks_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t secret_out[32];
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_export_secret(cnx, NULL, secret_out, sizeof(secret_out)) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a NULL label");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_export_secret(cnx, "test", NULL, sizeof(secret_out)) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a NULL output buffer");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_export_secret(cnx, "test", secret_out, 0) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a zero output length");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_set_ticket_key(quic, NULL, 16) == 0) {
+            DBG_PRINTF("%s", "picoquic_set_ticket_key did not reject a NULL key");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_aead_decrypt_generic(secret_out, secret_out, sizeof(secret_out),
+            0, NULL, 0, NULL) != SIZE_MAX) {
+            DBG_PRINTF("%s", "picoquic_aead_decrypt_generic did not reject a NULL aead context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_aead_decrypt_mp(secret_out, secret_out, sizeof(secret_out),
+            0, 0, NULL, 0, NULL) != SIZE_MAX) {
+            DBG_PRINTF("%s", "picoquic_aead_decrypt_mp did not reject a NULL aead context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_hp_enc_create_for_test(-1, secret_out) != NULL) {
+            DBG_PRINTF("%s", "picoquic_hp_enc_create_for_test did not reject an invalid cipher suite id");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_add_proposed_alpn(NULL, "h3") == 0) {
+            DBG_PRINTF("%s", "picoquic_add_proposed_alpn did not reject a NULL tls context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_refresh_tls_certificate(quic, NULL, NULL) == 0) {
+            DBG_PRINTF("%s", "picoquic_refresh_tls_certificate did not reject NULL file names");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_server_decrypt_retry_token rejects a token shorter than 8 bytes -- never
+ * exercised, since every existing test that builds a retry token uses the real
+ * picoquic_prepare_retry_token, which always emits a well-formed token. */
+int tls_api_server_decrypt_short_token_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_in addr;
+    uint8_t short_token[4] = { 1, 2, 3, 4 };
+    uint8_t text[256];
+    size_t text_length = 0;
+    int is_new_token = -1;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+
+        if (picoquic_server_decrypt_retry_token(quic, (struct sockaddr*)&addr, &is_new_token,
+            short_token, sizeof(short_token), text, &text_length) == 0) {
+            DBG_PRINTF("%s", "picoquic_server_decrypt_retry_token did not reject a too-short token");
+            ret = -1;
+        }
+        else if (is_new_token != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_set_key_exchange rejects a quic context whose TLS master context is not set --
+ * never exercised, since picoquic_create always sets it up. Null it out and restore it
+ * before deleting the context, the same save/restore pattern used elsewhere in this suite
+ * for forcing a "not registered" branch safely. */
+int tls_api_set_key_exchange_no_master_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        void* saved_master_ctx = quic->tls_master_ctx;
+
+        quic->tls_master_ctx = NULL;
+        if (picoquic_set_key_exchange(quic, 0) == 0) {
+            DBG_PRINTF("%s", "picoquic_set_key_exchange did not reject a missing TLS master context");
+            ret = -1;
+        }
+        quic->tls_master_ctx = saved_master_ctx;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_set_key_log_file's "already have a log_event" branch is only reached on a
+ * second call -- every existing test calls it at most once per quic context. */
+int tls_api_set_key_log_file_twice_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_key_log_file(quic, "tls_api_key_log_file_test_1.txt");
+        picoquic_set_key_log_file(quic, "tls_api_key_log_file_test_2.txt");
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_verify_retry_protection rejects a length too small to contain the AEAD checksum
+ * -- never exercised, since every existing retry test builds a full-size, well-formed
+ * protected retry packet via picoquic_encode_retry_protection. */
+int tls_api_verify_retry_protection_short_test(void)
+{
+    int ret = 0;
+    size_t version_index = 0;
+    void* integrity_aead = NULL;
+
+    for (version_index = 0; version_index < picoquic_nb_supported_versions; version_index++) {
+        if (picoquic_supported_versions[version_index].version_retry_key != NULL) {
+            integrity_aead = picoquic_create_retry_protection_context(0,
+                picoquic_supported_versions[version_index].version_retry_key,
+                picoquic_supported_versions[version_index].tls_prefix_label);
+            break;
+        }
+    }
+
+    if (integrity_aead == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t bytes[16] = { 0 };
+        size_t length = 0;
+
+        if (picoquic_verify_retry_protection(integrity_aead, bytes, &length, 0, &picoquic_null_connection_id) == 0) {
+            DBG_PRINTF("%s", "picoquic_verify_retry_protection did not reject a too-short length");
+            ret = -1;
+        }
+        picoquic_aead_free(integrity_aead);
+    }
+
+    return ret;
+}

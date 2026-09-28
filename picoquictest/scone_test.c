@@ -363,3 +363,154 @@ int scone_server_test(void)
 
     return scone_e2e_test_one(6, &spec);
 }
+
+/* Direct-call tests for a handful of scone.c branches that the end-to-end tests above
+ * never reach, because a real handshake always supplies a length-2-or-more buffer, only
+ * ever sends the indicator once per connection, and never runs out of packet buffer
+ * space mid-format. */
+
+uint8_t* picoquic_scone_format_packet(uint8_t* bytes, const uint8_t* bytes_max, unsigned int signal,
+    picoquic_connection_id_t* dcid, picoquic_connection_id_t* scid);
+
+/* picoquic_scone_padding's length < 2 path -- both the length == 0 sub-case (no write
+ * at all) and the length == 1 sub-case (writes a single zero byte) -- is never reached
+ * by the end-to-end tests, which always pad a real packet tail of several bytes. */
+int scone_padding_short_length_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[4] = { 0xff, 0xff, 0xff, 0xff };
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_scone_padding(cnx, buffer, 0);
+        if (buffer[0] != 0xff) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            picoquic_scone_padding(cnx, buffer, 1);
+            if (buffer[0] != 0) {
+                ret = -1;
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_scone_padding only logs and sets is_scone_indicator_sent on the first call;
+ * a second call on the same connection skips the "already sent" branch -- never
+ * exercised, since the end-to-end tests only pad the very first packet once per test. */
+int scone_padding_indicator_already_sent_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[8];
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_scone_padding(cnx, buffer, sizeof(buffer));
+        if (!cnx->is_scone_indicator_sent) {
+            ret = -1;
+        }
+        else {
+            /* Second call: indicator already sent, must not log again, but should
+             * still pad with the indicator bytes. */
+            picoquic_scone_padding(cnx, buffer, sizeof(buffer));
+            if (buffer[sizeof(buffer) - 2] != (uint8_t)((SCONE_INDICATOR >> 8) & 0xff) ||
+                buffer[sizeof(buffer) - 1] != (uint8_t)(SCONE_INDICATOR & 0xff)) {
+                ret = -1;
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_scone_format_packet rejects a buffer too small to hold the fixed 5 byte
+ * header plus at least one byte per CID -- never exercised, since every end-to-end
+ * test formats into a full-size packet buffer. */
+int scone_format_packet_too_small_test(void)
+{
+    int ret = 0;
+    uint8_t buffer[4];
+
+    if (picoquic_scone_format_packet(buffer, buffer + sizeof(buffer), 127, NULL, NULL) != NULL) {
+        DBG_PRINTF("%s", "picoquic_scone_format_packet did not reject a too-small buffer");
+        ret = -1;
+    }
+    return ret;
+}
+
+/* picoquic_scone_prepare's "format_packet failed" branch was never exercised -- reached
+ * here by supplying a packet buffer too small to hold the scone header. */
+int scone_prepare_format_failure_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t packet_buffer[4];
+    size_t segment_length = 0;
+    uint64_t next_wake_time = 0;
+    int is_initial_sent = 0;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_scone_prepare(cnx, cnx->path[0], NULL, 0, packet_buffer, sizeof(packet_buffer),
+            &segment_length, &next_wake_time, &is_initial_sent) != PICOQUIC_ERROR_UNEXPECTED_ERROR) {
+            DBG_PRINTF("%s", "picoquic_scone_prepare did not report a too-small packet buffer");
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_scone_report: the path_index < 0 guard, and the callback_fn == NULL guard,
+ * are never exercised -- the end-to-end tests only ever call it with a real path index
+ * and a real callback. */
+int scone_report_guards_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        uint64_t saved_indication = cnx->quic->scone_indication;
+        picoquic_stream_data_cb_fn saved_callback_fn = cnx->callback_fn;
+        uint64_t saved_advice = cnx->path[0]->scone_advice_last;
+
+        cnx->quic->scone_indication = 12345;
+        picoquic_scone_report(cnx, -1);
+        if (cnx->quic->scone_indication != 12345) {
+            DBG_PRINTF("%s", "picoquic_scone_report acted on a negative path index");
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            cnx->callback_fn = NULL;
+            picoquic_scone_report(cnx, 0);
+            if (cnx->quic->scone_indication != 0 || cnx->path[0]->scone_advice_last != 12345) {
+                DBG_PRINTF("%s", "picoquic_scone_report did not record advice when callback_fn is NULL");
+                ret = -1;
+            }
+        }
+
+        cnx->quic->scone_indication = saved_indication;
+        cnx->callback_fn = saved_callback_fn;
+        cnx->path[0]->scone_advice_last = saved_advice;
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}

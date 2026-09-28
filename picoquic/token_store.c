@@ -318,6 +318,10 @@ int picoquic_load_tokens(picoquic_quic_t* quic, char const* token_file_name)
 
                 if (ret == 0 && (consumed != storage_size || next == NULL)) {
                     ret = PICOQUIC_ERROR_INVALID_FILE;
+                    if (next != NULL) {
+                        free(next);
+                        next = NULL;
+                    }
                 }
 
                 if (ret == 0 && next != NULL) {

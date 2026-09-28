@@ -70,7 +70,13 @@ picoquic_af_xdp_send(void* xdp, struct sockaddr* addr_dest, struct sockaddr* add
     (void)length;
     (void)send_msg_size;
     if (sock_err != NULL) {
+#ifdef EOPNOTSUPP
         *sock_err = EOPNOTSUPP;
+#elif defined(WSAEOPNOTSUPP)
+        *sock_err = WSAEOPNOTSUPP;
+#else
+        *sock_err = -1;
+#endif
     }
     return -1;
 }

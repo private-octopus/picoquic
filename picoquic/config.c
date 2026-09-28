@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "tls_api.h"
@@ -209,7 +210,8 @@ int config_atoi(const option_param_t* params, int nb_param, int x, int* ret)
     else {
         for (size_t i = 0; i < params[x].length; i++) {
             int c = params[x].param[i] - '0';
-            if (c < 0 || c > 9) {
+            if (c < 0 || c > 9 || v > (INT_MAX - c) / 10) {
+                /* Invalid digit, or the multiply-and-add below would overflow int. */
                 v = -1;
                 *ret = -1;
                 break;
@@ -238,23 +240,23 @@ int config_set_port(picoquic_quic_config_t* config, char const * port_string)
         p++;
     }
     while (*p >= '0' && *p <= '9') {
-        p1 *= 10;
-        p1 += (*p - '0');
+        int c = *p - '0';
+        p1 = (p1 > (INT_MAX - c) / 10) ? INT_MAX : p1 * 10 + c;
         p++;
     }
     if (*p == ':') {
         p++;
         while (*p >= '0' && *p <= '9') {
-            p2 *= 10;
-            p2 += (*p - '0');
+            int c = *p - '0';
+            p2 = (p2 > (INT_MAX - c) / 10) ? INT_MAX : p2 * 10 + c;
             p++;
         }
     }
     if (*p == '*') {
         p++;
         while (*p >= '0' && *p <= '9') {
-            nb_threads *= 10;
-            nb_threads += (*p - '0');
+            int c = *p - '0';
+            nb_threads = (nb_threads > (INT_MAX - c) / 10) ? INT_MAX : nb_threads * 10 + c;
             p++;
         }
     }
@@ -520,7 +522,9 @@ static int config_set_option(option_table_line_t* option_desc, option_param_t* p
             ret = picoquic_base64_decode(&config->ech_target, &config->ech_target_len, params[0].param);
         }
         if (ret != 0) {
-            fprintf(stderr, "Incorrect base64 format: %s\n", params[0].param);
+            /* nb_params may be 0 here, so params[0] cannot be read directly -- go through the
+             * bounds-checked accessor, like every other case in this switch does. */
+            fprintf(stderr, "Incorrect base64 format: %s\n", config_optval_param_string(opval_buffer, 256, params, nb_params, 0));
             ret = (ret == 0) ? -1 : ret;
         }
         break;
@@ -754,6 +758,7 @@ int picoquic_config_command_line_ex(char const * opt_string, int* p_optind, int 
 
     if (option_index == -1) {
         fprintf(stderr, "Unknown option: %s\n", opt_string);
+        ret = -1;
     }
     else {
         ret = picoquic_get_command_line_option_value(option_index, opt_string, p_optind,

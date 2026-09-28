@@ -1451,3 +1451,182 @@ int qmux_loop_tls_close_test(void)
     return qmux_loop_one(&spec);
 }
 
+/* Direct-call tests for the qmux.c frame-level parse/format/decode/skip functions --
+ * these never got the same direct malformed-input testing as their frames.c equivalents,
+ * since every existing qmux test above exercises them only indirectly through a full
+ * end-to-end connection simulation (qmux_loop_one et al.), which only ever produces
+ * well-formed frames in normal order. */
+const uint8_t* picoquic_skip_qx_ping_frame(const uint8_t* bytes, const uint8_t* bytes_max);
+const uint8_t* picoquic_parse_qx_ping_frame(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* sequence);
+const uint8_t* picoquic_decode_qx_ping_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t frame_type, uint64_t current_time);
+uint8_t* picoquic_format_qx_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int is_response, int* more_data);
+uint8_t* picoquic_format_qmux_tp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max);
+const uint8_t* picoquic_decode_qmux_tp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
+
+/* picoquic_skip_qx_ping_frame is never reached by any existing test: the skip-frame
+ * dispatch path is only used for frames the receiver is choosing to ignore, and no qmux
+ * test ever does that. */
+int qmux_skip_qx_ping_frame_test(void)
+{
+    int ret = 0;
+    uint8_t valid[] = { 42 };
+    uint8_t truncated[] = { 0x40 }; /* 2-byte varint prefix with no second byte */
+    const uint8_t* result;
+
+    result = picoquic_skip_qx_ping_frame(valid, valid + sizeof(valid));
+    if (result != valid + sizeof(valid)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        result = picoquic_skip_qx_ping_frame(truncated, truncated + sizeof(truncated));
+        if (result != NULL) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+/* picoquic_parse_qx_ping_frame's truncated-input path was never exercised directly. */
+int qmux_parse_qx_ping_frame_test(void)
+{
+    int ret = 0;
+    uint8_t valid[] = { 42 };
+    uint8_t truncated[] = { 0x40 };
+    uint64_t sequence = 0;
+    const uint8_t* result;
+
+    result = picoquic_parse_qx_ping_frame(valid, valid + sizeof(valid), &sequence);
+    if (result != valid + sizeof(valid) || sequence != 42) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        sequence = 12345;
+        result = picoquic_parse_qx_ping_frame(truncated, truncated + sizeof(truncated), &sequence);
+        if (result != NULL) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+/* picoquic_decode_qx_ping_frame: the "not a QMux connection" guard, and the "response
+ * sequence exactly matches the last sent query" (delta == 0, a normal acknowledgement)
+ * branch, were never exercised -- the full end-to-end tests above only ever generate
+ * out-of-order or strictly-in-order exchanges on a real QMux connection. */
+int qmux_decode_qx_ping_frame_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t query_bytes[] = { 5 };
+    uint8_t response_bytes[] = { 5 };
+    const uint8_t* result;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        cnx->is_qmux = 0;
+        result = picoquic_decode_qx_ping_frame(cnx, query_bytes, query_bytes + sizeof(query_bytes),
+            FRAME_TYPE_QX_PING, 0);
+        if (result != NULL) {
+            ret = -1;
+        }
+
+        if (ret == 0) {
+            cnx->is_qmux = 1;
+            cnx->qx_sent_last = 5;
+            cnx->qx_acked_last = 0;
+            result = picoquic_decode_qx_ping_frame(cnx, response_bytes, response_bytes + sizeof(response_bytes),
+                FRAME_TYPE_QX_PING_R, 0);
+            if (result == NULL || cnx->qx_acked_last != 5) {
+                ret = -1;
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_format_qx_ping_frame's buffer-too-small path was never exercised -- every
+ * existing test formats into a full-size packet buffer. */
+int qmux_format_qx_ping_frame_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t buffer[1];
+    int more_data = 0;
+    uint8_t* result;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        cnx->qx_sent_last = 5;
+        result = picoquic_format_qx_ping_frame(cnx, buffer, buffer + sizeof(buffer), 0, &more_data);
+        if (result != buffer || more_data != 1) {
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_format_qmux_tp_frame's two failure paths -- not enough room even for the frame
+ * type and length prefix, and enough room for those but not for the actual transport
+ * parameters -- were never exercised, since every existing test formats into a full-size
+ * buffer. */
+int qmux_format_qmux_tp_frame_too_small_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t tiny_buffer[2];
+    uint8_t small_buffer[10];
+    uint8_t* result;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        result = picoquic_format_qmux_tp_frame(cnx, tiny_buffer, tiny_buffer + sizeof(tiny_buffer));
+        if (result != NULL) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            result = picoquic_format_qmux_tp_frame(cnx, small_buffer, small_buffer + sizeof(small_buffer));
+            if (result != NULL) {
+                ret = -1;
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* picoquic_decode_qmux_tp_frame rejects a declared length that overruns the buffer --
+ * never exercised, since every existing test decodes a well-formed frame produced by
+ * picoquic_format_qmux_tp_frame itself. */
+int qmux_decode_qmux_tp_frame_too_long_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t bytes[] = { 0x7F, 0xFF }; /* declares a 2-byte-varint length of 0x3FFF, far more than available */
+    const uint8_t* result;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        result = picoquic_decode_qmux_tp_frame(cnx, bytes, bytes + sizeof(bytes));
+        if (result != NULL) {
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+

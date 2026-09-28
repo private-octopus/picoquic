@@ -759,7 +759,7 @@ static int sockloop_send_err_eio(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t
         param.simulate_eio = 1;
         ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
             buffer, sizeof(buffer), &peer_addr, &local_addr, 0, send_msg_size, &send_msg_ptr,
-            &cnx->initial_cnxid, current_time);
+            &cnx->initial_cnxid, current_time, NULL);
         if (ret == 0 && param.simulate_eio != 0) {
             DBG_PRINTF("%s", "EIO was not simulated");
             ret = -1;
@@ -821,7 +821,7 @@ static int sockloop_send_err_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, 
             tuple->challenge_verified = 1;
             ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
                 buffer, sizeof(buffer), &peer_addr, &local_addr, 0, 0, NULL,
-                &cnx->initial_cnxid, current_time);
+                &cnx->initial_cnxid, current_time, NULL);
             if (ret == 0 && (!tuple->challenge_required || tuple->challenge_verified)) {
                 DBG_PRINTF("%s", "Unreachable error was not reported against the path");
                 ret = -1;

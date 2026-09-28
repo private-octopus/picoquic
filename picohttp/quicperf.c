@@ -339,6 +339,9 @@ char const* quicperf_parse_media_desc(char const* text, quicperf_stream_desc_t* 
 
 char const* quicperf_parse_stream_desc(char const* text, quicperf_stream_desc_t* desc)
 {
+    if (text != NULL) {
+        text = quicperf_parse_priority(quicperf_parse_stream_spaces(text), &desc->priority);
+    }
 
     if (text != NULL) {
         text = quicperf_parse_post_size(quicperf_parse_stream_spaces(text), 0, &desc->post_size);
@@ -647,6 +650,10 @@ quicperf_stream_ctx_t* quicperf_init_batch_stream_from_scenario(picoquic_cnx_t* 
         stream_ctx->rep_number = rep_number;
         stream_ctx->post_size = stream_desc->post_size;
         stream_ctx->response_size = stream_desc->response_size;
+        stream_ctx->priority = stream_desc->priority;
+        if (stream_ctx->priority != 0) {
+            (void)picoquic_set_stream_priority(cnx, stream_x, stream_ctx->priority);
+        }
 
         if (stream_desc->is_infinite) {
             stream_ctx->stop_for_fin = 1;
@@ -1152,18 +1159,20 @@ int quicperf_receive_data_from_client(picoquic_cnx_t* cnx, quicperf_stream_ctx_t
     stream_ctx->nb_post_bytes += (length - byte_index);
 
     if (fin_or_event == picoquic_callback_stream_fin) {
+        stream_ctx->is_fin_received = 1;
         if (stream_ctx->nb_post_bytes < 8 || (stream_ctx->is_media && stream_ctx->nb_post_bytes < 16)) {
             stream_ctx->response_size = 0;
             stream_ctx->is_media = 0;
             stream_ctx->is_datagram = 0;
         }
-        else if (stream_ctx->is_datagram) {
+        if (stream_ctx->is_datagram) {
             uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(cnx));
             ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);
             picoquic_set_app_wake_time(cnx, current_time);
         }
         else {
             ret = picoquic_mark_active_stream(cnx, stream_ctx->stream_id, 1, stream_ctx);
+            stream_ctx->is_activated = 1;
         }
     }
     return ret;
@@ -1431,7 +1440,7 @@ int quicperf_server_timer(picoquic_cnx_t* cnx, quicperf_ctx_t* ctx, uint64_t cur
                 /* remove the stream context! */
                 picosplay_delete_hint(&ctx->quicperf_stream_tree, stream_node);
             }
-            else if (!stream_ctx->is_activated) {
+            else if (!stream_ctx->is_activated && stream_ctx->is_fin_received) {
                 if (stream_ctx->is_datagram) {
                     while (stream_ctx->next_frame_time <= current_time && stream_ctx->nb_frames_sent < stream_ctx->nb_frames) {
                         ret = quicperf_send_datagrams(cnx, current_time, stream_ctx);

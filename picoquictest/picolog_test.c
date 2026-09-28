@@ -78,6 +78,78 @@ int test_convert_svg(const picoquic_connection_id_t* cid, void* ptr)
     return svg_convert(cid, appctx->f_binlog, appctx->f_template, appctx->binlog_name, appctx->out_dir);
 }
 
+/* These textlog_*_frame functions are only ever reached, in the existing test suite, through
+ * binlog->textlog conversion of well-formed traffic -- no existing scenario logs a genuinely
+ * malformed instance of these multipath frames. Call them directly with a buffer whose leading
+ * bytes look like an 8-byte varint prefix but don't have enough data behind them, which reliably
+ * fails every one of these functions' internal varint decode calls the same way. */
+size_t textlog_path_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_time_stamp_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_path_abandon_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_path_available_or_backup_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_max_path_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_paths_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+size_t textlog_path_cid_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max);
+char const* textlog_ptype_name(picoquic_packet_type_enum ptype);
+
+int logger_textlog_malformed_frame_test(void)
+{
+    int ret = 0;
+    uint8_t bad_bytes[9];
+    FILE* F = picoquic_file_open("logger_malformed_frame_test.txt", "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(bad_bytes, 0xff, sizeof(bad_bytes));
+
+        if (textlog_path_frame(F, bad_bytes, 2) != 2) {
+            DBG_PRINTF("%s", "textlog_path_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_time_stamp_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_time_stamp_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_path_abandon_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_path_abandon_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_path_available_or_backup_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_path_available_or_backup_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_max_path_id_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_max_path_id_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_paths_blocked_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_paths_blocked_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+        if (ret == 0 && textlog_path_cid_blocked_frame(F, bad_bytes, sizeof(bad_bytes)) != sizeof(bad_bytes)) {
+            DBG_PRINTF("%s", "textlog_path_cid_blocked_frame did not report the malformed frame as consumed");
+            ret = -1;
+        }
+
+        /* textlog_ptype_name's error/out-of-range cases: only wire-common packet types are
+         * ever logged by existing E2E tests. */
+        if (ret == 0 && strcmp(textlog_ptype_name(picoquic_packet_error), "error") != 0) {
+            DBG_PRINTF("%s", "textlog_ptype_name(picoquic_packet_error) did not return \"error\"");
+            ret = -1;
+        }
+        if (ret == 0 && strcmp(textlog_ptype_name((picoquic_packet_type_enum)0xffff), "unknown") != 0) {
+            DBG_PRINTF("%s", "textlog_ptype_name did not treat an out-of-range value as unknown");
+            ret = -1;
+        }
+
+        picoquic_file_close(F);
+    }
+
+    return ret;
+}
+
 int picolog_basic_test(void)
 {
     int ret = 0;

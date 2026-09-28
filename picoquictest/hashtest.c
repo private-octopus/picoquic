@@ -29,6 +29,7 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picohash.h"
+#include "siphash.h"
 
 struct hashtestkey {
     uint64_t x;
@@ -294,6 +295,29 @@ int siphash_test(void)
             ret = -1;
             break;
 #endif
+        }
+    }
+
+    /* picohash_siphash always requests an 8-byte output (outlen=8), so the raw siphash()
+     * function's 16-byte-output half is otherwise never exercised. Call it directly to
+     * cover that path: check it is deterministic and that the two 8-byte halves differ
+     * (i.e. the second half is actually computed, not left as a copy or as zeros). */
+    if (ret == 0) {
+        uint8_t out16_a[16];
+        uint8_t out16_b[16];
+
+        if (siphash(test, sizeof(test), k, out16_a, 16) != 0 ||
+            siphash(test, sizeof(test), k, out16_b, 16) != 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) returned an error");
+            ret = -1;
+        }
+        else if (memcmp(out16_a, out16_b, sizeof(out16_a)) != 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) is not deterministic");
+            ret = -1;
+        }
+        else if (memcmp(out16_a, out16_a + 8, 8) == 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) second half duplicates the first half");
+            ret = -1;
         }
     }
 #ifdef COMPARING_TIMES
