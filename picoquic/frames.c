@@ -501,6 +501,7 @@ const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const 
         (bytes = picoquic_parse_reset_stream_at_frame(bytes, bytes_max, &stream_id, &error_code_64, &final_offset, &reliable_size)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_reset_stream);
+        bytes = NULL;
     }
     else {
         bytes = picoquic_apply_reset_stream_frame(cnx, bytes, error_code_64, stream_id, final_offset, reliable_size);
@@ -5582,7 +5583,7 @@ const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, const u
     picoquic_path_t * path_x, uint64_t current_time)
 {
     /* This code assumes that the frame type is already skipped */
-    if (bytes != NULL && bytes < bytes_max){
+    if (bytes != NULL){
         if (!cnx->is_ack_frequency_negotiated) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
                 picoquic_frame_type_immediate_ack);
@@ -6345,6 +6346,7 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             ftype, "address discovery not negotiated as receiver");
+        bytes = NULL;
     }
     else if ((bytes = picoquic_parse_observed_address_frame(bytes, bytes_max, ftype, &sequence, &addr, &port)) == NULL) {
         /* Bad frame encoding */
