@@ -384,6 +384,124 @@ int migration_mtu_drop_test(void)
     return migration_test_one(1);
 }
 
+/* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client
+ * retires the CID of the old tuple in a packet sent on the new tuple, before
+ * the server has promoted that tuple. The server must accept the retirement. */
+int migration_retire_old_cid_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t drop_mask = 1;
+    uint64_t time_out = 0;
+    uint64_t nb_dropped = 0;
+    int was_active = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x10, 0xce, 4, 5, 6, 7, 8}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    else if (ret == 0) {
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = multipath_test_add_links(test_ctx, 0);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+            (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+    }
+
+    /* Run until the client promotes the new tuple */
+    time_out = simulated_time + 1000000;
+    while (ret == 0 && simulated_time < time_out &&
+        picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_2,
+            (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr) != 0) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+    }
+    if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_2,
+        (struct sockaddr*)&test_ctx->cnx_client->path[0]->first_tuple->local_addr) != 0) {
+        DBG_PRINTF("%s", "Client did not promote the new tuple");
+        ret = -1;
+    }
+
+    /* Drop the next client packet on the new tuple, which carries the PATH_RESPONSE */
+    if (ret == 0) {
+        nb_dropped = test_ctx->c_to_s_link_2->packets_dropped;
+        test_ctx->c_to_s_link_2->loss_mask = &drop_mask;
+        time_out = simulated_time + 1000000;
+        while (ret == 0 && simulated_time < time_out &&
+            test_ctx->c_to_s_link_2->packets_dropped == nb_dropped) {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+        test_ctx->c_to_s_link_2->loss_mask = NULL;
+        if (ret == 0 && test_ctx->c_to_s_link_2->packets_dropped == nb_dropped) {
+            DBG_PRINTF("%s", "No client packet dropped on the new tuple");
+            ret = -1;
+        }
+        else if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr,
+            (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr) != 0) {
+            DBG_PRINTF("%s", "Server promoted the new tuple too early for the test");
+            ret = -1;
+        }
+    }
+
+    /* Client deletes the old tuple, which queues a RETIRE_CONNECTION_ID for its CID */
+    if (ret == 0) {
+        picoquic_tuple_t* old_tuple = test_ctx->cnx_client->path[0]->first_tuple->next_tuple;
+
+        if (old_tuple == NULL || picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr,
+            (struct sockaddr*)&old_tuple->local_addr) != 0) {
+            DBG_PRINTF("%s", "Old tuple not found on the client");
+            ret = -1;
+        }
+        else {
+            picoquic_delete_tuple(test_ctx->cnx_client->path[0], old_tuple, 0);
+        }
+    }
+
+    /* The server must accept the retirement and complete the migration */
+    time_out = simulated_time + 2000000;
+    while (ret == 0 && simulated_time < time_out &&
+        test_ctx->cnx_server != NULL && test_ctx->cnx_server->cnx_state == picoquic_state_ready &&
+        picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_2,
+            (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr) != 0) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+    }
+
+    if (ret == 0 && (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_ready)) {
+        DBG_PRINTF("Server connection failed, error 0x%" PRIx64 ", reason: %s",
+            (test_ctx->cnx_server == NULL) ? 0 : test_ctx->cnx_server->local_error,
+            (test_ctx->cnx_server == NULL || test_ctx->cnx_server->local_error_reason == NULL) ? "none" :
+            test_ctx->cnx_server->local_error_reason);
+        ret = -1;
+    }
+    else if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_2,
+        (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr) != 0) {
+        DBG_PRINTF("%s", "Server did not migrate to the new tuple");
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 /*
  * Test of actual multipath, by opposition to only migration.
  */
