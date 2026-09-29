@@ -5579,7 +5579,7 @@ const uint8_t* picoquic_skip_immediate_ack_frame(const uint8_t* bytes, const uin
     return bytes;
 }
 
-const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t * cnx,
+const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, picoquic_cnx_t * cnx,
     picoquic_path_t * path_x, uint64_t current_time)
 {
     /* This code assumes that the frame type is already skipped */
@@ -6731,7 +6731,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_immediate_ack:
-                            bytes = picoquic_decode_immediate_ack_frame(bytes, bytes_max, cnx, path_x, current_time);
+                            bytes = picoquic_decode_immediate_ack_frame(bytes, cnx, path_x, current_time);
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_time_stamp:
