@@ -2069,7 +2069,7 @@ const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const u
 const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint8_t frame_id);
 const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, int is_mp);
+    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp);
 const uint8_t* picoquic_decode_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
@@ -2164,7 +2164,8 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
     picoquic_cnx_t* cnx, uint64_t current_time);
 int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const uint8_t* bytes, size_t bytes_max,
     picoquic_stream_data_node_t* received_data,
-    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated, uint64_t current_time);
+    int epoch, struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t pn64, int path_is_not_allocated,
+    picoquic_local_cnxid_t* l_cid, uint64_t current_time);
 const uint8_t* picoquic_parse_observed_address_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t ftype, uint64_t* sequence, const uint8_t** addr, uint16_t* port);
 uint8_t* picoquic_format_observed_address_frame(

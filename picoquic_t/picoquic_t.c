@@ -705,6 +705,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_reno_long", wifi_reno_long_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "migration_retire_old_cid", migration_retire_old_cid_test },
     { "minicrypto", minicrypto_test },
     { "minicrypto_is_last", minicrypto_is_last_test },
 #ifdef PICOQUIC_WITH_MBEDTLS

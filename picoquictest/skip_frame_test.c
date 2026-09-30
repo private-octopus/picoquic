@@ -1000,8 +1000,8 @@ static int parse_test_packet_ex(picoquic_quic_t* qclient, struct sockaddr* saddr
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
         parse_test_clear_option(cnx, option_off);
 
-        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch,
-            NULL, NULL, 0, 0, simulated_time);
+        ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
+            NULL, NULL, 0, 0, NULL, simulated_time);
 
         *ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
 

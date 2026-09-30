@@ -3876,6 +3876,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_retire_old_cid) {
+            int ret = migration_retire_old_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(minicrypto) {
             int ret = minicrypto_test();
 

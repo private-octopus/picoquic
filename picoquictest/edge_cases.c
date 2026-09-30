@@ -1048,7 +1048,7 @@ int reset_repeat_test_receive_frame(int test_id, picoquic_cnx_t * cnx, const uin
         &dn, picoquic_epoch_1rtt,
         (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
         (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
-        123, 0, simulated_time);
+        123, 0, NULL, simulated_time);
 
     if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
         DBG_PRINTF("Test %d. Error after stop sending, ret = 0x%x.", test_id, ret);
