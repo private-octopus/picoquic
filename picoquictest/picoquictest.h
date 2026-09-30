@@ -608,6 +608,7 @@ int app_limited_bbr_post_idle_test(void);
 int app_limited_cubic_test(void);
 int app_limited_reno_test(void);
 int app_limited_rpr_test(void);
+int app_limited_cubic_idle_test(void);
 int cwin_max_test(void);
 int bbr1_seed_bdp_test(void);
 int bbr1_seed_startup_test(void);

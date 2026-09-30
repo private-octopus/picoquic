@@ -78,6 +78,7 @@ typedef struct st_app_limited_test_config_t {
     uint64_t completion_target;
     uint64_t rtt_max;
     uint64_t cwin_max;
+    uint64_t cwin_min;
     uint64_t data_rate_max;
     uint64_t nb_losses_max;
     uint64_t min_bw_samples;
@@ -114,6 +115,7 @@ typedef struct st_app_limited_ctx_t {
     uint64_t last_interaction_time;
     uint64_t rtt_max;
     uint64_t cwin_max;
+    uint64_t cwin_min;
     uint64_t data_rate_max;
     uint64_t last_bw_sample_delivered;
     uint64_t nb_bw_samples;
@@ -369,6 +371,7 @@ void app_limited_initialize_context(app_limited_ctx_t* al_ctx, app_limited_test_
     int nb_test_streams = app_limited_nb_test_streams(config);
 
     memset(al_ctx, 0, sizeof(app_limited_ctx_t));
+    al_ctx->cwin_min = UINT64_MAX;
     for (int i = 0; i < 3; i++) {
         uint64_t data_size = 0;
         if (i < nb_test_streams) {
@@ -473,6 +476,9 @@ void app_limited_monitor(app_limited_ctx_t* al_ctx)
         }
         if (path_x->cwin > al_ctx->cwin_max) {
             al_ctx->cwin_max = path_x->cwin;
+        }
+        if (path_x->cwin < al_ctx->cwin_min) {
+            al_ctx->cwin_min = path_x->cwin;
         }
         if (path_x->pacing.rate > al_ctx->data_rate_max) {
             al_ctx->data_rate_max = path_x->pacing.rate;
@@ -599,6 +605,12 @@ static int app_limited_test_one(app_limited_test_config_t * config)
 
         if (al_ctx.cwin_max > config->cwin_max) {
             DBG_PRINTF("Max CWIN %llu instead of %llu", al_ctx.cwin_max, config->cwin_max);
+            ret = -1;
+        }
+
+
+        if (al_ctx.cwin_min < config->cwin_min) {
+            DBG_PRINTF("Min CWIN %llu instead of %llu", al_ctx.cwin_min, config->cwin_min);
             ret = -1;
         }
 
@@ -742,6 +754,25 @@ int app_limited_rpr_test(void)
     config.completion_target = 47200000;
     config.nb_losses_max = 1980;
     config.rtt_max = 275000;
+
+    return app_limited_test_one(&config);
+}
+
+
+int app_limited_cubic_idle_test(void)
+{
+    app_limited_test_config_t config;
+    app_limited_config_set_default(&config, 8);
+    config.ccalgo = picoquic_cubic_algorithm;
+    config.nb_losses_max = 64;
+    config.data_rate_max = 4013000;
+    config.stream_0_data_size = 250000;
+    config.data_stream_size = 250000;
+    config.time_to_stream[0] = 0;
+    config.time_to_stream[1] = 2000000;
+    config.time_to_stream[2] = 4000000;
+    config.completion_target = 6000000;
+    config.cwin_min = PICOQUIC_CWIN_INITIAL;
 
     return app_limited_test_one(&config);
 }

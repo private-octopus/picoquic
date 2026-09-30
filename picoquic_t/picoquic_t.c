@@ -640,6 +640,7 @@ static const picoquic_test_def_t test_table[] = {
     { "app_limited_cubic", app_limited_cubic_test },
     { "app_limited_reno", app_limited_reno_test },
     { "app_limited_rpr", app_limited_rpr_test },
+    { "app_limited_cubic_idle", app_limited_cubic_idle_test },
     { "cwin_max", cwin_max_test },
     { "bbr1_seed_bdp", bbr1_seed_bdp_test },
     { "bbr1_seed_startup", bbr1_seed_startup_test },
