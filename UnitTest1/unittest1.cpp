@@ -3509,6 +3509,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limited_cubic_idle) {
+            int ret = app_limited_cubic_idle_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cwin_max) {
             int ret = cwin_max_test();
 

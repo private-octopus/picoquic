@@ -407,7 +407,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
             if (old_p->send_path != NULL && cnx->is_multipath_enabled) {
                 old_p->send_path->is_ack_lost = 1;
             }
-            picoquic_count_and_notify_loss(cnx, old_p, 2, current_time);
+            /* The peer does not ACK this packet, so its timeout is not a loss: do not count it or notify the CC */
             picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1, 0);
             length = 0;
             *continue_next = 1;
@@ -895,15 +895,13 @@ static void picoquic_check_path_mtu_on_losses(
 static void picoquic_count_and_notify_loss(
     picoquic_cnx_t* cnx, picoquic_packet_t * old_p, int timer_based_retransmit, uint64_t current_time)
 {
-    if (timer_based_retransmit < 2) {
-        picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
-            (timer_based_retransmit) ? "timer" : "repeat",
-            (old_p->send_path == NULL || old_p->send_path->first_tuple->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->first_tuple->p_remote_cnxid->cnx_id,
-            old_p->length, current_time);
+    picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
+        (timer_based_retransmit) ? "timer" : "repeat",
+        (old_p->send_path == NULL || old_p->send_path->first_tuple->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->first_tuple->p_remote_cnxid->cnx_id,
+        old_p->length, current_time);
 
-        if (!old_p->is_preemptive_repeat) {
-            cnx->nb_retransmission_total++;
-        }
+    if (!old_p->is_preemptive_repeat) {
+        cnx->nb_retransmission_total++;
     }
 
     if (old_p->send_path != NULL) {
