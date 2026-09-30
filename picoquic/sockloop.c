@@ -2437,6 +2437,11 @@ int picoquic_packet_loop_do_udp_send(
         else {
             sock_ret = -1;
             sock_err = 0;
+            /* AF_XDP is opened once, when the network thread starts. If that
+             * failed, af_xdp is NULL and every datagram uses sendmsg. If it
+             * succeeded, try AF_XDP for this datagram and use sendmsg only
+             * when this datagram cannot be queued (loopback, missing neighbor,
+             * full TX ring). The next datagram tries AF_XDP again. */
             if (thread_ctx != NULL && thread_ctx->af_xdp != NULL) {
                 sock_ret = picoquic_af_xdp_send(thread_ctx->af_xdp,
                     (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,

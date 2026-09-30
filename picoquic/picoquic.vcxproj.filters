@@ -96,6 +96,12 @@
     <ClCompile Include="picoquic_af_xdp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picoquic_l3tx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="picoquic_neigh.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="winsockloop.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -222,6 +228,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_af_xdp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_l3tx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="picoquic_neigh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picoquic_config.h">

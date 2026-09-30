@@ -303,10 +303,11 @@ void* picoquic_packet_loop_v3(void* v_ctx);
 * picoquic_close_network_thread, passing the thread context as an argument.
 * The network thread context will be freed during that call.
 */
+/* Zero-copy AF_XDP is not offered. It takes a NIC queue away from the
+ * kernel UDP sockets that still receive. */
 typedef enum {
     picoquic_tx_method_sendmsg = 0,
-    picoquic_tx_method_af_xdp_copy = 1,
-    picoquic_tx_method_af_xdp_zerocopy = 2
+    picoquic_tx_method_af_xdp_copy = 1
 } picoquic_tx_method_enum;
 
 const char* picoquic_tx_method_to_string(int method);

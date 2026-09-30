@@ -26,7 +26,8 @@ void picoquic_af_xdp_delete(void* xdp);
 
 /*
  * Transmit one datagram or a GSO train. Returns bytes of UDP payload sent
- * (>= 1) on success, or <= 0 to request a sendmsg fallback.
+ * (>= 1) on success, or <= 0 to request a sendmsg fallback for this
+ * datagram only. The AF_XDP socket stays open for the next datagram.
  */
 int picoquic_af_xdp_send(void* xdp,
     struct sockaddr* addr_dest,
