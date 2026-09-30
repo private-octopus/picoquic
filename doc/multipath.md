@@ -13,9 +13,8 @@ in picoquic.
 
 Deployment of the multipath extension of QUIC is still in the early stage. The draft is
 stable, but we are still learning how to use it. Different application will use it
-differently. For example, we already learned that real time application cannot
-use a scheduling system designed for maximum bandwidth, because it also creates
-diorder and delays (see {{affinity}}). There is much more to be learned.
+differently, and some applications like multi-media may need to carefully
+assess the scheduling data over multiple streams -- see {{deployments}}.
 
 ## Multiple paths {#multiple-paths}
 
@@ -392,13 +391,33 @@ with affinity to an available path, or if control frames need to be sent.
 Once a path is selected, the regular preparation process will
 select the frames to send on that path.
 
+## Deployment considerations {#deployments}
+
+Applications should be aware of a few deployment consequences of using
+multiple paths concurrently:
+
+- Distributing a single stream's data across paths with different RTTs
+  or loss characteristics can increase delivery latency rather than
+  reduce it, since in-order delivery to the application waits on the
+  slowest path carrying unacknowledged data for that stream.
+- A backup path left idle for an extended period can have its NAT or
+  firewall mapping expire, requiring a new round of path validation
+  (and its associated RTT) before it can carry traffic again.
+- Each path runs its own congestion controller, but that does not imply
+  independent capacity: if two paths share a bottleneck link, their
+  congestion controllers will compete for the same capacity rather than
+  add to it.
+
+The stream affinity API (see {{affinity}}) can be used to mitigate the first
+issue and ensure that multi-media operation is not worse than single path operation.
+
 ### Feedback from deployments
 
 The path selection algorithm implemented in picoquic is
 a work in progress. Feedback from experience is very much welcome.
 As of this writing, this feedback has suggested two possible features:
 
-* sending QUIC datagrams with affinity to a stream.
+* sending QUIC datagrams with affinity to a stream,
 * specifying that a path can be used for redundancy, maybe through
   a variation of the stream affinity API.
 
