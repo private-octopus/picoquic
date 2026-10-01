@@ -236,7 +236,7 @@ int picoquic_ns_create_client_ctx(picoquic_ns_ctx_t* cc_ctx, picoquic_ns_spec_t*
         else{
             /* Set log and trigger for media statistics and file. */
             client_ctx->quicperf_ctx->stats_start = spec->media_stats_start;
-            if (spec->qperf_log != NULL) {
+            if (spec->qperf_log != NULL && client_id == 0) {
                 /* scenario requires a performance log */
                 char const* p_log = spec->qperf_log;
                 char f_name[512];
