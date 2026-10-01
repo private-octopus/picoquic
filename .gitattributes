@@ -1,0 +1,9 @@
+*.json text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.bat text eol=crlf
+*.sh text eol=lf
+*.txt text
+
+# ECH config blobs carry a .txt extension but hold raw binary
+certs/ech/*.txt binary
