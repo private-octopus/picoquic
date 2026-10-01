@@ -165,6 +165,9 @@
     <ClCompile Include="sockloop_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="af_xdp_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="h3zero_stream_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
