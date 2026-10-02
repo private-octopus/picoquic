@@ -324,6 +324,7 @@ static const picoquic_test_def_t test_table[] = {
     { "nat_attack", nat_attack_test },
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
+    { "socket_cloexec", socket_cloexec_test },
     { "ticket_store", ticket_store_test },
     { "ticket_store_save_wrappers", ticket_store_save_wrappers_test },
     { "ticket_store_too_short", ticket_store_too_short_test },

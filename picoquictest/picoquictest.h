@@ -518,6 +518,7 @@ int optimistic_ack_test(void);
 int optimistic_hole_test(void);
 int document_addresses_test(void);
 int socket_ecn_test(void);
+int socket_cloexec_test(void);
 int null_sni_test(void);
 int preferred_address_test(void);
 int preferred_address_dis_mig_test(void);

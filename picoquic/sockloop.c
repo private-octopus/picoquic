@@ -458,10 +458,8 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
 #endif
     }
     s_ctx->overlap.hEvent = WSA_INVALID_EVENT;
-    s_ctx->fd = WSASocket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
-#else
-    s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
+    s_ctx->fd = picoquic_socket_open(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 
 
     if (s_ctx->fd == INVALID_SOCKET ||
@@ -744,11 +742,7 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
     sqmux_sock_ctx->af = af;
     sqmux_sock_ctx->port = public_port;
     sqmux_sock_ctx->fd = INVALID_SOCKET;
-#ifdef _WINDOWS
-    sqmux_sock_ctx->fd = WSASocket(af, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
-#else
-    sqmux_sock_ctx->fd = socket(af, SOCK_STREAM, IPPROTO_TCP);
-#endif
+    sqmux_sock_ctx->fd = picoquic_socket_open(af, SOCK_STREAM, IPPROTO_TCP);
 
     if (sqmux_sock_ctx->fd == INVALID_SOCKET ||
 #ifdef _WINDOWS
@@ -2124,6 +2118,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         memset(new_ctx, 0, sizeof(picoqmux_socket_ctx_t));
         new_ctx->fd = new_socket;
         new_socket = INVALID_SOCKET;
+        (void)fcntl(new_ctx->fd, F_SETFD, FD_CLOEXEC);
         new_ctx->af = addr_from.ss_family;
         new_ctx->cnx = cnx;
         cnx = NULL;
