@@ -138,6 +138,7 @@ int tls_api_client_losses_test(void);
 int tls_api_server_losses_test(void);
 int skip_frame_test(void);
 int keep_alive_test(void);
+int keep_alive_idle_test(void);
 int logger_test(void);
 int binlog_test(void);
 int binlog_compare_mismatch_test(void);

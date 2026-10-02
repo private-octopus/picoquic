@@ -5243,6 +5243,9 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
     } else {
         cnx->keep_alive_interval = interval;
     }
+    /* An idle connection may not wake up before its idle timeout: wake it now,
+     * so that its next wake time accounts for the keep alive interval. */
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 }
 
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)
