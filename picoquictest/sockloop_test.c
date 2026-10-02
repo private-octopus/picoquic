@@ -2166,3 +2166,66 @@ int sockloop_qmux_close_test(void)
     }
     return ret;
 }
+
+/* An application ends the packet loop by returning non-zero from a loop callback,
+ * here picoquic_packet_loop_time_check. The loop must stop then, not wait and let the
+ * outcome of the wait overwrite that return code. */
+typedef struct st_sockloop_time_check_stop_t {
+    volatile int nb_time_check;
+} sockloop_time_check_stop_t;
+
+static int sockloop_time_check_stop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* callback_arg)
+{
+    sockloop_time_check_stop_t* ctx = (sockloop_time_check_stop_t*)callback_ctx;
+    int ret = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+#else
+    (void)quic;
+#endif
+    if (cb_mode == picoquic_packet_loop_ready) {
+        ((picoquic_packet_loop_options_t*)callback_arg)->do_time_check = 1;
+    }
+    else if (cb_mode == picoquic_packet_loop_time_check) {
+        /* Short waits, so that a loop ignoring the request spins quickly */
+        ((packet_loop_time_check_arg_t*)callback_arg)->delta_t = 1000;
+        ctx->nb_time_check++;
+        ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+    }
+    return ret;
+}
+
+int sockloop_time_check_stop_test(void)
+{
+    int ret = 0;
+    sockloop_time_check_stop_t ctx = { 0 };
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, PICOQUIC_TEST_ALPN, NULL, NULL,
+        NULL, NULL, NULL, picoquic_current_time(), NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        param.local_af = AF_INET;
+        thread_ctx = picoquic_start_network_thread(quic, &param, sockloop_time_check_stop_cb, &ctx, &ret);
+        if (thread_ctx == NULL) {
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            SLEEP(200);
+            if (ctx.nb_time_check != 1) {
+                DBG_PRINTF("Time check asked to end the loop, which went on: %d time checks in 200ms\n",
+                    ctx.nb_time_check);
+                ret = -1;
+            }
+            picoquic_delete_network_thread(thread_ctx);
+        }
+        picoquic_free(quic);
+    }
+    return ret;
+}
