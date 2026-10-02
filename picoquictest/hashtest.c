@@ -29,13 +29,14 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picohash.h"
+#include "siphash.h"
 
 struct hashtestkey {
     uint64_t x;
     picohash_item item;
 };
 
-static uint64_t hashtest_hash(const void* v, const uint8_t* hash_seed)
+static uint64_t hashtest_hash(const void* v, const uint8_t* UNUSED(hash_seed))
 {
     const struct hashtestkey* k = (const struct hashtestkey*)v;
     uint64_t hash = (k->x + 0xDEADBEEFull);
@@ -84,7 +85,7 @@ int picohash_test_one(int embedded_item)
     }
 
     if (t == NULL) {
-        DBG_PRINTF("%s", "picohash_create() failed\n");
+        DBG_PRINTF("%s", "picohash_create(void) failed\n");
         ret = -1;
     } else {
         struct hashtestkey hk;
@@ -194,12 +195,12 @@ int picohash_test_one(int embedded_item)
     return ret;
 }
 
-int picohash_test()
+int picohash_test(void)
 {
     return(picohash_test_one(0));
 }
 
-int picohash_embedded_test()
+int picohash_embedded_test(void)
 {
     return(picohash_test_one(1));
 }
@@ -219,7 +220,7 @@ void hash_test_init(uint8_t* test, size_t length, uint8_t * k, size_t k_length)
     }
 }
 
-int picohash_bytes_test()
+int picohash_bytes_test(void)
 {
     uint8_t test[1024];
     uint8_t k[16];
@@ -261,7 +262,7 @@ int picohash_bytes_test()
 /* Test of the siphash function
  */
 
-int siphash_test()
+int siphash_test(void)
 {
     uint8_t test[1024];
     uint8_t k[16];
@@ -294,6 +295,29 @@ int siphash_test()
             ret = -1;
             break;
 #endif
+        }
+    }
+
+    /* picohash_siphash always requests an 8-byte output (outlen=8), so the raw siphash()
+     * function's 16-byte-output half is otherwise never exercised. Call it directly to
+     * cover that path: check it is deterministic and that the two 8-byte halves differ
+     * (i.e. the second half is actually computed, not left as a copy or as zeros). */
+    if (ret == 0) {
+        uint8_t out16_a[16];
+        uint8_t out16_b[16];
+
+        if (siphash(test, sizeof(test), k, out16_a, 16) != 0 ||
+            siphash(test, sizeof(test), k, out16_b, 16) != 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) returned an error");
+            ret = -1;
+        }
+        else if (memcmp(out16_a, out16_b, sizeof(out16_a)) != 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) is not deterministic");
+            ret = -1;
+        }
+        else if (memcmp(out16_a, out16_a + 8, 8) == 0) {
+            DBG_PRINTF("%s", "siphash(outlen=16) second half duplicates the first half");
+            ret = -1;
         }
     }
 #ifdef COMPARING_TIMES

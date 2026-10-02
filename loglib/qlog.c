@@ -29,6 +29,7 @@
 #include "bytestream.h"
 #include "logreader.h"
 #include "logconvert.h"
+#include "picoquic_qlog_fns.h"
 
 typedef struct qlog_context_st {
 
@@ -54,6 +55,8 @@ typedef struct qlog_context_st {
     uint64_t RTT_min;
     uint64_t bytes_in_transit;
     uint64_t pacing_packet_time;
+    uint64_t cc_state;
+    uint64_t cc_param;
 
     unsigned int trace_flow_id : 1;
     unsigned int key_phase_sent_last : 1;
@@ -88,23 +91,12 @@ int qlog_string(FILE* f, bytestream* s, uint64_t l)
 
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
 {
-    uint64_t x;
     int error_found = (s->ptr + (size_t)l > s->size);
+    size_t actual_len = error_found ? (s->size - s->ptr) : (size_t)l;
 
     fprintf(f, "\"");
-
-    for (x = 0; x < l && s->ptr < s->size; x++) {
-        int c = s->data[s->ptr++];
-        if (c == '"' || c == '\\') {
-            fprintf(f, "\\%c", c);
-        }
-        else if (c >= ' ' && c < 127) {
-            fprintf(f, "%c", c);
-        }
-        else {
-            fprintf(f, "\\%02x", c);
-        }
-    }
+    qlog_fns_char_content(f, s->data + s->ptr, actual_len);
+    s->ptr += actual_len;
 
     if (error_found) {
         fprintf(f, "... coding error!");
@@ -229,7 +221,7 @@ void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
         s->size = s->ptr + (size_t)len;
         fprintf(f, "{ ");
         if ((len & 3) != 0 || len == 0) {
-            fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+            fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
         }
         else {
             fprintf(f, "\"chosen\": \"");
@@ -331,6 +323,7 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_disable_migration:
                 case picoquic_tp_enable_time_stamp:
                 case picoquic_tp_grease_quic_bit:
+                case picoquic_tp_is_scone_supported:
                     qlog_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), s, extension_length);
                     break;
                 case picoquic_tp_version_negotiation:
@@ -803,28 +796,37 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
+/* max_path_id, paths_blocked and path_cid_blocked have no dedicated binlog writer
+ * (picoquic_binlog_frames falls back to picoquic_log_erroring_frame for them), so a
+ * truncated frame can reach this decoder with fewer bytes than a full field needs --
+ * byteread_vint's return must be checked, or a failed read silently prints the
+ * variable's initialized value (0) as if it had been read successfully. */
 void qlog_max_path_id_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
     uint64_t next_sequence_number = 0;
-    byteread_vint(s, &path_id);
-    byteread_vint(s, &next_sequence_number);
-    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
-    fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    if (byteread_vint(s, &path_id) == 0) {
+        fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    }
+    if (byteread_vint(s, &next_sequence_number) == 0) {
+        fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    }
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)
@@ -1443,6 +1445,27 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     /* Not checking the app limited return, because it is not present in old bin logs */
     (void) byteread_vint(s, &app_limited);
 
+    if (ret == 0 && cc_state != ctx->cc_state) {
+        int64_t delta_time = time - ctx->start_time;
+
+        if (ctx->event_count != 0) {
+            fprintf(f, ",\n");
+        }
+        else {
+            fprintf(f, "\n");
+        }
+
+        qlog_event_header(f, ctx, delta_time, path_id, "recovery", "congestion_state_updated");
+        fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
+            ctx->cc_state, cc_state, cc_param);
+        ctx->cc_state = cc_state;
+        ctx->cc_param = cc_param;
+        ctx->event_count++;
+    }
+    else if (ret == 0) {
+        ctx->cc_param = cc_param;
+    }
+
     if (ret == 0 &&
         (cwin != ctx->cwin || rtt_sample != ctx->rtt_sample || SRTT != ctx->SRTT ||
             RTT_min != ctx->RTT_min || bytes_in_transit != ctx->bytes_in_transit || 
@@ -1547,8 +1570,8 @@ int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
     return ret;
 }
 
-int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
-    uint32_t proposed_version, const picoquic_connection_id_t * remote_cnxid, void * ptr)
+int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED(cid), int client_mode,
+    uint32_t UNUSED(proposed_version), const picoquic_connection_id_t* UNUSED(remote_cnxid), void* ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;
@@ -1593,7 +1616,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, i
     return 0;
 }
 
-int qlog_connection_end(uint64_t time, void * ptr)
+int qlog_connection_end(uint64_t UNUSED(time), void * ptr)
 {
     qlog_context_t * ctx = (qlog_context_t*)ptr;
     FILE * f = ctx->f_txtlog;

@@ -53,7 +53,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
     initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
     initial_cid.id[7] = (queue_delay_max > 255000) ? 0xff : (uint8_t)(queue_delay_max / 1000);
 
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid, 0);
+    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
@@ -88,8 +88,6 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
         /* set the binary log on the client side */
         picoquic_set_qlog(test_ctx->qclient, ".");
         test_ctx->qclient->use_long_log = 1;
-        /* Since the client connection was created before the binlog was set, force log of connection header */
-        binlog_new_connection(test_ctx->cnx_client);
 
         ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
             NULL, 0, data_size, 0, 0, queue_delay_max, max_completion_time);
@@ -104,7 +102,7 @@ static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hy
     return ret;
 }
 
-int hystart_test() {
+int hystart_test(void) {
     picoquic_congestion_algorithm_t* ccalgos[] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,

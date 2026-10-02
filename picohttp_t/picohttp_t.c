@@ -21,6 +21,12 @@
 #ifdef _WINDOWS
 #include "getopt.h"
 #endif
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest.h"
@@ -28,13 +34,78 @@
 #include <string.h>
 #include <stdlib.h>
 
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+/* Temporary diagnostic: on an unhandled exception (e.g. access violation),
+ * print a symbolized stack trace before the process dies. This is much
+ * faster than reaching for an external debugger when a test crashes. */
+static LONG WINAPI picohttp_t_crash_handler(EXCEPTION_POINTERS* ex)
+{
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+    CONTEXT context_record = *ex->ContextRecord;
+    STACKFRAME64 frame = { 0 };
+    DWORD machine_type = IMAGE_FILE_MACHINE_AMD64;
+
+    fprintf(stderr, "\n*** CRASH: exception code 0x%08lx at address %p ***\n",
+        ex->ExceptionRecord->ExceptionCode, ex->ExceptionRecord->ExceptionAddress);
+
+    SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+    SymInitialize(process, NULL, TRUE);
+
+    frame.AddrPC.Offset = context_record.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context_record.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context_record.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+
+    for (int i = 0; i < 32; i++) {
+        if (!StackWalk64(machine_type, process, thread, &frame, &context_record,
+            NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) {
+            break;
+        }
+
+        char symbol_buffer[sizeof(SYMBOL_INFO) + 256] = { 0 };
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)symbol_buffer;
+        DWORD64 displacement64 = 0;
+        DWORD displacement32 = 0;
+        IMAGEHLP_LINE64 line = { 0 };
+
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = 255;
+        line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+        if (SymFromAddr(process, frame.AddrPC.Offset, &displacement64, symbol)) {
+            if (SymGetLineFromAddr64(process, frame.AddrPC.Offset, &displacement32, &line)) {
+                fprintf(stderr, "  #%d %s + 0x%llx  (%s:%lu)\n", i, symbol->Name,
+                    (unsigned long long)displacement64, line.FileName, line.LineNumber);
+            }
+            else {
+                fprintf(stderr, "  #%d %s + 0x%llx  (no line info)\n", i, symbol->Name,
+                    (unsigned long long)displacement64);
+            }
+        }
+        else {
+            fprintf(stderr, "  #%d 0x%p  (no symbol)\n", i, (void*)frame.AddrPC.Offset);
+        }
+    }
+    fflush(stderr);
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
 extern size_t picohttp_nb_stress_clients;
 extern size_t picohttp_test_multifile_number;
 extern uint64_t picohttp_random_stress_context;
+extern uint64_t picohttp_perf_loopback_size;
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {
@@ -50,13 +121,22 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_incoming_unidir", h3zero_incoming_unidir_test },
     { "h3zero_unidir_error", h3zero_unidir_error_test },
     { "h3zero_setting_error", h3zero_setting_error_test },
+    { "h3zero_remote_control_stream_singleton", h3zero_remote_control_stream_singleton_test },
     { "h3zero_capsule", h3zero_capsule_test },
     { "h3zero_client_data", h3zero_client_data_test },
+    { "h3zero_client_data_repeat", h3zero_client_data_repeat_test },
     { "qpack_huffman", qpack_huffman_test },
     { "qpack_huffman_base", qpack_huffman_base_test},
+    { "h3zero_name_lookup", h3zero_name_lookup_test },
+    { "h3zero_qpack_encode_error", h3zero_qpack_encode_error_test },
+    { "h3zero_create_header_frame_error", h3zero_create_header_frame_error_test },
+    { "h3zero_parse_duplicate_header_value_string", h3zero_parse_duplicate_header_value_string_test },
+    { "h3zero_parse_duplicate_header", h3zero_parse_duplicate_header_test },
+    { "h3zero_varint_decode_error", h3zero_varint_decode_error_test },
     { "h3zero_parse_qpack", h3zero_parse_qpack_test },
     { "h3zero_prepare_qpack", h3zero_prepare_qpack_test },
     { "h3zero_user_agent", h3zero_user_agent_test },
+    { "h3zero_wt_protocol_response", h3zero_wt_protocol_response_test },
     { "h3zero_uri", h3zero_uri_test },
     { "h3zero_url_template", h3zero_url_template_test },
     { "h3zero_null_sni", h3zero_null_sni_test },
@@ -64,16 +144,25 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_stream_test", h3zero_stream_test },
     { "h3zero_stream_fuzz", h3zero_stream_fuzz_test },
     { "parse_demo_scenario", parse_demo_scenario_test },
+    { "parse_demo_scenario_error", parse_demo_scenario_error_test },
+    { "h09_prepare_stream_open_command_too_small", h09_prepare_stream_open_command_too_small_test },
     { "h3zero_server", h3zero_server_test },
+    { "h3zero_migration_disabled", h3zero_migration_disabled_test },
     { "h09_server", h09_server_test },
     { "h09_header", h09_header_test },
+    { "h09_parse_method", h09_parse_method_test },
+    { "h09_parse_protocol", h09_parse_protocol_test },
+    { "h09_parse_commandline", h09_parse_commandline_test },
+    { "h09_stop_sending_reset", h09_stop_sending_reset_test },
+    { "h3zero_server_parse_path", h3zero_server_parse_path_test },
+    { "h3zero_server_prepare_to_send", h3zero_server_prepare_to_send_test },
+    { "picohttp_find_path_item", picohttp_find_path_item_test },
     { "generic_server", generic_server_test },
     { "h3zero_post", h3zero_post_test },
     { "h09_post", h09_post_test },
     { "demo_alpn", demo_alpn_test },
     { "demo_ticket", demo_ticket_test },
     { "demo_error", demo_error_test },
-    { "demo_file_sanitize", demo_file_sanitize_test },
     { "demo_file_access", demo_file_access_test },
     { "demo_server_file", demo_server_file_test },
     { "h3zero_satellite", h3zero_satellite_test },
@@ -89,7 +178,11 @@ static const picoquic_test_def_t test_table[] = {
     { "h09_multi_file_loss", h09_multi_file_loss_test },
     { "h09_multi_file_preemptive", h09_multi_file_preemptive_test },
     { "h3zero_settings", h3zero_settings_test },
+    { "h3zero_settings_components_decode", h3zero_settings_components_decode_test },
+    { "h3zero_settings_encode_too_short", h3zero_settings_encode_too_short_test },
     { "h3zero_get_content_type_by_path", h3zero_get_content_type_by_path_test },
+    { "h3zero_find_path_item", h3zero_find_path_item_test },
+    { "h3zero_process_request_frame", h3zero_process_request_frame_test },
     { "http_stress", http_stress_test },
     { "http_corrupt", http_corrupt_test},
     { "http_corrupt_rdpn", http_corrupt_rdpn_test},
@@ -105,14 +198,51 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_uri", picowt_baton_uri_test },
     { "picowt_baton_wrong", picowt_baton_wrong_test },
     { "picowt_baton_reset", picowt_baton_reset_test },
+    { "picowt_baton_stop_reset", picowt_baton_stop_reset_test },
+    { "picowt_baton_bad_params", picowt_baton_bad_params_test },
+    { "picowt_baton_bad_params_syntax", picowt_baton_bad_params_syntax_test },
+    { "picowt_baton_server_reject", picowt_baton_server_reject_test },
+    { "picowt_baton_fin_before_baton", picowt_baton_fin_before_baton_test },
+    { "picowt_baton_wrong_stream", picowt_baton_wrong_stream_test },
+    { "picowt_baton_wildcard", picowt_baton_wildcard_test },
+    { "picowt_baton_overflow", picowt_baton_overflow_test },
     { "picowt_drain", picowt_drain_test },
+    { "picowt_reset_stream_remote_unidir", picowt_reset_stream_remote_unidir_test },
+    { "picowt_select_wt_protocol_whitespace", picowt_select_wt_protocol_whitespace_test },
+    { "picowt_webtransport_requirements_met", picowt_webtransport_requirements_met_test },
+    { "picowt_format_connect_frame", picowt_format_connect_frame_test },
+    { "picowt_send_close_session_already_closed", picowt_send_close_session_already_closed_test },
     { "picowt_tp", picowt_tp_test },
     { "quicperf_parse", quicperf_parse_test },
+    { "quicperf_scenario_error", quicperf_scenario_error_test },
     { "quicperf_batch", quicperf_batch_test },
+    { "quicperf_infinite", quicperf_infinite_test },
+    { "quicperf_batch_post", quicperf_batch_post_test },
+    { "quicperf_server_timer_batch", quicperf_server_timer_batch_test },
+    { "quicperf_batch_priority", quicperf_batch_priority_test },
+    { "quicperf_client_media_stream", quicperf_client_media_stream_test },
+    { "quicperf_client_media_datagram", quicperf_client_media_datagram_test },
+    { "quicperf_datagram_too_large", quicperf_datagram_too_large_test },
     { "quicperf_datagram", quicperf_datagram_test },
+    { "quicperf_datagram_multiflow", quicperf_datagram_multiflow_test },
     { "quicperf_media", quicperf_media_test },
+    { "quicperf_ungrouped", quicperf_ungrouped_test },
+    { "quicperf_group_remainder", quicperf_group_remainder_test },
+    { "quicperf_datagram_vs_group", quicperf_datagram_vs_group_test },
+    { "quicperf_server_timer_wakeup", quicperf_server_timer_wakeup_test },
+    { "quicperf_receive_media_overrun", quicperf_receive_media_overrun_test },
+    { "quicperf_server_timer_leak", quicperf_server_timer_leak_test },
+    { "quicperf_chain", quicperf_chain_test },
+    { "quicperf_print_report", quicperf_print_report_test },
     { "quicperf_multi", quicperf_multi_test },
     { "quicperf_overflow", quicperf_overflow_test },
+    { "quicperf_multipath_race", quicperf_multipath_race_test },
+    { "quicperf_multipath_race_delayed", quicperf_multipath_race_delayed_test },
+    { "quicperf_multipath_settled", quicperf_multipath_settled_test },
+    { "perf_loopback", perf_loopback_test },
+    { "perf_loopback_loss", perf_loopback_loss_test },
+    { "perf_loopback_multistream", perf_loopback_multistream_test },
+    { "perf_loopback_multiconn", perf_loopback_multiconn_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
     { "cc_compete_cubic2_hystart_pp", cc_compete_cubic2_hystart_pp_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
@@ -128,7 +258,15 @@ static const picoquic_test_def_t test_table[] = {
     { "cc_ns_wifi_bad_bbr", cc_ns_wifi_bad_bbr_test },
     { "cc_ns_varylink", cc_ns_varylink_test },
     { "cc_ns_satellite", cc_ns_satellite_test },
-    { "cc_ns_media", cc_ns_media_test }
+    { "cc_ns_media", cc_ns_media_test },
+    { "cc_ns_media_repeat", cc_ns_media_repeat_test },
+    { "cc_ns_bad_scenario", cc_ns_bad_scenario_test },
+    { "cc_ns_no_connections", cc_ns_no_connections_test },
+    { "cc_ns_bad_link_scenario", cc_ns_bad_link_scenario_test },
+    { "cc_ns_bad_qperf_log", cc_ns_bad_qperf_log_test },
+    { "cc_ns_target_time_exceeded", cc_ns_target_time_exceeded_test },
+    { "cc_ns_connection_error", cc_ns_connection_error_test },
+    { "cc_ns_varylink_zero_rate", cc_ns_varylink_zero_rate_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -178,6 +316,7 @@ int usage(char const * argv0)
     fprintf(stderr, "  -s nnn            Set the number of stress clients to nnn.\n");
     fprintf(stderr, "  -R xxxxxxxx       Set seed for stress tests to xxxxxxxx.\n");
     fprintf(stderr, "  -m nnn            Set number of files in multi file tests to nnn.\n");
+    fprintf(stderr, "  -p nnn            Set the response size in bytes for perf_loopback to nnn.\n");
     fprintf(stderr, "  -n                Disable debug prints.\n");
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
@@ -195,6 +334,13 @@ int usage(char const * argv0)
     fprintf(stderr, "with loss and using preemptive repeat. For all these tests,\n");
     fprintf(stderr, "the number of files is controlled by the \"-m\" option\n");
     fprintf(stderr, "(default: 1000).\n");
+    fprintf(stderr, "\nThe perf_loopback test downloads a batch of the given size over\n");
+    fprintf(stderr, "a single QUIC context looped back on itself, with no socket and\n");
+    fprintf(stderr, "no simulated network delay -- it is meant for profiling the sending\n");
+    fprintf(stderr, "path. The response size is controlled by the \"-p\" option, in bytes\n");
+    fprintf(stderr, "(default: 1000000). Set it much higher (e.g. 10000000000 for 10GB)\n");
+    fprintf(stderr, "when actually profiling; the default is kept small so the test\n");
+    fprintf(stderr, "suite stays fast.\n");
 
     return -1;
 }
@@ -215,6 +361,9 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+    SetUnhandledExceptionFilter(picohttp_t_crash_handler);
+#endif
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_clients = 0;
@@ -232,7 +381,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        while (ret == 0 && (opt = getopt(argc, argv, "R:s:m:S:x:nrh")) != -1) {
+        while (ret == 0 && (opt = getopt(argc, argv, "R:s:m:p:S:x:nrh")) != -1) {
             switch (opt) {
             case 'x': {
                 int test_number = get_test_number(optarg);
@@ -276,6 +425,19 @@ int main(int argc, char** argv)
                     picohttp_test_multifile_number = (size_t)nb_multi_file;
                 }
                 break;
+            case 'p': {
+                char* end_ptr = NULL;
+                unsigned long long perf_loopback_size = strtoull(optarg, &end_ptr, 10);
+
+                if (perf_loopback_size == 0 || end_ptr == NULL || *end_ptr != 0) {
+                    fprintf(stderr, "Incorrect response size for perf_loopback: %s\n", optarg);
+                    ret = usage(argv[0]);
+                }
+                else {
+                    picohttp_perf_loopback_size = (uint64_t)perf_loopback_size;
+                }
+                break;
+            }
             case 'S':
                 picoquic_set_solution_dir(optarg);
                 break;

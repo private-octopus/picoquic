@@ -21,6 +21,9 @@
 #ifndef H3ZERO_H
 #define H3ZERO_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,8 +50,17 @@ extern "C" {
 #define H3ZERO_QPACK_DECODER_STREAM_ERROR 0x0202 /* Error on the decoder stream */
 #define H3ZERO_WEBTRANSPORT_BUFFERED_STREAM_REJECTED 0x3994bd84 /* Stream arrived before webtransport session established */
 #define H3ZERO_WEBTRANSPORT_SESSION_GONE 0x170d7b68 /* Stream arrived after web transport session closed */
-#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (0x52e4a40fa8dbull + code) /* see spec for skipping grease points when mapping codes */
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_FIRST 0x52e4a40fa8dbull
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_LAST 0x52e5ac983162ull
+#define H3ZERO_WEBTRANSPORT_APPLICATION_ERROR(code) (H3ZERO_WEBTRANSPORT_APPLICATION_ERROR_FIRST + (uint64_t)(code) + ((uint64_t)(code) / 0x1eull))
 #define H3ZERO_USER_AGENT_STRING "H3Zero/1.0"
+
+#define H3ZERO_MAX_FIELD_SECTION_SIZE 0x10000
+#define H3ZERO_WEBTRANSPORT_H3_PROTOCOL "webtransport-h3"
+#define H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD "webtransport"
+
+#define H3ZERO_WT_AVAILABLE_PROTOCOLS "wt-available-protocols"
+#define H3ZERO_WT_PROTOCOL "wt-protocol"
 
 #define H3ZERO_CAPSULE_CLOSE_WEBTRANSPORT_SESSION 0x2843
 #define H3ZERO_CAPSULE_DRAIN_WEBTRANSPORT_SESSION 0x78ae
@@ -129,6 +141,8 @@ typedef enum {
     http_header_user_agent,
     http_header_x_forwarded_for,
     http_header_x_frame_options,
+    http_header_wt_available_protocols,
+    http_header_wt_protocol,
 	http_header_max
 } http_header_enum_t;
 
@@ -185,12 +199,21 @@ typedef struct st_h3zero_header_parts_t {
     h3zero_method_enum method;
     uint8_t const * path;
     size_t path_length;
+    uint8_t const * authority;
+    size_t authority_length;
+    uint8_t const* origin;
+    size_t origin_length;
     uint8_t const * range;
     size_t range_length;
     int status;
     h3zero_content_type_enum content_type;
     uint8_t const * protocol;
     size_t protocol_length;
+    uint8_t const* wt_available_protocols;
+    size_t wt_available_protocols_length;
+    uint8_t const* wt_protocol;
+    size_t wt_protocol_length;
+
     unsigned int path_is_huffman : 1;
 } h3zero_header_parts_t;
 
@@ -201,12 +224,17 @@ typedef struct st_h3zero_header_parts_t {
  */
 #define h3zero_setting_reserved = 0x0
 #define h3zero_setting_header_table_size 0x1
-#define h3zero_setting_max_header_list_size 0x6
+#define h3zero_setting_max_field_section_size 0x6
 #define h3zero_qpack_blocked_streams 0x07
 #define h3zero_setting_grease_signature 0x0a0a
 #define h3zero_setting_grease_mask 0x0f0f
 #define h3zero_settings_enable_connect_protocol 0x8
 #define h3zero_setting_h3_datagram 0x33
+/* Draft WebTransport enablement setting. Picoquic deliberately does not
+ * advertise the WT session flow-control SETTINGS: QUIC flow control already
+ * bounds resource use, and picoquic keeps one WT session per QUIC connection.
+ */
+#define h3zero_settings_wt_enabled 0x2c7cf000
 #define h3zero_settings_webtransport_max_sessions 0x14e9cd29
 #define h3zero_settings_webtransport_max_sessions_old 0xc671706aull
 /* Chrome compatibility: SETTINGS_ENABLE_WEBTRANSPORT from older draft */
@@ -214,12 +242,14 @@ typedef struct st_h3zero_header_parts_t {
 
 typedef struct st_h3zero_settings_t {
     uint64_t webtransport_max_sessions;
+    uint64_t webtransport_enabled;
     uint64_t table_size;
     uint64_t max_header_list_size;
     uint64_t blocked_streams;
     unsigned int enable_connect_protocol : 1;
     unsigned int h3_datagram : 1;
     unsigned int settings_received : 1;
+    unsigned int web_transport_legacy : 1;
 } h3zero_settings_t;
 
 extern uint8_t const * h3zero_default_setting_frame;
@@ -253,7 +283,7 @@ uint8_t* h3zero_create_request_header_frame_ex(uint8_t* bytes, uint8_t* bytes_ma
     char const* host, char const* ua_string);
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     char const* authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const* origin, char const* ua_string);
+    char const* origin, char const* ua_string, char const * wt_available_protocols);
 uint8_t* h3zero_create_post_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
     uint8_t const* path, size_t path_length, uint8_t const* range, size_t range_length,
     char const* host, h3zero_content_type_enum content_type, char const* ua_string);
@@ -261,7 +291,8 @@ uint8_t * h3zero_create_response_header_frame(uint8_t * bytes, uint8_t * bytes_m
     h3zero_content_type_enum doc_type);
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string);
 uint8_t* h3zero_create_response_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max,
-    h3zero_content_type_enum doc_type, char const* server_string);
+    h3zero_content_type_enum doc_type, char const* server_string,
+    char const* wt_protocol);
 uint8_t * h3zero_create_not_found_header_frame(uint8_t * bytes, uint8_t * bytes_max);
 uint8_t* h3zero_create_not_found_header_frame_ex(uint8_t* bytes, uint8_t* bytes_max, char const* server_string);
 uint8_t * h3zero_create_bad_method_header_frame(uint8_t * bytes, uint8_t * bytes_max);
@@ -279,6 +310,7 @@ typedef struct st_h3zero_data_stream_state_t {
     uint64_t control_stream_id;
     uint8_t frame_header[16];
     size_t frame_header_read;
+    char const * wt_protocol;
     unsigned int is_upgrade_requested:1;
     unsigned int is_web_transport : 1;
     unsigned int frame_prefix_parsed : 1;
@@ -308,7 +340,7 @@ typedef struct st_h3zero_data_stream_state_t {
 
 size_t h3zero_varint_skip(const uint8_t* bytes);
 size_t h3zero_varint_decode(const uint8_t* bytes, size_t max_bytes, uint64_t* n64);
-uint8_t* h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
+const uint8_t* h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* result, uint8_t* buffer, size_t* buffer_length);
 void h3zero_release_header_parts(h3zero_header_parts_t* header);
 
 int hzero_qpack_huffman_decode(uint8_t * bytes, uint8_t * bytes_max,

@@ -1,0 +1,46 @@
+---
+name: "CIThreadCheck"
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  citests:
+    name: CI-Tests-Thread-Check
+    runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # We must fetch at least the immediate parents so that if this is
+          # a pull request then we can checkout the head.
+          submodules: 'recursive'
+
+      - name: Building picoquic
+        run: |
+          sudo apt-get install clangd
+          sudo apt-get install -y libssl-dev
+          echo $CC
+          echo $CXX
+          # $CC --version
+          ./ci/build_picotls.sh
+          cmake -S . -B build "-DWITH_THREAD_CHECK=ON"
+          cmake --build build
+
+      - name: Perform Unit Tests
+        run: |
+            ulimit -c unlimited -S
+            cd build
+            make picoquic_ct
+            ./picoquic_ct -S .. -n && QUICRESULT=$?
+            if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
+            exit 1

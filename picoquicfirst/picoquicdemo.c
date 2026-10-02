@@ -109,7 +109,7 @@ typedef struct st_server_loop_cb_t {
 } server_loop_cb_t;
 
 static int server_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
-    void* callback_ctx, void * callback_arg)
+    void* callback_ctx, void * UNUSED(callback_arg))
 {
     int ret = 0;
     server_loop_cb_t* cb_ctx = (server_loop_cb_t*)callback_ctx;
@@ -164,10 +164,10 @@ typedef struct st_demoserver_post_test_t {
     char posted[256];
 } demoserver_post_test_t;
 
-int demoserver_post_callback(picoquic_cnx_t* cnx,
+int demoserver_post_callback(picoquic_cnx_t* UNUSED(cnx),
     uint8_t* bytes, size_t length,
     picohttp_call_back_event_t event, h3zero_stream_ctx_t* stream_ctx,
-    void * callback_ctx)
+    void* UNUSED(callback_ctx))
 {
     int ret = 0;
     demoserver_post_test_t* ctx = (demoserver_post_test_t*)stream_ctx->path_callback_ctx;
@@ -266,20 +266,21 @@ int demoserver_post_callback(picoquic_cnx_t* cnx,
 picohttp_server_path_item_t path_item_list[2] =
 {
     {
-        "/post",
-        5,
-        demoserver_post_callback,
-        NULL
+        .path = "/post",
+        .path_length = 5,
+        .path_callback = demoserver_post_callback
     },
     {
-        "/baton",
-        6,
-        wt_baton_callback,
-        NULL
+        .path = "/baton",
+        .path_length = 6,
+        .path_callback = wt_baton_callback,
+        .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+        .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+        .origin_validator = h3zero_origin_validator_allow_all
     }
 };
 
-int quic_server(const char* server_name, picoquic_quic_config_t * config, int just_once)
+int quic_server(picoquic_quic_config_t * config, int just_once)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -288,6 +289,12 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
     picohttp_server_parameters_t picoquic_file_param;
     server_loop_cb_t loop_cb_ctx;
 
+
+    if (config->nb_threads > 1) {
+        fprintf(stdout, "Sorry, but the program picoquicdemo is not designed to run threaded loops.\n");
+        return -1;
+    }
+
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = config->www_dir;
     picoquic_file_param.path_table = path_item_list;
@@ -295,69 +302,47 @@ int quic_server(const char* server_name, picoquic_quic_config_t * config, int ju
 
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;
+    current_time = picoquic_current_time();
+
+
+    if (config->ticket_file_name == NULL) {
+        ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
+    }
+    if (ret == 0 && config->token_file_name == NULL) {
+        ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
+    }
 
     /* Setup the server context */
     if (ret == 0) {
-        current_time = picoquic_current_time();
         /* Create QUIC context */
+        ret = picoquic_server_set_context(&qserver, config, current_time, NULL, &picoquic_file_param,
+            picoquic_demo_server_callback_select_alpn);
 
-        if (config->ticket_file_name == NULL) {
-            ret = picoquic_config_set_option(config, picoquic_option_Ticket_File_Name, ticket_store_filename);
+        if (ret == 0 && config->qlog_dir != NULL) {
+            picoquic_set_qlog(qserver, config->qlog_dir);
         }
-        if (ret == 0 && config->token_file_name == NULL) {
-            ret = picoquic_config_set_option(config, picoquic_option_Token_File_Name, token_store_filename);
-        }
+
         if (ret == 0) {
-            qserver = picoquic_create_and_configure(config, NULL, &picoquic_file_param, current_time, NULL);
-            if (qserver == NULL) {
-                ret = -1;
-            }
-            else {
-                picoquic_set_key_log_file_from_env(qserver);
+            /* Wait for packets */
+            picoquic_packet_loop_param_t param = { 0 };
+            picoquic_network_thread_ctx_t thread_ctx = { 0 };
 
-                picoquic_set_alpn_select_fn_v2(qserver, picoquic_demo_server_callback_select_alpn);
+            param.local_port = config->local_port;
+            param.public_port = config->server_port;
+            param.is_port_shared = config->is_port_shared;
+            param.local_af = 0;
+            param.dest_if = config->dest_if;
+            param.socket_buffer_size = config->socket_buffer_size;
+            param.do_not_use_gso = config->do_not_use_gso;
 
-                picoquic_use_unique_log_names(qserver, 1);
+            thread_ctx.quic = qserver;
+            thread_ctx.param = &param;
+            thread_ctx.loop_callback = server_loop_cb;
+            thread_ctx.loop_callback_ctx = &loop_cb_ctx;
 
-                if (config->qlog_dir != NULL)
-                {
-                    picoquic_set_qlog(qserver, config->qlog_dir);
-                }
-                if (config->performance_log != NULL)
-                {
-                    ret = picoquic_perflog_setup(qserver, config->performance_log);
-                }
-                if (ret == 0 && config->cnx_id_cbdata != NULL) {
-                    picoquic_load_balancer_config_t lb_config;
-                    ret = picoquic_lb_compat_cid_config_parse(&lb_config, config->cnx_id_cbdata, strlen(config->cnx_id_cbdata));
-                    if (ret != 0) {
-                        fprintf(stdout, "Cannot parse the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
-                    }
-                    else {
-                        ret = picoquic_lb_compat_cid_config(qserver, &lb_config);
-                        if (ret != 0) {
-                            fprintf(stdout, "Cannot set the CNX_ID config policy: %s.\n", config->cnx_id_cbdata);
-                        }
-                    }
-                }
-                if (ret == 0) {
-                    fprintf(stdout, "Accept enable multipath: %d.\n", qserver->default_multipath_option);
-                }
-                qserver->default_tp.is_reset_stream_at_enabled = 1;
-                qserver->default_tp.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
-            }
+            (void)picoquic_packet_loop_v3((void*)&thread_ctx);
+            ret = thread_ctx.return_code;
         }
-    }
-
-    if (ret == 0) {
-        /* Wait for packets */
-#if _WINDOWS_BUT_WE_ARE_UNIFYING
-        ret = picoquic_packet_loop_win(qserver, config->server_port, 0, config->dest_if, 
-            config->socket_buffer_size, server_loop_cb, &loop_cb_ctx);
-#else
-        ret = picoquic_packet_loop(qserver, config->server_port, 0, config->dest_if,
-            config->socket_buffer_size, config->do_not_use_gso, server_loop_cb, &loop_cb_ctx);
-#endif
     }
 
     /* And exit */
@@ -410,6 +395,7 @@ typedef struct st_client_loop_cb_t {
     struct sockaddr_storage server_address;
     struct sockaddr_storage client_address;
     struct sockaddr_storage client_alt_address[PICOQUIC_NB_PATH_TARGET];
+    struct sockaddr_storage server_alt_address[PICOQUIC_NB_PATH_TARGET];
     int client_alt_if[PICOQUIC_NB_PATH_TARGET];
     int client_alt_state[PICOQUIC_NB_PATH_TARGET];
     int nb_alt_paths;
@@ -446,34 +432,57 @@ char * picoquic_strsep(char **stringp, const char *delim)
  * alt_ip is the ip of the alternative path
  * src_if is the index of the interface where the alt_ip is bounded with
  */
-int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_ip, int *nb_alt_paths)
+int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct sockaddr_storage *alt_client_ip,
+  struct sockaddr_storage *alt_server_ip, int *nb_alt_paths, struct sockaddr_storage *default_server_ip)
 {
     int ret = 0;
-    int valid_ip, valid_index = 0;
-    char *token, *token2, *ptr, *str;
-    str = malloc(sizeof(char) * (strlen(mp_config) + 1));
+    size_t config_len = strlen(mp_config) + 1;
+    int valid_new_entry = 0;
+    char *token, *token2, *end_ptr, *alt_path, *ptr, *str;
+    uint16_t server_port = (default_server_ip->ss_family == AF_INET) ? ((struct sockaddr_in*)default_server_ip)->sin_port : ((struct sockaddr_in6*)default_server_ip)->sin6_port;
+    str = malloc(sizeof(char) * config_len);
+    alt_path = malloc(sizeof(char) * config_len);
     if (str == NULL) {
         ret = -1;
     }
-    memcpy(str, mp_config, sizeof(char) * (strlen(mp_config) + 1));
+    memcpy(str, mp_config, sizeof(char) * config_len);
     ptr = str;
 
     while ((token = picoquic_strsep(&str, ","))) {
         struct sockaddr_storage ip;
-        valid_index = valid_ip = 0;
+        valid_new_entry = 0;
+        memcpy(alt_path, token, sizeof(char) * (strnlen(token, config_len - 1) + 1));
 
-        while ((token2 = picoquic_strsep(&token, "/"))) {
+        if ((token2 = picoquic_strsep(&token, "/")) != 0) {
             if (picoquic_store_text_addr(&ip, token2, 0) == 0) {
-                memcpy(alt_ip+(*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
-                valid_ip = 1;
-            }
-            if (atoi(token2) >= 0) {
-                *(src_if+(*nb_alt_paths)) = atoi(token2);
-                valid_index = 1;
+                memcpy(alt_client_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                if ((token2 = picoquic_strsep(&token, "/")) == NULL) {
+                    *(src_if + (*nb_alt_paths)) = 0;
+                    memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                    valid_new_entry = 1;
+                }
+                else {
+                    *(src_if + (*nb_alt_paths)) = (int)strtol(token2, &end_ptr, 10);
+                    if (*end_ptr) {
+                        fprintf(stdout, "Unexpected interface index %s, skipping the alternative path %s\n", token2, alt_path);
+                    }
+                    else {
+                        if (token) {
+                            if (picoquic_store_text_addr(&ip, token, server_port) == 0){
+                                memcpy(alt_server_ip + (*nb_alt_paths), &ip, sizeof(struct sockaddr_storage));
+                                valid_new_entry = 1;
+                            }
+                        }
+                        else {
+                            memcpy(alt_server_ip + (*nb_alt_paths), default_server_ip, sizeof(struct sockaddr_storage));
+                            valid_new_entry = 1;
+                        }
+                    }
+                }
             }
         }
 
-        if ((valid_ip == 1) && (valid_index == 1)){
+        if (valid_new_entry == 1 && alt_client_ip[*nb_alt_paths].ss_family == alt_server_ip[*nb_alt_paths].ss_family){
             (*nb_alt_paths)++;
             /* If more than PICOQUIC_NB_PATH_TARGET alt paths are specified, the remaining are ignored */
             if (*nb_alt_paths >= PICOQUIC_NB_PATH_TARGET) {
@@ -481,6 +490,7 @@ int picoquic_parse_client_multipath_config(char *mp_config, int *src_if, struct 
             }
         }
     }
+    free(alt_path);
     free(ptr);
     return ret;
 }
@@ -552,7 +562,7 @@ int client_create_additional_path(picoquic_cnx_t* cnx, client_loop_cb_t* cb_ctx)
         }
 
         cb_ctx->client_alt_state[i] = 1; /* Unless we detect a transient error, mark this path as tried */
-        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_address,
+        if ((ret = picoquic_probe_new_path_ex(cb_ctx->cnx_client, (struct sockaddr*)&cb_ctx->server_alt_address[i],
             addr_from, cb_ctx->client_alt_if[i], picoquic_get_quic_time(picoquic_get_quic_ctx(cnx)), 0)) != 0) {
             /* Check whether the code returned a transient error */
             if (ret == PICOQUIC_ERROR_PATH_ID_BLOCKED ||
@@ -593,7 +603,7 @@ void client_handle_path_allowed(picoquic_cnx_t* cnx, void* v_cb_ctx)
     }
 }
 
-int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+int client_loop_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
@@ -656,20 +666,24 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
             }
             else if (ret == 0 && (picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready ||
                 picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_client_ready_start)) {
-                if (cb_ctx->multipath_initiated == 0) {
-                    int is_already_allowed = 0;
-                    cb_ctx->multipath_initiated = 1;
-                    if ((ret = picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed)) == 0) {
-                        if (is_already_allowed) {
-                            ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                if (cb_ctx->cnx_client->is_multipath_enabled || cb_ctx->force_migration ||
+                    cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined)
+                {
+                    if (cb_ctx->multipath_initiated == 0) {
+                        int is_already_allowed = 0;
+                        cb_ctx->multipath_initiated = 1;
+                        if (picoquic_subscribe_new_path_allowed(cb_ctx->cnx_client, &is_already_allowed) == 0) {
+                            if (is_already_allowed) {
+                                ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                            }
                         }
                     }
-                }
-                if (!cb_ctx->multipath_probe_done && cb_ctx->cnx_client->is_notified_that_path_is_allowed) {
-                    ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                    if (!cb_ctx->multipath_probe_done && cb_ctx->cnx_client->is_notified_that_path_is_allowed) {
+                        ret = client_create_additional_path(cb_ctx->cnx_client, cb_ctx);
+                    }
                 }
                 /* Track the migration to server preferred address */
-                if (cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
+                if (cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined && !cb_ctx->migration_to_preferred_finished) {
                     if (picoquic_compare_addr(
                         (struct sockaddr*) & cb_ctx->server_address, (struct sockaddr*) & cb_ctx->cnx_client->path[0]->first_tuple->peer_addr) != 0) {
                         fprintf(stdout, "Migrated to server preferred address!\n");
@@ -697,7 +711,7 @@ int client_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
                 if (cb_ctx->force_migration && cb_ctx->migration_started == 0 && cb_ctx->address_updated &&
                     picoquic_get_cnx_state(cb_ctx->cnx_client) == picoquic_state_ready &&
                     (cb_ctx->cnx_client->first_remote_cnxid_stash->cnxid_stash_first != NULL || cb_ctx->force_migration == 1) &&
-                    (!cb_ctx->cnx_client->remote_parameters.prefered_address.is_defined ||
+                    (!cb_ctx->cnx_client->remote_parameters.preferred_address.is_defined ||
                         cb_ctx->migration_to_preferred_finished)) {
                     int mig_ret = 0;
                     cb_ctx->migration_started = 1;
@@ -971,12 +985,15 @@ int quic_client(const char* ip_address_text, int server_port,
                 picoquic_set_desired_version(cnx_client, config->desired_version);
             }
 
-            fprintf(stdout, "Max stream id bidir remote before start = %d (%d)\n",
-                (int)cnx_client->max_stream_id_bidir_remote,
+            fprintf(stdout, "Max streams bidir remote before start = %d (%d)\n",
+                (int)cnx_client->max_streams_bidir_remote,
                 (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
 
             if (config->ech_target != NULL) {
                 picoquic_ech_configure_client(cnx_client, config->ech_target, config->ech_target_len);
+            }
+            else if (config->ech_target_len == SIZE_MAX) {
+                picoquic_ech_configure_client(cnx_client, NULL, 0);
             }
 
             if (ret == 0) {
@@ -986,8 +1003,8 @@ int quic_client(const char* ip_address_text, int server_port,
                     picoquic_supported_versions[cnx_client->version_index].version,
                     (unsigned long long)picoquic_val64_connection_id(picoquic_get_logging_cnxid(cnx_client)));
 
-                fprintf(stdout, "Max stream id bidir remote after start = %d (%d)\n",
-                    (int)cnx_client->max_stream_id_bidir_remote,
+                fprintf(stdout, "Max streams bidir remote after start = %d (%d)\n",
+                    (int)cnx_client->max_streams_bidir_remote,
                     (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
             }
 
@@ -995,8 +1012,8 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (picoquic_is_0rtt_available(cnx_client) && (config->proposed_version & 0x0a0a0a0a) != 0x0a0a0a0a) {
                     loop_cb.zero_rtt_available = 1;
 
-                    fprintf(stdout, "Max stream id bidir remote after 0rtt = %d (%d)\n",
-                        (int)cnx_client->max_stream_id_bidir_remote,
+                    fprintf(stdout, "Max streams bidir remote after 0rtt = %d (%d)\n",
+                        (int)cnx_client->max_streams_bidir_remote,
                         (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
 
                     /* Queue a simple frame to perform 0-RTT test */
@@ -1010,7 +1027,9 @@ int quic_client(const char* ip_address_text, int server_port,
     /* Wait for packets */
     if (ret == 0) {
         if (config->multipath_alt_config != NULL) {
-            picoquic_parse_client_multipath_config(config->multipath_alt_config, loop_cb.client_alt_if, loop_cb.client_alt_address, &loop_cb.nb_alt_paths);
+            picoquic_parse_client_multipath_config(config->multipath_alt_config, loop_cb.client_alt_if,
+                loop_cb.client_alt_address, loop_cb.server_alt_address,
+                &loop_cb.nb_alt_paths, &loop_cb.server_address);
         }
 
         loop_cb.cnx_client = cnx_client;
@@ -1108,6 +1127,10 @@ int quic_client(const char* ip_address_text, int server_port,
         }
 
         if (loop_cb.force_migration){
+            if (cnx_client->remote_parameters.migration_disabled) {
+                fprintf(stdout, "Migration is disabled by the server.\n");
+                picoquic_log_app_message(cnx_client, "%s", "Migration is disabled by the server.");
+            }
             if (!loop_cb.migration_started) {
                 fprintf(stdout, "Could not start testing migration.\n");
                 picoquic_log_app_message(cnx_client, "%s", "Could not start testing migration.");
@@ -1291,8 +1314,7 @@ int quic_client(const char* ip_address_text, int server_port,
     return ret;
 }
 
-/* TODO: rewrite using common code */
-void usage()
+void usage(void)
 {
     fprintf(stderr, "PicoQUIC demo client and server\n");
     fprintf(stderr, "Usage: picoquicdemo <options> [server_name [port [scenario]]] \n");
@@ -1300,9 +1322,10 @@ void usage()
     fprintf(stderr, "  For the server mode, use -p to specify the port.\n");
     picoquic_config_usage();
     fprintf(stderr, "Picoquic demo options:\n");
-    fprintf(stderr, "  -A \"ip/ifindex[,ip/ifindex]\"  IP and interface index for multipath alternative\n");
-    fprintf(stderr, "                        path, e.g. \"10.0.0.2/3,10.0.0.3/4\". This option only\n");
-    fprintf(stderr, "                        affects the behavior of the client.\n");
+    fprintf(stderr, "  -A \"client_ip/ifindex[/server_ip][,client_ip/ifindex[/server_ip]]\"  IPs and client\n");
+    fprintf(stderr, "                        interface index for multipath alternative path,\n");
+    fprintf(stderr, "                        e.g. \"10.0.0.2/3,10.0.0.3/4/10.1.1.1\".\n");
+    fprintf(stderr, "                        This option only affects the behavior of the client.\n");
     fprintf(stderr, "                        Use -A ::0/0 or -A 0.0.0.0/0 to test multipath with\n");
     fprintf(stderr, "                        a second path from the same IP and different port.\n");
     fprintf(stderr, "  -f migration_mode     Force client to migrate to start migration:\n");
@@ -1429,7 +1452,7 @@ int main(int argc, char** argv)
         /* Run as server */
         printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
             PICOQUIC_VERSION, config.server_port, server_name, just_once, config.do_retry);
-        ret = quic_server(server_name, &config, just_once);
+        ret = quic_server(&config, just_once);
         printf("Server exit with code = %d\n", ret);
     }
     else {

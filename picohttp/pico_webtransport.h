@@ -63,7 +63,8 @@ extern "C" {
      *              this is defined in h3zero_common.h
      * wt_ctx: application level context for that connection.
      */
-    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx);
+    int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback,
+        void* wt_ctx, char const* wt_available_protocols);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */
@@ -82,10 +83,23 @@ extern "C" {
         size_t error_msg_len;
     } picowt_capsule_t;
 
-    int picowt_receive_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
+    int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t* capsule);
     void picowt_release_capsule(picowt_capsule_t* capsule);
 
     void picowt_deregister(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
+
+    /* Unwind a partially completed accept/connect setup after a fatal error,
+     * undoing any stream prefix registration done so far. If a prefix had
+     * already been declared for stream_ctx (typically via
+     * h3zero_declare_stream_prefix during the application's own context
+     * init), this fires the application's deregister callback as a side
+     * effect, which is expected to free the application context. Returns 1
+     * if the caller must still free its own application context itself, or
+     * 0 if the deregister callback already did so -- freeing it again in
+     * that case would be a double free. See wt_baton_accept in wt_baton.c
+     * for an example of use.
+     */
+    int picowt_abort_registration(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* stream_ctx);
 
     /**
     * Create local stream: when a stream is created locally. 
@@ -98,6 +112,28 @@ extern "C" {
     /* Reset local stream
      */
     int picowt_reset_stream(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, uint64_t local_stream_error);
+
+    /* Select the protocol to use for the web transport session, among the ones supported by the peer.
+     * This should be called by the server before accepting a web transport session.
+     * If the peer provided a "WT_AVAILABLE_PROTOCOLS" header, the code will parse the
+     * parameter list and select the first protocol that is also present in the
+     * "supported" list provided as argument.
+     * 
+     * The supported list is a character string with the format "protocol1, protocol2, protocol3",
+     * where the protocol names are separated by comma and optional space.
+     * The code will select the first protocol in the client list that is also supported
+     * by the server, and set it in the stream_ctx of the web transport session.
+     * 
+     * Return value is 0 if successful, -1 if no common protocol is found, including if the peer did
+     * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
+     */
+    int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
+
+    /* Get the authority from a WebTransport request.
+     * Returns a pointer to the null-terminated authority string, or NULL if not present.
+     * The pointer is valid for the lifetime of the stream context.
+     */
+    const char* picowt_get_authority(h3zero_stream_ctx_t* stream_ctx);
 
 #ifdef __cplusplus
 }

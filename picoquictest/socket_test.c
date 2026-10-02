@@ -162,7 +162,7 @@ int socket_test_port(picoquic_server_sockets_t* server_sockets, int test_port)
     return ret;
 }
 
-int socket_test()
+int socket_test(void)
 {
     int ret = 0;
     int test_port = 12345;
@@ -231,7 +231,7 @@ int socket_ecn_test_one(int af_domain)
     return ret;
 }
 
-int socket_ecn_test()
+int socket_ecn_test(void)
 {
     int ret;
 

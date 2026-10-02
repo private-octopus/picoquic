@@ -23,6 +23,7 @@
 #define PICOQUIC_UTILS_H
 
 #include <stdio.h>
+#include <string.h>
 #include <inttypes.h>
 #include "picoquic.h"
 
@@ -62,6 +63,7 @@ extern "C" {
 #define PICOQUIC_QUICCTX 3
 #define PICOQUIC_FRAME 4
 #define PICOQUIC_LOSS_RECOVERY 5
+#define PICOQUIC_QMUX 6
 #define SET_LAST_WAKE(quic, file_id) ((quic)->wake_file = file_id, (quic)->wake_line = __LINE__)
 
 /* Macros for handling conversion between data rate, microseconds and bytes
@@ -117,6 +119,8 @@ void picoquic_get_ip_addr(struct sockaddr * addr, uint8_t ** ip_addr, uint8_t * 
 int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* ip_address_text, uint16_t port);
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size);
 int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_family, uint16_t port);
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t* preferred,
+    char const* v4_text, char const* v6_text, uint16_t preferred_port);
 
 /* Setting the solution dir when not executing from default location */
 void picoquic_set_solution_dir(char const* solution_dir);
@@ -170,8 +174,29 @@ FILE * picoquic_file_close(FILE * F);
 
 int picoquic_file_delete(char const* file_name, int* last_err);
 
+/* Sanity check of a path or file name to prevent directory traversal. See util.c for details. */
+int picoquic_is_path_sane(const uint8_t* path, size_t path_length);
+
 /* Skip and decoding functions */
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t size);
+/* static inline: called on the packet-parse hot path, and must fold away to nothing when only its NULL-ness is checked */
+static inline const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
+{
+    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
+    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
+}
+/* Same bound check as picoquic_frames_fixed_skip, but for the encode side: copies size bytes from src if they fit */
+static inline uint8_t* picoquic_frames_fixed_copy(uint8_t* bytes, const uint8_t* bytes_max, const uint8_t* src, size_t size)
+{
+    uint8_t* next_bytes;
+    if (bytes == NULL || size > (size_t)(bytes_max - bytes)) {
+        next_bytes = NULL;
+    }
+    else {
+        memcpy(bytes, src, size);
+        next_bytes = bytes + size;
+    }
+    return next_bytes;
+}
 const uint8_t* picoquic_frames_varint_skip(const uint8_t * bytes, const uint8_t * bytes_max);
 const uint8_t* picoquic_frames_varint_decode(const uint8_t * bytes, const uint8_t * bytes_max, uint64_t * n64);
 const uint8_t* picoquic_frames_varlen_decode(const uint8_t * bytes, const uint8_t * bytes_max, size_t * n);

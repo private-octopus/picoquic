@@ -96,6 +96,9 @@
     <ClCompile Include="picoquic_lb_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="picoquic_ptls_fusion_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="satellite_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -144,6 +147,9 @@
     <ClCompile Include="quic_tester.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="quicctx_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="cpu_limited.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -168,6 +174,9 @@
     <ClCompile Include="pacing_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="packet_names_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="p2p_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -189,6 +198,9 @@
     <ClCompile Include="picolog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="performance_log_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="memlog_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -196,9 +208,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="cc_compete_test.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="picoquic_ns.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="hystart_test.c">
@@ -219,13 +228,16 @@
     <ClCompile Include="rctl_aqm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="dualq_aqm.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="dualq_aqm_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="qlog_frame_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="qmux_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="scone_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

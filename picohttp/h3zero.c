@@ -31,9 +31,16 @@
  * The server will start the connection by sending a setting frame, which will
  * specify a zero-length dynamic dictionary for QPACK.
  */
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#ifdef _WINDOWS
+#define picoquic_strncasecmp _strnicmp
+#else
+#include <strings.h>
+#define picoquic_strncasecmp strncasecmp
+#endif
 #include "h3zero.h"
 
 /*
@@ -368,7 +375,7 @@ int h3zero_parse_status(uint8_t * content, size_t content_length)
     int val = 0;
 
     for (size_t i = 0; i < content_length; i++) {
-        if (content[i] >= '0' && content[i] <= '9') {
+        if (content[i] >= '0' && content[i] <= '9' && val < 100000000) {
             val *= 10;
             val += content[i] - '0';
         }
@@ -420,80 +427,141 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
         bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x7F, &v_length);
     }
     if (bytes != NULL) {
-        if (bytes + v_length > bytes_max) {
+        if (v_length > (size_t)(bytes_max - bytes)) {
             bytes = NULL;
-        } else {
-            if (is_huffman && hzero_qpack_huffman_decode(
-                bytes, bytes + v_length, deHuff, sizeof(deHuff), &decoded_length) == 0)
-            {
-                decoded = deHuff;
+        }
+        else {
+            if (is_huffman) {
+                if (hzero_qpack_huffman_decode(
+                    bytes, bytes + v_length, deHuff, sizeof(deHuff), &decoded_length) == 0)
+                {
+                    decoded = deHuff;
+                }
+                else {
+                    /* this is an error case, should be treated as such. */
+                    bytes = NULL;
+                }
             }
             else {
                 decoded = bytes;
-                decoded_length = (size_t) v_length;
+                decoded_length = (size_t)v_length;
             }
 
-            switch (header) {
-            case http_pseudo_header_method:
-                if (parts->method != h3zero_method_none) {
-                    /* Duplicate method! */
-                    bytes = 0;
+            if (bytes != NULL) {
+                switch (header) {
+                case http_pseudo_header_method:
+                    if (parts->method != h3zero_method_none) {
+                        /* Duplicate method! */
+                        bytes = 0;
+                    }
+                    else {
+                        parts->method = h3zero_get_method_by_name(decoded, decoded_length);
+                    }
+                    break;
+                case http_header_content_type:
+                    if (parts->content_type != h3zero_content_type_none) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        parts->content_type = h3zero_get_content_type_by_name(decoded, decoded_length);
+                    }
+                    break;
+                case http_pseudo_header_status:
+                    if (parts->status != 0) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        /* TODO: decimal to binary */
+                        parts->status = h3zero_parse_status(decoded, decoded_length);
+                    }
+                    break;
+                case http_pseudo_header_path:
+                    if (parts->path != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->path, &parts->path_length);
+                    }
+                    break;
+                case http_pseudo_header_authority:
+                    if (parts->authority != NULL) {
+                        /* Duplicate authority! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->authority, &parts->authority_length);
+                    }
+                    break;
+                case http_header_origin:
+                    if (parts->origin != NULL) {
+                        /* Duplicate origin! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->origin, &parts->origin_length);
+                    }
+                    break;
+                case http_header_range:
+                    if (parts->range != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->range, &parts->range_length);
+                    }
+                    break;
+                case http_pseudo_header_protocol:
+                    if (parts->protocol != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->protocol, &parts->protocol_length);
+                    }
+                    break;
+
+                case http_header_wt_available_protocols:
+                    if (parts->wt_available_protocols != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->wt_available_protocols, &parts->wt_available_protocols_length);
+                    }
+                    break;
+
+                case http_header_wt_protocol:
+                    if (parts->wt_protocol != NULL) {
+                        /* Duplicate content type! */
+                        bytes = 0;
+                    }
+                    else {
+                        bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
+                            decoded_length, &parts->wt_protocol, &parts->wt_protocol_length);
+                        /* WT-Protocol is a Structured Header String — strip surrounding quotes */
+                        if (parts->wt_protocol != NULL && parts->wt_protocol_length >= 2 &&
+                            parts->wt_protocol[0] == '"' &&
+                            parts->wt_protocol[parts->wt_protocol_length - 1] == '"') {
+                            uint8_t* p = (uint8_t*)parts->wt_protocol;
+                            parts->wt_protocol_length -= 2;
+                            memmove(p, p + 1, parts->wt_protocol_length);
+                            p[parts->wt_protocol_length] = 0;
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
                 }
-                else {
-                    parts->method = h3zero_get_method_by_name(decoded, decoded_length);
-                }
-                break;
-            case http_header_content_type:
-                if (parts->content_type != h3zero_content_type_none) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    parts->content_type = h3zero_get_content_type_by_name(decoded, decoded_length);
-                }
-                break;
-            case http_pseudo_header_status:
-                if (parts->status != 0) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    /* TODO: decimal to binary */
-                    parts->status = h3zero_parse_status(decoded, decoded_length);
-                }
-                break;
-            case http_pseudo_header_path:
-                if (parts->path != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->path, &parts->path_length);
-                }
-                break;
-            case http_header_range:
-                if (parts->range != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->range, &parts->range_length);
-                }
-                break;
-            case http_pseudo_header_protocol:
-                if (parts->protocol != NULL) {
-                    /* Duplicate content type! */
-                    bytes = 0;
-                }
-                else {
-                    bytes = h3zero_parse_qpack_header_value_string(bytes, decoded,
-                        decoded_length, &parts->protocol, &parts->protocol_length);
-                }
-                break;
-            default:
-                break;
             }
 
             if (bytes != NULL) {
@@ -508,12 +576,15 @@ uint8_t * h3zero_parse_qpack_header_value(uint8_t * bytes, uint8_t * bytes_max,
 int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int is_huffman)
 {
     char const  * interesting_header_name[] = {
-     ":method", ":path", ":status", "content-type", ":protocol", "origin", "range", NULL};
+     ":method", ":path", ":authority", ":status", "content-type", ":protocol", "origin", "range",
+     H3ZERO_WT_AVAILABLE_PROTOCOLS, H3ZERO_WT_PROTOCOL,
+     NULL};
     const http_header_enum_t interesting_header[] = {
         http_pseudo_header_method, http_pseudo_header_path,
+        http_pseudo_header_authority,
         http_pseudo_header_status, http_header_content_type,
         http_pseudo_header_protocol, http_header_origin,
-        http_header_range
+        http_header_range, http_header_wt_available_protocols, http_header_wt_protocol
     };
     http_header_enum_t val = http_header_unknown;
     uint8_t deHuff[256];
@@ -525,12 +596,13 @@ int h3zero_get_interesting_header_type(uint8_t * name, size_t name_length, int i
             name_length = nb_decoded;
         }
     }
-
-    for (int i = 0; interesting_header_name[i] != NULL; i++) {
-        if (strlen(interesting_header_name[i]) == name_length &&
-            memcmp(interesting_header_name[i], name, name_length) == 0) {
-            val = interesting_header[i];
-            break;
+    if (name_length > 0) {
+        for (int i = 0; interesting_header_name[i] != NULL; i++) {
+            if (strlen(interesting_header_name[i]) == name_length &&
+                picoquic_strncasecmp(interesting_header_name[i], (const char*)name, name_length) == 0) {
+                val = interesting_header[i];
+                break;
+            }
         }
     }
 
@@ -563,7 +635,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x3F, &s_index);
 
-            if (s_index > h3zero_qpack_nb_static) {
+            if (s_index >= h3zero_qpack_nb_static) {
                 /* Index out of range */
                 bytes = NULL;
             }
@@ -630,7 +702,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x0F, &s_index);
             if (bytes != NULL) {
-                if (s_index > h3zero_qpack_nb_static) {
+                if (s_index >= h3zero_qpack_nb_static) {
                     /* Index out of range */
                     bytes = NULL;
                 } else {
@@ -646,7 +718,7 @@ uint8_t * h3zero_parse_qpack_header_frame(uint8_t * bytes, uint8_t * bytes_max,
 
             bytes = h3zero_qpack_int_decode(bytes, bytes_max, 0x07, &n_length);
             if (bytes != NULL) {
-                if (bytes + n_length > bytes_max) {
+                if (n_length > (uint64_t)(bytes_max - bytes)) {
                     bytes = NULL;
                 }
                 else {
@@ -803,7 +875,7 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
         int code = -1;
         for (size_t i = 0; i < h3zero_qpack_nb_static; i++) {
             if (qpack_static[i].header == http_header_content_type &&
-                qpack_static[i].enum_as_int == content_type) {
+                qpack_static[i].enum_as_int == (int)content_type) {
                 code = qpack_static[i].index;
                 break;
             }
@@ -823,7 +895,7 @@ uint8_t * h3zero_encode_content_type(uint8_t * bytes, uint8_t * bytes_max, h3zer
 
 uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     char const * authority, uint8_t const* path, size_t path_length, char const* protocol,
-    char const * origin, char const* ua_string)
+    char const * origin, char const* ua_string, char const * wt_available_protocols)
 {
     if (bytes == NULL || bytes + 2 > bytes_max) {
         return NULL;
@@ -852,6 +924,12 @@ uint8_t* h3zero_create_connect_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     /* User Agent */
     if (ua_string != NULL) {
         bytes = h3zero_qpack_literal_plus_ref_encode(bytes, bytes_max, H3ZERO_QPACK_USER_AGENT, (uint8_t const*)ua_string, strlen(ua_string));
+    }
+    /* WT Available Protocols */
+    if (wt_available_protocols != NULL) {
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max, 
+            (uint8_t*)H3ZERO_WT_AVAILABLE_PROTOCOLS, strlen(H3ZERO_WT_AVAILABLE_PROTOCOLS),
+            (uint8_t*)wt_available_protocols, strlen(wt_available_protocols));
     }
     return bytes;
 }
@@ -936,7 +1014,8 @@ uint8_t* h3zero_create_request_header_frame(uint8_t* bytes, uint8_t* bytes_max,
 }
 
 uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * bytes_max,
-    h3zero_content_type_enum doc_type, char const* server_string)
+    h3zero_content_type_enum doc_type, char const* server_string, 
+    char const * wt_protocol)
 {
 
     if (bytes == NULL || bytes + 2 > bytes_max) {
@@ -959,13 +1038,23 @@ uint8_t * h3zero_create_response_header_frame_ex(uint8_t * bytes, uint8_t * byte
         bytes = h3zero_encode_content_type(bytes, bytes_max, doc_type);
     }
 
+    if (wt_protocol != NULL) {
+        /* WT-Protocol is a Structured Header String and must be quoted per spec */
+        char quoted[258];
+        int quoted_len = snprintf(quoted, sizeof(quoted), "\"%s\"", wt_protocol);
+        bytes = h3zero_qpack_literal_plus_name_encode(bytes, bytes_max,
+            (uint8_t*)H3ZERO_WT_PROTOCOL, strlen(H3ZERO_WT_PROTOCOL),
+            (uint8_t*)quoted, (size_t)quoted_len);
+    }
+
     return bytes;
 }
 
 uint8_t* h3zero_create_response_header_frame(uint8_t* bytes, uint8_t* bytes_max,
     h3zero_content_type_enum doc_type)
 {
-    return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type, H3ZERO_USER_AGENT_STRING);
+    return h3zero_create_response_header_frame_ex(bytes, bytes_max, doc_type,
+        H3ZERO_USER_AGENT_STRING, NULL);
 }
 
 uint8_t* h3zero_create_error_frame(uint8_t* bytes, uint8_t* bytes_max, char const* error_code, char const* server_string)
@@ -1033,7 +1122,7 @@ uint8_t* h3zero_create_bad_method_header_frame(uint8_t* bytes, uint8_t* bytes_ma
  * length of the encoding. If there are zero bytes, the first byte
  * to be read will be placed in the buffer.
  */
-uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
+const uint8_t * h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * result, uint8_t * buffer, size_t* buffer_length)
 {
     uint8_t* bp = buffer + *buffer_length;
     uint8_t* be;
@@ -1053,10 +1142,9 @@ uint8_t * h3zero_varint_from_stream(uint8_t* bytes, uint8_t* bytes_max, uint64_t
     }
 
     if (bp >= be) {
+        /* The accumulation loop above is bounded by bp < be, so bp == be here: never past be. */
         (void)h3zero_varint_decode(buffer, bp - buffer, result);
-        if ((*buffer_length = bp - be) > 0) {
-            memmove(buffer, be, *buffer_length);
-        }
+        *buffer_length = 0;
     }
     return bytes;
 }
@@ -1068,6 +1156,16 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         *((uint8_t**)&header->path) = NULL;
         header->path_length = 0;
     }
+    if (header->authority != NULL) {
+        free((uint8_t*)header->authority);
+        *((uint8_t**)&header->authority) = NULL;
+        header->authority_length = 0;
+    }
+    if (header->origin != NULL) {
+        free((uint8_t*)header->origin);
+        *((uint8_t**)&header->origin) = NULL;
+        header->origin_length = 0;
+    }
     if (header->range != NULL) {
         free((uint8_t*)header->range);
         *((uint8_t**)&header->range) = NULL;
@@ -1077,6 +1175,16 @@ void h3zero_release_header_parts(h3zero_header_parts_t* header)
         free((uint8_t*)header->protocol);
         *((uint8_t**)&header->protocol) = NULL;
         header->protocol_length = 0;
+    }
+    if (header->wt_available_protocols != NULL) {
+        free((uint8_t*)header->wt_available_protocols);
+        *((uint8_t**)&header->wt_available_protocols) = NULL;
+        header->wt_available_protocols_length = 0;
+    }
+    if (header->wt_protocol != NULL) {
+        free((uint8_t*)header->wt_protocol);
+        *((uint8_t**)&header->wt_protocol) = NULL;
+        header->wt_protocol_length = 0;
     }
 }
 
@@ -1088,6 +1196,11 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 
     if (stream_state->trailer_found){
         h3zero_release_header_parts(&stream_state->trailer);
+    }
+
+    if (stream_state->wt_protocol != NULL) {
+        free((char *)stream_state->wt_protocol);
+        stream_state->wt_protocol = NULL;;
     }
 
     if (stream_state->current_frame != NULL) {
@@ -1106,29 +1219,41 @@ void h3zero_delete_data_stream_state(h3zero_data_stream_state_t * stream_state)
 static uint8_t const h3zero_default_setting_frame_val[] = {
     0, /* Control Stream ID, varint = 0 */
     (uint8_t)h3zero_frame_settings, /* var int frame type ( < 64) */
-    27, /* Length of setting frame content */
+    0x25, /* Length of setting frame content */
     (uint8_t)h3zero_setting_header_table_size, 0, /* var int type ( < 64), then var int value (0) */
+    (uint8_t)h3zero_setting_max_field_section_size, 0x80, 0x01, 0, 0, /* var int type ( < 64), the var in value 0x10000 */
     (uint8_t)h3zero_qpack_blocked_streams, 0, /* var int type ( < 64),  then var int value (0) Control*/
     /* enable_connect_protocol = 0x8 */
     (uint8_t)h3zero_settings_enable_connect_protocol, 1,
     /* datagram support */
     (uint8_t)h3zero_setting_h3_datagram, 1,
-    /* Declare max 1 web transport session (draft-14: SETTINGS_WT_MAX_SESSIONS) */
+    /* SETTINGS_WT_ENABLED. Picoquic does not advertise WebTransport
+     * session flow-control settings: QUIC flow control already bounds the
+     * data, and picoquic keeps one WebTransport session per QUIC connection.
+     */
+    ((h3zero_settings_wt_enabled >> 24)&0xff)|0x80,
+    (uint8_t)((h3zero_settings_wt_enabled >> 16)&0xff),
+    (uint8_t)((h3zero_settings_wt_enabled >> 8)&0xff),
+    (uint8_t)((h3zero_settings_wt_enabled)&0xff), 1,
+    /* WT_MAX_SESSIONS, drafts 13-14 */
     ((h3zero_settings_webtransport_max_sessions >> 24)&0xff)|0x80,
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 16)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions >> 8)&0xff),
     (uint8_t)((h3zero_settings_webtransport_max_sessions)&0xff), 1,
-    /* Old draft: SETTINGS_WEBTRANSPORT_MAX_SESSIONS */
-    0xc0, 0x00, 0x00, 0x00,
-    ((h3zero_settings_webtransport_max_sessions_old >> 24) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8) & 0xff),
-    (uint8_t)((h3zero_settings_webtransport_max_sessions_old) & 0xff), 1,
-    /* Chrome compatibility: SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) */
-    ((h3zero_settings_enable_webtransport >> 24)&0xff)|0x80,
-    (uint8_t)((h3zero_settings_enable_webtransport >> 16)&0xff),
-    (uint8_t)((h3zero_settings_enable_webtransport >> 8)&0xff),
-    (uint8_t)((h3zero_settings_enable_webtransport)&0xff), 1
+    /* WEBTRANSPORT_MAX_SESSIONS, drafts 7-12 */
+    (uint8_t)(((h3zero_settings_webtransport_max_sessions_old >> 56)&0xff)|0xc0),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 48)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 40)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 32)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 24)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 16)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old >> 8)&0xff),
+    (uint8_t)((h3zero_settings_webtransport_max_sessions_old)&0xff), 1,
+    /* ENABLE_WEBTRANSPORT, draft 2-6 */
+    ((h3zero_settings_enable_webtransport >> 24) & 0xff) | 0x80,
+    (uint8_t)((h3zero_settings_enable_webtransport >> 16) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport >> 8) & 0xff),
+    (uint8_t)((h3zero_settings_enable_webtransport) & 0xff), 1
 };
 
 uint8_t const * h3zero_default_setting_frame = h3zero_default_setting_frame_val;
@@ -1781,7 +1906,7 @@ int hzero_qpack_huffman_decode(uint8_t* bytes, uint8_t* bytes_max, uint8_t* deco
         else
         {
             /* input is too long */
-            was_all_ones = 1;
+            was_all_ones = 0;
             break;
         }
     }

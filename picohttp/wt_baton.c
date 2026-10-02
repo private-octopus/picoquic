@@ -343,11 +343,19 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      * processed directly at the web transport layer.
      */
     if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
-            ret = picowt_receive_capsule(cnx, stream_ctx, bytes, bytes + length, &baton_ctx->capsule);
+            ret = picowt_receive_capsule(cnx, bytes, (bytes == NULL)?NULL:(bytes + length), &baton_ctx->capsule);
+            if (ret == 0 &&
+                baton_ctx->capsule.h3_capsule.is_stored &&
+                baton_ctx->capsule.h3_capsule.capsule_type == picowt_capsule_drain_webtransport_session) {
+                /* Drain is advisory; legacy apps may not handle the callback. */
+                (void)wt_baton_callback(cnx, NULL, 0, picohttp_callback_drain, stream_ctx, path_app_ctx);
+            }
             if (ret == 0 && is_fin) {
                 stream_ctx->ps.stream_state.is_fin_received = 1;
                 baton_ctx->baton_state = wt_baton_state_closed;
                 if (baton_ctx->is_client) {
+                    /* Most baton memory is allocated on the stack, but not the capsule! */
+                    picowt_release_capsule(&baton_ctx->capsule);
                     ret = picoquic_close(cnx, 0);
                 }
                 else {
@@ -381,7 +389,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             if (receive_id == SIZE_MAX) {
                 if (receive_available == SIZE_MAX) {
                     /* unexpected incoming stream */
-                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64 ", expected %" PRIu64,
+                    picoquic_log_app_message(cnx, "Received baton data on wrong stream %" PRIu64,
                         stream_ctx->stream_id);
                     ret = wt_baton_close_session(cnx, baton_ctx, WT_BATON_SESSION_ERR_BRUH, "Data on wrong stream!");
                 }
@@ -395,8 +403,11 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
 
-            /* Process to receive the stream */
-            if (ret == 0) {
+            /* Process to receive the stream. receive_id stays SIZE_MAX when
+             * the "wrong stream" branch above ran: wt_baton_close_session
+             * commonly returns 0 (a graceful close was successfully queued),
+             * so ret == 0 alone does not mean a lane was assigned. */
+            if (ret == 0 && receive_id != SIZE_MAX) {
                 wt_baton_incoming_t* incoming_ctx = &baton_ctx->incoming[receive_id];
 
                 if (length > 0) {
@@ -555,7 +566,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             const uint8_t* queries = path + query_offset;
             size_t queries_length = path_length - query_offset;
 
-            if (h3zero_query_parameter_number(queries, queries_length, "version", 5, &baton_ctx->version, 0) != 0 ||
+            if (h3zero_query_parameter_number(queries, queries_length, "version", 7, &baton_ctx->version, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "baton", 5, &baton_ctx->initial_baton, 0) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "count", 5, &baton_ctx->nb_lanes, 1) != 0 ||
                 h3zero_query_parameter_number(queries, queries_length, "inject", 6, &baton_ctx->inject_error, 0) != 0) {
@@ -580,11 +591,9 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     /* Accept an incoming connection */
     int wt_baton_accept(picoquic_cnx_t * cnx,
         uint8_t * path, size_t path_length,
-        struct st_h3zero_stream_ctx_t* stream_ctx,
-        void* path_app_ctx)
+        struct st_h3zero_stream_ctx_t* stream_ctx)
     {
         int ret = 0;
-        wt_baton_app_ctx_t* app_ctx = (wt_baton_app_ctx_t*)path_app_ctx;
         h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
         wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
         if (baton_ctx == NULL) {
@@ -592,7 +601,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         }
         else {
             /* register the incoming stream ID */
-            ret = wt_baton_ctx_init(baton_ctx, h3_ctx, app_ctx, stream_ctx);
+            ret = wt_baton_ctx_init(baton_ctx, h3_ctx, stream_ctx);
 
             /* init the global parameters */
             if (path != NULL && path_length > 0) {
@@ -612,6 +621,15 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                     baton_ctx->lanes[lane_id].first_baton = (uint8_t)baton_ctx->initial_baton;
                     /* Get the relaying started */
                     ret = wt_baton_relay(cnx, NULL, baton_ctx, lane_id);
+                }
+            }
+            if (ret != 0) {
+                /* wt_baton_ctx_init, above, may already have declared the
+                 * control stream prefix with baton_ctx as its context. If
+                 * so, unwinding that registration frees baton_ctx via our
+                 * own deregister callback -- see picowt_abort_registration. */
+                if (picowt_abort_registration(cnx, h3_ctx, stream_ctx)) {
+                    free(baton_ctx);
                 }
             }
         }
@@ -682,7 +700,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
 
     /* Management of datagrams
      */
-    int wt_baton_receive_datagram(picoquic_cnx_t * cnx,
+    int wt_baton_receive_datagram(
         const uint8_t * bytes, size_t length,
         struct st_h3zero_stream_ctx_t* stream_ctx,
         void* path_app_ctx)
@@ -711,9 +729,8 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         return ret;
     }
 
-    int wt_baton_provide_datagram(picoquic_cnx_t * cnx,
+    int wt_baton_provide_datagram(
         void* context, size_t space,
-        struct st_h3zero_stream_ctx_t* stream_ctx,
         void* path_app_ctx)
     {
         int ret = 0;
@@ -775,7 +792,8 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             * Then, callback the application. That means the WT app context
             * should be obtained from the path app context, etc.
             */
-            ret = wt_baton_accept(cnx, bytes, length, stream_ctx, path_app_ctx);
+            (void)picowt_select_wt_protocol(stream_ctx, PICOWT_BATON_ALPN_FILTER);
+            ret = wt_baton_accept(cnx, bytes, length, stream_ctx);
             break;
         case picohttp_callback_connect_refused:
             /* The response from the server has arrived and it is negative. The
@@ -783,11 +801,27 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             * Do we need an error code? Maybe pass as bytes + length.
             * Application should clean up the app context.
             */
+            picoquic_log_app_message(cnx, "WT Connection refused on stream %" PRIu64 ", status= %d",
+                stream_ctx->stream_id,
+                stream_ctx->ps.stream_state.header.status);
             break;
         case picohttp_callback_connect_accepted: /* Connection request was accepted by peer */
             /* The response from the server has arrived and it is positive.
              * The application can start sending data.
              */
+            picoquic_log_app_message(cnx, "WT Connection accepted on stream %" PRIu64 ", protocol= %s",
+                stream_ctx->stream_id,
+                stream_ctx->ps.stream_state.header.wt_protocol != NULL ? (char const*)stream_ctx->ps.stream_state.header.wt_protocol : "none");
+            if (stream_ctx->ps.stream_state.header.wt_protocol != NULL){
+                /* For test purpose, copy the result of the negotiation in the baton context. */
+                wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)path_app_ctx;
+                size_t wt_protocol_len = strlen((char const*)stream_ctx->ps.stream_state.header.wt_protocol);
+                if (wt_protocol_len > 254) {
+                    wt_protocol_len = 254;
+                }
+                memcpy(baton_ctx->wt_protocol, stream_ctx->ps.stream_state.header.wt_protocol, wt_protocol_len);
+                baton_ctx->wt_protocol[wt_protocol_len] = 0;
+            }
             break;
         case picohttp_callback_post_fin:
         case picohttp_callback_post_data:
@@ -806,10 +840,10 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             /* Data received on a stream for which the per-app stream context is known.
             * the app just has to process the data.
             */
-            ret = wt_baton_receive_datagram(cnx, bytes, length, stream_ctx, path_app_ctx);
+            ret = wt_baton_receive_datagram(bytes, length, stream_ctx, path_app_ctx);
             break;
         case picohttp_callback_provide_datagram: /* Stack is ready to send a datagram */
-            ret = wt_baton_provide_datagram(cnx, bytes, length, stream_ctx, path_app_ctx);
+            ret = wt_baton_provide_datagram(bytes, length, path_app_ctx);
             break;
         case picohttp_callback_reset: /* Stream has been abandoned. */
             /* If control stream: abandon the whole connection. */
@@ -817,6 +851,10 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             break;
         case picohttp_callback_stop_sending: /* peer wants to abandon the stream */
             ret = wt_baton_stream_stop(cnx, stream_ctx, path_app_ctx);
+            break;
+        case picohttp_callback_drain:
+            ((wt_baton_ctx_t*)path_app_ctx)->baton_state = wt_baton_state_done;
+            picoquic_log_app_message(cnx, "WT drain received on stream %" PRIu64, stream_ctx->stream_id);
             break;
         case picohttp_callback_free: /* Used during clean up the stream. Only cause the freeing of memory. */
             /* Free the memory attached to the stream */
@@ -845,7 +883,7 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     /* Initialize the content of a wt_baton context.
     * TODO: replace internal pointers by pointer to h3zero context
     */
-    int wt_baton_ctx_init(wt_baton_ctx_t * baton_ctx, h3zero_callback_ctx_t * h3_ctx, wt_baton_app_ctx_t * app_ctx, h3zero_stream_ctx_t * stream_ctx)
+    int wt_baton_ctx_init(wt_baton_ctx_t * baton_ctx, h3zero_callback_ctx_t * h3_ctx, h3zero_stream_ctx_t * stream_ctx)
     {
         int ret = 0;
 
@@ -881,37 +919,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         return ret;
 }
 
-int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event,
-    h3zero_stream_ctx_t* stream_ctx,
-    wt_baton_ctx_t* baton_ctx)
-{
-    int ret = 0;
-
-    if (stream_ctx == NULL) {
-        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, baton_ctx->h3_ctx, 1, 1);
-        picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
-    }
-    if (stream_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        uint8_t* bytes_max = bytes + length;
-
-        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx, cnx);
-
-        if (bytes == NULL) {
-            picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
-            ret = -1;
-        }
-        else if (bytes < bytes_max) {
-            ret = h3zero_post_data_or_fin(cnx, bytes, bytes_max - bytes, fin_or_event, stream_ctx);
-        }
-    }
-    return ret;
-}
-
 /*
 * wt_baton_prepare_context:
 * Prepare the application context (baton_ctx), documenting the h3 context,
@@ -925,11 +932,12 @@ int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
 {
     int ret = 0;
 
-    wt_baton_ctx_init(baton_ctx, h3_ctx, NULL, NULL);
+    wt_baton_ctx_init(baton_ctx, h3_ctx, NULL);
     baton_ctx->cnx = cnx;
     baton_ctx->is_client = 1;
     baton_ctx->authority = server_name;
     baton_ctx->server_path = path;
+    baton_ctx->control_stream_id = control_stream_ctx->stream_id;
 
     baton_ctx->connection_ready = 1;
     baton_ctx->is_client = 1;

@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include "picoquic_internal.h"
+#include "picoquic_unified_log.h"
 #include "bytestream.h"
 #include "csv.h"
 #include "svg.h"
@@ -42,7 +43,7 @@
 */
 #define AUTOQLOG_BAD_QLOG "no_such_folder/bad\\folder"
 
-int autoqlog_bad_file()
+int autoqlog_bad_file(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -61,7 +62,7 @@ int autoqlog_bad_file()
 	return ret;
 }
 
-int autoqlog_no_binlog()
+int autoqlog_no_binlog(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -74,16 +75,17 @@ int autoqlog_no_binlog()
 	if (ret == 0) {
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
-
+#if 0
 		picoquic_string_free(cnx->binlog_file_name);
 		cnx->binlog_file_name = picoquic_string_duplicate(AUTOQLOG_BAD_QLOG);
+#endif
 	}
 
 	picoquic_test_delete_minimal_cnx(&quic, &cnx);
 	return ret;
 }
 
-int autoqlog_longdir()
+int autoqlog_longdir(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -106,7 +108,7 @@ int autoqlog_longdir()
 	return ret;
 }
 
-int autoqlog_unique()
+int autoqlog_unique(void)
 {
 	picoquic_quic_t* quic = NULL;
 	picoquic_cnx_t* cnx = NULL;
@@ -122,7 +124,8 @@ int autoqlog_unique()
 		ret = picoquic_set_qlog(quic, long_qlog);
 	}
 	if (ret == 0) {
-		binlog_new_connection(cnx);
+		/* TODO: fix that, It assumes that binlog is the only method declared in context. */
+		binlog_new_connection(cnx, (void*)".", & cnx->log_ctx[0]);
 		/* Initialize the client connection */
 		ret = picoquic_start_client_cnx(cnx);
 	}
@@ -131,7 +134,7 @@ int autoqlog_unique()
 	return ret;
 }
 
-int qlog_auto_test()
+int qlog_auto_test(void)
 {
 	int ret = autoqlog_bad_file();
 
@@ -196,6 +199,68 @@ int qlog_error_string(FILE* F)
 	return ret;
 }
 
+/* Test common function for writing a byte string with proper escape for JSON */
+int qlog_fns_chars(FILE* f, const uint8_t* s, uint64_t l);
+#define QLOG_JSON_ESCAPE_FILE "qlol_json_escape_file.txt"
+
+int qlog_json_escape_test(void)
+{
+	int ret = 0;
+	static const uint8_t escape_input[] = { 0xFF, 0x01, 0x7F };
+	static const char* expected = "\"\\u00ff\\u0001\\u007f\"";
+	char line[256];
+	FILE* F;
+
+	F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+	if (F == NULL) {
+		ret = -1;
+	}
+	else {
+		qlog_fns_chars(F, escape_input, sizeof(escape_input));
+		F = picoquic_file_close(F);
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_fns_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		bytestream bs = { 0 };
+		bs.data = (uint8_t*)escape_input;
+		bs.size = sizeof(escape_input);
+		bs.ptr = 0;
+
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
+		if (F == NULL) {
+			ret = -1;
+		}
+		else {
+			qlog_chars(F, &bs, bs.size);
+			F = picoquic_file_close(F);
+		}
+	}
+
+	if (ret == 0) {
+		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
+		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
+			DBG_PRINTF("qlog_chars did not escape as %s", expected);
+			ret = -1;
+		}
+		if (F != NULL) {
+			F = picoquic_file_close(F);
+		}
+	}
+
+	return ret;
+}
+
 static uint8_t qlog_pref_addr[] = {
 	/* IPv4 address */
 	10, 0, 0, 1,
@@ -216,6 +281,95 @@ static uint8_t qlog_pref_addr[] = {
 	16, 17, 18, 19
 };
 void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len);
+
+/* test proper rendering of preferred IPv4 address in qlog. */
+#define QLOG_FNS_PREFADDR_FILE "qlog_fns_preferred_address_test.txt"
+static uint8_t qlog_fns_pref_addr_bytes[] = {
+    /* IPv4 address */
+    10, 0, 0, 99,
+    /* IPv4 port */
+    1, 4,
+    /* IPv6 address */
+    2, 1, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16,
+    /* IPv6 port */
+    2, 8,
+    /* CID len */
+    4,
+    /* CID value */
+    15, 14, 13, 12,
+    /* Reset token */
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+};
+void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len);
+
+/* Render bytes/len through qlog_fns_preferred_address and compare the whole file
+ * content against expected, potentially detecting JSON formatting errors. */
+static int qlog_fns_pref_addr_check(const uint8_t* bytes, uint64_t len, char const* expected)
+{
+    int ret = 0;
+    char line[512];
+    FILE* F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_preferred_address(F, bytes, len);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_PREFADDR_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            char* line_read = fgets(line, sizeof(line), F);
+            if (line_read == NULL || strcmp(line_read, expected) != 0) {
+                DBG_PRINTF("Unexpected preferred address rendering: %s", (line_read == NULL) ? "(empty)" : line_read);
+                ret = -1;
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
+int qlog_fns_pref_addr_test(void)
+{
+    int ret = 0;
+    /* Exactly the four bytes the "len >= 4" admission check guarantees -- reading past it is the OOB bug this guards against. The trailing "port_v4":0 is a separate pre-existing quirk: that field prints before its own failed decode is checked. */
+    uint8_t* min_bytes = (uint8_t*)malloc(4);
+
+    if (min_bytes == NULL) {
+        ret = -1;
+    }
+    else {
+        memcpy(min_bytes, qlog_fns_pref_addr_bytes, 4);
+        ret = qlog_fns_pref_addr_check(min_bytes, 4, "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":0}");
+        free(min_bytes);
+    }
+
+    /* Full TP, no extra bytes. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes),
+            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\"}");
+    }
+
+    /* Full TP, with 4 trailing extra bytes -- exercises the "extra_bytes" field and the separator before it. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_pref_addr, sizeof(qlog_pref_addr),
+            "{\"ip_v4\": \"10.0.0.1\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\", \"extra_bytes\": \"10111213\"}");
+    }
+
+    return ret;
+}
 
 int qlog_pref_addr_test(FILE* F)
 {
@@ -268,6 +422,70 @@ int qlog_pref_vnego_test(FILE* F)
 		ret = -1;
 	}
 	return ret;
+}
+
+#define QLOG_FNS_VNEGO_FILE "qlog_fns_tp_version_negotiation_test.txt"
+void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len);
+
+static int qlog_fns_vnego_check(const uint8_t* bytes, uint64_t len, char const* expected)
+{
+    int ret = 0;
+    char line[512];
+    FILE* F = picoquic_file_open(QLOG_FNS_VNEGO_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_tp_version_negotiation(F, bytes, len);
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_check_json_well_formed(QLOG_FNS_VNEGO_FILE);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Version negotiation TP rendering is not well-formed JSON.");
+        }
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_FNS_VNEGO_FILE, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            char* line_read = fgets(line, sizeof(line), F);
+            if (line_read == NULL || strcmp(line_read, expected) != 0) {
+                DBG_PRINTF("Unexpected version negotiation TP rendering: %s", (line_read == NULL) ? "(empty)" : line_read);
+                ret = -1;
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    return ret;
+}
+
+/* Render the same version-negotiation TP bytes used by qlog_pref_vnego_test through the
+ * live-path sibling qlog_fns_tp_version_negotiation, checking both exact content and that
+ * the output is well-formed JSON -- qlog_fns_tp_version_negotiation used to omit its
+ * opening "{", and its "bad_length" branch used to leave a string unterminated. */
+int qlog_fns_vnego_test(void)
+{
+    int ret = qlog_fns_vnego_check(qlog_vnego_tp_input, sizeof(qlog_vnego_tp_input),
+        "{\"chosen\": \"00000002\", \"others\": [\"00000001\",\"01020304\",\"05060708\"]}");
+
+    if (ret == 0) {
+        /* Length not a multiple of 4: exercises the "bad_length" branch. */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 15, "{\"bad_length\": \"15\"}");
+    }
+
+    if (ret == 0) {
+        /* Zero length is also treated as "bad_length". */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 0, "{\"bad_length\": \"0\"}");
+    }
+
+    return ret;
 }
 
 uint8_t qlog_tp_extension_input[] = {
@@ -330,7 +548,7 @@ int qlog_tp_extension_test(FILE* F)
 	return ret;
 }
 
-int qlog_error_test()
+int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
 	int ret = (F == NULL) ? -1 : 0;
@@ -359,5 +577,191 @@ int qlog_error_test()
 	if (F != NULL) {
 		F = picoquic_file_close(F);
 	}
+
+	if (ret == 0) {
+		ret = qlog_fns_pref_addr_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_fns_vnego_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_json_escape_test();
+	}
+
 	return ret;
+}
+
+/* Minimal structural well-formedness check: balanced {}/[] and properly closed,
+ * properly escaped strings. Not a full RFC 8259 validator, but enough to catch the
+ * class of bug where a frame-rendering off-by-one corrupts the JSON structure --
+ * a text diff against a reference file would not catch that if the reference file was
+ * itself generated from already-broken output. */
+int picoquic_check_json_well_formed(char const* fname)
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open(fname, "r");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        int c;
+        int in_string = 0;
+        int is_escaped = 0;
+        size_t depth = 0;
+        char stack[256];
+        long line = 1;
+
+        while (ret == 0 && (c = fgetc(F)) != EOF) {
+            if (c == '\n') {
+                line++;
+            }
+            if (in_string) {
+                if (is_escaped) {
+                    is_escaped = 0;
+                }
+                else if (c == '\\') {
+                    is_escaped = 1;
+                }
+                else if (c == '"') {
+                    in_string = 0;
+                }
+                else if ((unsigned char)c < 0x20) {
+                    DBG_PRINTF("Unescaped control character 0x%02x in JSON string, %s line %ld", c, fname, line);
+                    ret = -1;
+                }
+            }
+            else if (c == '"') {
+                in_string = 1;
+            }
+            else if (c == '{' || c == '[') {
+                if (depth >= sizeof(stack)) {
+                    DBG_PRINTF("JSON nesting too deep in %s", fname);
+                    ret = -1;
+                }
+                else {
+                    stack[depth] = (char)c;
+                    depth++;
+                }
+            }
+            else if (c == '}' || c == ']') {
+                char expected = (c == '}') ? '{' : '[';
+                if (depth == 0 || stack[depth - 1] != expected) {
+                    DBG_PRINTF("Unbalanced JSON closer '%c' in %s, line %ld", c, fname, line);
+                    ret = -1;
+                }
+                else {
+                    depth--;
+                }
+            }
+        }
+
+        if (ret == 0 && in_string) {
+            DBG_PRINTF("JSON file %s ends inside an unterminated string", fname);
+            ret = -1;
+        }
+        if (ret == 0 && depth != 0) {
+            DBG_PRINTF("JSON file %s ends with %zu unclosed brace(s)/bracket(s)", fname, depth);
+            ret = -1;
+        }
+
+        (void)picoquic_file_close(F);
+    }
+
+    return ret;
+}
+
+/* qlog_fns_new_connection names the output file after the initial CID's hex form
+ * (see qlog_fns_set_file_name), so an explicit, non-random CID is needed here -- a
+ * client-mode cnx created with a null initial CID gets a random one instead. */
+#define QLOG_FNS_TRIM_FILE "09090909.client.qlog"
+
+/* qlog_fns_get_path_context keeps a per-connection list of path contexts, one per
+ * unique_path_id it has ever seen a cc_dump event for. When that list grows past the
+ * connection's current number of paths, it calls qlog_fns_trim_path_contexts to drop
+ * entries for paths that no longer exist. Exercise that by creating three paths, cc-
+ * dumping all of them (three contexts remembered), abandoning one, then creating a new
+ * path and cc-dumping again -- the new, not-yet-seen path id pushes the remembered count
+ * over the live path count, triggering the trim of the abandoned path's stale entry. */
+int qlog_fns_trim_path_contexts_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    const picoquic_connection_id_t initial_cid = {
+        { 9, 9, 9, 9 }, 4
+    };
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+        (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* picoquic_create_path returns the new path's array index (>= 0) on success,
+         * or -1 on failure -- it is not a plain 0/nonzero status code. */
+        cnx->is_multipath_enabled = 1;
+
+        if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 1) < 0 ||
+            picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 2) < 0) {
+            ret = -1;
+        }
+        else if (picoquic_set_qlog(quic, ".") != 0) {
+            ret = -1;
+        }
+        else {
+            picoquic_log_new_connection(cnx);
+
+            /* Dump all three paths: creates three remembered path contexts. */
+            for (int i = 0; i < cnx->nb_paths; i++) {
+                cnx->path[i]->is_cc_data_updated = 1;
+            }
+            picoquic_log_cc_dump(cnx, simulated_time);
+
+            /* Abandon the path with unique_path_id 1. */
+            picoquic_delete_path(cnx, 1);
+
+            /* Create a new, not-yet-seen path: nb_paths is 3 again (ids 0, 2, 3), but
+             * the qlog context list still has 3 entries for ids 0, 1, 2 -- adding a
+             * context for id 3 pushes that list to 4, past nb_paths, triggering trim. */
+            if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 3) < 0) {
+                ret = -1;
+            }
+            else {
+                for (int i = 0; i < cnx->nb_paths; i++) {
+                    cnx->path[i]->is_cc_data_updated = 1;
+                }
+                picoquic_log_cc_dump(cnx, simulated_time);
+            }
+        }
+
+        picoquic_log_close_connection(cnx);
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_check_json_well_formed(QLOG_FNS_TRIM_FILE);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Trim-path-contexts QLOG output is not well-formed JSON.");
+        }
+    }
+
+    return ret;
 }

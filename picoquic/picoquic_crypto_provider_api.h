@@ -48,7 +48,7 @@ extern "C" {
         unsigned int* is_cert_store_not_empty, picoquic_dispose_certificate_verifier_t * free_certificate_verifier_fn);
     typedef int (*picoquic_set_tls_root_certificates_t)(ptls_context_t* ctx, ptls_iovec_t* certs, size_t count);
     typedef int (*picoquic_explain_crypto_error_t)(char const** err_file, int* err_line);
-    typedef void (*picoquic_clear_crypto_errors_t)();
+    typedef void (*picoquic_clear_crypto_errors_t)(void);
     typedef void (*picoquic_set_random_provider_in_ctx_t)(ptls_context_t* ctx);
     typedef void (*picoquic_crypto_random_provider_t)(void *buf, size_t len);
     typedef int (*picoquic_keyex_from_key_file_t)(ptls_key_exchange_context_t** keyex, const char* keypem);
@@ -75,6 +75,7 @@ extern "C" {
 /* Additional definitions required for testing and verification */
 
 #define PICOQUIC_CIPHER_SUITES_NB_MAX 8
+#define PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX PICOQUIC_CIPHER_SUITES_NB_MAX
     struct st_picoquic_cipher_suites_t {
         ptls_cipher_suite_t* high_memory_suite;
         ptls_cipher_suite_t* low_memory_suite;
@@ -82,9 +83,8 @@ extern "C" {
 
     extern struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
-#define PICOQUIC_KEY_EXCHANGES_NB_MAX 4
+#define PICOQUIC_KEY_EXCHANGES_NB_MAX 8
     extern ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-    extern ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2];
 #define PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX 4
     extern ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1];
 #define PICOQUIC_HPKE_KEM_NB_MAX 3
@@ -124,6 +124,8 @@ extern "C" {
         size_t ext_data_size;
         uint8_t app_secret_enc[PTLS_MAX_DIGEST_SIZE];
         uint8_t app_secret_dec[PTLS_MAX_DIGEST_SIZE];
+        ptls_buffer_t tls_wbuf;
+        ptls_buffer_t tls_rbuf;
     } picoquic_tls_ctx_t;
 
 #ifdef __cplusplus

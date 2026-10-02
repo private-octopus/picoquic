@@ -37,7 +37,7 @@ picoquic_congestion_algorithm_t const* getter_test_cc_algo_list[8] = {
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
-void picoquic_register_all_congestion_control_algorithms()
+void picoquic_register_all_congestion_control_algorithms(void)
 {
     getter_test_cc_algo_list[0] = picoquic_newreno_algorithm;
     getter_test_cc_algo_list[1] = picoquic_cubic_algorithm;

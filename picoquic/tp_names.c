@@ -89,6 +89,9 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
     case picoquic_tp_reset_stream_at:
         tp_name = "reset_stream_at";
         break;
+    case picoquic_tp_is_scone_supported:
+        tp_name = "scone_supported";
+        break;
     default:
         break;
     }

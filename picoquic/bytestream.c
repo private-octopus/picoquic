@@ -383,15 +383,27 @@ int byteskip_cstr(bytestream * s)
     return ret;
 }
 
+/* The family marker on the wire is a protocol-defined constant (4 or 6, like the IP
+ * version number), not the platform's raw sa_family_t/AF_INET6 value -- that value is
+ * not portable (e.g. AF_INET6 is 23 on Windows, 10 on Linux), and encoding it directly
+ * made binlog files generated on one platform unreadable as intended on another. This
+ * follows the same pattern already used for the observed_address frame on the wire,
+ * which picks 4 vs 16 address bytes from a protocol-defined type rather than the raw
+ * platform family constant. */
+#define BYTESTREAM_ADDR_FAMILY_INET 4
+#define BYTESTREAM_ADDR_FAMILY_INET6 6
+
 int bytewrite_addr(bytestream* s, const struct sockaddr* addr)
 {
-    int ret = bytewrite_vint(s, addr->sa_family);
+    int ret;
     if (addr->sa_family == AF_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)addr;
+        ret = bytewrite_vint(s, BYTESTREAM_ADDR_FAMILY_INET);
         ret |= bytewrite_buffer(s, &s4->sin_addr, 4);
         ret |= bytewrite_int16(s, s4->sin_port);
     } else {
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr;
+        ret = bytewrite_vint(s, BYTESTREAM_ADDR_FAMILY_INET6);
         ret |= bytewrite_buffer(s, &s6->sin6_addr, 16);
         ret |= bytewrite_int16(s, s6->sin6_port);
     }
@@ -403,7 +415,7 @@ int byteread_addr(bytestream* s, struct sockaddr_storage * addr)
     uint64_t family = 0;
     int ret = byteread_vint(s, &family);
 
-    if (ret == 0 && family == AF_INET) {
+    if (ret == 0 && family == BYTESTREAM_ADDR_FAMILY_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)addr;
         s4->sin_family = AF_INET;
         ret |= byteread_buffer(s, &s4->sin_addr, 4);
@@ -422,7 +434,7 @@ int byteskip_addr(bytestream* s)
     uint64_t family = 0;
     int ret = byteread_vint(s, &family);
 
-    if (ret == 0 && family == AF_INET) {
+    if (ret == 0 && family == BYTESTREAM_ADDR_FAMILY_INET) {
         ret |= bytestream_skip(s, 4 + 2);
     } else {
         ret |= bytestream_skip(s, 16 + 2);

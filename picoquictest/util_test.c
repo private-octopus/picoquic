@@ -43,7 +43,7 @@ static const char* expected_str[4] = {
 
 static size_t test_cases = sizeof(expected_cnxid) / sizeof(picoquic_connection_id_t);
 
-int util_connection_id_print_test()
+int util_connection_id_print_test(void)
 {
     int ret = 0;  
     char cnxid_str[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
@@ -70,7 +70,7 @@ int util_connection_id_print_test()
     return ret;
 }
 
-int util_connection_id_parse_test()
+int util_connection_id_parse_test(void)
 {
     int ret = 0;  
     for (size_t i = 0; i < test_cases; ++i) {
@@ -88,7 +88,7 @@ int util_connection_id_parse_test()
     return ret;
 }
 
-int util_sprintf_test()
+int util_sprintf_test(void)
 {
     int ret = 0;
     size_t nb_chars;
@@ -130,7 +130,7 @@ char util_uint8_to_str_out2[] = {
    '.', 0
 };
 
-int util_uint8_to_str_test()
+int util_uint8_to_str_test(void)
 {
     int ret = 0;
     char text[16];
@@ -160,7 +160,7 @@ int util_uint8_to_str_test()
  * and if the time differences are not too high
  */
 
-int util_memcmp_test()
+int util_memcmp_test(void)
 {
     int ret = 0;
     size_t nb8 = (1 << 20) / sizeof(uint64_t);
@@ -227,7 +227,7 @@ int util_memcmp_test()
 
                 carry = 1;
                 time_start = picoquic_current_time();
-                for (int j = 0; j < nb_round; j++) {
+                for (uint64_t j = 0; j < nb_round; j++) {
                     x[j] ^= 1;
                     y[j] ^= 1;
                     carry &= (picoquic_constant_time_memcmp(x, y, l_total) != 0);
@@ -329,10 +329,10 @@ int util_memcmp_test()
 
 
 #define file_test_debug "file_test_debug.txt"
-FILE* get_debug_out();
-int get_debug_suspended();
+FILE* get_debug_out(void);
+int get_debug_suspended(void);
 
-int util_debug_print_test()
+int util_debug_print_test(void)
 {
     int ret = 0;
     int was_suspened = get_debug_suspended();
@@ -352,6 +352,21 @@ int util_debug_print_test()
             debug_printf_suspend();
         }
     }
+    return ret;
+}
+
+/* Make sure that debug_set_stream and debug_printf_pop_stream are tested at least once.  */
+int util_debug_pop_stream_test(void)
+{
+    int ret = 0;
+    FILE* old_debug_file = get_debug_out();
+
+    debug_set_stream(stderr);
+    debug_printf_pop_stream();
+    if (get_debug_out() != NULL) {
+        ret = -1;
+    }
+    debug_set_stream(old_debug_file);
     return ret;
 }
 
@@ -386,7 +401,7 @@ static picoquic_thread_return_t thread_test_function(void* vctx )
     picoquic_thread_do_return;
 }
 
-int util_threading_test()
+int util_threading_test(void)
 {
     thread_test_data_t ctx;
     picoquic_thread_t thread;
@@ -455,3 +470,99 @@ int util_threading_test()
     return ret;
 }
 
+static picoquic_thread_return_t wait_thread_test_function(void* vctx)
+{
+    int* p_done = (int*)vctx;
+    *p_done = 1;
+    picoquic_thread_do_return;
+}
+
+/* Exercise util_wait_thread_test, which is not used in the current
+* test suite. */
+int util_wait_thread_test(void)
+{
+    int ret = 0;
+    int done = 0;
+    picoquic_thread_t thread;
+
+    ret = picoquic_create_thread(&thread, wait_thread_test_function, &done);
+    if (ret != 0) {
+        DBG_PRINTF("Create thread returns %d (0x%x)", ret, ret);
+    }
+    else {
+        ret = picoquic_wait_thread(thread);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait for thread, ret = %d (0x%x)", ret, ret);
+        }
+        else if (!done) {
+            ret = -1;
+        }
+#ifdef _WINDOWS
+        CloseHandle(thread);
+#endif
+    }
+
+    return ret;
+}
+
+/* picoquic_is_path_sane rejects traversal and other unsafe path components;
+ * a leading '/' is accepted but not required, so both URL paths (h3zero) and 
+ * bare relative file names (the sample server) validate correctly. */
+int util_is_path_sane_test(void)
+{
+    int ret = 0;
+    char const* good[] = {
+        "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z", "/dir/index.html",
+        "index.html", "example.com.txt", "dir/index.html"
+    };
+    size_t nb_good = sizeof(good) / sizeof(char const*);
+    char const* bad[] = {
+        "/../index.html", "../index.html", "/dir/../secret.txt", "dir/../secret.txt",
+        "/5000000/", "/.123_45.png", ".123_45.png",
+        "/a-b-C-Z\\..\\password.txt", "//remote-server/example", ""
+    };
+    size_t nb_bad = sizeof(bad) / sizeof(char const*);
+
+    for (size_t i = 0; ret == 0 && i < nb_good; i++) {
+        if (picoquic_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
+            DBG_PRINTF("Found good path not good: %s\n", good[i]);
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
+        if (picoquic_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
+            DBG_PRINTF("Found bad path not bad: %s\n", bad[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* picoquic_set_addr_port is a public utility with no callers anywhere in the codebase --
+ * exercised here directly, for both the IPv4 and IPv6 sockaddr layouts it branches on. */
+int util_set_addr_port_test(void)
+{
+    int ret = 0;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    picoquic_set_addr_port((struct sockaddr*)&addr4, 1234);
+    if (addr4.sin_port != 1234) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&addr6, 0, sizeof(addr6));
+        addr6.sin6_family = AF_INET6;
+        picoquic_set_addr_port((struct sockaddr*)&addr6, 5678);
+        if (addr6.sin6_port != 5678) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}

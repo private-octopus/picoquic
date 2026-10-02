@@ -91,12 +91,11 @@ void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_p
     }
 }
 
-void picoquic_fastcc_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
+void picoquic_fastcc_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_fastcc_state_t* fastcc_state = path_x->congestion_alg_state;
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
     UNREFERENCED_PARAMETER(option_string);
 #endif
     
@@ -133,7 +132,14 @@ static void fastcc_notify_congestion(
 {
     if (fastcc_state->alg_state == picoquic_fastcc_freeze &&
         (!is_timeout || !fastcc_state->last_freeze_was_timeout) &&
+#if 0
+        /* last_freeze_was_not_delay is never actually read: is_delay is only ever 1 from the
+         * nb_cc_events threshold call site, which requires alg_state != freeze to be called at
+         * all, so whenever this guard's first clause is true, is_delay is already 0 here. */
         (!is_delay || !fastcc_state->last_freeze_was_not_delay)) {
+#else
+        !is_delay) {
+#endif
         /* Do not treat additional events during same freeze interval */
         return;
     }
@@ -155,7 +161,7 @@ static void fastcc_notify_congestion(
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
 
-    picoquic_update_pacing_data(cnx, path_x, 0);
+    picoquic_update_pacing_data(path_x, 0);
 
     path_x->is_ssthresh_initialized = 1;
 }
@@ -198,7 +204,7 @@ void picoquic_fastcc_notify(
                 /* Count the bytes since last RTT measurement */
                 fastcc_state->nb_bytes_ack_since_rtt += ack_state->nb_bytes_acknowledged;
                 /* Compute pacing data. */
-                picoquic_update_pacing_data(cnx, path_x, 0);
+                picoquic_update_pacing_data(path_x, 0);
             }
             break;
 
@@ -330,7 +336,7 @@ void picoquic_fastcc_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64
 #define picoquic_fastcc_ID "fast" 
 
 picoquic_congestion_algorithm_t picoquic_fastcc_algorithm_struct = {
-    picoquic_fastcc_ID, PICOQUIC_CC_ALGO_NUMBER_FAST,
+    picoquic_fastcc_ID, PICOQUIC_CC_ALGO_NUMBER_FAST, PICOQUIC_ECN_ECT_0,
     picoquic_fastcc_init,
     picoquic_fastcc_notify,
     picoquic_fastcc_delete,

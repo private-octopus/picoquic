@@ -108,12 +108,12 @@ void debug_set_stream(FILE *F)
 #endif
 }
 
-FILE* get_debug_out()
+FILE* get_debug_out(void)
 {
     return debug_out;
 }
 
-int get_debug_suspended()
+int get_debug_suspended(void)
 {
     return debug_suspended;
 }
@@ -365,7 +365,7 @@ int picoquic_compare_connection_id(const picoquic_connection_id_t * cnx_id1, con
 }
 
 /* Hash connection ids for picohash_table's */
-uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * hash_seed)
+uint64_t picoquic_connection_id_hash(const picoquic_connection_id_t * cid, const uint8_t * UNUSED(hash_seed))
 {
     uint64_t val64 = 0;
     size_t i = 0;
@@ -650,6 +650,53 @@ int picoquic_store_loopback_addr(struct sockaddr_storage* stored_addr, int addr_
     return ret;
 }
 
+/* fill the preferred address data based on v4 and v6 text addresses */
+int picoquic_set_preferred_address(picoquic_tp_preferred_address_t * preferred,
+    char const * v4_text, char const * v6_text, uint16_t preferred_port)
+{
+    int ret = 0;
+    struct sockaddr_storage v4_addr = { 0 };
+    struct sockaddr_storage v6_addr = { 0 };
+
+    memset(preferred, 0, sizeof(picoquic_tp_preferred_address_t));
+
+    if (v4_text != NULL) {
+        ret = picoquic_store_text_addr(&v4_addr, v4_text, preferred_port);
+    }
+    if (ret == 0 && v6_text != NULL) {
+        ret = picoquic_store_text_addr(&v6_addr, v6_text, preferred_port);
+    }
+    if (ret == 0) {
+        if (v4_text != NULL) {
+            if (v4_addr.ss_family != AF_INET) {
+                ret = -1;
+            }
+            else {
+                memcpy(preferred->ipv4Address, &((struct sockaddr_in*)&v4_addr)->sin_addr, 4);
+                preferred->ipv4Port = ((struct sockaddr_in*)&v4_addr)->sin_port;
+                if (preferred->ipv4Port == 0) {
+                    preferred->ipv4Port = preferred_port;
+                }
+                preferred->is_defined |= 1;
+            }
+        }
+        if (v6_text != NULL) {
+            if (v6_addr.ss_family != AF_INET6) {
+                ret = -1;
+            }
+            else {
+                memcpy(preferred->ipv6Address, &((struct sockaddr_in6*)&v6_addr)->sin6_addr, 16);
+                preferred->ipv6Port = ((struct sockaddr_in6*)&v6_addr)->sin6_port;
+                if (preferred->ipv6Port == 0) {
+                    preferred->ipv6Port = preferred_port;
+                }
+                preferred->is_defined |= 1;
+            }
+        }
+    }
+    return ret;
+}
+
 /* Return a directory path based on solution dir and file name */
 char const* picoquic_solution_dir = NULL;
 
@@ -715,6 +762,52 @@ FILE * picoquic_file_close(FILE * F)
     return NULL;
 }
 
+/* Reject unsafe path components (traversal, absolute-ish or backslash paths, odd characters);
+ * a leading '/' is accepted but not required, so both URL paths and bare relative file names
+ * can be checked with the same function. */
+int picoquic_is_path_sane(const uint8_t* path, size_t path_length)
+{
+    int ret = 0;
+    size_t i = 0;
+    int past_is_dot = 0;
+    int nb_good = 0;
+
+    if (path_length == 0) {
+        ret = -1;
+    }
+    else {
+        if (path[0] == '/') {
+            i++;
+        }
+
+        for (; ret == 0 && i < path_length; i++) {
+            int c = path[i];
+            if ((c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') ||
+                c == '-' || c == '_') {
+                nb_good++;
+                past_is_dot = 0;
+            }
+            else if (c == '/' && i < path_length - 1 && nb_good > 0) {
+                nb_good++;
+            }
+            else if (c == '.' && !past_is_dot && nb_good > 0) {
+                past_is_dot = 1;
+            }
+            else {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && nb_good == 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 /* Safely delete file in a portable way */
 int picoquic_file_delete(char const * file_name, int * last_err)
 {
@@ -736,14 +829,8 @@ int picoquic_file_delete(char const * file_name, int * last_err)
 
  /* Skip and decode function.
   * These functions return NULL in case of a failure (insufficient buffer).
+  * picoquic_frames_fixed_skip lives in picoquic_utils.h (static inline).
   */
-
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
-{
-    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
-    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
-}
-
 
 const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {
@@ -860,7 +947,6 @@ const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* b
 
     return bytes;
 }
-
 
 /* Predict length of a varint encoding */
 size_t picoquic_frames_varint_encode_length(uint64_t n64)
@@ -1126,7 +1212,6 @@ void picoquic_delete_thread(picoquic_thread_t * thread)
     }
 #endif
 }
-
 
 int picoquic_create_mutex(picoquic_mutex_t * mutex)
 {

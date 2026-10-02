@@ -38,9 +38,10 @@
 #include "picoquic_binlog.h"
 #include "picoquic_config.h"
 #include "tls_api.h"
+#include "picoquic_qlog.h"
 
 extern "C" {
-    int cplusplustest() {
+    int cplusplustest(void) {
         return 0;
     }
 }

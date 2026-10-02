@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(picoquic REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/sample_lib-targets.cmake")
+
+check_required_components(sample_lib)

@@ -229,10 +229,15 @@ int picoquic_parse_long_packet_header(
     else if (ph->vn != 0) {
         ph->version_index = picoquic_get_version_index(ph->vn);
         if (ph->version_index < 0) {
-            DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
-            ph->ptype = picoquic_packet_error;
-            ph->pc = 0;
-            ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            if (picoquic_scone_incoming(quic, ph, bytes_start, bytes_max) != 0) {
+                DBG_PRINTF("Version is not recognized: 0x%08x\n", ph->vn);
+                ph->ptype = picoquic_packet_error;
+                ph->pc = 0;
+                ret = PICOQUIC_ERROR_VERSION_NOT_SUPPORTED;
+            }
+            else {
+                ret = PICOQUIC_NO_ERROR_SCONE_ADVICE;
+            }
         }
     }
     
@@ -241,7 +246,6 @@ int picoquic_parse_long_packet_header(
         (bytes = picoquic_frames_cid_decode(bytes, bytes_max, &ph->srce_cnx_id)) == NULL)) {
         ret = -1;
     }
-
     if (ret == 0) {
         ph->offset = bytes - bytes_start;
 
@@ -317,6 +321,7 @@ int picoquic_parse_long_packet_header(
                 ph->epoch = picoquic_epoch_handshake;
                 break;
             case picoquic_packet_retry: /* Retry */
+            case picoquic_packet_scone: /* SCONE */
             default:
                 /* No default branch in this statement, because there are only 4 possible types
                  * parsed in picoquic_parse_long_packet_type */
@@ -793,7 +798,11 @@ int picoquic_parse_header_and_decrypt(
             length = ph->offset + ph->payload_length;
             *consumed = length;
 
-            if (*pcnx != NULL) {
+            if (length > PICOQUIC_MAX_PACKET_SIZE) {
+                /* Attempting to decrypt messages that long could create a buffer overflow */
+                ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+            }
+            else if (*pcnx != NULL) {
                 if (!(*pcnx)->client_mode && ph->ptype == picoquic_packet_initial && packet_length < PICOQUIC_ENFORCED_INITIAL_MTU) {
                     /* Unexpected packet. Reject, drop and log. */
                     ret = PICOQUIC_ERROR_INITIAL_TOO_SHORT;
@@ -891,13 +900,16 @@ int picoquic_parse_header_and_decrypt(
                 }
             }
         }
+        else if (length > PICOQUIC_MAX_PACKET_SIZE) {
+            /* Attempting to decrypt messages that long could create a buffer overflow */
+            ret = PICOQUIC_ERROR_PACKET_TOO_BIG;
+        }
         else {
             /* Clear text packet. Copy content to decrypted data */
             memmove(decrypted_data->data, bytes, length);
             *consumed = length;
         }
     }
-    
     return ret;
 }
 
@@ -916,9 +928,9 @@ int picoquic_incoming_version_negotiation(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     size_t length,
-    struct sockaddr* addr_from,
+    struct sockaddr* UNUSED(addr_from),
     picoquic_packet_header* ph,
-    uint64_t current_time)
+    uint64_t UNUSED(current_time))
 {
     int ret = 0;
 #ifdef _WINDOWS
@@ -1100,6 +1112,7 @@ void picoquic_process_unexpected_cnxid(
     uint64_t current_time)
 {
     if (length > PICOQUIC_RESET_PACKET_MIN_SIZE && 
+        length <= PICOQUIC_MAX_PACKET_SIZE &&
         ph->ptype == picoquic_packet_1rtt_protected &&
         quic->stateless_reset_next_time <= current_time) {
         picoquic_stateless_packet_t* sp = picoquic_create_stateless_packet(quic);
@@ -1220,7 +1233,7 @@ int picoquic_queue_retry_packet(
     size_t token_size;
     picoquic_connection_id_t s_cid = { 0 };
 
-    picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+    picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
     if (picoquic_prepare_retry_token(quic, addr_from,
@@ -1242,8 +1255,7 @@ int picoquic_queue_busy_packet(
     const struct sockaddr* addr_from,
     const struct sockaddr* addr_to,
     int if_index_to,
-    picoquic_packet_header* ph,
-    uint64_t current_time)
+    picoquic_packet_header* ph)
 {
     int ret = 0;
     picoquic_connection_id_t s_cid = { 0 };
@@ -1261,7 +1273,7 @@ int picoquic_queue_busy_packet(
         uint8_t payload[4] = { picoquic_frame_type_connection_close, PICOQUIC_TRANSPORT_SERVER_BUSY, 0, 0 };
         size_t payload_length = 0;
 
-        picoquic_create_local_cnx_id(quic, &s_cid, quic->local_cnxid_length, ph->dest_cnx_id);
+        picoquic_create_local_cnx_id(quic, &s_cid, ph->dest_cnx_id);
 
 
         /* Prepare long header:  Initial */
@@ -1448,7 +1460,7 @@ int picoquic_incoming_client_initial(
                 uint64_t highest_ack_before = (*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged;
                 ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                ph->epoch, addr_from, addr_to, ph->pn64, 0, current_time);
+                ph->epoch, addr_from, addr_to, ph->pn64, 0, NULL, current_time);
                 if ((*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged > highest_ack_before &&
                     (*pcnx)->quic->random_initial > 1) {
                     /* Randomized sequence number was acknowledged. Consider the
@@ -1662,7 +1674,7 @@ int picoquic_incoming_server_initial(
                         size_t frame_length = 0;
                         int frame_is_pure_ack = 0;
                         skip_ret = picoquic_skip_frame(&bytes[byte_index],
-                            ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
+                            ph->offset + ph->payload_length - byte_index, &frame_length, &frame_is_pure_ack);
                         byte_index += frame_length;
                         if (frame_is_pure_ack == 0) {
                             ack_needed = 1;
@@ -1680,7 +1692,7 @@ int picoquic_incoming_server_initial(
                 if (ret == 0) {
                     ret = picoquic_decode_frames(cnx, cnx->path[0],
                         bytes + ph->offset, ph->payload_length, received_data,
-                        ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
+                        ph->epoch, NULL, addr_to, ph->pn64, 0, NULL, current_time);
                 }
             }
             /* processing of initial packet */
@@ -1706,8 +1718,8 @@ int picoquic_incoming_server_handshake(
     picoquic_cnx_t* cnx,
     uint8_t* bytes,
     picoquic_stream_data_node_t* received_data,
-    struct sockaddr* addr_to,
-    unsigned long if_index_to,
+    struct sockaddr* UNUSED(addr_to),
+    unsigned long UNUSED(if_index_to),
     picoquic_packet_header* ph,
     uint64_t current_time)
 {
@@ -1734,7 +1746,7 @@ int picoquic_incoming_server_handshake(
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length,received_data,
-                    ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, addr_to, ph->pn64, 0, NULL, current_time);
             }
 
             /* processing of initial packet */
@@ -1778,7 +1790,7 @@ int picoquic_incoming_client_handshake(
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                    ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, NULL, ph->pn64, 0, NULL, current_time);
             }
             /* processing of client clear text packet */
             if (ret == 0) {
@@ -1861,7 +1873,7 @@ int picoquic_incoming_0rtt(
                 cnx->nb_zero_rtt_received++;
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                    ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, NULL, ph->pn64, 0, NULL, current_time);
             }
 
             if (ret == 0) {
@@ -1893,15 +1905,15 @@ void picoquic_ecn_accounting(picoquic_cnx_t* cnx,
     switch (received_ecn & 0x03) {
     case 0x00:
         break;
-    case 0x01: /* ECN_ECT_1 */
+    case PICOQUIC_ECN_ECT_1: /* ECN_ECT_1 */
         ack_ctx->ecn_ect1_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x02: /* ECN_ECT_0 */
+    case PICOQUIC_ECN_ECT_0: /* ECN_ECT_0 */
         ack_ctx->ecn_ect0_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
-    case 0x03: /* ECN_CE */
+    case PICOQUIC_ECN_CE: /* ECN_CE */
         ack_ctx->ecn_ce_total_local++;
         ack_ctx->sending_ecn_ack |= 1;
         break;
@@ -1920,7 +1932,6 @@ int picoquic_incoming_1rtt(
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     int if_index_to,
-    unsigned char received_ecn,
     int path_is_not_allocated,
     uint64_t current_time)
 {
@@ -1947,7 +1958,7 @@ int picoquic_incoming_1rtt(
                 int closing_received = 0;
 
                 ret = picoquic_decode_closing_frames(
-                    cnx, bytes + ph->offset, ph->payload_length, &closing_received);
+                    bytes + ph->offset, ph->payload_length, &closing_received);
 
                 if (ret == 0) {
                     if (closing_received) {
@@ -1971,6 +1982,10 @@ int picoquic_incoming_1rtt(
         else if (ret == 0) {
             picoquic_path_t* path_x = cnx->path[path_id];
 
+
+            /* Check and report SCONE advice */
+            picoquic_scone_report(cnx, path_id);
+
             path_x->first_tuple->if_index = if_index_to;
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
@@ -1978,7 +1993,7 @@ int picoquic_incoming_1rtt(
             ret = picoquic_decode_frames(cnx, cnx->path[path_id],
                 bytes + ph->offset, ph->payload_length, received_data,
                 ph->epoch, addr_from, addr_to, ph->pn64,
-                path_is_not_allocated, current_time);
+                path_is_not_allocated, ph->l_cid, current_time);
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
@@ -2041,25 +2056,44 @@ int  picoquic_incoming_not_decrypted(
             * Setting epoch parameter = -1 guarantees the hint is only used if the RTT is not
             * yet known.
             */
-            picoquic_update_path_rtt(cnx, cnx->path[0], cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
+            picoquic_update_path_rtt(cnx, cnx->path[0], -1, cnx->start_time, current_time, 0, 0);
 
             if (length <= PICOQUIC_MAX_PACKET_SIZE &&
                 ((ph->ptype == picoquic_packet_handshake && cnx->client_mode) || ph->ptype == picoquic_packet_1rtt_protected)) {
-                /* stash a copy of the incoming message for processing once the keys are available */
-                picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+                /* Do not stash more than PICOQUIC_INCOMING_NOT_DECRYPTED_MAX, or a forged-CID flood could
+                 * grow the stash without bound. Excess packets are just dropped. */
+                int nb_stashed = 0;
+                picoquic_stateless_packet_t* last_stashed = NULL;
+                picoquic_stateless_packet_t* stashed = cnx->first_sooner;
 
-                if (packet != NULL) {
-                    packet->length = length;
-                    packet->ptype = ph->ptype;
-                    memcpy(packet->bytes, bytes, length);
-                    packet->next_packet = cnx->first_sooner;
-                    cnx->first_sooner = packet;
-                    picoquic_store_addr(&packet->addr_local, addr_to);
-                    picoquic_store_addr(&packet->addr_to, addr_from);
-                    packet->if_index_local = if_index_to;
-                    packet->received_ecn = received_ecn;
-                    packet->receive_time = current_time;
-                    buffered = 1;
+                while (stashed != NULL && nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    nb_stashed++;
+                    last_stashed = stashed;
+                    stashed = stashed->next_packet;
+                }
+
+                if (nb_stashed < PICOQUIC_INCOMING_NOT_DECRYPTED_MAX) {
+                    /* Stash packets in the order in which they arrived. */
+                    picoquic_stateless_packet_t* packet = picoquic_create_stateless_packet(cnx->quic);
+
+                    if (packet != NULL) {
+                        packet->length = length;
+                        packet->ptype = ph->ptype;
+                        memcpy(packet->bytes, bytes, length);
+                        packet->next_packet = NULL;
+                        if (last_stashed == NULL) {
+                            cnx->first_sooner = packet;
+                        }
+                        else {
+                            last_stashed->next_packet = packet;
+                        }
+                        picoquic_store_addr(&packet->addr_local, addr_to);
+                        picoquic_store_addr(&packet->addr_to, addr_from);
+                        packet->if_index_local = if_index_to;
+                        packet->received_ecn = received_ecn;
+                        packet->receive_time = current_time;
+                        buffered = 1;
+                    }
                 }
             }
         }
@@ -2097,10 +2131,14 @@ int picoquic_incoming_segment(
     int path_is_not_allocated = 0;
     uint8_t* bytes = NULL;
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
+    /* saving the value of the input_segment_node_taken, to ensure reentrency. */
+    unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
 
     if (decrypted_data == NULL) {
         return -1;
     }
+    quic->input_segment_node_taken = 0;
+
     /* Parse the header and decrypt the segment */
     ret = picoquic_parse_header_and_decrypt(quic, raw_bytes, length, packet_length, addr_from,
         current_time, decrypted_data, &ph, &cnx, consumed, &new_context_created);
@@ -2109,7 +2147,7 @@ int picoquic_incoming_segment(
     if (ret == 0 && cnx != NULL) {
         if (ph.ptype == picoquic_packet_1rtt_protected) {
             /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, decrypted_data, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &path_is_not_allocated);
+            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id);
         }
         else {
             path_id = 0;
@@ -2197,7 +2235,7 @@ int picoquic_incoming_segment(
         /* Incoming packet could not be processed, need to send a Retry. */
         if (packet_length >= PICOQUIC_ENFORCED_INITIAL_MTU){
             if (quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) {
-                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph, current_time);
+                picoquic_queue_busy_packet(quic, addr_from, addr_to, if_index_to, &ph);
             }
         }
     } else if (ret == 0) {
@@ -2268,9 +2306,6 @@ int picoquic_incoming_segment(
                 if (ph.has_reserved_bit_set) {
                     ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION, 0);
                 }
-                else if (ph.has_reserved_bit_set) {
-                    ret = PICOQUIC_ERROR_PACKET_HEADER_PARSING;
-                }
                 else if (cnx->client_mode)
                 {
                     ret = picoquic_incoming_server_handshake(cnx, bytes, decrypted_data, addr_to, if_index_to, &ph, current_time);
@@ -2296,7 +2331,7 @@ int picoquic_incoming_segment(
                 break;
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_1rtt(cnx, path_id, bytes, decrypted_data,
-                    &ph, addr_from, addr_to, if_index_to, received_ecn,
+                    &ph, addr_from, addr_to, if_index_to,
                     path_is_not_allocated, current_time);
                 break;
             default:
@@ -2322,6 +2357,10 @@ int picoquic_incoming_segment(
             cnx->path[0]->retransmit_timer = current_time -
                 cnx->pkt_ctx[picoquic_packet_context_initial].pending_first->send_time;
         }
+    }
+    else if (ret == PICOQUIC_NO_ERROR_SCONE_ADVICE) {
+        *consumed = ph.offset;
+        ret = 0;
     }
 
     if (ret == 0) {
@@ -2351,6 +2390,7 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_PACKET_TOO_LONG ||
         ret == PICOQUIC_ERROR_DUPLICATE ||
         ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
+        ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
         ret == PICOQUIC_ERROR_REDIRECTED) {
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
@@ -2360,6 +2400,7 @@ int picoquic_incoming_segment(
             ret == PICOQUIC_ERROR_VERSION_NOT_SUPPORTED ||
             ret == PICOQUIC_ERROR_RETRY ||
             ret == PICOQUIC_ERROR_SERVER_BUSY ||
+            ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
             ret == PICOQUIC_ERROR_REDIRECTED) {
             ret = 0;
         }
@@ -2381,9 +2422,10 @@ int picoquic_incoming_segment(
         ret = -1;
     }
 
-    if (decrypted_data != NULL && decrypted_data->bytes == NULL) {
+    if (decrypted_data != NULL && quic->input_segment_node_taken == 0) {
         picoquic_stream_data_node_recycle(decrypted_data);
     }
+    quic->input_segment_node_taken = saved_input_segment_node_taken;
 
     return ret;
 }
@@ -2402,6 +2444,7 @@ int picoquic_incoming_packet_ex(
     size_t consumed_index = 0;
     int ret = 0;
     picoquic_connection_id_t previous_destid = picoquic_null_connection_id;
+    PICOQUIC_THREAD_CHECK(quic);
 
     while (consumed_index < packet_length) {
         size_t consumed = 0;

@@ -73,6 +73,11 @@ typedef struct st_test_datagram_send_recv_ctx_t {
     uint64_t send_delay;
     uint64_t next_gen_time[2];
     uint64_t duration_max;
+    uint64_t last_bw_sample_delivered[2];
+    uint64_t nb_bw_samples[2];
+    uint64_t nb_app_limited_bw_samples[2];
+    uint64_t min_bw_samples;
+    uint64_t min_app_limited_bw_samples;
     int is_ready[2];
     int max_packets_received;
     int nb_recv_path_0[2];
@@ -231,6 +236,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int streams_finished;
     int reset_received;
     int immediate_exit;
+    int ecn_support;
     /* Checking that addresses are discovered */
     int nb_address_observed;
 
@@ -256,6 +262,18 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquic_datagram_ack_fn datagram_ack_fn;
 } picoquic_test_tls_api_ctx_t;
 
+/* Options required to decode a test frame, set by parse_test_packet_cnx_fix and cleared one at a time */
+typedef enum {
+    parse_option_none = 0,
+    parse_option_time_stamp,
+    parse_option_datagram,
+    parse_option_ack_frequency,
+    parse_option_bdp,
+    parse_option_address_discovery,
+    parse_option_reset_stream_at,
+    parse_option_max
+} parse_option_enum;
+
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -267,11 +285,16 @@ typedef struct st_test_skip_frames_t {
     int skip_fails;
     int mpath;
     int nb_varints;
+    parse_option_enum option;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
+
+extern test_skip_frames_t test_frame_error_list[];
+
+extern size_t nb_test_frame_error_list;
 
 typedef struct st_test_vary_link_spec_t {
     uint64_t duration;
@@ -313,7 +336,7 @@ void test_api_delete_test_streams(picoquic_test_tls_api_ctx_t* test_ctx);
 int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t time_out, int* was_active);
 
-int tls_api_one_scenario_init_ex(picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time, uint32_t proposed_version, picoquic_tp_t* client_params, picoquic_tp_t* server_params, picoquic_connection_id_t* icid, int cid_zero);
+int tls_api_one_scenario_init_ex(picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time, uint32_t proposed_version, picoquic_tp_t* client_params, picoquic_tp_t* server_params, picoquic_connection_id_t* icid);
 
 int tls_api_one_scenario_init(
     picoquic_test_tls_api_ctx_t** p_test_ctx, uint64_t* simulated_time,
@@ -323,7 +346,7 @@ int tls_api_one_scenario_init(
 int tls_api_connection_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t queue_delay_max, uint64_t* simulated_time);
 
-int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx, uint32_t proposed_version,
+int tls_api_test_with_loss_final(picoquic_test_tls_api_ctx_t* test_ctx,
     char const* sni, char const* alpn, uint64_t* simulated_time);
 
 int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
@@ -332,7 +355,7 @@ int test_api_init_send_recv_scenario(picoquic_test_tls_api_ctx_t* test_ctx,
 int test_api_queue_initial_queries(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t stream_id);
 
 int tls_api_one_scenario_body_connect(picoquic_test_tls_api_ctx_t* test_ctx,
-    uint64_t* simulated_time, size_t stream0_target, uint64_t max_data, uint64_t queue_delay_max);
+    uint64_t* simulated_time, uint64_t max_data, uint64_t queue_delay_max);
 
 int tls_api_data_sending_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* loss_mask, uint64_t* simulated_time, int max_trials);
@@ -363,6 +386,12 @@ int wait_client_connection_ready(picoquic_test_tls_api_ctx_t* test_ctx,
 int wait_client_connection_timeout(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, uint64_t timeout_value);
 
+/* Shared multipath test helpers, defined in multipath_test.c */
+int multipath_test_add_links(picoquic_test_tls_api_ctx_t* test_ctx, int mtu_drop);
+void multipath_init_params(picoquic_tp_t* test_parameters, int enable_time_stamp);
+int wait_multipath_ready(picoquic_test_tls_api_ctx_t* test_ctx,
+    uint64_t* simulated_time);
+
 int tls_api_synch_to_empty_loop(picoquic_test_tls_api_ctx_t* test_ctx,
     uint64_t* simulated_time, int max_trials,
     int path_target, int wait_for_ready);
@@ -374,6 +403,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
+int picoquic_check_json_well_formed(char const* fname);
 
 uint64_t picoquic_sum_text_file(char const* fname);
 
@@ -401,6 +431,8 @@ typedef struct st_zero_rtt_test_t {
     uint64_t extra_delay;
     int do_multipath;
     int propose_ech;
+    int change_params;
+    int cipher_suite_id;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);

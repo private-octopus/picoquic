@@ -45,7 +45,7 @@ static uint64_t decode_number(uint8_t* bytes, size_t length)
     return n;
 }
 
-int intformattest()
+int intformattest(void)
 {
     /* Test the formating routines */
     int ret = 0;
@@ -246,7 +246,7 @@ static picoquic_varintformat_test_t varint_test_cases[] = {
 
 static size_t nb_varint_test_cases = sizeof(varint_test_cases) / sizeof(picoquic_varintformat_test_t);
 
-int varint_test()
+int varint_test(void)
 {
     int ret = 0;
     uint8_t test_buf[16];
@@ -381,7 +381,7 @@ uint64_t picoquic_sqrt_for_tests(uint64_t y)
     return x;
 }
 
-int sqrt_for_test_test()
+int sqrt_for_test_test(void)
 {
     int ret = 0;
     uint64_t x_base = 0;

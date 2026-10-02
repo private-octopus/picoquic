@@ -50,7 +50,7 @@ int picoquic_master_tlscontext(picoquic_quic_t* quic, char const* cert_file_name
 
 void picoquic_master_tlscontext_free(picoquic_quic_t* quic);
 
-int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx, uint64_t current_time);
+int picoquic_tlscontext_create(picoquic_quic_t* quic, picoquic_cnx_t* cnx);
 
 void picoquic_tlscontext_free(void* ctx, unsigned int client_mode);
 
@@ -125,6 +125,7 @@ void picoquic_crypto_context_free(picoquic_crypto_context_t * ctx);
 
 void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, const char *prefix_label);
 void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefix_label);
+void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_key);
 
 int picoquic_create_cnxid_reset_secret(picoquic_quic_t* quic, picoquic_connection_id_t * cnx_id,
     uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE]);
@@ -133,6 +134,8 @@ void picoquic_tls_set_verify_certificate_callback(picoquic_quic_t* quic,
     struct st_ptls_verify_certificate_t* cb, picoquic_free_verify_certificate_ctx free_fn);
 
 void picoquic_dispose_verify_certificate_callback(picoquic_quic_t* quic);
+
+void picoquic_dispose_ticket_key_state(picoquic_ticket_key_state_t* key);
 
 void picoquic_tls_set_client_authentication(picoquic_quic_t* quic, int client_authentication);
 
@@ -198,9 +201,37 @@ void picoquic_aes128_ecb_free(void* v_aesecb);
 
 void picoquic_aes128_ecb_encrypt(void* v_aesecb, uint8_t* output, const uint8_t* input, size_t len);
 
-void picoquic_tls_api_init();
-void picoquic_tls_api_unload();
+void picoquic_tls_api_init(void);
+void picoquic_tls_api_unload(void);
 void picoquic_tls_api_reset(uint64_t init_flags);
+
+/* picoquic_sort_key_exchange_algorithms:
+* Set the order of key exchange algorithms to the value prefered for the
+* application. The order determines which algorithm is used for the initial
+* client message (the first in list), and then which among many is
+* negotiated by the peer.
+* The argument is a list of 16 bit "Group Identifiers", from the table of
+* TLS Group mainitained by IANA, see
+* https://www.iana.org/assignments/tls-parameters#tls-parameters-8.
+* The default order is:
+*    PTLS_GROUP_X25519MLKEM768, Preferred hybrid PQC + classic group.
+*    PTLS_GROUP_X25519, Preferred classic group
+*    PTLS_GROUP_MLKEM1024, for CNSA 2.0 compliance
+*    PTLS_GROUP_SECP256R1MLKEM768, legacy hybrid PQC + classic group.
+*    PTLS_GROUP_SECP256R1, default classic group.
+* 
+* The list of available key exchanges is determined by what is
+* available in the selected back-ends (e.g., minicrypto, openssl
+* or mbedtls.) 
+* 
+* After the sort, the list will start with those algorithms
+* that are present in both the discovered list and the ordered list,
+* in the order specified in the order list. The algorithms
+* present in the discovered list but not in the ordered least
+* will follow.
+*/
+
+void picoquic_sort_key_exchange_algorithms(uint16_t* ordered_key_exchange, size_t nb_ordered_key_exchange);
 
 void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);
 

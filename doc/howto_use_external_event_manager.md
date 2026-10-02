@@ -257,6 +257,13 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
 ~~~
 
 If that parameter is a NULL pointer, UDP GSO is not used. Otherwise, the code will attempt to format multiple packets in the send_buffer. The send_length will return the combined length of all these packets, and the send_msg_size will return the length of the first packet. The packets after the first will have the same length, except for the last one which may be shorter, and would carry the remaining bytes in the send_buffer.
+### Handling Socket Send Errors
+
+Once `picoquic_prepare_next_packet_ex` (or `picoquic_prepare_packet_ex`) returns a packet, Picoquic has already committed to having sent it: stream offsets are advanced, `is_active` flags are updated, and loss-recovery timers are armed as if the datagram is now in flight. Picoquic does not re-check with the application afterward. This means:
+
+- Your integration must actually attempt to transmit every datagram the API hands you. Discarding one silently (for example, because a lookup from the returned `addr_from`/interface to a local socket or path object failed) creates a black hole: the data is gone from the wire but Picoquic still thinks it was sent, so it only gets a second chance much later, when the retransmission timer eventually fires — and if the same lookup fails again, the drop repeats indefinitely, producing what looks like a permanently stuck stream even though Picoquic's own scheduling is behaving correctly. If your lookup can fail, log it, and prefer falling back to a known-good default path over dropping the packet.
+- When the underlying `sendmsg`/`sendto` call itself fails, check the error with `picoquic_socket_error_implies_unreachable(sock_err)`. If it indicates the destination is unreachable, call `picoquic_notify_destination_unreachable` (or `picoquic_notify_destination_unreachable_by_cnxid` if you only have the connection ID handy) so Picoquic can react — issuing a path challenge or demoting the affected path — instead of continuing to schedule packets onto a path the OS has already told you is dead. This call is not automatic outside of Picoquic's own built-in socket loop; a custom event loop must make it explicitly. See `picoquic_packet_loop_do_udp_send` in `picoquic/sockloop.c` for the reference behavior, including the `EIO` fallback for drivers that reject UDP GSO.
+
 ### Error Handling and Connection Cleanup
 
 The event management does not have to concern itself with connection handling. If a connection fails, the application will receive a callback such as:

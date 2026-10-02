@@ -291,7 +291,7 @@ static void picoquic_check_path_mtu_on_losses(
 static void picoquic_count_and_notify_loss(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, int timer_based_retransmit, uint64_t current_time);
 
-static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time);
 
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
@@ -407,7 +407,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
             if (old_p->send_path != NULL && cnx->is_multipath_enabled) {
                 old_p->send_path->is_ack_lost = 1;
             }
-            picoquic_count_and_notify_loss(cnx, old_p, 2, current_time);
+            /* The peer does not ACK this packet, so its timeout is not a loss: do not count it or notify the CC */
             picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1, 0);
             length = 0;
             *continue_next = 1;
@@ -449,7 +449,7 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
                     if (cnx->is_multipath_enabled && cnx->nb_paths > 1) {
-                        picoquic_retransmit_path_packet_queue(cnx, old_path, pkt_ctx, current_time);
+                        picoquic_retransmit_path_packet_queue(cnx, pkt_ctx, current_time);
                     }
                     if (old_path->nb_retransmit > 9 &&
                         cnx->cnx_state >= picoquic_state_ready) {
@@ -648,8 +648,8 @@ static void picoquic_set_wake_up_from_packet_retransmit(
 {
     uint64_t next_retransmit_time = *next_wake_time;
     int is_timer_expired = 0;
-    int is_probably_lost = picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time,
-        &is_timer_expired);
+    int is_probably_lost = old_p->send_path == NULL ||
+        picoquic_is_packet_probably_lost(cnx, old_p, current_time, &next_retransmit_time, &is_timer_expired);
 
     if (is_probably_lost || is_timer_expired) {
         *next_wake_time = current_time;
@@ -895,19 +895,24 @@ static void picoquic_check_path_mtu_on_losses(
 static void picoquic_count_and_notify_loss(
     picoquic_cnx_t* cnx, picoquic_packet_t * old_p, int timer_based_retransmit, uint64_t current_time)
 {
-    if (timer_based_retransmit < 2) {
-        picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
-            (timer_based_retransmit) ? "timer" : "repeat",
-            (old_p->send_path == NULL || old_p->send_path->first_tuple->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->first_tuple->p_remote_cnxid->cnx_id,
-            old_p->length, current_time);
+    picoquic_log_packet_lost(cnx, old_p->send_path, old_p->ptype, old_p->sequence_number,
+        (timer_based_retransmit) ? "timer" : "repeat",
+        (old_p->send_path == NULL || old_p->send_path->first_tuple->p_remote_cnxid == NULL) ? NULL : &old_p->send_path->first_tuple->p_remote_cnxid->cnx_id,
+        old_p->length, current_time);
 
-        if (!old_p->is_preemptive_repeat) {
-            cnx->nb_retransmission_total++;
-        }
+    if (!old_p->is_preemptive_repeat) {
+        cnx->nb_retransmission_total++;
     }
 
     if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
+        if (timer_based_retransmit == 0) {
+            if (old_p->send_path->nb_loss_ranges_found == 0 ||
+                old_p->sequence_number != old_p->send_path->latest_repeat_loss_packet_number + 1) {
+                old_p->send_path->nb_loss_ranges_found++;
+            }
+            old_p->send_path->latest_repeat_loss_packet_number = old_p->sequence_number;
+        }
         if (timer_based_retransmit) {
             old_p->send_path->nb_timer_losses++;
         }
@@ -922,8 +927,17 @@ static void picoquic_count_and_notify_loss(
         if (cnx->congestion_alg != NULL && cnx->cnx_state >= picoquic_state_ready && old_p->send_path != NULL) {
             picoquic_per_ack_state_t ack_state = { 0 };
             ack_state.pc = old_p->pc;
+            ack_state.rtt_measurement = old_p->send_path->rtt_sample;
             ack_state.lost_packet_number = old_p->sequence_number;
+            ack_state.lost_packet_sent_time = old_p->send_time;
             ack_state.nb_bytes_newly_lost = old_p->length;
+            ack_state.nb_bytes_lost_since_packet_sent = (old_p->send_path->total_bytes_lost > old_p->lost_prior) ?
+                old_p->send_path->total_bytes_lost - old_p->lost_prior : old_p->length;
+            ack_state.nb_bytes_delivered_since_packet_sent = (old_p->send_path->delivered > old_p->delivered_prior) ?
+                old_p->send_path->delivered - old_p->delivered_prior : 0;
+            ack_state.inflight_prior = old_p->inflight_prior;
+            ack_state.is_app_limited = old_p->delivered_app_limited;
+            ack_state.is_cwnd_limited = old_p->sent_cwin_limited;
             cnx->congestion_alg->alg_notify(cnx, old_p->send_path,
                 (timer_based_retransmit == 0) ? picoquic_congestion_notification_repeat : picoquic_congestion_notification_timeout,
                 &ack_state, current_time);
@@ -968,7 +982,7 @@ static int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
 
 /* In multipath operation, schedule all packets queued on a path for retransmission
  */
-static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time)
 {
     picoquic_packet_t* old_p = pkt_ctx->pending_first;
@@ -1007,6 +1021,10 @@ static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx, picoquic_
 
 }
 
+#if 0
+/* Not called anywhere: its logic (requeue a demoted path's pending packets for retransmission
+ * elsewhere) is already inlined directly in the path-demotion code, not shared through this
+ * function. Kept as documentation, not wired in, to avoid refactoring the demote code now. */
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint64_t current_time)
 {
@@ -1020,10 +1038,11 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
             pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
         }
         if (pkt_ctx != NULL) {
-            picoquic_retransmit_path_packet_queue(cnx, path_x, pkt_ctx, current_time);
+            picoquic_retransmit_path_packet_queue(cnx, pkt_ctx, current_time);
         }
     }
 }
+#endif
 
 
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x,

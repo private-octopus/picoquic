@@ -25,6 +25,7 @@
 #include "tls_api.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #ifdef _WINDOWS
@@ -115,8 +116,19 @@ int picoquic_ech_read_config(ptls_buffer_t * config, char const * config_file_na
             ret = PTLS_ERROR_INCORRECT_BASE64;
         }
         F=picoquic_file_close(F);
+
         if (ret == 0) {
-            DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
+            if (config->off == 0) {
+                DBG_PRINTF("Empty config after reading %s", config_file_name);
+                ret = -1;
+            }
+            else if (config->off < 9) {
+                DBG_PRINTF("Config too short after reading %s", config_file_name);
+                ret = -1;
+            }
+            else {
+                DBG_PRINTF("Got %zu bytes from %s", config->off, config_file_name);
+            }
         }
     }
     return ret;
@@ -230,8 +242,8 @@ typedef struct st_ech_opener_callback_t {
 /* Perform the key exchange using the public key provided by the client
  * in the "enc" parameter and the private key corresponding to the config ID */
 ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
-    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* tls, 
-    uint8_t config_id, ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
+    ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* UNUSED(tls), 
+    uint8_t UNUSED(config_id), ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
 {
     ptls_aead_context_t* aead = NULL;
     ptls_buffer_t infobuf;
@@ -348,6 +360,7 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 {
     int ret = 0;
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    PICOQUIC_THREAD_CHECK(quic);
 
     picoquic_release_quic_ech_ctx(quic);
     ctx->ech.client.ciphers = picoquic_hpke_cipher_suites;
@@ -373,6 +386,8 @@ int picoquic_ech_configure_quic_ctx(picoquic_quic_t * quic, char const* private_
 void picoquic_release_quic_ech_ctx(picoquic_quic_t* quic)
 {
     ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+    PICOQUIC_THREAD_CHECK(quic);
+
     if (ctx != NULL) {
         ech_opener_callback_t* ech_cb = (ech_opener_callback_t*)ctx->ech.server.create_opener;
         ctx->ech.server.retry_configs.base = NULL;
@@ -393,12 +408,16 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_da
 {
     int ret = 0;
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
-    tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length);
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+
+    tls_ctx->handshake_properties.client.ech.configs.base = (uint8_t*)malloc(config_length+1);
     if (tls_ctx->handshake_properties.client.ech.configs.base == NULL) {
         ret = PICOQUIC_ERROR_MEMORY;
     }
     else {
-        memcpy(tls_ctx->handshake_properties.client.ech.configs.base, config_data, config_length);
+        if (config_length > 0) {
+            memcpy(tls_ctx->handshake_properties.client.ech.configs.base, config_data, config_length);
+        }
         tls_ctx->handshake_properties.client.ech.configs.len = config_length;
     }
     return ret;
@@ -409,6 +428,7 @@ int picoquic_ech_configure_client(picoquic_cnx_t* cnx, const uint8_t * config_da
 int picoquic_is_ech_handshake(picoquic_cnx_t* cnx)
 {
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
     return ptls_is_ech_handshake(tls_ctx->tls, NULL, NULL, NULL);
 }
 
@@ -885,10 +905,10 @@ int picoquic_ech_create_config_from_private_key(uint8_t** config, size_t* config
             case 0x21: /* x25519 */
                 group_id = 0x001d;
                 break;
-            case 0x41: /* secp265r1 */
+            case 0x41: /* secp256r1 */
                 group_id = 0x0017;
                 break;
-            case 0x61: /* x25519 */
+            case 0x61: /* secp384r1 */
                 group_id = 0x0018;
                 break;
             default:
@@ -1059,6 +1079,7 @@ void picoquic_ech_get_retry_config(picoquic_cnx_t* cnx,
     uint8_t** retry_config, size_t* retry_config_len)
 {
     picoquic_tls_ctx_t* tls_ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+    PICOQUIC_THREAD_CHECK(cnx->quic);
 
     *retry_config = tls_ctx->retry_configs.base;
     *retry_config_len = tls_ctx->retry_configs.len;

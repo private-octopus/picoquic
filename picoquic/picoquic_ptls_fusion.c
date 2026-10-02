@@ -27,6 +27,7 @@
 #include "wincompat.h"
 #include "ws2ipdef.h"
 #pragma warning(disable:4100)
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #include "picoquic_crypto_provider_api.h"
@@ -64,17 +65,17 @@ void picoquic_ptls_fusion_load(int unload)
     }
     else {
         if (ptls_fusion_is_supported_by_cpu()) {
-            if ((picoquic_fusion_aes128gcmsha256.hash = picoquic_get_hash_algorithm_by_name("SHA256")) != NULL) {
+            if ((picoquic_fusion_aes128gcmsha256.hash = picoquic_get_hash_algorithm_by_name("sha256")) != NULL) {
                 picoquic_register_ciphersuite((ptls_cipher_suite_t*)&picoquic_fusion_aes128gcmsha256, 0);
             }
-            if ((picoquic_fusion_aes256gcmsha384.hash = picoquic_get_hash_algorithm_by_name("SHA384")) != NULL) {
+            if ((picoquic_fusion_aes256gcmsha384.hash = picoquic_get_hash_algorithm_by_name("sha384")) != NULL) {
                 picoquic_register_ciphersuite(&picoquic_fusion_aes256gcmsha384, 0);
             }
         }
     }
 }
 #else
-void picoquic_ptls_fusion_load(int unload)
+void picoquic_ptls_fusion_load(int UNUSED(unload))
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(unload);

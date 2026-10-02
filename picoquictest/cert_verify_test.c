@@ -25,17 +25,13 @@
 #include "picoquictest_internal.h"
 #ifdef _WINDOWS
 #include "wincompat.h"
+#pragma warning(disable:4204)
 #endif
 #include <picotls.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "picoquic_binlog.h"
-#include "csv.h"
-#include "qlog.h"
-#include "autoqlog.h"
-#include "picoquic_logger.h"
-#include "performance_log.h"
+#include "picoquic_qlog.h"
 #include "picoquictest.h"
 
 /* Verify that server certificates are properly verified by the client.
@@ -208,7 +204,7 @@ int cert_verify_test_one(int expect_success,
 
 /* NULL test: do not specify a list of root CAs.
  * Verfication defaults to just testing that the SNI maps the name in the certificate */
-int cert_verify_null_test()
+int cert_verify_null_test(void)
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         NULL, CERT_VERIFY_TEST_SNI);
@@ -217,7 +213,7 @@ int cert_verify_null_test()
 
 /* RSA test: the certificate specifies an RSA key, and the certificate authority is
  * added to the trusted list. */
-int cert_verify_rsa_test()
+int cert_verify_rsa_test(void)
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
@@ -226,7 +222,7 @@ int cert_verify_rsa_test()
 
 /* BAD CERT: the server uses the wrong certificate.
  */
-int cert_verify_bad_cert_test()
+int cert_verify_bad_cert_test(void)
 {
     int ret = cert_verify_test_one(0, CERT_VERIFY_RSA_BAD_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
@@ -236,7 +232,7 @@ int cert_verify_bad_cert_test()
 /* BAD SNI: the name certified in the server's certificate does not match the
  * SNI set by the client. Verification should fail.
  */
-int cert_verify_bad_sni_test()
+int cert_verify_bad_sni_test(void)
 {
     int ret = cert_verify_test_one(0, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_BAD_SNI);
@@ -246,9 +242,18 @@ int cert_verify_bad_sni_test()
 /* NULL SNI: the client does not provide an SNI.
  * Treated as indicating that the client does not care for the SNI.
  */
-int cert_verify_null_sni_test()
+int cert_verify_null_sni_test(void)
 {
     int ret = cert_verify_test_one(1, CERT_VERIFY_RSA_CERT, CERT_VERIFY_RSA_KEY,
         CERT_VERIFY_TEST_CA, NULL);
+    return ret;
+}
+
+/* Invalid certificate: issued for ECDSA key, but the server uses an RSA key. Verification should fail.
+ */
+int cert_verify_invalid_test(void)
+{
+    int ret = cert_verify_test_one(0, PICOQUIC_TEST_FILE_SERVER_CERT_ECDSA, CERT_VERIFY_RSA_KEY,
+        CERT_VERIFY_TEST_CA, CERT_VERIFY_TEST_SNI);
     return ret;
 }

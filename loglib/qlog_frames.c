@@ -25,6 +25,7 @@
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
+#include "picoquic_qlog_fns.h"
 
 /* Helper: Write a JSON key-value pair for an integer */
 static void qlog_json_uint(FILE* f, const char* key, uint64_t value) {
@@ -43,7 +44,7 @@ static void qlog_json_boolean(FILE* f, const char* key, int value) {
 /* Helper: write a binary string parameter */
 const uint8_t * qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l)
 {
-    int error_found = (bytes + l > bytes_max);
+    int error_found = (l > (uint64_t)(bytes_max - bytes));
 
     fprintf(f, "\"");
     if (error_found) {
@@ -251,14 +252,7 @@ const uint8_t* qlog_frame_connection_close(FILE* f, const uint8_t* bytes, const 
         if (reason_length > 0){
             if ((size_t)(bytes_max - bytes) >= reason_length) {
                 fprintf(f, ", \"reason\": \"");
-                for (uint64_t i = 0; i < reason_length; i++) {
-                    int c = (int)bytes[i];
-
-                    if (c < 0x20 || c > 0x7E) {
-                        c = '.';
-                    }
-                    fprintf(f, "%c", c);
-                }
+                qlog_fns_char_content(f, bytes, reason_length);
                 fprintf(f, "\"");
                 bytes += reason_length;
             }
@@ -275,6 +269,7 @@ const uint8_t* qlog_frame_connection_close(FILE* f, const uint8_t* bytes, const 
 const uint8_t* qlog_frame_max_streams(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int is_bidir, int is_blocked)
 {
     uint64_t max_streams;
+    fprintf(f, ", ");
     if (is_bidir){
         qlog_json_str(f, "stream_type", "bidirectional");
     }
@@ -332,7 +327,7 @@ const uint8_t* qlog_frame_crypto_hs(FILE* f, const uint8_t* bytes, const uint8_t
         qlog_json_uint(f, "offset", offset);
         fprintf(f, ", ");
         qlog_json_uint(f, "length", length);
-        if (bytes + length <= bytes_max) {
+        if (length <= (uint64_t)(bytes_max - bytes)) {
             bytes += length;
         }
         else {
@@ -372,9 +367,10 @@ const uint8_t* qlog_frame_datagram(FILE* f, const uint8_t* bytes, const uint8_t*
     if (has_length) {
         uint64_t length;
         if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
-            bytes + length > bytes_max) {
+            length > (uint64_t)(bytes_max - bytes)) {
             return NULL;
         }
+        fprintf(f, ", ");
         qlog_json_uint(f, "length", length);
         bytes += length;
     }
@@ -451,7 +447,7 @@ const uint8_t* qlog_frame_bdp(FILE* f, const uint8_t* bytes, const uint8_t* byte
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &recon_bytes_in_flight)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &recon_min_rtt)) == NULL ||
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &saved_ip_length)) == NULL ||
-        (saved_ip_length != 4 && saved_ip_length != 4) ||
+        (saved_ip_length != 4 && saved_ip_length != 16) ||
         (bytes + saved_ip_length > bytes_max)) {
         return NULL;
     }
@@ -485,6 +481,7 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
         fprintf(f, ", ");
         fprintf(f, "\"address\": ");
         qlog_frame_ip_address(f, addr, addr_length);
+        fprintf(f, ", ");
         qlog_json_uint(f, "port", port);
     }
     return bytes;
@@ -619,6 +616,9 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int sk
                 bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "reason");
                 break;
             case picoquic_frame_type_path_backup:
+                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
+                break;
+            case picoquic_frame_type_path_available:
                 bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
                 break;
             case picoquic_frame_type_bdp:

@@ -67,49 +67,49 @@
 #define TRANSPORT_PARAMETERS_SUPPORTED_VERSIONS_ERROR2 \
      0x0F, 'P', 'C', 'Q', '1', 'P', 'C', 'Q', '0', 0xFF, 0x00, 0x00, 0x10, 0xFF, 0x00, 0x00
 
-#define TRANSPORT_PREFERED_ADDRESS_NULL \
+#define TRANSPORT_PREFERRED_ADDRESS_NULL \
     { 0, { 0, 0, 0, 0}, 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0, \
     { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },0 }, \
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }} 
 
 static picoquic_tp_t transport_param_test1 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 3, 0, 1
 };
 
 static picoquic_tp_t transport_param_test2 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 1480, 2, 3, 0, 1, { 0 }, 0, 0, 0, 1, 0
 };
 
 static picoquic_tp_t transport_param_test3 = {
     0x1000000, 0, 0, 0x1000000, 1, 0, 255, 0, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 3, 0x3e8, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test4 = {
     65535, 0, 0, 0x400000, 16384, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test5 = {
     0x1000000, 0, 0, 0x1000000, 2, 0, 255, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test6 = {
     0x10000, 0, 0, 0xffffffff, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 4, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test7 = {
     8192, 0, 0, 16384, 2, 0, 10, 1472, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 17, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test8 = {
     65535, 0, 0, 0x400000, 0, 0, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 0, 
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test9 = {
@@ -117,22 +117,23 @@ static picoquic_tp_t transport_param_test9 = {
     { 1, { 10, 0, 0, 1}, 4433, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 0,
     {{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },4},
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }},
-        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+        0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test10 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT, 0, 3, 1,
-    TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0
+    TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 0, { 0 }, 0, 0, 0, 0, 0
 };
 
 static picoquic_tp_t transport_param_test11 = {
     65535, 0, 0, 0x400000, 16384, 16384, 30, 1480, PICOQUIC_ACK_DELAY_MAX_DEFAULT,
-    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0
+    PICOQUIC_NB_PATH_TARGET, 3, 0,  TRANSPORT_PREFERRED_ADDRESS_NULL, 0, 0, 0, 0, 1, { 0 }, 0, 0, 0, 0, 0
 };
 
 #define LOCAL_CONNECTION_ID  2, 3, 4, 5, 6, 7, 8, 9
 #define INITIAL_CONNECTION_ID  1, 2, 3, 4, 5, 6, 7, 8
 #define ADDRESS_DISCOVERY_TP 0xc0, 0, 0, 0, 0x9f, 0x81, 0xa1, 0x76
+#define SCONE_SUPPORTED_TP 0x61, 0x9e
 
 uint8_t client_param1[] = {
     picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
@@ -143,7 +144,8 @@ uint8_t client_param1[] = {
     picoquic_tp_initial_max_streams_uni, 4, 0x80, 0, 0x40, 0x00,
     picoquic_tp_active_connection_id_limit, 1, PICOQUIC_NB_PATH_TARGET,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    ADDRESS_DISCOVERY_TP, 1, 2, 
+    ADDRESS_DISCOVERY_TP, 1, 2,
+    SCONE_SUPPORTED_TP, 0
 };
 
 uint8_t client_param2[] = {
@@ -176,14 +178,7 @@ uint8_t client_param4[] = {
     picoquic_tp_idle_timeout, 1, 0x1E,
     picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
-    0xC0 | (uint8_t)((picoquic_tp_initial_max_path_id >> 56) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 48) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 40) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 32) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 24) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 16) & 0xFF),
-    (uint8_t)((picoquic_tp_initial_max_path_id >> 8) & 0xFF),
-    (uint8_t)(picoquic_tp_initial_max_path_id&0xFF), 1, 4,
+    picoquic_tp_initial_max_path_id, 1, 4,
 };
 
 uint8_t client_param5[] = {
@@ -272,7 +267,8 @@ uint8_t client_param11[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
     /* Add same grease value that the server will generate */
     0x40, 0x59, 2, 0x42, 0x03,
-    ADDRESS_DISCOVERY_TP, 1, 2
+    ADDRESS_DISCOVERY_TP, 1, 2,
+    SCONE_SUPPORTED_TP, 0
 };
 
 uint8_t client_param12[] = {
@@ -372,6 +368,61 @@ uint8_t client_param_err9[] = {
     picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID
 };
 
+/* error 10, Active CID limit too small */
+uint8_t client_param_err10[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_active_connection_id_limit, 1, 1
+};
+
+/* error 11, ack_delay_exponent over 20 */
+uint8_t client_param_err11[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_ack_delay_exponent , 1, 21
+};
+
+/* error 12, max_ack_delay larger than 2^16 */
+uint8_t client_param_err12[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_max_ack_delay , 4, 0x80, 0x00, 0x40, 0x01
+};
+
+/* error 13, max_streams_bidir larger than or equal to 2^60 */
+uint8_t client_param_err13[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_initial_max_streams_bidi, 8,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+/* error 14, max_streams_unidir larger than or equal to 2^60 */
+uint8_t client_param_err14[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_initial_max_streams_uni, 8,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+/* Error 15, is_cone_supported is not 0 bytes.*/
+uint8_t client_param_err15[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    SCONE_SUPPORTED_TP, 1, 0
+};
 
 typedef struct st_transport_param_error_test_t {
     int mode;
@@ -387,8 +438,14 @@ static transport_param_error_test_t transport_param_error_case[] = {
     { 0, client_param_err5, sizeof(client_param_err5), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err6, sizeof(client_param_err6), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err7, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err8, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err9, sizeof(client_param_err7), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
+    { 0, client_param_err8, sizeof(client_param_err8), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err9, sizeof(client_param_err9), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err10, sizeof(client_param_err10), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err11, sizeof(client_param_err11), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err12, sizeof(client_param_err12), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err13, sizeof(client_param_err13), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err14, sizeof(client_param_err14), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err15, sizeof(client_param_err15), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
 };
 
 static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);
@@ -429,35 +486,35 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->max_idle_timeout, ref->max_idle_timeout);
         ret = -1;
     }
-    else if (param->prefered_address.is_defined != ref->prefered_address.is_defined) {
-        DBG_PRINTF("prefered_address.is_defined: got %d, expected %d\n",
-            param->prefered_address.is_defined, ref->prefered_address.is_defined);
+    else if (param->preferred_address.is_defined != ref->preferred_address.is_defined) {
+        DBG_PRINTF("preferred_address.is_defined: got %d, expected %d\n",
+            param->preferred_address.is_defined, ref->preferred_address.is_defined);
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.ipv4Address, ref->prefered_address.ipv4Address, 4) != 0) {
-        DBG_PRINTF("%s", "prefered_address.ipv4Address: values don't match\n");
+    else if (memcmp(param->preferred_address.ipv4Address, ref->preferred_address.ipv4Address, 4) != 0) {
+        DBG_PRINTF("%s", "preferred_address.ipv4Address: values don't match\n");
         ret = -1;
     }
-    else if (param->prefered_address.ipv4Port != ref->prefered_address.ipv4Port) {
-        DBG_PRINTF("prefered_address.ipv4Port: got %d, expected %d\n",
-            param->prefered_address.ipv4Port, ref->prefered_address.ipv4Port);
+    else if (param->preferred_address.ipv4Port != ref->preferred_address.ipv4Port) {
+        DBG_PRINTF("preferred_address.ipv4Port: got %d, expected %d\n",
+            param->preferred_address.ipv4Port, ref->preferred_address.ipv4Port);
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.ipv6Address, ref->prefered_address.ipv6Address, 16) != 0) {
-        DBG_PRINTF("%s", "prefered_address.ipv6Address: values don't match\n");
+    else if (memcmp(param->preferred_address.ipv6Address, ref->preferred_address.ipv6Address, 16) != 0) {
+        DBG_PRINTF("%s", "preferred_address.ipv6Address: values don't match\n");
         ret = -1;
     }
-    else if (param->prefered_address.ipv6Port != ref->prefered_address.ipv6Port) {
-        DBG_PRINTF("prefered_address.ipv6Port: got %d, expected %d\n",
-            param->prefered_address.ipv6Port, ref->prefered_address.ipv6Port);
+    else if (param->preferred_address.ipv6Port != ref->preferred_address.ipv6Port) {
+        DBG_PRINTF("preferred_address.ipv6Port: got %d, expected %d\n",
+            param->preferred_address.ipv6Port, ref->preferred_address.ipv6Port);
         ret = -1;
     }
-    else if (picoquic_compare_connection_id(&param->prefered_address.connection_id, &ref->prefered_address.connection_id) != 0) {
-        DBG_PRINTF("%s", "prefered_address.connection_id: values don't match\n");
+    else if (picoquic_compare_connection_id(&param->preferred_address.connection_id, &ref->preferred_address.connection_id) != 0) {
+        DBG_PRINTF("%s", "preferred_address.connection_id: values don't match\n");
         ret = -1;
     }
-    else if (memcmp(param->prefered_address.statelessResetToken, ref->prefered_address.statelessResetToken, 16) != 0) {
-        DBG_PRINTF("%s", "prefered_address.statelessResetToken: values don't match\n");
+    else if (memcmp(param->preferred_address.statelessResetToken, ref->preferred_address.statelessResetToken, 16) != 0) {
+        DBG_PRINTF("%s", "preferred_address.statelessResetToken: values don't match\n");
         ret = -1;
     }
     else if (param->max_datagram_frame_size != ref->max_datagram_frame_size) {
@@ -504,12 +561,18 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
         DBG_PRINTF("is_reset_stream_at_enabled: got %" PRIu64 ", expected%" PRIu64 "\n",
             param->is_reset_stream_at_enabled, ref->is_reset_stream_at_enabled);
         ret = -1;
-        }
+    }
+    else if (param->is_scone_supported != ref->is_scone_supported) {
+        DBG_PRINTF("is_scone_supported: got %d, expected%d\n",
+            param->is_scone_supported, ref->is_scone_supported);
+        ret = -1;
+    }
 
     return ret;
 }
 
-int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, uint64_t * p_simulated_time, int mode)
+int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** test_cnx, 
+    uint32_t proposed_version, uint64_t * p_simulated_time, int mode)
 {
     int ret = 0;
     picoquic_connection_id_t initial_cnx_id = { { INITIAL_CONNECTION_ID, 0, 0, 0, 0, 0, 0, 0, 0 }, 8 };
@@ -548,7 +611,7 @@ int transport_param_set_contexts(picoquic_quic_t ** quic_ctx, picoquic_cnx_t ** 
 
         if (*quic_ctx != NULL) {
             *test_cnx = picoquic_create_cnx(*quic_ctx, initial_cnx_id, remote_cnx_id,
-                (struct sockaddr*) &addr, 0, 0, "sni", "alpn", (mode == 0) ? 1 : 0);
+                (struct sockaddr*) &addr, 0, proposed_version, "sni", "alpn", (mode == 0) ? 1 : 0);
         }
 
         if (*quic_ctx == NULL || *test_cnx == NULL) {
@@ -573,7 +636,7 @@ int transport_param_one_test(int mode, int grease, uint32_t version, uint32_t pr
     size_t encoded = 0, decoded = 0; 
     uint64_t simulated_time = 0;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, proposed_version, &simulated_time, mode);
 
     if (ret == 0) {
         /* initialize the connection object to the test parameters */
@@ -655,7 +718,8 @@ int transport_param_decode_test(int mode, uint32_t version, uint32_t proposed_ve
     uint64_t simulated_time = 0;
     size_t decoded = 0;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, version, &simulated_time, mode);
+    test_cnx->proposed_version = proposed_version;
 
     if (ret == 0) {
         ret = picoquic_receive_transport_extensions(test_cnx, mode,
@@ -695,7 +759,7 @@ int transport_param_error_test(int mode, uint8_t* target, size_t target_length, 
     uint64_t simulated_time = 0;
     size_t decoded;
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, 0, &simulated_time, mode);
 
     if (ret == 0) {
         int err_ret = picoquic_receive_transport_extensions(test_cnx, mode,
@@ -745,7 +809,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     }
 
 
-    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, &simulated_time, mode);
+    ret = transport_param_set_contexts(&quic_ctx, &test_cnx, 0, &simulated_time, mode);
 
     if (ret == 0) {
         /* initialize the connection object to the test parameters */
@@ -805,7 +869,7 @@ int transport_param_fuzz_test(int mode, uint32_t version, uint32_t proposed_vers
     return ret;
 }
 
-int transport_param_test()
+int transport_param_test(void)
 {
     int ret = 0;
     uint64_t proof = 0;
@@ -951,13 +1015,13 @@ static char const* log_tp_fuzz_file = "log_tp_fuzz_test.txt";
 void picoquic_textlog_transport_extension_content(FILE* F, int log_cnxid, uint64_t cnx_id_64,
     uint8_t * bytes, size_t bytes_max);
 
-static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max, int client_mode)
+static void transport_param_log_test_one(FILE * F, uint8_t * bytes, size_t bytes_max)
 {
     picoquic_textlog_transport_extension_content(F, 1, 0x0102030405060708ull, bytes, bytes_max);
     fprintf(F, "\n");
 }
 
-static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_t target_length)
+static int transport_param_log_fuzz_test(uint8_t* target, size_t target_length)
 {
     int ret = 0;
     uint8_t buffer[256];
@@ -994,7 +1058,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
                 for (size_t dl = 0; dl < target_length; dl += l + 6)
                 {
                     /* log */
-                    transport_param_log_test_one(F, buffer, target_length - dl, client_mode);
+                    transport_param_log_test_one(F, buffer, target_length - dl);
                 }
                 fclose(F);
             }
@@ -1006,7 +1070,7 @@ static int transport_param_log_fuzz_test(int client_mode, uint8_t* target, size_
     return ret;
 }
 
-int transport_param_log_test()
+int transport_param_log_test(void)
 {
     FILE* F = NULL;
     int ret = 0;
@@ -1019,14 +1083,14 @@ int transport_param_log_test()
     if (F != NULL) {
         char log_tp_test_ref[512];
 
-        transport_param_log_test_one(F, client_param1, sizeof(client_param1), 0);
-        transport_param_log_test_one(F, client_param2, sizeof(client_param2), 0);
-        transport_param_log_test_one(F, client_param3, sizeof(client_param3), 0);
-        transport_param_log_test_one(F, server_param1, sizeof(server_param1), 1);
-        transport_param_log_test_one(F, server_param2, sizeof(server_param2), 1);
-        transport_param_log_test_one(F, client_param4, sizeof(client_param4), 0);
-        transport_param_log_test_one(F, client_param5, sizeof(client_param5), 0);
-        transport_param_log_test_one(F, server_param3, sizeof(server_param3), 1);
+        transport_param_log_test_one(F, client_param1, sizeof(client_param1));
+        transport_param_log_test_one(F, client_param2, sizeof(client_param2));
+        transport_param_log_test_one(F, client_param3, sizeof(client_param3));
+        transport_param_log_test_one(F, server_param1, sizeof(server_param1));
+        transport_param_log_test_one(F, server_param2, sizeof(server_param2));
+        transport_param_log_test_one(F, client_param4, sizeof(client_param4));
+        transport_param_log_test_one(F, client_param5, sizeof(client_param5));
+        transport_param_log_test_one(F, server_param3, sizeof(server_param3));
 
         fclose(F);
 
@@ -1043,10 +1107,10 @@ int transport_param_log_test()
     {
         DBG_PRINTF("Doing fuzz test of transport parameter logging into %s\n", log_tp_fuzz_file);
 
-        ret = transport_param_log_fuzz_test(0, client_param2, sizeof(client_param2));
+        ret = transport_param_log_fuzz_test(client_param2, sizeof(client_param2));
 
         if (ret == 0) {
-            ret = transport_param_log_fuzz_test(1, server_param2, sizeof(server_param2));
+            ret = transport_param_log_fuzz_test(server_param2, sizeof(server_param2));
         }
 
         DBG_PRINTF("Fuzz test of transport parameter was successful.\n", log_tp_fuzz_file);
@@ -1208,7 +1272,7 @@ vn_tp_test_t vn_tp_test_case[] = {
 
 size_t nb_vn_tp_test_case = sizeof(vn_tp_test_case) / sizeof(vn_tp_test_t);
 
-int vn_tp_test()
+int vn_tp_test(void)
 {
     int ret = 0;
 
@@ -1339,7 +1403,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_loss_bit:
-        if (quic->default_tp.enable_loss_bit != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_loss_bit != tp_value) {
             ret = -1;
         }
         break;
@@ -1349,7 +1413,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_time_stamp:
-        if (quic->default_tp.enable_time_stamp != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_time_stamp != tp_value) {
             ret = -1;
         }
         break;
@@ -1359,7 +1423,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_enable_bdp_frame:
-        if (quic->default_tp.enable_bdp_frame != tp_value) {
+        if ((uint64_t)quic->default_tp.enable_bdp_frame != tp_value) {
             ret = -1;
         }
         break;
@@ -1374,7 +1438,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_reset_stream_at:
-        if (quic->default_tp.is_reset_stream_at_enabled != tp_value) {
+        if ((uint64_t)quic->default_tp.is_reset_stream_at_enabled != tp_value) {
             ret = -1;
         }
         break;
@@ -1385,7 +1449,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
     return ret;
 }
 
-int transport_param_default_test()
+int transport_param_default_test(void)
 {
     int ret = 0;
     for (size_t i = 0; ret == 0 && i < nb_default_test_case; i++) {

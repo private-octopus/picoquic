@@ -41,6 +41,17 @@ and an implementation in progress, with two goals:
 * enable P2P developers to gather the IP addresses used by their endpoint.
 
 The service is negotiated using a transport parameter, "address_discovery_mode",
-that could be 
+for which the draft defines 3 values:
+
+0. Willing to send, not receive.
+1. Willing to receive, not send.
+2. Willing to send and receive.
+
+Internally, picoquic uses 4 values:
+
+0. nothing goes (TP is absent)
+1. send only (TP value 0)
+2. receive only (TP value 1)
+3. both (TP value 2)
 
 

@@ -93,7 +93,7 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
             /* Print version identifiers */
             fprintf(F, "%d, %s, ", PICOQUIC_PER_LOG_VERSION, PICOQUIC_VERSION);
             /* Print the key performance data */
-            fprintf(F, "%f, %" PRIu64 ", %" PRIu64 ", %f, %f",
+            fprintf(F, "%.3f, %" PRIu64 ", %" PRIu64 ", %.3f, %.3f",
                 perflog_item->duration_sec,
                 perflog_item->data_sent,
                 perflog_item->data_received,
@@ -114,7 +114,13 @@ int picoquic_perflog_save(picoquic_performance_log_ctx_t* perflog_ctx)
 
             /* Print the additional values */
             for (size_t i = 0; i < perflog_item->nb_values; i++) {
-                fprintf(F, ", %"PRIu64, perflog_item->v[i]);
+                if (i == perflog_item->nb_values - 5) {
+                    double bwe_max = 8.0 * ((double)perflog_item->v[i]) / 1000000.0;
+                    fprintf(F, ", %.3f", bwe_max);
+                }
+                else {
+                    fprintf(F, ", %"PRIu64, perflog_item->v[i]);
+                }
             }
             fprintf(F, "\n");
             picoquic_perflog_item_free(perflog_item);
@@ -188,6 +194,12 @@ int picoquic_perflog_record(picoquic_cnx_t* cnx, picoquic_performance_log_ctx_t*
         }
         if (cnx->congestion_alg != NULL) {
             perflog_item->v[picoquic_perflog_ccalgo] = cnx->congestion_alg->congestion_algorithm_number;
+            if (cnx->path != NULL && cnx->path[0] != NULL &&
+                cnx->path[0]->congestion_alg_state != NULL) {
+                cnx->congestion_alg->alg_observe(cnx->path[0],
+                    &perflog_item->v[picoquic_perflog_cc_state],
+                    &perflog_item->v[picoquic_perflog_cc_param]);
+            }
         }
         
         if (perflog_ctx->first == NULL) {
@@ -270,6 +282,8 @@ const char* picoquic_perflog_param_name(picoquic_perflog_column_enum rank)
     case picoquic_perflog_bwe_max: return("bwe_max");
     case picoquic_perflog_pacing_quantum_max: return("p_quantum");
     case picoquic_perflog_pacing_rate: return("p_rate");
+    case picoquic_perflog_cc_state: return("cc_state");
+    case picoquic_perflog_cc_param: return("cc_param");
     default:
         break;
     }

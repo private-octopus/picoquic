@@ -70,7 +70,7 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
 
         stored->ip_addr_client = (uint8_t*)next_p;
         if (ip_addr_client == NULL || ip_addr_client_length == 0) {
-            stored->ip_addr_length = 0;
+            stored->ip_addr_client_length = 0;
         }
         else {
             if (ip_addr_client_length > PICOQUIC_STORED_IP_MAX) {
@@ -266,7 +266,9 @@ int picoquic_store_ticket(picoquic_quic_t* quic,
     picoquic_stored_ticket_t** pp_first_ticket = &quic->p_first_ticket;
     int ret = 0;
 
-    if (ticket_length < 17) {
+    /* Layout: 8B issued time, 2B key share ID, 2B cipher suite ID, 3B body length, then
+     * the NewSessionTicket body starting with its 4B ticket_lifetime per (RFC 8446 4.6.1). */
+    if (ticket_length < 19) {
         ret = PICOQUIC_ERROR_INVALID_TICKET;
     } else {
         uint64_t ticket_issued_time;
@@ -274,7 +276,7 @@ int picoquic_store_ticket(picoquic_quic_t* quic,
         uint64_t time_valid_until;
 
         ticket_issued_time = PICOPARSE_64(ticket);
-        ttl_seconds = PICOPARSE_32(ticket + 13);
+        ttl_seconds = PICOPARSE_32(ticket + 15);
 
         if (ttl_seconds > (7 * 24 * 3600)) {
             ttl_seconds = (7 * 24 * 3600);
@@ -469,6 +471,10 @@ int picoquic_load_tickets(picoquic_quic_t* quic, char const* ticket_file_name)
 
                 if (ret == 0 && (consumed != storage_size || next == NULL)) {
                     ret = PICOQUIC_ERROR_INVALID_FILE;
+                    if (next != NULL) {
+                        free(next);
+                        next = NULL;
+                    }
                 }
 
                 if (ret == 0 && next != NULL) {
@@ -510,20 +516,23 @@ void picoquic_free_tickets(picoquic_stored_ticket_t** pp_first_ticket)
 
 int picoquic_save_session_tickets(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_save_tickets(quic->p_first_ticket, picoquic_get_tls_time(quic), ticket_store_filename);
 }
 
 int picoquic_load_retry_tokens(picoquic_quic_t* quic, char const* token_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_load_tokens(quic, token_store_filename);
 }
 
 int picoquic_save_retry_tokens(picoquic_quic_t* quic, char const* ticket_store_filename)
 {
+    PICOQUIC_THREAD_CHECK(quic);
     return picoquic_save_tokens(quic, ticket_store_filename);
 }
 
-void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x, uint64_t current_time)
+void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x)
 {
     char const* sni = (cnx->sni == NULL) ? "" : cnx->sni;
     size_t sni_length = strlen(sni);
@@ -569,9 +578,8 @@ void picoquic_update_stored_ticket(picoquic_cnx_t* cnx, picoquic_path_t * path_x
 
 void picoquic_seed_ticket(picoquic_cnx_t* cnx, picoquic_path_t* path_x)
 {
-    uint64_t current_time = picoquic_get_tls_time(cnx->quic);
     if (cnx->client_mode) {
-        picoquic_update_stored_ticket(cnx, path_x, current_time);
+        picoquic_update_stored_ticket(cnx, path_x);
     }
     else {
         uint8_t* ip_addr;

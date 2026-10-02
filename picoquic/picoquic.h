@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.45.0"
+#define PICOQUIC_VERSION "1.1.53.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -112,7 +112,10 @@ extern "C" {
 #define PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED (PICOQUIC_ERROR_CLASS + 68)
 #define PICOQUIC_ERROR_REDIRECTED (PICOQUIC_ERROR_CLASS + 69) /* Not an error: the packet was captured by a proxy, no further processing needed */
 #define PICOQUIC_ERROR_PADDING_PACKET (PICOQUIC_ERROR_CLASS + 70)
-
+#define PICOQUIC_ERROR_PACKET_TOO_BIG (PICOQUIC_ERROR_CLASS + 71)
+#define PICOQUIC_ERROR_OFFSET_TOO_BIG (PICOQUIC_ERROR_CLASS + 72)
+#define PICOQUIC_NO_ERROR_SCONE_ADVICE (PICOQUIC_ERROR_CLASS + 73)
+#define PICOQUIC_ERROR_PATH_LAST_REMAINING (PICOQUIC_ERROR_CLASS + 74)
 /*
  * Protocol errors defined in the QUIC spec
  */
@@ -137,10 +140,10 @@ extern "C" {
 #define PICOQUIC_TLS_HANDSHAKE_FAILED (0x201)
 #define PICOQUIC_TRANSPORT_VERSION_NEGOTIATION_ERROR (0x11)
 
-#define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x4150504C4142414E)
-#define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x5245534C494D4954)
-#define PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE (0x554e5f494e5446)
-#define PICOQUIC_TRANSPORT_NO_CID_AVAILABLE (0x4e4f5f4349445f)
+#define PICOQUIC_TRANSPORT_APPLICATION_ABANDON (0x3e) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_RESOURCE_LIMIT_REACHED (0x3e75) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE (0x3e76) /* Per draft quic multipath 20 */
+#define PICOQUIC_TRANSPORT_NO_CID_AVAILABLE (0x3e77) /* Per draft quic multipath 20 */
 
 #define PICOQUIC_MAX_PACKET_SIZE 1536
 #define PICOQUIC_INITIAL_MTU_IPV4 1252
@@ -157,12 +160,27 @@ extern "C" {
 #define PICOQUIC_AES_128_GCM_SHA256 0x1301
 #define PICOQUIC_AES_256_GCM_SHA384 0x1302
 #define PICOQUIC_CHACHA20_POLY1305_SHA256 0x1303
+#define PICOQUIC_AEGIS_256_SHA512 0x1306
+#define PICOQUIC_AEGIS_128L_SHA256 0x1307
 
 #define PICOQUIC_GROUP_SECP256R1 23
 
 #define PICOQUIC_RESERVED_IF_INDEX 0x09cb8ed3 /* First 4 bytes of SHA256("QUIC Masque") */
 
+#define PICOQUIC_ECN_ECT_0 0x02
+#define PICOQUIC_ECN_ECT_1 0x01
+#define PICOQUIC_ECN_CE 0x03
 
+/* Convenience macro for handling unused attribute in functions that
+* must be defined with a specific signature, for example as callback.
+ */
+#ifndef UNUSED
+#if defined(__GNUC__) || defined(__clang__)
+#define UNUSED(x) x __attribute__((unused))
+#else
+#define UNUSED(x) x
+#endif
+#endif
 /*
 * Connection states, useful to expose the state to the application.
 */
@@ -188,6 +206,22 @@ typedef enum {
     picoquic_state_draining,
     picoquic_state_disconnected
 } picoquic_state_enum;
+
+/*
+* Nominal packet types. These are the packet types used internally by the
+* implementation. The wire encoding depends on the version.
+*/
+typedef enum {
+    picoquic_packet_error = 0,
+    picoquic_packet_version_negotiation,
+    picoquic_packet_initial,
+    picoquic_packet_retry,
+    picoquic_packet_handshake,
+    picoquic_packet_0rtt_protected,
+    picoquic_packet_1rtt_protected,
+    picoquic_packet_scone,
+    picoquic_packet_type_max
+} picoquic_packet_type_enum;
 
 /*
  * Transport parameters, as defined by the QUIC transport specification.
@@ -223,9 +257,11 @@ typedef uint64_t picoquic_tp_enum;
 #define picoquic_tp_grease_quic_bit 0x2ab2
 #define picoquic_tp_version_negotiation 0x11
 #define picoquic_tp_enable_bdp_frame 0xebd9 /* per draft-kuhn-quic-0rtt-bdp-09 */
-#define picoquic_tp_initial_max_path_id 0x0f739bbc1b666d0dull /* per draft quic multipath 13 */ 
+#define picoquic_tp_initial_max_path_id 0x3e /* per draft quic multipath 20 */ 
 #define picoquic_tp_address_discovery 0x9f81a176 /* per draft-seemann-quic-address-discovery */
 #define picoquic_tp_reset_stream_at 0x17f7586d2cb571ull /* per draft-ietf-quic-reliable-stream-reset-07 */
+#define picoquic_tp_qmux_max_record_size 0x0571c59429cd0845ull /* per draft-ietf-quic-qmux-01 */
+#define picoquic_tp_is_scone_supported 0x219e
 
 /* Packet contexts */
 typedef enum {
@@ -234,7 +270,6 @@ typedef enum {
     picoquic_packet_context_initial = 2,
     picoquic_nb_packet_context = 3
 } picoquic_packet_context_enum;
-
 
 /* PMTUD 
  */
@@ -287,6 +322,54 @@ typedef struct st_picoquic_connection_id_t {
     uint8_t id_len;
 } picoquic_connection_id_t;
 
+/* Quic defines 4 epochs, which are used for managing the
+ * crypto contexts
+ */
+#define PICOQUIC_NUMBER_OF_EPOCHS 4
+#define PICOQUIC_NUMBER_OF_EPOCH_OFFSETS (PICOQUIC_NUMBER_OF_EPOCHS+1)
+
+typedef enum {
+    picoquic_epoch_initial = 0,
+    picoquic_epoch_0rtt = 1,
+    picoquic_epoch_handshake = 2,
+    picoquic_epoch_1rtt = 3
+} picoquic_epoch_enum;
+
+/* Packet header structure.
+ * This structure is used internally when parsing or
+ * formatting the header of a Quic packet.
+ * It is also used in some APIs, including logging APIs.
+ */
+
+typedef struct st_picoquic_packet_header_t {
+    picoquic_connection_id_t dest_cnx_id;
+    picoquic_connection_id_t srce_cnx_id;
+    uint32_t pn;
+    uint32_t vn;
+    size_t offset; /* offset to the first byte of the payload.*/
+    size_t pn_offset; /* offset to the first byte of the packet number */
+    picoquic_packet_type_enum ptype;
+    uint64_t pnmask;
+    uint64_t pn64;
+    size_t payload_length;
+    int version_index;
+    picoquic_epoch_enum epoch;
+    picoquic_packet_context_enum pc;
+
+    unsigned int key_phase : 1;
+    unsigned int spin : 1;
+    unsigned int has_spin_bit : 1;
+    unsigned int has_reserved_bit_set : 1;
+    unsigned int has_loss_bits : 1;
+    unsigned int loss_bit_Q : 1;
+    unsigned int loss_bit_L : 1;
+    unsigned int quic_bit_is_zero : 1;
+
+    size_t token_length;
+    const uint8_t* token_bytes;
+    size_t pl_val;
+    struct st_picoquic_local_cnxid_t* l_cid;
+} picoquic_packet_header;
 
 /* forward definition to avoid full dependency on picotls.h */
 typedef struct st_ptls_iovec_t ptls_iovec_t;
@@ -320,7 +403,7 @@ typedef enum {
     picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
-    picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_stream_gap,  /* Deprecated: picoquic never emits this callback, kept only so old code that switches on it still compiles */
     picoquic_callback_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
@@ -339,10 +422,14 @@ typedef enum {
     picoquic_callback_path_quality_changed, /* Some path quality parameters have changed */
     picoquic_callback_path_address_observed, /* The peer has reported an address for the path */
     picoquic_callback_app_wakeup, /* wakeup timer set by application has expired */
-    picoquic_callback_next_path_allowed /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_next_path_allowed, /* There are enough path_id and connection ID available for the next path */
+    picoquic_callback_stream_released, /* Stream fully retired: bytes=NULL, len=0,
+                                       * stream_ctx = the app_stream_ctx the app set;
+                                       * picoquic will not call back with this stream_ctx again. */
+    picoquic_callback_scone_indication /* Received a scone indication of the long term incoming rate */
 } picoquic_call_back_event_t;
 
-typedef struct st_picoquic_tp_prefered_address_t {
+typedef struct st_picoquic_tp_preferred_address_t {
     int is_defined;
     uint8_t ipv4Address[4];
     uint16_t ipv4Port;
@@ -350,7 +437,7 @@ typedef struct st_picoquic_tp_prefered_address_t {
     uint16_t ipv6Port;
     picoquic_connection_id_t connection_id;
     uint8_t statelessResetToken[16];
-} picoquic_tp_prefered_address_t;
+} picoquic_tp_preferred_address_t;
 
 typedef struct st_picoquic_tp_version_negotiation_t {
     uint32_t current; /* Version found in TP, should match envelope */
@@ -374,7 +461,7 @@ typedef struct st_picoquic_tp_t {
     uint32_t active_connection_id_limit;
     uint8_t ack_delay_exponent;
     unsigned int migration_disabled;
-    picoquic_tp_prefered_address_t prefered_address;
+    picoquic_tp_preferred_address_t preferred_address;
     uint32_t max_datagram_frame_size;
     int enable_loss_bit;
     int enable_time_stamp; /* (x&1) want, (x&2) can */
@@ -385,6 +472,7 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_path_id;
     int address_discovery_mode; /* 0=none, 1=provide only, 2=receive only, 3=both */
     int is_reset_stream_at_enabled; /* 1: enabled. 0: not there. (default) */
+    int is_scone_supported; /* 1: want to receive scone, default : 0 */
 } picoquic_tp_t;
 
 /*
@@ -645,6 +733,10 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
 void picoquic_free(picoquic_quic_t* quic);
 
+/* Ticket keys protect TLS tickets and tokens. key[0] selects slot 0/1; last set is active. */
+int picoquic_set_ticket_key(picoquic_quic_t* quic,
+    const uint8_t* ticket_key, size_t ticket_key_length);
+
 /* Preference for low memory options.
  * setting this flag instructs picoquic to chose implementations of algorithms 
  * that use less memory while maintaining reasonable performance. For example,
@@ -671,6 +763,8 @@ void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode);
  *     PICOQUIC_AES_128_GCM_SHA256
  *     PICOQUIC_AES_256_GCM_SHA384
  *     PICOQUIC_CHACHA20_POLY1305_SHA256
+ *     PICOQUIC_AEGIS_256_SHA512
+ *     PICOQUIC_AEGIS_128L_SHA256
  * returns 0 if OK, -1 if the specified ciphersuite is not supported.
  */
 int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id);
@@ -696,6 +790,10 @@ picoquic_tp_t const* picoquic_get_transport_parameters(picoquic_cnx_t* cnx, int 
 /* Set the TLS certificate chain(DER format) for the QUIC context. The context will take ownership over the certs pointer. */
 void picoquic_set_tls_certificate_chain(picoquic_quic_t* quic, ptls_iovec_t* certs, size_t count);
 
+/* Refresh the TLS certificate used by new server connections. */
+int picoquic_refresh_tls_certificate(picoquic_quic_t* quic,
+    char const* cert_file_name, char const* key_file_name);
+
 /* Set the TLS root certificates (DER format) for the QUIC context. The context will take ownership over the certs pointer.
  * The root certificates will be used to verify the certificate chain of the server and client (with client authentication activated).
  * Returns `0` on success, `-1` on error while loading X509 certificate or `-2` on error while adding a cert to the certificate store.
@@ -704,6 +802,13 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
 
 /* Tell the TLS stack to not attempt verifying certificates */
 void picoquic_set_null_verifier(picoquic_quic_t* quic);
+
+/* Set the policy applied when a client connection has no root certificate store to verify
+ * against (no cert_root_file_name given to picoquic_create, or it failed to load). By
+ * default (is_strict = 0) verification is silently disabled (fail open), preserved for
+ * applications -- e.g. test setups -- that rely on it. With is_strict != 0,
+ * picoquic_start_client_cnx refuses the connection instead of proceeding unverified. */
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict);
 
 /* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
@@ -930,6 +1035,8 @@ int picoquic_start_client_cnx(picoquic_cnx_t* cnx);
  */
 int picoquic_close(picoquic_cnx_t* cnx, uint64_t application_reason_code);
 
+int picoquic_close_ex(picoquic_cnx_t* cnx, uint64_t application_reason_code, char const* error_reason);
+
 void picoquic_close_immediate(picoquic_cnx_t* cnx);
 
 void picoquic_delete_cnx(picoquic_cnx_t* cnx);
@@ -956,10 +1063,15 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * the new path will come in addition to the set of existing paths; if not,
  * the new path when validated will replace the default path.
  * The "abandon path" should only be used if multipath is enabled, and if more than
- * one path is available -- otherwise, just close the connection. If the command
- * is accepted, the peer will be informed of the need to close the path, and the
- * path will be demoted after a short delay. 
- * 
+ * one path is still available for use -- otherwise, just close the connection, or
+ * probe a new path before abandoning this one. If the command is accepted, the
+ * peer will be informed of the need to close the path, and the path will be
+ * demoted after a short delay. Calling picoquic_abandon_path() on the last path
+ * that is not already marked for demotion returns PICOQUIC_ERROR_PATH_LAST_REMAINING
+ * instead of demoting it, since that would eventually leave the connection with no
+ * path to send on. The peer abandoning its last path is not affected by this check;
+ * it simply results in the connection being closed.
+ *
  * Like all user-level networking API, the "probe new path" API assumes that the
  * port numbers in the socket addresses structures are expressed in network order.
  * 
@@ -994,7 +1106,12 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  *   PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED: The application is trying to create more
  *   simultaneous paths than allowed. It will need to close one of the existing paths
  *   before creating a new one.
- * 
+ *
+ *   PICOQUIC_ERROR_PATH_LAST_REMAINING: returned by picoquic_abandon_path(). The
+ *   target path is the last one not already marked for demotion, so abandoning it
+ *   would leave the connection with no path to send on. The application should
+ *   close the connection instead, or probe a new path before abandoning this one.
+ *
  * The errors PICOQUIC_ERROR_PATH_ID_BLOCKED, PICOQUIC_ERROR_PATH_CID_BLOCKED.
  * PICOQUIC_ERROR_PATH_NOT_READY and PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED are transient.
  * The application can use the `picoquic_check_new_path_allowed` API to check whether
@@ -1061,7 +1178,7 @@ void picoquic_enable_path_callbacks(picoquic_cnx_t* cnx, int are_enabled);
 void picoquic_enable_path_callbacks_default(picoquic_quic_t* quic, int are_enabled);
 int picoquic_set_app_path_ctx(picoquic_cnx_t* cnx, uint64_t unique_path_id, void * app_path_ctx);
 int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id, 
-    uint64_t reason, char const* phrase, uint64_t current_time);
+    uint64_t reason, uint64_t current_time);
 int picoquic_refresh_path_connection_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_set_stream_path_affinity(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t unique_path_id);
 int picoquic_set_path_status(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_path_status_enum status);
@@ -1130,6 +1247,31 @@ int picoquic_subscribe_to_quality_update_per_path(picoquic_cnx_t* cnx, uint64_t 
     uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_subscribe_to_quality_update(picoquic_cnx_t* cnx, uint64_t pacing_rate_delta, uint64_t rtt_delta);
 void picoquic_default_quality_update(picoquic_quic_t* quic, uint64_t pacing_rate_delta, uint64_t rtt_delta);
+
+/* The socket creation API is used to set the socket creation function
+* in the picoquic context. That function needs to be set by the
+* packet loop when it starts. It has three parameters:
+*
+* - a calling context, specified by the socket loop.
+* - the socket address family, type and protocol.
+* - the local address, in which the socket type MUST be specified. If
+*   the IP address and port numbers are specified, the socket will
+*   be bound to these addresses.
+* - an optional remote address. If it is specified, the socket will
+*   be connected to that address, using an asynchronous version of
+*   the connect call.
+*
+* The function returns a (void *) version of the handle of the socket
+* that was created.
+*/
+
+typedef void* (*picoquic_create_socket_fn)(void* create_socket_ctx,
+    int af, int type, int protocol,
+    struct sockaddr* addr_local, struct sockaddr* addr_remote, int interface_index);
+
+int picoquic_set_socket_fn(picoquic_quic_t* quic, picoquic_create_socket_fn socket_fn,
+    void* create_socket_ctx);
+
 
 /* Connection management API.
  * TODO: many of these API should be deprecated. They were created when we
@@ -1360,6 +1502,16 @@ void picoquic_unlink_app_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
  */
 int picoquic_mark_active_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, int is_active, void* v_stream_ctx);
+
+/* Mark stream as active without touching app_stream_ctx. Use when the
+ * caller has no opinion on the ctx (e.g. a layered stack where a lower
+ * layer like h3zero already set app_stream_ctx, and a higher layer
+ * uses prepare_to_send for byte transfer and only needs to wake the
+ * worker). picoquic_set_app_stream_ctx / picoquic_unlink_app_stream_ctx
+ * remain the explicit set / clear APIs.
+ */
+int picoquic_mark_active_stream_v2(picoquic_cnx_t* cnx,
+    uint64_t stream_id, int is_active);
 
 /* Handling of stream packetisation and head-of-line blocking:
 * 
@@ -1646,7 +1798,6 @@ uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);
 
-
 uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
@@ -1665,7 +1816,8 @@ typedef enum {
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset,
-    picoquic_congestion_notification_lost_feedback /* notification of lost feedback */
+    picoquic_congestion_notification_lost_feedback, /* notification of lost feedback */
+    picoquic_congestion_notification_restart_from_idle /* notification before ack-eliciting restart from idle */
 } picoquic_congestion_notification_t;
 
 /** HyStart algorithms:
@@ -1686,6 +1838,7 @@ typedef struct st_picoquic_per_ack_state_t {
     uint64_t one_way_delay; /* One way delay when receiving the ACK, 0 if unknown */
     uint64_t nb_bytes_acknowledged; /* Number of bytes acknowledged by this ACK */
     uint64_t nb_bytes_newly_lost; /* Number of bytes in packets found lost because of this ACK */
+    uint64_t nb_loss_ranges_newly_lost; /* Number of discontiguous packet loss ranges found because of this ACK */
     uint64_t nb_bytes_lost_since_packet_sent; /* Number of bytes lost between the time the packet was sent and now */
     uint64_t nb_bytes_delivered_since_packet_sent; /* Number of bytes acked between the time the packet was sent and now */
     uint64_t inflight_prior;
@@ -1696,7 +1849,7 @@ typedef struct st_picoquic_per_ack_state_t {
     unsigned int is_cwnd_limited: 1; /* path marked CWIN limited after packet was sent. */
 } picoquic_per_ack_state_t;
 
-typedef void (*picoquic_congestion_algorithm_init)(picoquic_cnx_t* cnx, picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
+typedef void (*picoquic_congestion_algorithm_init)(picoquic_path_t* path_x, char const * option_string, uint64_t current_time);
 typedef void (*picoquic_congestion_algorithm_notify)(
     picoquic_cnx_t* cnx,
     picoquic_path_t* path_x,
@@ -1710,6 +1863,7 @@ typedef void (*picoquic_congestion_algorithm_observe)(
 typedef struct st_picoquic_congestion_algorithm_t {
     char const * congestion_algorithm_id;
     uint8_t congestion_algorithm_number;
+    uint8_t ecn_mark;
     picoquic_congestion_algorithm_init alg_init;
     picoquic_congestion_algorithm_notify alg_notify;
     picoquic_congestion_algorithm_delete alg_delete;

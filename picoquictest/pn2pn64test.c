@@ -70,7 +70,7 @@ static struct _pn2pn64test_entry test_entries[] = {
 
 static const size_t nb_test_entries = sizeof(test_entries) / sizeof(struct _pn2pn64test_entry);
 
-int pn2pn64test()
+int pn2pn64test(void)
 {
     int ret = 0;
 

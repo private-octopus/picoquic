@@ -74,11 +74,15 @@ typedef enum {
     picoquic_option_BDP_frame,
     picoquic_option_CWIN_MAX,
     picoquic_option_SSLKEYLOG,
+    picoquic_option_QMUX,
     picoquic_option_AddressDiscovery,
     picoquic_option_ECH_server,
     picoquic_option_ECH_client,
     picoquic_option_ECH_init,
     picoquic_option_FLOW_CONTROL_MAX,
+    picoquic_option_Preferred_V4,
+    picoquic_option_Preferred_V6,
+    picoquic_option_SCONE,
     picoquic_option_HELP
 }  picoquic_option_enum_t;
 
@@ -91,7 +95,10 @@ typedef struct st_picoquic_quic_config_t {
     char const* bin_dir;
     char const* qlog_dir;
     char const* performance_log;
-    int server_port;
+    uint16_t server_port;
+    uint16_t local_port;
+    int is_port_shared;
+    int nb_threads;
     int dest_if;
     int mtu_max;
     int cnx_id_length;
@@ -147,11 +154,16 @@ typedef struct st_picoquic_quic_config_t {
     uint8_t * ech_target;
     size_t ech_target_len;
     uint64_t flow_control_max;
+    /* Preferred address, encoded as strings */
+    char const* preferred_address_v4;
+    char const* preferred_address_v6;
+    char const* qmux_string;
+    int is_scone_supported;
 } picoquic_quic_config_t;
 
 int picoquic_config_option_letters(char* option_string, size_t string_max, size_t* string_length);
 void picoquic_config_usage_file(FILE* F);
-void picoquic_config_usage();
+void picoquic_config_usage(void);
 int picoquic_config_set_option(picoquic_quic_config_t* config, picoquic_option_enum_t option_num, const char* opt_val);
 
 /* picoquic_config_command_line:
@@ -174,6 +186,13 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
     void* default_callback_ctx,
     uint64_t current_time,
     uint64_t* p_simulated_time);
+
+void picoqmux_parse_option_string(char const* option_string, int* qmux_port, int* nb_connections);
+
+picoquic_quic_t* picoqmux_create_and_configure(picoquic_quic_config_t* config,
+    picoquic_stream_data_cb_fn default_callback_fn, void* default_callback_ctx,
+    uint64_t current_time, uint64_t* p_simulated_time,
+    int* qmux_port, int* nb_connections);
 
 void picoquic_config_init(picoquic_quic_config_t* config);
 void picoquic_config_clear(picoquic_quic_config_t* config);

@@ -260,7 +260,7 @@ int verify_bytestream_read(bytestream * s)
     return ret;
 }
 
-int verify_bytestream_on_stack()
+int verify_bytestream_on_stack(void)
 {
     int ret = 0;
 
@@ -284,7 +284,7 @@ int verify_bytestream_on_stack()
     return ret;
 }
 
-int verify_bytestream_on_heap()
+int verify_bytestream_on_heap(void)
 {
     int ret = 0;
 
@@ -307,7 +307,7 @@ int verify_bytestream_on_heap()
 /*
  * This tests bytestream write functionality when close to or over the allocated limits.
  */
-int bytestream_test_write_limits()
+int bytestream_test_write_limits(void)
 {
     int ret = 0;
     const static uint8_t buf[8] = { 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
@@ -404,7 +404,7 @@ int bytestream_test_write_limits()
 /*
  * This tests bytestream read functionality when close to or over the allocated limits.
  */
-int bytestream_test_read_limits()
+int bytestream_test_read_limits(void)
 {
     int ret = 0;
     
@@ -617,7 +617,7 @@ typedef struct st_picoquic_val_len {
     size_t len;
 } picoquic_val_len;
 
-int bytestream_test_vint()
+int bytestream_test_vint(void)
 {
     int ret = 0;
 
@@ -655,7 +655,8 @@ int bytestream_test_vint()
     return ret;
 }
 
-int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_storage * out, size_t addr_size, const char * type_name)
+int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_storage * out, size_t addr_size,
+    const char * type_name, uint8_t expected_wire_family)
 {
     int ret = 0;
 
@@ -664,6 +665,15 @@ int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_sto
 
     ret |= bytewrite_addr(s, in);
     ret |= bytewrite_addr(s, in);
+
+    /* The family marker on the wire must be the protocol-defined value (4 or 6), not
+     * the platform's raw sa_family_t -- that value is not portable across Windows and
+     * Linux and must never leak into a persisted stream. */
+    if (ret == 0 && (s->ptr < 1 || s->data[0] != expected_wire_family)) {
+        DBG_PRINTF("wire family marker for %s is 0x%02x, expected %d\n", type_name,
+            (s->ptr < 1) ? 0 : s->data[0], expected_wire_family);
+        ret = -1;
+    }
 
     bytestream_reset(s);
 
@@ -681,7 +691,7 @@ int bytestream_test_addr_version(const struct sockaddr * in, struct sockaddr_sto
     return ret;
 }
 
-int bytestream_test_addr()
+int bytestream_test_addr(void)
 {
     int ret = 0;
 
@@ -695,7 +705,7 @@ int bytestream_test_addr()
         (const struct sockaddr*)&addr_in,
         & addr_out,
         sizeof(struct sockaddr_in),
-        "sockaddr_in");
+        "sockaddr_in", 4);
 
     struct sockaddr_in6 addr_in6 = { 0 };
     addr_in6.sin6_family = AF_INET6;
@@ -706,12 +716,12 @@ int bytestream_test_addr()
         (const struct sockaddr*)&addr_in6,
         &addr_out,
         sizeof(struct sockaddr_in6),
-        "sockaddr_in6");
+        "sockaddr_in6", 6);
 
     return ret;
 }
 
-int bytestream_test_utils()
+int bytestream_test_utils(void)
 {
     int ret = 0;
     size_t size = 0;
@@ -778,7 +788,7 @@ int bytestream_test_utils()
     return ret;
 }
 
-int bytestream_test()
+int bytestream_test(void)
 {
     int ret = 0;
 

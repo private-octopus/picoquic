@@ -138,7 +138,7 @@ static int qinq_test_one_rh(const struct st_qinq_test_rh_t* rh, size_t length, u
     return ret;
 }
 
-int qinq_rh_test()
+int qinq_rh_test(void)
 {
     int ret;
 
@@ -183,7 +183,7 @@ static struct st_qinq_test_dg_t dg_list[] = {
 
 size_t dg_list_nb = sizeof(dg_list) / sizeof(struct st_qinq_test_dg_t);
 
-int qinq_incoming_datagram_parse_test()
+int qinq_incoming_datagram_parse_test(void)
 {
     int ret = 0;
     picoqinq_header_compression_t* hc_head = NULL;
@@ -366,7 +366,7 @@ static const struct st_qinq_test_address_table_t address_event[] = {
 
 static const size_t nb_address_event = sizeof(address_event) / sizeof(struct st_qinq_test_address_table_t);
 
-int qinq_address_table_test()
+int qinq_address_table_test(void)
 {
     struct sockaddr_storage addr_s[QINQ_NB_TEST_ADDRESS];
     picoqinq_srv_ctx_t* qinq;
@@ -494,7 +494,7 @@ void picoqinq_test_ctx_delete(struct st_picoqinq_test_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init()
+struct st_picoqinq_test_ctx_t* picoqinq_test_ctx_init(void)
 {
     struct st_picoqinq_test_ctx_t* test_ctx = (struct st_picoqinq_test_ctx_t*)malloc(sizeof(struct st_picoqinq_test_ctx_t));
     const char* addr_txt[3] = { "10.0.0.1", "10.0.0.2", "10.0.0.3" };
@@ -574,11 +574,13 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
             selected_ctx = i;
             is_stateless = 1;
             next_time = test_ctx->simulated_time;
-        } else if (test_ctx->qctx[i]->cnx_wake_first != NULL) {
-            if (test_ctx->qctx[i]->cnx_wake_first->next_wake_time < next_time) {
+        }
+        else {
+            uint64_t wake_time = picoquic_get_next_wake_time(test_ctx->qctx[i], test_ctx->simulated_time);
+            if (wake_time < next_time) {
                 selected_ctx = i;
                 is_stateless = 0;
-                next_time = test_ctx->qctx[i]->cnx_wake_first->next_wake_time;
+                next_time = wake_time;
             }
         }
     }
@@ -642,19 +644,21 @@ int picoqinq_test_sim_step(struct st_picoqinq_test_ctx_t* test_ctx)
                 picoquic_delete_stateless_packet(sp);
             }
         }
-        else if (test_ctx->qctx[selected_ctx]->cnx_wake_first == NULL) {
-            ret = -1; /* unexpected */
-        }
         else {
-            /* check whether there is something to send */
+            picoquic_cnx_t* cnx = picoquic_get_earliest_cnx_to_wake(test_ctx->qctx[selected_ctx], test_ctx->simulated_time);
+            if (cnx == NULL) {
+                ret = -1; /* unexpected */
+            }
+            else {
+                /* check whether there is something to send */
 
-            ret = picoquic_prepare_packet(test_ctx->qctx[selected_ctx]->cnx_wake_first, test_ctx->simulated_time,
-                packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
-                &packet->addr_to, &packet->addr_from);
-            if (ret != 0)
-            {
-                /* useless test, but makes it easier to add a breakpoint under debugger */
-                ret = -1;
+                ret = picoquic_prepare_packet(cnx, test_ctx->simulated_time,
+                    packet->bytes, PICOQUIC_MAX_PACKET_SIZE, &packet->length,
+                    &packet->addr_to, &packet->addr_from);
+                if (ret != 0) {
+                    /* useless test, but makes it easier to add a breakpoint under debugger */
+                    ret = -1;
+                }
             }
         }
 
@@ -742,7 +746,7 @@ int picoqinq_test_sim_connection(struct st_picoqinq_test_ctx_t* test_ctx, picoqu
  * Close.
  */
 
-int qinq_e2e_basic_test()
+int qinq_e2e_basic_test(void)
 {
     struct st_picoqinq_test_ctx_t* test_ctx = picoqinq_test_ctx_init();
     int ret = 0;

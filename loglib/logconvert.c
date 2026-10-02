@@ -37,6 +37,8 @@ const char * ptype2str(picoquic_packet_type_enum ptype)
         return "0RTT";
     case picoquic_packet_1rtt_protected:
         return "1RTT";
+    case picoquic_packet_scone:
+        return "scone";
     case picoquic_packet_type_max:
     default:
         return "unknown";

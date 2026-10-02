@@ -21,6 +21,12 @@
 #ifdef _WINDOWS
 #include "getopt.h"
 #endif
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest.h"
@@ -28,11 +34,75 @@
 #include <string.h>
 #include <stdlib.h>
 
-void picoquic_tls_api_unload();
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+/* Temporary diagnostic: on an unhandled exception (e.g. access violation),
+ * print a symbolized stack trace before the process dies. This is much
+ * faster than reaching for an external debugger when a test crashes. */
+static LONG WINAPI picoquic_t_crash_handler(EXCEPTION_POINTERS* ex)
+{
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+    CONTEXT context_record = *ex->ContextRecord;
+    STACKFRAME64 frame = { 0 };
+    DWORD machine_type = IMAGE_FILE_MACHINE_AMD64;
+
+    fprintf(stderr, "\n*** CRASH: exception code 0x%08lx at address %p ***\n",
+        ex->ExceptionRecord->ExceptionCode, ex->ExceptionRecord->ExceptionAddress);
+
+    SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+    SymInitialize(process, NULL, TRUE);
+
+    frame.AddrPC.Offset = context_record.Rip;
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Offset = context_record.Rbp;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Offset = context_record.Rsp;
+    frame.AddrStack.Mode = AddrModeFlat;
+
+    for (int i = 0; i < 32; i++) {
+        if (!StackWalk64(machine_type, process, thread, &frame, &context_record,
+            NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) {
+            break;
+        }
+
+        char symbol_buffer[sizeof(SYMBOL_INFO) + 256] = { 0 };
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)symbol_buffer;
+        DWORD64 displacement64 = 0;
+        DWORD displacement32 = 0;
+        IMAGEHLP_LINE64 line = { 0 };
+
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = 255;
+        line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+        if (SymFromAddr(process, frame.AddrPC.Offset, &displacement64, symbol)) {
+            if (SymGetLineFromAddr64(process, frame.AddrPC.Offset, &displacement32, &line)) {
+                fprintf(stderr, "  #%d %s + 0x%llx  (%s:%lu)\n", i, symbol->Name,
+                    (unsigned long long)displacement64, line.FileName, line.LineNumber);
+            }
+            else {
+                fprintf(stderr, "  #%d %s + 0x%llx  (no line info)\n", i, symbol->Name,
+                    (unsigned long long)displacement64);
+            }
+        }
+        else {
+            fprintf(stderr, "  #%d 0x%p  (no symbol)\n", i, (void*)frame.AddrPC.Offset);
+        }
+    }
+    fflush(stderr);
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
+void picoquic_tls_api_unload(void);
 
 typedef struct st_picoquic_test_def_t {
     char const* test_name;
-    int (*test_fn)();
+    int (*test_fn)(void);
 } picoquic_test_def_t;
 
 typedef enum {
@@ -48,26 +118,47 @@ static const picoquic_test_def_t test_table[] = {
     { "error_name", error_name_test },
     { "util_sprintf", util_sprintf_test },
     { "util_debug_print", util_debug_print_test },
+    { "util_debug_pop_stream", util_debug_pop_stream_test },
     { "util_uint8_to_str", util_uint8_to_str_test },
     { "util_memcmp", util_memcmp_test },
     { "threading", util_threading_test },
+    { "wait_thread", util_wait_thread_test },
+    { "is_path_sane", util_is_path_sane_test },
+    { "set_addr_port", util_set_addr_port_test },
     { "picohash", picohash_test },
     { "picohash_embedded", picohash_embedded_test },
     { "picohash_bytes", picohash_bytes_test },
     { "siphash", siphash_test },
     { "picolog_basic", picolog_basic_test },
+    { "logger_textlog_malformed_frame", logger_textlog_malformed_frame_test },
+    { "perflog_param_name", perflog_param_name_test },
+    { "perflog_file_is_empty", perflog_file_is_empty_test },
+    { "perflog_multi_cnx", perflog_multi_cnx_test },
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },
     { "sockloop_eio", sockloop_eio_test },
     { "sockloop_errsock", sockloop_errsock_test },
     { "sockloop_ipv4", sockloop_ipv4_test },
+    { "sockloop_send_err", sockloop_send_err_test },
+    { "sockloop_bind_addr", sockloop_bind_addr_test },
     { "sockloop_migration", sockloop_migration_test },
     { "sockloop_nat", sockloop_nat_test },
+    { "sockloop_send_source", sockloop_send_source_test },
+    { "sockloop_delete_thread_allocated_param", sockloop_delete_thread_allocated_param_test },
+    { "sockloop_server_set_context", sockloop_server_set_context_test },
+    { "sockloop_start_server_threads", sockloop_start_server_threads_test },
+    { "sockloop_system_call_duration", sockloop_system_call_duration_test },
     { "sockloop_thread", sockloop_thread_test },
     { "sockloop_thread_name", sockloop_thread_name_test },
+    { "sockloop_thread_null_callback", sockloop_thread_null_callback_test },
+    { "sockloop_qmux", sockloop_qmux_test },
+    { "sockloop_qmux_badp", sockloop_qmux_badp_test },
+    { "sockloop_qmux_cnx_sockets_limit", sockloop_qmux_cnx_sockets_limit_test },
+    { "sockloop_qmux_close", sockloop_qmux_close_test },
     { "splay", splay_test },
     { "create_cnx", create_cnx_test },
     { "create_quic", create_quic_test },
+    { "stateless_packet_queue_limit", stateless_packet_queue_limit_test },
     { "parseheader", parseheadertest },
     { "incoming_initial", incoming_initial_test },
     { "header_length", header_length_test },
@@ -76,13 +167,28 @@ static const picoquic_test_def_t test_table[] = {
     { "varint", varint_test },
     { "sqrt_for_test", sqrt_for_test_test },
     { "ack_sack", sacktest },
+    { "ack_stress", sack_stress_test },
     { "frames_skip", skip_frame_test },
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },
     { "frames_ackack_error", frames_ackack_error_test },
+    { "observed_address_ack_after_path_deleted", observed_address_ack_after_path_deleted_test },
+    { "frames_ackof_error", frames_ackof_error_test },
+    { "reset_stream_at_needs_repeat", reset_stream_at_needs_repeat_test },
+    { "process_ack_of_reset_stream_at", process_ack_of_reset_stream_at_test },
+    { "stop_sending_needs_repeat", stop_sending_needs_repeat_test },
+    { "stream_invalid_id", stream_invalid_id_test },
+    { "stream_never_called_apis", stream_never_called_apis_test },
+    { "queue_multipath_blocked_frames", queue_multipath_blocked_frames_test },
+    { "skip_immediate_ack_frame", skip_immediate_ack_frame_test },
+    { "quicctx_never_called_apis", quicctx_never_called_apis_test },
     { "frames_format", frames_format_test },
+    { "flow_control_check_stream_offset", flow_control_check_stream_offset_test },
+    { "signal_stream_reset", signal_stream_reset_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
+    { "binlog_compare_mismatch", binlog_compare_mismatch_test },
+    { "unified_log_multi_backend", unified_log_multi_backend_test },
     { "qlog_frames", qlog_frames_test },
     { "app_message_overflow", app_message_overflow_test },
     { "TlsStreamFrame", TlsStreamFrameTest },
@@ -98,6 +204,9 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_range", ackrange_test },
     { "ack_disorder", ack_disorder_test },
     { "ack_horizon", ack_horizon_test },
+    { "sack_list_unbounded_growth", sack_list_unbounded_growth_test },
+    { "sack_list_stream_bytes_unbounded", sack_list_stream_bytes_unbounded_test },
+    { "sack_list_horizon_backward", sack_list_horizon_backward_test },
     { "ack_of_ack", ack_of_ack_test },
     { "ackfrq_basic", ackfrq_basic_test },
     { "ackfrq_short", ackfrq_short_test },
@@ -115,15 +224,19 @@ static const picoquic_test_def_t test_table[] = {
     { "dtn_silence", dtn_silence_test },
     { "dtn_twenty", dtn_twenty_test },
     { "pn_enc_1rtt", pn_enc_1rtt_test },
+    { "not_decrypted_stash", not_decrypted_stash_test },
     { "new_cnxid_stash", cnxid_stash_test },
     { "new_cnxid", new_cnxid_test },
     { "pacing", pacing_test },
     { "pacing_repeat", pacing_repeat_test },
+    { "packet_names", packet_names_test },
+    { "picoquic_ptls_fusion", picoquic_ptls_fusion_test },
 #if 0
     /* The TLS API connect test is only useful when debugging issues step by step */
     { "tls_api_connect", tls_api_connect_test },
 #endif
     { "tls_api", tls_api_test },
+    { "tls_handshake_pool_exhausted", tls_handshake_pool_exhausted_test },
     { "tls_api_inject_hs_ack", tls_api_inject_hs_ack_test },
     { "tls_exporter", tls_exporter_test },
     { "null_sni", null_sni_test },
@@ -151,6 +264,7 @@ static const picoquic_test_def_t test_table[] = {
     { "datagram_small_packet", datagram_small_packet_test },
     { "datagram_too_long_test", datagram_too_long_test },
     { "datagram_wifi", datagram_wifi_test },
+    { "datagram_app_limited_bbr", datagram_app_limited_bbr_test },
     { "ddos_amplification", ddos_amplification_test },
     { "ddos_amplification_0rtt", ddos_amplification_0rtt_test },
     { "ddos_amplification_8k", ddos_amplification_8k_test },
@@ -162,10 +276,20 @@ static const picoquic_test_def_t test_table[] = {
     { "vn_compat", vn_compat_test },
     { "transport_param_default", transport_param_default_test },
     { "stream_rank", stream_rank_test },
+    { "stream_id_limit", stream_id_limit_test },
     { "provide_stream_buffer", provide_stream_buffer_test },
     { "transport_param", transport_param_test },
     { "tls_api_sni", tls_api_sni_test },
     { "tls_api_alpn", tls_api_alpn_test },
+    { "tls_x25519", tls_x25519_test },
+    { "tls_x25519mlkem", tls_x25519mlkem_test },
+    { "tls_api_dispose_certificate_verifier", tls_api_dispose_certificate_verifier_test },
+    { "tls_api_remove_ticket", tls_api_remove_ticket_test },
+    { "tls_api_null_arg_checks", tls_api_null_arg_checks_test },
+    { "tls_api_server_decrypt_short_token", tls_api_server_decrypt_short_token_test },
+    { "tls_api_set_key_exchange_no_master", tls_api_set_key_exchange_no_master_test },
+    { "tls_api_set_key_log_file_twice", tls_api_set_key_log_file_twice_test },
+    { "tls_api_verify_retry_protection_short", tls_api_verify_retry_protection_short_test },
     { "tls_api_wrong_alpn", tls_api_wrong_alpn_test },
     { "tls_api_oneway_stream", tls_api_oneway_stream_test },
     { "tls_api_q_and_r_stream", tls_api_q_and_r_stream_test },
@@ -196,11 +320,24 @@ static const picoquic_test_def_t test_table[] = {
     { "sockets", socket_test },
     { "socket_ecn", socket_ecn_test },
     { "ticket_store", ticket_store_test },
+    { "ticket_store_save_wrappers", ticket_store_save_wrappers_test },
+    { "ticket_store_too_short", ticket_store_too_short_test },
+    { "ticket_store_load_padded_record", ticket_store_load_padded_record_test },
     { "ticket_seed", ticket_seed_test },
     { "ticket_seed_from_bdp_frame", ticket_seed_from_bdp_frame_test },
     { "token_store", token_store_test },
+    { "token_store_format_zero_ip", token_store_format_zero_ip_test },
+    { "token_store_serialize_too_small", token_store_serialize_too_small_test },
+    { "token_store_deserialize_short", token_store_deserialize_short_test },
+    { "token_store_store_invalid_params", token_store_store_invalid_params_test },
+    { "token_store_load_oversized_record", token_store_load_oversized_record_test },
+    { "token_store_load_record_size_overflow", token_store_load_record_size_overflow_test },
+    { "token_store_load_truncated", token_store_load_truncated_test },
+    { "token_store_load_padded_record", token_store_load_padded_record_test },
     { "token_reuse_api", token_reuse_api_test },
+    { "token_reuse_cap", token_reuse_cap_test },
     { "session_resume", session_resume_test },
+    { "ticket_key_rotation", ticket_key_rotation_test },
     { "zero_rtt", zero_rtt_test },
     { "zero_rtt_loss", zero_rtt_loss_test },
     { "stop_sending", stop_sending_test },
@@ -217,6 +354,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mtu_drop_dcubic", mtu_drop_dcubic_test },
     { "mtu_drop_fast", mtu_drop_fast_test },
     { "mtu_drop_newreno", mtu_drop_newreno_test },
+    { "mtu_drop_bbr1", mtu_drop_bbr1_test },
     { "red_bbr", red_bbr_test },
     { "red_cubic", red_cubic_test },
     { "red_dcubic", red_dcubic_test },
@@ -234,8 +372,10 @@ static const picoquic_test_def_t test_table[] = {
     { "spurious_retransmit", spurious_retransmit_test },
     { "tls_zero_share", tls_zero_share_test },
     { "transport_param_log", transport_param_log_test },
-    { "bad_certificate", bad_certificate_test },
     { "set_verify_certificate_callback_test", set_verify_certificate_callback_test },
+    { "client_cert_verification_policy", client_cert_verification_policy_test },
+    { "cert_rollover_inflight", cert_rollover_inflight_test },
+    { "cert_rollover_active_connection", cert_rollover_active_connection_test },
     { "virtual_time" , virtual_time_test },
     { "different_params", tls_different_params_test },
     { "quant_params", tls_quant_params_test },
@@ -258,6 +398,7 @@ static const picoquic_test_def_t test_table[] = {
     { "packet_enc_dec", packet_enc_dec_test},
     { "pn_vector", cleartext_pn_vector_test },
     { "zero_rtt_spurious", zero_rtt_spurious_test },
+    { "zero_rtt_bad_param", zero_rtt_bad_param_test },
     { "zero_rtt_retry", zero_rtt_retry_test },
     { "zero_rtt_no_coal", zero_rtt_no_coal_test },
     { "zero_rtt_many_losses", zero_rtt_many_losses_test },
@@ -307,10 +448,57 @@ static const picoquic_test_def_t test_table[] = {
     { "packet_trace", packet_trace_test },
     { "qlog_auto", qlog_auto_test },
     { "qlog_error", qlog_error_test },
+    { "qlog_fns_trim_path_contexts", qlog_fns_trim_path_contexts_test },
     { "qlog_trace", qlog_trace_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
+    { "qlog_trace_parallel", qlog_trace_parallel_test },
     { "qlog_fns", qlog_fns_test },
     { "qlog_fns_ecn", qlog_fns_ecn_test },
+    { "qmux_send", qmux_send_test },
+    { "qmux_receive", qmux_receive_test },
+    { "qmux_send_tp", qmux_send_tp_test },
+    { "qmux_receive_tp", qmux_receive_tp_test },
+    { "qmux_receive_app_close", qmux_receive_app_close_test },
+    { "qmux_receive_cnx_close", qmux_receive_cnx_close_test },
+    { "qmux_receive_errors", qmux_receive_errors_test },
+    { "qmux_receive_prohibited_frames", qmux_receive_prohibited_frames_test },
+    { "qmux_receive_allowed_frames", qmux_receive_allowed_frames_test },
+    { "qmux_receive_extension_tp_ignore", qmux_receive_extension_tp_ignore_test },
+    { "qmux_receive_record_errors", qmux_receive_record_errors_test },
+    { "qmux_datagram", qmux_datagram_test },
+    { "qmux_receive_stream_order", qmux_receive_stream_order_test },
+    { "qmux_receive_stream_order_edges", qmux_receive_stream_order_edges_test },
+    { "qmux_receive_empty_record", qmux_receive_empty_record_test },
+    { "qmux_receive_split_record", qmux_receive_split_record_test },
+    { "qmux_receive_qx_ping", qmux_receive_qx_ping_test },
+    { "qmux_receive_qx_ping_order", qmux_receive_qx_ping_order_test },
+    { "qmux_send_qx_ping_r", qmux_send_qx_ping_r_test },
+    { "qmux_send_qx_ping_r_append", qmux_send_qx_ping_r_append_test },
+    { "qmux_send_cnx_close", qmux_send_cnx_close_test },
+    { "qmux_loop", qmux_loop_test },
+    { "qmux_loop_delay", qmux_loop_delay_test },
+    { "qmux_loop_idle", qmux_loop_idle_test },
+    { "qmux_socket_accept", qmux_socket_accept_test },
+    { "qmux_socket_close_on_receive", qmux_socket_close_on_receive_test },
+    { "qmux_loop_tls", qmux_loop_tls_test },
+    { "qmux_tls_client_alpn_required", qmux_tls_client_alpn_required_test },
+    { "qmux_loop_tls_close", qmux_loop_tls_close_test },
+    { "qmux_skip_qx_ping_frame", qmux_skip_qx_ping_frame_test },
+    { "qmux_parse_qx_ping_frame", qmux_parse_qx_ping_frame_test },
+    { "qmux_decode_qx_ping_frame", qmux_decode_qx_ping_frame_test },
+    { "qmux_format_qx_ping_frame", qmux_format_qx_ping_frame_test },
+    { "qmux_format_qmux_tp_frame_too_small", qmux_format_qmux_tp_frame_too_small_test },
+    { "qmux_decode_qmux_tp_frame_too_long", qmux_decode_qmux_tp_frame_too_long_test },
+    { "quicctx_context_from_epoch", quicctx_context_from_epoch_test },
+    { "quicctx_adjust_max_connections", quicctx_adjust_max_connections_test },
+    { "quicctx_set_default_address_discovery_mode", quicctx_set_default_address_discovery_mode_test },
+    { "quicctx_is_local_cid", quicctx_is_local_cid_test },
+    { "quicctx_get_path_addr", quicctx_get_path_addr_test },
+    { "quicctx_set_stream_path_affinity", quicctx_set_stream_path_affinity_test },
+    { "quicctx_verify_proposed_tuple_family_mismatch", quicctx_verify_proposed_tuple_family_mismatch_test },
+    { "quicctx_probe_new_tuple_family_mismatch", quicctx_probe_new_tuple_family_mismatch_test },
+    { "quicctx_remember_issued_ticket_oversized_addr", quicctx_remember_issued_ticket_oversized_addr_test },
+    { "quicctx_check_new_path_allowed_limit", quicctx_check_new_path_allowed_limit_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
     { "random_padding", random_padding_test },
@@ -319,8 +507,10 @@ static const picoquic_test_def_t test_table[] = {
     { "eccf_corrupted_fuzz", eccf_corrupted_file_fuzz_test },
     { "eca1_amplification_loss", eca1_amplification_loss_test },
     { "ecf1_final_loss", ecf1_final_loss_test },
+    { "ecdc_double_close", ecdc_double_close_test },
     { "ec5c_silly_cid", ec5c_silly_cid_test },
     { "ec9a_preemptive_amok", ec9a_preemptive_amok_test },
+    { "ec2b_packet_too_big", ec2b_packet_too_big_test },
     { "error_reason", error_reason_test },
     { "idle_server", idle_server_test },
     { "idle_timeout", idle_timeout_test },
@@ -332,11 +522,13 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_max", reset_need_max_test },
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
+    { "reset_at_end", reset_at_end_test },
     { "reset_loop_test", reset_loop_test },
     { "reset_stream_at_basic", reset_stream_at_basic_test },
     { "reset_stream_at_limit_test", reset_stream_at_limit_test },
     { "reset_stream_at_loss", reset_stream_at_loss_test },
     { "stream_state_local_reuse", stream_state_local_reuse_test },
+    { "add_to_stream_fin_only_wakes_cnx", add_to_stream_fin_only_wakes_cnx_test },
     { "initial_pto", initial_pto_test },
     { "initial_pto_srv", initial_pto_srv_test },
     { "ready_to_send", ready_to_send_test },
@@ -351,6 +543,10 @@ static const picoquic_test_def_t test_table[] = {
     { "fastcc", fastcc_test },
     { "fastcc_jitter", fastcc_jitter_test },
     { "flow_control", flow_control_test },
+    { "flow_control_open_max", flow_control_open_max_test },
+    { "stream_uni_blocked", stream_uni_blocked_test },
+    { "stream_blocked_reset", stream_blocked_reset_test },
+    { "stream_uni_reactivate", stream_uni_reactivate_test },
     { "bbr", bbr_test },
     { "bbr_jitter", bbr_jitter_test },
     { "bbr_long", bbr_long_test },
@@ -368,6 +564,8 @@ static const picoquic_test_def_t test_table[] = {
     { "l4s_prague", l4s_prague_test },
     { "l4s_prague_updown", l4s_prague_updown_test },
     { "l4s_bbr", l4s_bbr_test },
+    { "l4s_bbr1", l4s_bbr1_test },
+    { "l4s_c4", l4s_c4_test },
     { "l4s_bbr_updown", l4s_bbr_updown_test },
     { "long_rtt", long_rtt_test },
     { "high_latency_basic", high_latency_basic_test },
@@ -409,6 +607,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bad_coalesce", bad_coalesce_test },
     { "bad_cnxid", bad_cnxid_test },
     { "document_addresses", document_addresses_test },
+    { "migration_disabled", migration_disabled_test },
     { "large_client_hello", large_client_hello_test },
     { "limited_reno", limited_reno_test },
     { "limited_cubic", limited_cubic_test },
@@ -416,6 +615,17 @@ static const picoquic_test_def_t test_table[] = {
     { "limited_batch", limited_batch_test },
     { "limited_safe", limited_safe_test },
     { "send_stream_blocked", send_stream_blocked_test },
+    { "scone_basic", scone_basic_test },
+    { "scone_loss", scone_loss_test },
+    { "scone_loss_client", scone_loss_client_test },
+    { "scone_loss_server", scone_loss_server_test },
+    { "scone_none", scone_none_test },
+    { "scone_server", scone_server_test },
+    { "scone_padding_short_length", scone_padding_short_length_test },
+    { "scone_padding_indicator_already_sent", scone_padding_indicator_already_sent_test },
+    { "scone_format_packet_too_small", scone_format_packet_too_small_test },
+    { "scone_prepare_format_failure", scone_prepare_format_failure_test },
+    { "scone_report_guards", scone_report_guards_test },
     { "stream_ack", stream_ack_test },
     { "queue_network_input", queue_network_input_test },
     { "pacing_update", pacing_update_test },
@@ -425,11 +635,33 @@ static const picoquic_test_def_t test_table[] = {
     { "af_undef", af_undef_test },
     { "app_limit_cc", app_limit_cc_test },
     { "app_limited_bbr", app_limited_bbr_test },
+    { "app_limited_bbr1", app_limited_bbr1_test },
+    { "app_limited_bbr_post_idle", app_limited_bbr_post_idle_test },
     { "app_limited_cubic", app_limited_cubic_test },
     { "app_limited_reno", app_limited_reno_test },
     { "app_limited_rpr", app_limited_rpr_test },
+    { "app_limited_cubic_idle", app_limited_cubic_idle_test },
     { "cwin_max", cwin_max_test },
+    { "bbr1_seed_bdp", bbr1_seed_bdp_test },
+    { "bbr1_seed_startup", bbr1_seed_startup_test },
+    { "bbr1_ltbw", bbr1_ltbw_test },
+    { "bbr1_ltbw_edge", bbr1_ltbw_edge_test },
+    { "fastcc_notify", fastcc_notify_test },
+    { "c4_notify", c4_notify_test },
+    { "c4_seed_resuming", c4_seed_resuming_test },
+    { "prague_notify", prague_notify_test },
+    { "prague_ecn_recovery", prague_ecn_recovery_test },
+    { "cc_algo_reset", cc_algo_reset_test },
+    { "cc_common_slow_start_increase", cc_common_slow_start_increase_test },
     { "initial_race", initial_race_test },
+    { "aegis_cipher_suite", aegis_cipher_suite_test },
+    { "aegis_hp_vector", aegis_hp_vector_test },
+    { "aegis128l", aegis128l_test },
+    { "aegis256", aegis256_test },
+    { "aegis_fallback", aegis_fallback_test },
+    { "aegis_0rtt", aegis_0rtt_test },
+    { "aegis_retry", aegis_retry_test },
+    { "aegis_initial_aes", aegis_initial_aes_test },
     { "chacha20", chacha20_test },
     { "cnx_limit", cnx_limit_test },
     { "cert_verify_bad_cert", cert_verify_bad_cert_test },
@@ -437,6 +669,7 @@ static const picoquic_test_def_t test_table[] = {
     { "cert_verify_null", cert_verify_null_test },
     { "cert_verify_null_sni", cert_verify_null_sni_test },
     { "cert_verify_rsa", cert_verify_rsa_test },
+    { "cert_verify_invalid", cert_verify_invalid_test },
     { "cid_quiescence", cid_quiescence_test },
     { "client_auth", request_client_authentication_test },
     { "client_auth_25519", request_client_authentication_25519_test },
@@ -473,6 +706,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_reno_long", wifi_reno_long_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "migration_retire_old_cid", migration_retire_old_cid_test },
     { "minicrypto", minicrypto_test },
     { "minicrypto_is_last", minicrypto_is_last_test },
 #ifdef PICOQUIC_WITH_MBEDTLS
@@ -504,6 +738,10 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_socket_error", multipath_socket_error_test },
     { "multipath_socket0_error", multipath_socket0_error_test },
     { "multipath_abandon", multipath_abandon_test },
+    { "multipath_abandon_last", multipath_abandon_last_test },
+    { "multipath_abandon_last_by_peer", multipath_abandon_last_by_peer_test },
+    { "multipath_last_path_validation_fails", multipath_last_path_validation_fails_test },
+    { "multipath_demoted_path0_null_cnxid", multipath_demoted_path0_null_cnxid_test },
     { "multipath_back0", multipath_back0_test },
     { "multipath_back1", multipath_back1_test },
     { "multipath_nat", multipath_nat_test },
@@ -515,14 +753,15 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_datagram", multipath_datagram_test },
     { "multipath_dg_af", multipath_dg_af_test },
     { "multipath_backup", multipath_backup_test },
+    { "multipath_stream_af_backup", multipath_stream_af_backup_test },
     { "multipath_standup", multipath_standup_test },
     { "multipath_discovery", multipath_discovery_test },
     { "multipath_keep_alive", multipath_keep_alive_test },
     { "multipath_just_one", multipath_just_one_test },
     { "multipath_break_both", multipath_break_both_test },
     { "multipath_qlog", multipath_qlog_test },
-    { "multipath_qlog_fns", multipath_qlog_fns_test },
     { "multipath_tunnel", multipath_tunnel_test },
+    { "multipath_cid_retire", multipath_cid_retire_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "get_hash", get_hash_test },
@@ -530,10 +769,23 @@ static const picoquic_test_def_t test_table[] = {
     { "dualq_aqm", dualq_aqm_test },
     { "ech_config", ech_config_test },
     { "ech_config_p", ech_config_p_test },
+    { "ech_config_secp384r1", ech_config_secp384r1_test },
+    { "ech_config_pub_secp384r1", ech_config_pub_secp384r1_test },
+    { "ech_config_pub_x25519", ech_config_pub_x25519_test },
+    { "ech_config_file", ech_config_file_test },
     { "ech_e2e", ech_e2e_test },
     { "ech_e2e_0rtt", ech_e2e_0rtt_test },
     { "ech_grease", ech_grease_test },
     { "ech_no_ech", ech_no_ech_test },
+    { "ech_bad_config_empty", ech_bad_config_empty_test },
+    { "ech_bad_config_whitespace", ech_bad_config_whitespace_test },
+    { "ech_bad_config_too_short", ech_bad_config_too_short_test },
+    { "ech_bad_config_missing_file", ech_bad_config_missing_file_test },
+    { "ech_bad_config_invalid_base64", ech_bad_config_invalid_base64_test },
+    { "ech_kem_lookup", ech_kem_lookup_test },
+    { "ech_pubkey_asn1", ech_pubkey_asn1_test },
+    { "ech_pubkey_missing_file", ech_pubkey_missing_file_test },
+    { "ech_registration_failure", ech_registration_failure_test },
     { "getter", getter_test },
     { "grease_quic_bit", grease_quic_bit_test },
     { "grease_quic_bit_one_way", grease_quic_bit_one_way_test },
@@ -548,9 +800,14 @@ static const picoquic_test_def_t test_table[] = {
     { "cnx_ddos", cnx_ddos_unit_test },
     { "config_option", config_option_test },
     { "config_option_letters", config_option_letters_test },
+    { "config_command_line_index", config_command_line_index_test },
     { "config_quic", config_quic_test },
+    { "config_quic_context_edge", config_quic_context_edge_test },
+    { "config_qmux", config_qmux_test },
     { "config_usage", config_usage_test },
-    {"hystart", hystart_test },
+    { "config_preferred", config_preferred_test },
+    { "config_set_port", config_set_port_test },
+    { "hystart", hystart_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);
@@ -629,6 +886,9 @@ int get_test_number(char const * test_name)
 int main(int argc, char** argv)
 {
     int ret = 0;
+#if defined(_WINDOWS) && defined(_WINDOWS64)
+    SetUnhandledExceptionFilter(picoquic_t_crash_handler);
+#endif
     int nb_test_tried = 0;
     int nb_test_failed = 0;
     int stress_minutes = 0;

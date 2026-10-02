@@ -28,13 +28,13 @@
 #include "wincompat.h"
 #include "ws2ipdef.h"
 #pragma warning(disable:4100)
+#pragma warning(disable:4204)
 #endif
 #include "picotls.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
 
 #include "picoquic_crypto_provider_api.h"
-
 #ifdef PTLS_WITHOUT_OPENSSL
 void picoquic_openssl_load(int unload)
 {
@@ -42,9 +42,14 @@ void picoquic_openssl_load(int unload)
 }
 #else
 #include "picotls/openssl.h"
+#ifdef PTLS_HAVE_AEGIS
+#include <aegis.h>
+#endif
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#if !defined(OPENSSL_NO_ENGINE)
 #include <openssl/engine.h>
+#endif
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
@@ -66,7 +71,7 @@ static int openssl_is_init = 0;
 static OSSL_PROVIDER* openssl_default_provider = NULL;
 #endif
 
-static void picoquic_init_openssl()
+static void picoquic_init_openssl(void)
 {
     if (openssl_is_init == 0) {
         openssl_is_init = 1;
@@ -85,7 +90,7 @@ static void picoquic_init_openssl()
     }
 }
 
-static void picoquic_clear_openssl()
+static void picoquic_clear_openssl(void)
 {
     if (openssl_is_init) {
 #if !defined(LIBRESSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -332,7 +337,7 @@ int picoquic_open_ssl_explain_crypto_error(char const** err_file, int* err_line)
 /* Clear the recorded errors in the crypto stack, e.g. before
 * processing a new message.
 */
-void picoquic_openssl_clear_crypto_errors()
+void picoquic_openssl_clear_crypto_errors(void)
 {
     ERR_clear_error();
 }
@@ -420,6 +425,10 @@ void picoquic_ptls_openssl_load(int unload)
 #endif
         DBG_PRINTF("OpenSSL_version_num(): %x", OpenSSL_version_num());
 
+#ifdef PTLS_HAVE_AEGIS
+        (void)aegis_init();
+#endif
+
         picoquic_register_ciphersuite(&ptls_openssl_aes128gcmsha256, 1);
         picoquic_register_ciphersuite(&ptls_openssl_aes256gcmsha384, 1);
         picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1);
@@ -434,6 +443,27 @@ void picoquic_ptls_openssl_load(int unload)
         picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519);
         picoquic_register_hpke_cipher_suite(&picoquic_openssl_hpke_chacha20poly1305sha256);
         picoquic_register_hpke_kem(&picoquic_openssl_hpke_kem_x25519sha256);
+#endif
+
+#ifdef PICOQUIC_WITH_ALL_PQC_ALGORITHMS
+#if PTLS_OPENSSL_HAVE_MLKEM
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem1024);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_secp256r1mlkem768);
+#if 0
+        /* rarely used groups, not very useful */
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem512);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_mlkem768);
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_secp384r1mlkem1024);
+#endif
+#endif
+#endif 
+#if PTLS_OPENSSL_HAVE_X25519MLKEM768
+        picoquic_register_key_exchange_algorithm(&ptls_openssl_x25519mlkem768);
+#endif
+
+#ifdef PTLS_HAVE_AEGIS
+        picoquic_register_ciphersuite(&ptls_openssl_aegis256sha512, 1);
+        picoquic_register_ciphersuite(&ptls_openssl_aegis128lsha256, 1);
 #endif
         picoquic_register_tls_key_provider_fn(
             set_openssl_private_key_from_key_file,

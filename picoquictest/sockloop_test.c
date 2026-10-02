@@ -26,9 +26,10 @@
 #include "picoquic.h"
 #include "picoquic_utils.h"
 #include "picoquictest_internal.h"
-#include "autoqlog.h"
+#include "picoquic_qlog.h"
 #include "picoquic_packet_loop.h"
 #include "picosocks.h"
+#include "picoqmux.h"
 
 
 #ifndef SLEEP
@@ -62,6 +63,8 @@ typedef struct st_sockloop_test_spec_t {
     int extra_socket_required;
     int prefer_extra_socket;
     int force_migration;
+    int bind_loopback; /* bind the server socket to the loopback address of spec->af */
+    int test_system_call_duration; /* ask the loop to monitor and report system call duration */
 } sockloop_test_spec_t;
 
 typedef struct st_sockloop_test_cb_t {
@@ -83,6 +86,9 @@ typedef struct st_sockloop_test_cb_t {
     picoquic_connection_id_t server_cid_before_migration;
     picoquic_connection_id_t client_cid_before_migration;
     picoquic_packet_loop_param_t* param;
+    picoquic_cnx_t* qmux_cnx;
+    int test_system_call_duration;
+    int system_call_duration_notified;
 } sockloop_test_cb_t;
 
 int sockloop_test_received_finished(picoquic_test_tls_api_ctx_t* test_ctx)
@@ -125,7 +131,7 @@ int sockloop_test_verify_extra_socket(picoquic_cnx_t* cnx_client, struct sockadd
     return ret;
 }
 
-int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode, 
+int sockloop_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void * callback_arg)
 {
     int ret = 0;
@@ -136,7 +142,13 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
     }
     else {
         picoquic_cnx_t* cnx_client = (cb_ctx->test_ctx == NULL)?NULL:cb_ctx->test_ctx->cnx_client;
-        switch (cb_mode) {
+        if (cnx_client == NULL){
+            if (cb_ctx->qmux_cnx == NULL ||
+                cb_ctx->qmux_cnx->cnx_state == picoquic_state_disconnected) {
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+        }
+        else switch (cb_mode) {
         case picoquic_packet_loop_ready: {
             picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
             if (cb_ctx->test_id > 1) {
@@ -145,9 +157,15 @@ int sockloop_test_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode
                     options->provide_alt_port = 1;
                 }
             }
+            if (cb_ctx->test_system_call_duration) {
+                options->do_system_call_duration = 1;
+            }
             DBG_PRINTF("%s", "Waiting for packets.\n");
             break;
         }
+        case picoquic_packet_loop_system_call_duration:
+            cb_ctx->system_call_duration_notified = 1;
+            break;
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
             if (cnx_client->cnx_state == picoquic_state_disconnected) {
@@ -483,8 +501,12 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
         double_bind[i].fd = INVALID_SOCKET;
     }
     if (ret == 0 && spec->double_bind) {
-        if ((nb_double_bind = picoquic_packet_loop_open_sockets(spec->port,
-            AF_INET6, PICOQUIC_MAX_PACKET_SIZE, 0, 1, double_bind)) <= 0) {
+        picoquic_packet_loop_param_t param = { 0 };
+        param.local_port = spec->port;
+        param.local_af = AF_INET6;
+        param.socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+        param.do_not_use_gso = 1;
+        if ((nb_double_bind = picoquic_packet_loop_open_sockets(&param, double_bind, test_ctx->qserver->default_congestion_alg->ecn_mark)) <= 0) {
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
         }
     }
@@ -499,6 +521,7 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
     if (ret == 0) {
         loop_cb.test_ctx = test_ctx;
         loop_cb.test_id = spec->test_id;
+        loop_cb.test_system_call_duration = spec->test_system_call_duration;
         if (!spec->use_background_thread) {
             picoquic_start_client_cnx(test_ctx->cnx_client);
         }
@@ -522,7 +545,9 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             param.simulate_eio = spec->simulate_eio;
             param.extra_socket_required = spec->extra_socket_required;
             param.prefer_extra_socket = spec->prefer_extra_socket;
-            
+            if (spec->bind_loopback) {
+                ret = sockloop_test_addr_config(&param.local_addr[0], spec->af, 0);
+            }
 
             loop_cb.force_migration = spec->force_migration;
             loop_cb.param = &param;
@@ -542,6 +567,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
                     }
                 }
                 else {
+                    if (picoquic_get_thread_ctx(test_ctx->qserver) != thread_ctx) {
+                        DBG_PRINTF("%s", "picoquic_get_thread_ctx does not match the started thread");
+                        ret = -1;
+                    }
                     for (int i = 0; i < 2000; i++) {
                         if (thread_ctx->thread_is_ready) {
                             DBG_PRINTF("Thread is ready after %dms", i);
@@ -571,6 +600,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
                         }
                     }
                     picoquic_delete_network_thread(thread_ctx);
+                    if (picoquic_get_thread_ctx(test_ctx->qserver) != NULL) {
+                        DBG_PRINTF("%s", "picoquic_get_thread_ctx is not NULL after delete");
+                        ret = -1;
+                    }
                 }
             }
             else {
@@ -588,6 +621,10 @@ int sockloop_test_one(sockloop_test_spec_t *spec)
             ret = -1;
         }
         else if (spec->force_migration != 0 && sockloop_test_verify_migration(&loop_cb, test_ctx->cnx_client) != 0) {
+            ret = -1;
+        }
+        else if (spec->test_system_call_duration && !loop_cb.system_call_duration_notified) {
+            DBG_PRINTF("%s", "picoquic_packet_loop_system_call_duration was never notified");
             ret = -1;
         }
         else {
@@ -630,7 +667,7 @@ void sockloop_test_set_spec(sockloop_test_spec_t* spec, uint8_t test_id)
     spec->socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
 }
 
-int sockloop_basic_test()
+int sockloop_basic_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 1);
@@ -640,12 +677,25 @@ int sockloop_basic_test()
     return(sockloop_test_one(&spec));
 }
 
+/* monitor_system_call_duration is only reachable when options->do_system_call_duration is
+ * set on the picoquic_packet_loop_ready event, which no other test opts into. On the very
+ * first monitored receive, scd_max starts at 0 so the very first real duration is guaranteed
+ * to be "shall_notify". */
+int sockloop_system_call_duration_test(void)
+{
+    sockloop_test_spec_t spec;
+    sockloop_test_set_spec(&spec, 9);
+    spec.test_system_call_duration = 1;
+
+    return(sockloop_test_one(&spec));
+}
+
 static test_api_stream_desc_t sockloop_test_scenario_1M[] = {
     { 4, 0, 257, 1000000 },
     { 8, 4, 257, 1000000 }
 };
 
-int sockloop_eio_test()
+int sockloop_eio_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 2);
@@ -657,7 +707,7 @@ int sockloop_eio_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_errsock_test()
+int sockloop_errsock_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 3);
@@ -666,7 +716,7 @@ int sockloop_errsock_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_ipv4_test()
+int sockloop_ipv4_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 4);
@@ -678,7 +728,600 @@ int sockloop_ipv4_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_migration_test()
+/* Verify that after EIO on a GSO batch, picoquic_packet_loop_do_udp_send
+ * resends the batch packet by packet and disables GSO for the caller, by
+ * clearing both the caller's segment size and its pointer to it. */
+static int sockloop_send_err_eio(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t current_time)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[2] = { 0 };
+    picoquic_cnx_t* cnx = test_ctx->cnx_client;
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    uint8_t buffer[3 * 1440] = { 0 };
+    size_t send_msg_size = 1440;
+    size_t* send_msg_ptr = &send_msg_size;
+
+    for (int i = 0; i < 2; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&peer_addr, AF_INET, 4433);
+    if (ret == 0) {
+        param.local_af = AF_INET;
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open IPv4 socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        param.simulate_eio = 1;
+        ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
+            buffer, sizeof(buffer), &peer_addr, &local_addr, 0, send_msg_size, &send_msg_ptr,
+            &cnx->initial_cnxid, current_time);
+        if (ret == 0 && param.simulate_eio != 0) {
+            DBG_PRINTF("%s", "EIO was not simulated");
+            ret = -1;
+        }
+        else if (ret == 0 && (send_msg_ptr != NULL || send_msg_size != 0)) {
+            DBG_PRINTF("GSO was not disabled after EIO, ptr %s, size %zu",
+                (send_msg_ptr == NULL) ? "cleared" : "kept", send_msg_size);
+            ret = -1;
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+/* Verify that a send error implying that the destination is unreachable is
+ * reported against the path whose peer address was used, which sets a path
+ * challenge on that path. The error is produced by sending to an IPv6
+ * address on an IPv4 socket, which most stacks refuse with EAFNOSUPPORT;
+ * if this platform reports another error, that check is skipped. */
+static int sockloop_send_err_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t current_time)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[2] = { 0 };
+    picoquic_cnx_t* cnx = test_ctx->cnx_client;
+    picoquic_tuple_t* tuple = cnx->path[0]->first_tuple;
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    uint8_t buffer[64] = { 0 };
+    int sock_ret = 0;
+    int sock_err = 0;
+
+    for (int i = 0; i < 2; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&peer_addr, AF_INET6, 4433);
+    if (ret == 0) {
+        param.local_af = AF_INET;
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open IPv4 socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        sock_ret = picoquic_sendmsg(s_ctx[0].fd, (struct sockaddr*)&peer_addr, NULL, 0,
+            (const char*)buffer, (int)sizeof(buffer), 0, &sock_err);
+        if (sock_ret > 0 || !picoquic_socket_error_implies_unreachable(sock_err)) {
+            DBG_PRINTF("IPv6 send on IPv4 socket returns %d, err=%d, skipping unreachable check",
+                sock_ret, sock_err);
+        }
+        else {
+            /* Make path 0 use the unreachable peer, with an unspecified local address */
+            picoquic_store_addr(&tuple->peer_addr, (struct sockaddr*)&peer_addr);
+            memset(&tuple->local_addr, 0, sizeof(tuple->local_addr));
+            tuple->challenge_required = 0;
+            tuple->challenge_verified = 1;
+            ret = picoquic_packet_loop_do_udp_send(test_ctx->qclient, cnx, s_ctx[0].fd, &param,
+                buffer, sizeof(buffer), &peer_addr, &local_addr, 0, 0, NULL,
+                &cnx->initial_cnxid, current_time);
+            if (ret == 0 && (!tuple->challenge_required || tuple->challenge_verified)) {
+                DBG_PRINTF("%s", "Unreachable error was not reported against the path");
+                ret = -1;
+            }
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+int sockloop_send_err_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x5e, 0xe7, 0xe4, 4, 5, 6, 7, 8}, 8 };
+    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    /* The unreachable notification only acts on connections in the ready state */
+    for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->cnx_state != picoquic_state_ready; i++) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_ready) {
+        DBG_PRINTF("Client not ready, state %d", (int)test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = sockloop_send_err_eio(test_ctx, simulated_time);
+    }
+    if (ret == 0) {
+        ret = sockloop_send_err_unreachable(test_ctx, simulated_time);
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+/* Compare the address part of two sockaddr, after aligning the port of the
+ * expected address on the port reported by the socket. */
+static int picoquic_addr_set_port_and_compare(struct sockaddr_storage* expected, uint16_t port,
+    struct sockaddr_storage* actual)
+{
+    if (expected->ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)expected)->sin6_port = htons(port);
+    }
+    else if (expected->ss_family == AF_INET) {
+        ((struct sockaddr_in*)expected)->sin_port = htons(port);
+    }
+    return picoquic_compare_addr((struct sockaddr*)expected, (struct sockaddr*)actual);
+}
+
+/* Check that socket s_ctx is bound to the loopback address of its family,
+ * on a non-zero port. */
+static int sockloop_bind_addr_check_socket(picoquic_socket_ctx_t* s_ctx, int af)
+{
+    int ret = 0;
+    struct sockaddr_storage expected = { 0 };
+    struct sockaddr_storage actual = { 0 };
+
+    if (s_ctx->af != af) {
+        DBG_PRINTF("Expected socket af=%d, got %d", af, s_ctx->af);
+        ret = -1;
+    }
+    else if (sockloop_test_addr_config(&expected, af, 0) != 0) {
+        ret = -1;
+    }
+    else if (picoquic_get_local_address(s_ctx->fd, &actual) != 0) {
+        DBG_PRINTF("%s", "Cannot read local address of bound socket");
+        ret = -1;
+    }
+    else if (s_ctx->port == 0) {
+        DBG_PRINTF("%s", "Ephemeral port was not reported back");
+        ret = -1;
+    }
+    else if (picoquic_addr_set_port_and_compare(&expected, s_ctx->port, &actual) != 0 ||
+        picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&s_ctx->bound_addr) != 0) {
+        char expected_text[64];
+        char actual_text[64];
+        char bound_text[64];
+        DBG_PRINTF("Expected bind address %s, got %s, recorded %s",
+            picoquic_addr_text((struct sockaddr*)&expected, expected_text, sizeof(expected_text)),
+            picoquic_addr_text((struct sockaddr*)&actual, actual_text, sizeof(actual_text)),
+            picoquic_addr_text((struct sockaddr*)&s_ctx->bound_addr, bound_text, sizeof(bound_text)));
+        ret = -1;
+    }
+    return ret;
+}
+
+/* Verify that sockets opened with param.local_addr are bound to those
+ * addresses rather than to the wildcard address: one socket per entry,
+ * none for a family without an entry. af_list holds the families to
+ * configure, nb_af of them. local_af is left to 0 (unspecified). */
+static int sockloop_bind_addr_one(const int* af_list, int nb_af)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    for (int i = 0; ret == 0 && i < nb_af; i++) {
+        ret = sockloop_test_addr_config(&param.local_addr[i], af_list[i], 0);
+    }
+    if (ret == 0) {
+        param.local_port = 0;
+        param.socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+        param.do_not_use_gso = 1;
+        nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+        if (nb_sockets != nb_af) {
+            DBG_PRINTF("Expected %d sockets, got %d", nb_af, nb_sockets);
+            ret = -1;
+        }
+        for (int i = 0; ret == 0 && i < nb_af; i++) {
+            ret = sockloop_bind_addr_check_socket(&s_ctx[i], af_list[i]);
+        }
+        for (int i = 0; i < 4; i++) {
+            picoquic_packet_loop_close_socket(&s_ctx[i]);
+        }
+    }
+    return ret;
+}
+
+/* Verify that inconsistent parameters are refused: a local_af that does not
+ * match the configured address, or two addresses of the same family. */
+static int sockloop_bind_addr_refused(int local_af, int af0, int af1)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    param.local_af = local_af;
+    ret = sockloop_test_addr_config(&param.local_addr[0], af0, 0);
+    if (ret == 0 && af1 != AF_UNSPEC) {
+        ret = sockloop_test_addr_config(&param.local_addr[1], af1, 0);
+    }
+    if (ret == 0) {
+        param.do_not_use_gso = 1;
+        nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+        if (nb_sockets != 0) {
+            DBG_PRINTF("Expected refusal for local_af=%d, af0=%d, af1=%d, got %d sockets",
+                local_af, af0, af1, nb_sockets);
+            ret = -1;
+        }
+        for (int i = 0; i < 4; i++) {
+            picoquic_packet_loop_close_socket(&s_ctx[i]);
+        }
+    }
+    return ret;
+}
+
+/* Without IP_PKTINFO (BSD), the source of an IPv4 packet sent on a bound
+ * socket is left unspecified, because IP_SENDSRCADDR is refused there. */
+#ifndef IP_PKTINFO
+#define SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(expected) do { \
+    if ((expected)->ss_family == AF_INET) { memset((expected), 0, sizeof(struct sockaddr_storage)); } } while (0)
+#else
+#define SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(expected) do { } while (0)
+#endif
+
+/* Verify that the send path substitutes the bound address for whatever
+ * local address the path proposes, keeps the port, fills in an unspecified
+ * local address, and leaves sockets bound to the wildcard alone. */
+static int sockloop_bind_addr_send_source(int af)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    struct sockaddr_storage other = { 0 };
+    struct sockaddr_storage expected = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    /* "other" is a different address of the same family, port 1234 */
+    ret = sockloop_test_addr_config(&other, af, 1234);
+    if (ret == 0) {
+        if (af == AF_INET6) {
+            ((uint8_t*)(&((struct sockaddr_in6*)&other)->sin6_addr))[14] = 0xff;
+        }
+        else {
+            ((uint8_t*)(&((struct sockaddr_in*)&other)->sin_addr))[3] = 5;
+        }
+        ret = sockloop_test_addr_config(&param.local_addr[0], af, 0);
+    }
+    if (ret == 0) {
+        param.do_not_use_gso = 1;
+        nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+        if (nb_sockets != 1) {
+            DBG_PRINTF("Expected 1 socket, got %d", nb_sockets);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* Path proposes another address: expect the bound address, same port */
+        picoquic_store_addr(&local_addr, (struct sockaddr*)&other);
+        picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
+        (void)sockloop_test_addr_config(&expected, af, 1234);
+        SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(&expected);
+        if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
+            DBG_PRINTF("%s", "Bound address was not substituted for the path's local address");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* Path has no local address yet: expect the bound address and port */
+        memset(&local_addr, 0, sizeof(local_addr));
+        picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
+        (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
+        SOCKLOOP_BIND_ADDR_EXPECTED_SOURCE(&expected);
+        if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&local_addr) != 0) {
+            DBG_PRINTF("%s", "Unspecified local address was not filled from the bound address");
+            ret = -1;
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    if (ret == 0) {
+        /* Socket bound to the wildcard: the path's local address is kept */
+        memset(&param, 0, sizeof(param));
+        param.local_af = af;
+        param.do_not_use_gso = 1;
+        nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+        if (nb_sockets != 1) {
+            DBG_PRINTF("Expected 1 wildcard socket, got %d", nb_sockets);
+            ret = -1;
+        }
+        else {
+            picoquic_store_addr(&local_addr, (struct sockaddr*)&other);
+            picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
+            if (picoquic_compare_addr((struct sockaddr*)&other, (struct sockaddr*)&local_addr) != 0) {
+                DBG_PRINTF("%s", "Wildcard socket changed the path's local address");
+                ret = -1;
+            }
+        }
+        for (int i = 0; i < 4; i++) {
+            picoquic_packet_loop_close_socket(&s_ctx[i]);
+        }
+    }
+    return ret;
+}
+
+/* An address family that picoquic_packet_loop_open_sockets does not know how to bind
+ * (neither AF_INET nor AF_INET6) must be refused outright. */
+static int sockloop_bind_addr_unsupported_af(void)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    param.local_addr[0].ss_family = 200; /* Not AF_INET, AF_INET6, or AF_UNSPEC; fits sa_family_t on all platforms */
+    param.do_not_use_gso = 1;
+
+    nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+    if (nb_sockets != 0) {
+        DBG_PRINTF("Expected refusal for unsupported af, got %d sockets", nb_sockets);
+        ret = -1;
+    }
+    for (int i = 0; i < 4; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+/* If a public (shared) port is requested in addition to the local port, open_sockets
+ * must open a second socket per address family for that public port. */
+static int sockloop_bind_addr_public_port(void)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    int nb_sockets;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    param.local_af = AF_INET;
+    param.local_port = 0;
+    param.public_port = 34567;
+    param.do_not_use_gso = 1;
+
+    nb_sockets = picoquic_packet_loop_open_sockets(&param, s_ctx, 0);
+    if (nb_sockets != 2) {
+        DBG_PRINTF("Expected 2 sockets (local + public port), got %d", nb_sockets);
+        ret = -1;
+    }
+    else if (s_ctx[1].port != param.public_port) {
+        DBG_PRINTF("Expected public port socket bound to %d, got %d", param.public_port, s_ctx[1].port);
+        ret = -1;
+    }
+    for (int i = 0; i < 4; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    return ret;
+}
+
+int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param, picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value);
+
+/* picoquic_packet_loop_open_socket itself refuses to open a socket for an address family
+ * that has no configured local address, when other families do have one configured --
+ * called directly here since picoquic_packet_loop_open_sockets never reaches this guard
+ * (it only ever asks for sockets matching a family it already found in param->local_addr). */
+static int sockloop_bind_addr_open_socket_no_addr_for_af(void)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx = { 0 };
+
+    s_ctx.fd = INVALID_SOCKET;
+    param.local_addr[0].ss_family = AF_INET;
+    s_ctx.af = AF_INET6;
+
+    if (picoquic_packet_loop_open_socket(&param, &s_ctx, 0) == 0) {
+        DBG_PRINTF("%s", "Expected refusal when no local address is configured for the requested af");
+        ret = -1;
+        picoquic_packet_loop_close_socket(&s_ctx);
+    }
+    return ret;
+}
+
+/* Send a datagram from a socket bound to the loopback address, using the
+ * source that picoquic_packet_loop_set_send_source proposes, and verify that
+ * the send is accepted and that the receiver sees the bound address as the
+ * source. On FreeBSD, an IP_SENDSRCADDR control message on such a socket
+ * fails with EINVAL. */
+static int sockloop_bind_addr_send_bound(int af)
+{
+    int ret = 0;
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[4] = { 0 };
+    SOCKET_TYPE r_fd = INVALID_SOCKET;
+    struct sockaddr_storage r_addr = { 0 };
+    struct sockaddr_storage local_addr = { 0 };
+    struct sockaddr_storage peer_addr = { 0 };
+    struct sockaddr_storage addr_from = { 0 };
+    struct sockaddr_storage addr_dest = { 0 };
+    struct sockaddr_storage expected = { 0 };
+    uint8_t buffer[64] = { 0 };
+    uint8_t received[256];
+    uint64_t current_time = picoquic_current_time();
+    unsigned char received_ecn = 0;
+    int dest_if = 0;
+    int sock_ret = 0;
+    int sock_err = 0;
+
+    for (int i = 0; i < 4; i++) {
+        s_ctx[i].fd = INVALID_SOCKET;
+    }
+    ret = sockloop_test_addr_config(&param.local_addr[0], af, 0);
+    if (ret == 0) {
+        param.do_not_use_gso = 1;
+        if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1) {
+            DBG_PRINTF("%s", "Cannot open the bound socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* The receiver is a plain socket, not a packet loop socket: on Windows,
+         * a packet loop socket already has an overlapped WSARecvMsg pending,
+         * which would consume the datagram before picoquic_select sees it. */
+        r_fd = picoquic_open_client_socket(af);
+        if (r_fd == INVALID_SOCKET ||
+            picoquic_bind_to_address(r_fd, af, 0, (struct sockaddr*)&param.local_addr[0]) != 0 ||
+            picoquic_get_local_address(r_fd, &r_addr) != 0) {
+            DBG_PRINTF("%s", "Cannot open the receiving socket");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        uint16_t r_port = (af == AF_INET6) ? ntohs(((struct sockaddr_in6*)&r_addr)->sin6_port) :
+            ntohs(((struct sockaddr_in*)&r_addr)->sin_port);
+        ret = sockloop_test_addr_config(&peer_addr, af, r_port);
+    }
+    if (ret == 0) {
+        picoquic_packet_loop_set_send_source(&s_ctx[0], &local_addr);
+        sock_ret = picoquic_sendmsg(s_ctx[0].fd, (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, 0,
+            (const char*)buffer, (int)sizeof(buffer), 0, &sock_err);
+        if (sock_ret <= 0) {
+            DBG_PRINTF("Send from bound socket fails, af=%d, ret=%d, err=%d", af, sock_ret, sock_err);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        sock_ret = picoquic_select(&r_fd, 1, &addr_from, &addr_dest, &dest_if, &received_ecn,
+            received, (int)sizeof(received), 1000000, &current_time);
+        (void)sockloop_test_addr_config(&expected, af, s_ctx[0].port);
+        if (sock_ret != (int)sizeof(buffer)) {
+            DBG_PRINTF("Expected %zu bytes from bound socket, got %d", sizeof(buffer), sock_ret);
+            ret = -1;
+        }
+        else if (picoquic_compare_addr((struct sockaddr*)&expected, (struct sockaddr*)&addr_from) != 0) {
+            DBG_PRINTF("%s", "Datagram was not received from the bound address");
+            ret = -1;
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        picoquic_packet_loop_close_socket(&s_ctx[i]);
+    }
+    if (r_fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(r_fd);
+    }
+    return ret;
+}
+
+int sockloop_bind_addr_test(void)
+{
+    const int af_v4[1] = { AF_INET };
+    const int af_v6[1] = { AF_INET6 };
+    const int af_both[2] = { AF_INET, AF_INET6 };
+    int ret = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+
+    /* The sub-tests open sockets directly, without going through the packet
+     * loop that would otherwise initialize Winsock. */
+    ret = WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    if (ret == 0) {
+        ret = sockloop_bind_addr_one(af_v4, 1);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_one(af_v6, 1);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_unsupported_af();
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_public_port();
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_open_socket_no_addr_for_af();
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_one(af_both, 2);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_refused(AF_INET6, AF_INET, AF_UNSPEC);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_refused(0, AF_INET, AF_INET);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_send_source(AF_INET);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_send_source(AF_INET6);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_send_bound(AF_INET);
+    }
+    if (ret == 0) {
+        ret = sockloop_bind_addr_send_bound(AF_INET6);
+    }
+    if (ret == 0) {
+        /* Full loop, server bound to 127.0.0.1 only, client connecting to it. */
+        sockloop_test_spec_t spec;
+        sockloop_test_set_spec(&spec, 11);
+        spec.af = AF_INET;
+        spec.bind_loopback = 1;
+        spec.do_not_use_gso = 1;
+        ret = sockloop_test_one(&spec);
+    }
+    if (ret == 0) {
+        /* Full loop, server bound to ::1 only, client connecting to it. */
+        sockloop_test_spec_t spec;
+        sockloop_test_set_spec(&spec, 12);
+        spec.af = AF_INET6;
+        spec.bind_loopback = 1;
+        spec.do_not_use_gso = 1;
+        ret = sockloop_test_one(&spec);
+    }
+    return ret;
+}
+
+int sockloop_migration_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 5);
@@ -692,7 +1335,7 @@ int sockloop_migration_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_nat_test()
+int sockloop_nat_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 6);
@@ -707,7 +1350,186 @@ int sockloop_nat_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_thread_test()
+/* picoquic_packet_loop_set_send_source returns immediately if the socket's bound
+ * address has a family other than AF_INET/AF_INET6 (picoquic_packet_loop_addr_is_wildcard's
+ * fallthrough treats that as "wildcard"). Exercise that fallthrough directly. */
+int sockloop_send_source_test(void)
+{
+    int ret = 0;
+    picoquic_socket_ctx_t s_ctx;
+    struct sockaddr_storage local_addr;
+
+    memset(&s_ctx, 0, sizeof(s_ctx));
+    memset(&local_addr, 0, sizeof(local_addr));
+
+    s_ctx.bound_addr.ss_family = AF_UNSPEC;
+    local_addr.ss_family = AF_UNSPEC;
+
+    picoquic_packet_loop_set_send_source(&s_ctx, &local_addr);
+
+    if (local_addr.ss_family != AF_UNSPEC) {
+        DBG_PRINTF("%s", "picoquic_packet_loop_set_send_source touched local_addr for a non-IP bound address");
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int sockloop_delete_thread_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum UNUSED(cb_mode),
+    void* UNUSED(callback_ctx), void* UNUSED(callback_argv))
+{
+    return 0;
+}
+
+/* picoquic_delete_network_thread only frees thread_ctx->param if is_param_allocated is set.
+ * That flag is only ever set by picoquic_start_server_threads, which is not itself under
+ * test here, so poke it directly on a param that this test really did allocate -- matching
+ * the ownership contract exactly, so the delete path frees real heap memory. */
+int sockloop_delete_thread_allocated_param_test(void)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    picoquic_quic_t* quic = NULL;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        quic = picoquic_create(8, test_server_cert_file, test_server_key_file, NULL,
+            PICOQUIC_TEST_ALPN, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        if (quic == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_packet_loop_param_t* param = (picoquic_packet_loop_param_t*)malloc(sizeof(picoquic_packet_loop_param_t));
+
+        if (param == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_network_thread_ctx_t* thread_ctx;
+            memset(param, 0, sizeof(picoquic_packet_loop_param_t));
+
+            thread_ctx = picoquic_start_network_thread(quic, param, sockloop_delete_thread_test_cb, NULL, &ret);
+            if (thread_ctx == NULL) {
+                free(param);
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                for (int i = 0; i < 2000 && !thread_ctx->thread_is_ready; i++) {
+                    SLEEP(1);
+                }
+                thread_ctx->is_param_allocated = 1;
+                picoquic_delete_network_thread(thread_ctx);
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* picoquic_server_set_context is a real public API (used by picoquicdemo.c) but was never
+ * exercised by the test suite. Build a minimal server config and call it directly. */
+int sockloop_server_set_context_test(void)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    picoquic_quic_config_t config;
+    picoquic_quic_t* qserver = NULL;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        picoquic_config_init(&config);
+        config.server_cert_file = test_server_cert_file;
+        config.server_key_file = test_server_key_file;
+        config.nb_connections = 8;
+
+        ret = picoquic_server_set_context(&qserver, &config, 0, NULL, NULL, NULL);
+        if (ret != 0 || qserver == NULL) {
+            ret = -1;
+        }
+        else if (!qserver->default_tp.is_reset_stream_at_enabled ||
+            qserver->default_tp.max_datagram_frame_size != PICOQUIC_MAX_PACKET_SIZE) {
+            ret = -1;
+        }
+    }
+
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+
+    return ret;
+}
+
+/* picoquic_start_server_threads is never called anywhere (picoquicdemo.c uses the lower level
+ * picoquic_server_set_context plus a manual packet loop instead). Start exactly one thread and
+ * tear it down; this also exercises the is_param_allocated ownership path taken by the function
+ * itself (thread_ctxs[i]->is_param_allocated = 1). */
+int sockloop_start_server_threads_test(void)
+{
+    int ret = 0;
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    picoquic_quic_config_t config;
+    picoquic_network_thread_ctx_t* thread_ctxs[1] = { NULL };
+    int nb_threads_created = 0;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        picoquic_config_init(&config);
+        config.server_cert_file = test_server_cert_file;
+        config.server_key_file = test_server_key_file;
+        config.nb_connections = 8;
+        config.nb_threads = 1;
+
+        ret = picoquic_start_server_threads(&config, 0, NULL, NULL, NULL,
+            sockloop_delete_thread_test_cb, NULL, NULL, NULL, NULL,
+            thread_ctxs, 1, &nb_threads_created);
+
+        if (ret != 0 || nb_threads_created != 1 || thread_ctxs[0] == NULL ||
+            !thread_ctxs[0]->is_param_allocated) {
+            ret = -1;
+        }
+        else {
+            picoquic_quic_t* qserver = thread_ctxs[0]->quic;
+
+            for (int i = 0; i < 2000 && !thread_ctxs[0]->thread_is_ready; i++) {
+                SLEEP(1);
+            }
+            picoquic_delete_network_thread(thread_ctxs[0]);
+            picoquic_free(qserver);
+        }
+    }
+
+    return ret;
+}
+
+int sockloop_thread_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 7);
@@ -719,7 +1541,7 @@ int sockloop_thread_test()
     return(sockloop_test_one(&spec));
 }
 
-int sockloop_thread_name_test()
+int sockloop_thread_name_test(void)
 {
     sockloop_test_spec_t spec;
     sockloop_test_set_spec(&spec, 8);
@@ -730,4 +1552,593 @@ int sockloop_thread_name_test()
     spec.thread_name = "picoquic loop";
 
     return(sockloop_test_one(&spec));
+}
+
+/* The wake up action calls loop_callback unconditionally. Verify that so the
+* thread-starting APIs refuses a NULL loop_callback rather than store it and crash later. */
+int sockloop_thread_null_callback_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        picoquic_packet_loop_param_t param = { 0 };
+        int thread_ret = 0;
+        picoquic_network_thread_ctx_t* thread_ctx = picoquic_start_network_thread(quic, &param, NULL, NULL, &thread_ret);
+
+        if (thread_ctx != NULL) {
+            DBG_PRINTF("%s", "picoquic_start_network_thread accepted a NULL loop_callback");
+            picoquic_delete_network_thread(thread_ctx);
+            ret = -1;
+        }
+        else if (thread_ret == 0) {
+            DBG_PRINTF("%s", "picoquic_start_network_thread with a NULL loop_callback did not report an error");
+            ret = -1;
+        }
+
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* Add tests of a QMUX loop. */
+uint8_t sockloop_qmux_test_data[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,14, 15, 16
+};
+
+typedef struct st_sockloop_qmux_test_t {
+    uint8_t test_id;
+    int af;
+    uint16_t port;
+    int socket_buffer_size;
+    char const* thread_name;
+    int use_background_thread;
+    int test_bad_port;
+    int test_close;
+    int test_idle;
+    /* variables used to monitor execution */
+    picoquic_packet_loop_param_t* param;
+    int received_stream_0;
+    uint64_t stream_0_length_received;
+    int stream_0_data_matches;
+    int stream_0_fin_received;
+    int should_close_tcp;
+    /* Tracking the client connection to terminate gracefully */
+    picoquic_cnx_t* qmux_cnx;
+} sockloop_qmux_test_t;
+
+/* Check that frames can be received properly */
+/* TODO: run a test with all frames in skip frame test, to check
+* that allowed frames pass, and that not allowed frames are rejected. */
+
+int sockloop_qmux_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+
+    int ret = 0;
+    sockloop_qmux_test_t* sim_ctx = (sockloop_qmux_test_t*)callback_ctx;
+
+    if (ret == 0) {
+        switch (fin_or_event) {
+        case picoquic_callback_stream_data:
+        case picoquic_callback_stream_fin:
+            if (stream_id == 0) {
+                DBG_PRINTF("Receive data on stream 0, client_mode: %d, len: %d, fin: %d",
+                    cnx->client_mode, (int)length, (fin_or_event == picoquic_callback_stream_fin));
+                sim_ctx->received_stream_0 = 1;
+                sim_ctx->stream_0_length_received = length;
+                if (length == sizeof(sockloop_qmux_test_data) &&
+                    memcmp(bytes, sockloop_qmux_test_data, length) == 0) {
+                    sim_ctx->stream_0_data_matches = 1;
+                }
+                if (fin_or_event == picoquic_callback_stream_fin) {
+                    sim_ctx->stream_0_fin_received = 1;
+                    if (sim_ctx->test_close) {
+                        sim_ctx->should_close_tcp = 1;
+                        picoquic_connection_disconnect(cnx);
+                    }
+                    else if (!sim_ctx->test_idle) {
+                        picoquic_close_ex(cnx, 0, "data received.");
+                    }
+                }
+            }
+            break;
+        case picoquic_callback_prepare_to_send:
+        case picoquic_callback_datagram:
+        case picoquic_callback_prepare_datagram:
+            /* not expected */
+            ret = -1;
+            break;
+        case picoquic_callback_stream_reset: /* Client reset stream #x */
+        case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
+            /* TODO: react to abandon stream, etc. */
+            break;
+        case picoquic_callback_stateless_reset: /* Received an error message */
+        case picoquic_callback_close: /* Received connection close */
+        case picoquic_callback_application_close: /* Received application close */
+            /* Remove the connection from the context, and then delete it */
+            picoquic_set_callback(cnx, NULL, NULL);
+            break;
+        case picoquic_callback_version_negotiation:
+            /* The server should never receive a version negotiation response */
+            break;
+        case picoquic_callback_almost_ready:
+            DBG_PRINTF("Almost ready, client_mode: %d", cnx->client_mode);
+            break;
+        case picoquic_callback_ready:
+            /* should mark the first stream as ready, create it if necessary */
+            DBG_PRINTF("Ready, client_mode: %d", cnx->client_mode);
+            if (cnx->client_mode) {
+                picoquic_add_to_stream(cnx, 0, sockloop_qmux_test_data, sizeof(sockloop_qmux_test_data), 1);
+            }
+            break;
+        case picoquic_callback_request_alpn_list:
+            /* qmux_test_set_alpn_list((void*)bytes); */
+            break;
+        case picoquic_callback_set_alpn:
+            break;
+        case picoquic_callback_datagram_acked:
+            /* Ack for packet carrying datagram-object received from peer */
+        case picoquic_callback_datagram_lost:
+            /* Packet carrying datagram-object probably lost */
+        case picoquic_callback_datagram_spurious:
+            /* Packet carrying datagram-object was not really lost */
+            break;
+        case picoquic_callback_pacing_changed:
+            /* Notification of rate change from congestion controller */
+            break;
+        default:
+            /* unexpected */
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int sockloop_qmux_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* callback_arg)
+{
+    int ret = 0;
+    sockloop_qmux_test_t* sim_ctx = (sockloop_qmux_test_t*)callback_ctx;
+
+    if (sim_ctx == NULL) {
+        ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+    }
+    else {
+        if (sim_ctx->qmux_cnx == NULL) {
+            DBG_PRINTF("%s", "QMUX_CNX context is NULL.");
+            ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+        }
+        else switch (cb_mode) {
+        case picoquic_packet_loop_ready: {
+            picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
+            options->do_time_check = 1;
+            fprintf(stdout, "Waiting for packets.\n");
+            break;
+        }
+        case picoquic_packet_loop_after_receive:
+            /* Post receive callback */
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("The connection is closed after receive! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+                break;
+            }
+            break;
+        case picoquic_packet_loop_after_send:
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("The connection is closed after send! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+            }
+            break;
+        case picoquic_packet_loop_port_update:
+            break;
+            /* TODO: consider adding the delay computation callback! */
+        case picoquic_packet_loop_time_check: {
+            packet_loop_time_check_arg_t* time_check_arg = (packet_loop_time_check_arg_t*)callback_arg;
+            if (picoquic_get_cnx_state(sim_ctx->qmux_cnx) == picoquic_state_disconnected) {
+                DBG_PRINTF("The connection is closed on time check! Client mode:\n", sim_ctx->qmux_cnx->client_mode);
+                ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+                break;
+            }
+            else if (time_check_arg->delta_t > 10000000) {
+                time_check_arg->delta_t = 10000000;
+            }
+            break;
+        }
+        case picoquic_packet_loop_wake_up:
+            break;
+        case picoquic_packet_loop_alt_port:
+            break;
+        case picoquic_packet_loop_system_call_duration:
+            break;
+        default:
+            DBG_PRINTF("Unexpected socket loop callback: %d.\n", cb_mode);
+            ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+            break;
+        }
+    }
+    return ret;
+}
+
+int sockloop_qmux_one(
+    sockloop_qmux_test_t* spec)
+{
+    int ret = 0;
+    picoquic_quic_t* qserver = NULL;
+    picoquic_quic_t* qmux = NULL;
+    picoquic_cnx_t* cnx_qmux = NULL;
+    picoquic_packet_loop_param_t param = { 0 };
+    struct sockaddr_storage dest = { 0 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    const uint8_t test_ticket_encrypt_key[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        /* Create a pro-forma QUIc server */
+        qserver = picoquic_create(8,
+            NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, NULL, NULL,
+            0, NULL, NULL, NULL, 0);
+        /* Create a QMux context */
+        qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, sockloop_qmux_callback, spec, NULL, 0, NULL,
+            0, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+        if (qserver == NULL || qmux == NULL) {
+            ret = -1;
+        }
+        else {
+            /* set the destination address to selected port and loopback */
+            picoquic_set_test_address((struct sockaddr_in*)&dest, htonl(0x7f000001), 
+                (spec->test_bad_port)?spec->port:htons(spec->port));
+            /* start a client connection */
+            cnx_qmux = picoqmux_create_qmux_cnx(qmux, picoquic_current_time(), 1, 0,
+                PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, (struct sockaddr*)&dest);
+            if (cnx_qmux == NULL) {
+                ret = -1;
+            }
+            else {
+                spec->qmux_cnx = cnx_qmux;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        param.local_port = spec->port;
+        param.qmux_port = spec->port;
+        param.local_af = 0;
+        param.socket_buffer_size = spec->socket_buffer_size;
+        spec->param = &param;
+
+        if (spec->use_background_thread) {
+            picoquic_network_thread_ctx_t* thread_ctx = NULL;
+
+            if (spec->thread_name != NULL) {
+                thread_ctx = picoquic_start_custom_network_thread_qmux(qserver, qmux, &param,
+                    picoquic_internal_thread_create, picoquic_internal_thread_delete,
+                    picoquic_internal_thread_setname, spec->thread_name, sockloop_qmux_test_cb, spec, &ret);
+            }
+            else {
+                thread_ctx = picoquic_start_network_thread_qmux(qserver, qmux, &param, sockloop_qmux_test_cb, spec, &ret);
+            }
+            if (thread_ctx == NULL) {
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+            else {
+                for (int i = 0; i < 2000; i++) {
+                    if (thread_ctx->thread_is_ready) {
+                        DBG_PRINTF("Thread is ready after %dms", i);
+                        break;
+                    }
+                    else {
+                        SLEEP(1);
+                    }
+                }
+                if (!thread_ctx->thread_is_ready) {
+                    DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                    ret = -1;
+                }
+                else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                    DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                    ret = -1;
+                }
+                else {
+                    if (spec->test_bad_port) {
+                        /* we merely check that the connection was properly terminated */
+                        ret = 0;
+                    }
+                    else {
+                        if (!spec->received_stream_0 ||
+                            !spec->stream_0_fin_received ||
+                            !spec->stream_0_data_matches) {
+                            ret = -1;
+                        }
+                    }
+                }
+                picoquic_delete_network_thread(thread_ctx);
+            }
+        }
+        else {
+            /* TODO -- proper initialization */
+            picoquic_network_thread_ctx_t t_ctx = { 0 };
+            t_ctx.quic = qserver;
+            t_ctx.qmux = qmux;
+            t_ctx.param = &param;
+            t_ctx.loop_callback = sockloop_qmux_test_cb;
+            t_ctx.loop_callback_ctx = spec;
+
+            (void)picoquic_packet_loop_v3((void*)&t_ctx);
+
+            if (spec->test_bad_port) {
+                /* we merely check that the connection was properly terminated */
+                ret = 0;
+            }
+            else {
+                if (!spec->received_stream_0 ||
+                    !spec->stream_0_fin_received ||
+                    !spec->stream_0_data_matches) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+    if (qmux != NULL) {
+        picoquic_free(qmux);
+    }
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+    return ret;
+}
+
+void sockloop_test_set_qmux_spec(sockloop_qmux_test_t* spec, uint8_t test_id)
+{
+    memset(spec, 0, sizeof(sockloop_qmux_test_t));
+    spec->test_id = test_id;
+    spec->af = AF_INET6;
+    spec->port = 3456;
+    spec->socket_buffer_size = PICOQUIC_MAX_PACKET_SIZE;
+}
+
+int sockloop_qmux_test(void)
+{
+    sockloop_qmux_test_t spec;
+    sockloop_test_set_qmux_spec(&spec, 1);
+
+    return(sockloop_qmux_one(&spec));
+}
+
+int sockloop_qmux_badp_test(void)
+{
+    sockloop_qmux_test_t spec;
+    sockloop_test_set_qmux_spec(&spec, 1);
+    spec.test_bad_port = 1;
+
+    return(sockloop_qmux_one(&spec));
+}
+
+int picoquic_packet_loop_open_qmux_cnx_sockets(picoquic_quic_t* qmux, picoqmux_socket_ctx_t** sqmux_ctx,
+    int* nb_qmux_sockets, int max_qmux_socket);
+
+/* picoquic_packet_loop_open_qmux_cnx_sockets used to loop forever if nb_qmux_sockets reached
+ * max_qmux_socket while qmux->cnx_list still had entries left: cnx was only advanced inside the
+ * "socket opened" branch, never in the "limit reached" branch. Verify it now terminates and
+ * leaves nb_qmux_sockets unchanged when the limit is already hit on entry. */
+int sockloop_qmux_cnx_sockets_limit_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+    else {
+        struct sockaddr_in saddr = { 0 };
+        picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            0, 0, "test-sni", "test-alpn", 1);
+
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            picoqmux_socket_ctx_t* sqmux_ctx[1] = { NULL };
+            int nb_qmux_sockets = 0;
+
+            /* Link the connection into the qmux's connection list directly (white-box),
+             * matching what picoqmux_create_qmux_cnx does for a real QMUX connection. */
+            cnx->next_in_table = NULL;
+            qclient->cnx_list = cnx;
+
+            if (picoquic_packet_loop_open_qmux_cnx_sockets(qclient, sqmux_ctx, &nb_qmux_sockets, 0) != 0 ||
+                nb_qmux_sockets != 0) {
+                ret = -1;
+            }
+            qclient->cnx_list = NULL;
+            picoquic_delete_cnx(cnx);
+        }
+        picoquic_free(qclient);
+    }
+    return ret;
+}
+
+/* Open two extra raw TCP connections to the QMUX port, then close the first
+ * one while the second stays open and the real QMUX connection is still
+ * running. This exercises the "socket was closed" compaction logic in the
+ * main loop, including the array memmove, which no other test reaches. */
+int sockloop_qmux_close_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* qserver = NULL;
+    picoquic_quic_t* qmux = NULL;
+    picoquic_cnx_t* cnx_qmux = NULL;
+    picoquic_packet_loop_param_t param = { 0 };
+    struct sockaddr_storage dest = { 0 };
+    struct sockaddr_in probe_dest = { 0 };
+    char test_server_cert_file[512];
+    char test_server_key_file[512];
+    char test_server_cert_store_file[512];
+    const uint8_t test_ticket_encrypt_key[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+    sockloop_qmux_test_t spec;
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
+    SOCKET_TYPE probe1 = INVALID_SOCKET;
+    SOCKET_TYPE probe2 = INVALID_SOCKET;
+
+    sockloop_test_set_qmux_spec(&spec, 4);
+    spec.port = 3458;
+    /* Keep the connection (and thus the loop) alive after the data exchange,
+     * so there is time to open and close the probe connections below. */
+    spec.test_idle = 1;
+
+    ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
+        PICOQUIC_TEST_FILE_SERVER_CERT);
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_SERVER_KEY);
+    }
+    if (ret == 0) {
+        ret = picoquic_get_input_path(test_server_cert_store_file, sizeof(test_server_cert_store_file), picoquic_solution_dir,
+            PICOQUIC_TEST_FILE_CERT_STORE);
+    }
+
+    if (ret != 0) {
+        DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
+    }
+    else {
+        qserver = picoquic_create(8,
+            NULL, NULL, NULL,
+            PICOQUIC_TEST_ALPN, test_api_callback, NULL, NULL, NULL, NULL,
+            0, NULL, NULL, NULL, 0);
+        qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, test_server_cert_store_file,
+            PICOQUIC_TEST_ALPN, sockloop_qmux_callback, &spec, NULL, 0, NULL,
+            0, test_ticket_encrypt_key, sizeof(test_ticket_encrypt_key));
+        if (qserver == NULL || qmux == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_set_test_address((struct sockaddr_in*)&dest, htonl(0x7f000001), htons(spec.port));
+            cnx_qmux = picoqmux_create_qmux_cnx(qmux, picoquic_current_time(), 1, 0,
+                PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, (struct sockaddr*)&dest);
+            if (cnx_qmux == NULL) {
+                ret = -1;
+            }
+            else {
+                spec.qmux_cnx = cnx_qmux;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        param.local_port = spec.port;
+        param.qmux_port = spec.port;
+        param.local_af = 0;
+        param.socket_buffer_size = spec.socket_buffer_size;
+
+        thread_ctx = picoquic_start_network_thread_qmux(qserver, qmux, &param, sockloop_qmux_test_cb, &spec, &ret);
+        if (thread_ctx == NULL) {
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+        else {
+            int thread_ready = 0;
+            for (int i = 0; i < 2000 && !thread_ready; i++) {
+                thread_ready = thread_ctx->thread_is_ready;
+                if (!thread_ready) {
+                    SLEEP(1);
+                }
+            }
+            if (!thread_ready) {
+                DBG_PRINTF("%s", "Cannot start the network thread in 2000ms");
+                ret = -1;
+            }
+            else if (picoquic_wake_up_network_thread(thread_ctx) != 0) {
+                DBG_PRINTF("%s", "Cannot wakeup the network thread");
+                ret = -1;
+            }
+            else {
+                /* Wait for the real QMUX connection to complete its data
+                 * exchange; it stays open afterwards because of test_idle. */
+                int nb_waits = 0;
+                while (nb_waits < 2000 &&
+                    !(spec.received_stream_0 && spec.stream_0_fin_received)) {
+                    SLEEP(1);
+                    nb_waits++;
+                }
+                if (!spec.received_stream_0 || !spec.stream_0_fin_received || !spec.stream_0_data_matches) {
+                    ret = -1;
+                }
+                else {
+                    picoquic_set_test_address(&probe_dest, htonl(0x7f000001), htons(spec.port));
+                    probe1 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                    if (probe1 == INVALID_SOCKET ||
+                        connect(probe1, (struct sockaddr*)&probe_dest, sizeof(probe_dest)) != 0) {
+                        DBG_PRINTF("%s", "Cannot open first probe connection");
+                        ret = -1;
+                    }
+                    else {
+                        SLEEP(100);
+                        probe2 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                        if (probe2 == INVALID_SOCKET ||
+                            connect(probe2, (struct sockaddr*)&probe_dest, sizeof(probe_dest)) != 0) {
+                            DBG_PRINTF("%s", "Cannot open second probe connection");
+                            ret = -1;
+                        }
+                        else {
+                            SLEEP(100);
+                            /* probe1 is not the last qmux socket, since probe2 stays
+                             * open: closing it exercises the array compaction. */
+                            SOCKET_CLOSE(probe1);
+                            probe1 = INVALID_SOCKET;
+                            SLEEP(100);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (probe1 != INVALID_SOCKET) {
+        SOCKET_CLOSE(probe1);
+    }
+    if (probe2 != INVALID_SOCKET) {
+        SOCKET_CLOSE(probe2);
+    }
+    if (thread_ctx != NULL) {
+        picoquic_delete_network_thread(thread_ctx);
+    }
+    if (qmux != NULL) {
+        picoquic_free(qmux);
+    }
+    if (qserver != NULL) {
+        picoquic_free(qserver);
+    }
+    return ret;
 }

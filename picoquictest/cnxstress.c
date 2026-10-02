@@ -25,6 +25,7 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
+#pragma warning(disable:4204)
 #else
 #include <signal.h>
 #endif
@@ -297,7 +298,7 @@ int cnx_stress_callback_data(cnx_stress_callback_ctx_t* cnx_ctx,
 }
 
 int cnx_stress_callback_prepare_to_send(cnx_stress_callback_ctx_t* cnx_ctx,
-    cnx_stress_stream_ctx_t* stream_ctx, uint64_t stream_id,
+    cnx_stress_stream_ctx_t* stream_ctx, uint64_t UNUSED(stream_id),
     void* context, size_t length)
 {
     int ret = 0;
@@ -409,10 +410,6 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
     case picoquic_callback_application_close: /* Received application close */
         cnx_stress_callback_delete_context(cnx_ctx);
         picoquic_set_callback(cnx, NULL, NULL);
-        break;
-    case picoquic_callback_stream_gap:
-        /* Gap indication, when unreliable streams are supported */
-        /* Should trigger a failure */
         break;
     case picoquic_callback_prepare_to_send:
         ret = cnx_stress_callback_prepare_to_send(cnx_ctx, stream_ctx, stream_id, (void*)bytes, length);
@@ -966,7 +963,7 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report)
 /* The unit test entry point executes the cnx stress test with a 
  * small duration and a small number of clients, the goal being to check that
  * the cnx stress code actually works. */
-int cnx_stress_unit_test()
+int cnx_stress_unit_test(void)
 {
     return cnx_stress_do_test(120000000, 100, 0);
 }
@@ -977,7 +974,7 @@ int cnx_stress_unit_test()
  * test, which verifies that if one creates exactly the "limit" number of connections, 
  * they all succeed.
  */
-int cnx_limit_test()
+int cnx_limit_test(void)
 {
     int ret = 0;
     int nb_clients = 4;
@@ -994,8 +991,8 @@ int cnx_limit_test()
         /* loop until time exhausted or all created */
         while (ret == 0 && stress_ctx->simulated_time < duration && !is_done) {
             ret = cnx_stress_loop_step(stress_ctx);
-            if (stress_ctx->nb_clients == (uint32_t)nb_clients &&
-                stress_ctx->nb_servers == (uint32_t)nb_clients) {
+            if (stress_ctx->nb_clients == nb_clients &&
+                stress_ctx->nb_servers == nb_clients) {
                 is_done = 1;
                 for (int c = 0; c < nb_clients; c++) {
                     if (stress_ctx->c_ctx[c] == NULL ||

@@ -57,7 +57,7 @@ static void * int_node_value(picosplay_node_t * node)
     return (void*)((char*)node - offsetof(struct st_int_node_t, node));
 }
 
-static void delete_int_node(void * tree, picosplay_node_t * node)
+static void delete_int_node(void* UNUSED(tree), picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
@@ -103,7 +103,7 @@ static int check_node_sanity(picosplay_node_t *x, void *floor, void *ceil, picos
     return count;
 }
 
-int splay_test() {
+int splay_test(void) {
     int ret = 0;
     int count = 0;
     picosplay_tree_t *tree = picosplay_new_tree(&compare_int, create_int_node, delete_int_node, int_node_value);
