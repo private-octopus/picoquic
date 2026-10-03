@@ -878,6 +878,9 @@ int perf_loopback_multiconn_test(void);
 int cplusplustest(void);
 int error_name_test(void);
 int hystart_test(void);
+int hystart_pp_state_test(void);
+int hystart_cc_test(void);
+int hystart_ss_exit_test(void);
 
 #ifdef __cplusplus
 }
