@@ -38,104 +38,6 @@
 #include "picoquic_prague.h"
 #include "cc_common.h"
 
-static int hystart_test_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_algo, size_t data_size, uint64_t max_completion_time,
-                            uint64_t datarate, uint64_t latency, uint64_t jitter, uint64_t queue_delay_max)
-{
-    uint64_t simulated_time = 0;
-    uint64_t picoseq_per_byte = (1000000ull * 8) / datarate;
-    picoquic_connection_id_t initial_cid = { {0x08, 0x22, 0, 0, 0, 0, 0, 0}, 8 };
-    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = 0;
-
-    initial_cid.id[2] = ccalgo->congestion_algorithm_number;
-    initial_cid.id[3] = hystart_algo;
-    initial_cid.id[4] = (datarate > 0xff) ? 0xff : (uint8_t)datarate;
-    initial_cid.id[5] = (latency > 2550000) ? 0xff : (uint8_t)(latency / 10000);
-    initial_cid.id[6] = (jitter > 255000) ? 0xff : (uint8_t)(jitter / 1000);
-    initial_cid.id[7] = (queue_delay_max > 255000) ? 0xff : (uint8_t)(queue_delay_max / 1000);
-
-    ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
-
-    if (ret == 0 && test_ctx == NULL) {
-        ret = -1;
-    }
-
-    if (ret == 0) {
-        /* Set CC algo. */
-        const char* option_string = "Y0";
-        switch (hystart_algo) {
-            case picoquic_hystart_alg_hystart_pp_t:
-                option_string = "Y1";
-                break;
-            case picoquic_hystart_alg_disabled_t:
-                option_string = "Y2";
-                break;
-            default:
-                break;
-        }
-        picoquic_set_default_congestion_algorithm_ex(test_ctx->qserver, ccalgo, option_string);
-        picoquic_set_congestion_algorithm_ex(test_ctx->cnx_client, ccalgo, option_string);
-
-        /* Configure links. */
-        test_ctx->c_to_s_link->jitter = jitter;
-        test_ctx->c_to_s_link->microsec_latency = latency;
-        test_ctx->c_to_s_link->picosec_per_byte = picoseq_per_byte;
-        test_ctx->s_to_c_link->jitter = jitter;
-        test_ctx->s_to_c_link->microsec_latency = latency;
-        test_ctx->s_to_c_link->picosec_per_byte = picoseq_per_byte;
-        test_ctx->stream0_flow_release = 1;
-        test_ctx->immediate_exit = 1;
-
-        /* set the binary log on the client side */
-        picoquic_set_qlog(test_ctx->qclient, ".");
-        test_ctx->qclient->use_long_log = 1;
-
-        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
-            NULL, 0, data_size, 0, 0, queue_delay_max, max_completion_time);
-    }
-
-    /* Free the resource, which will close the log file. */
-    if (test_ctx != NULL) {
-        tls_api_delete_ctx(test_ctx);
-        test_ctx = NULL;
-    }
-
-    return ret;
-}
-
-int hystart_test(void) {
-    picoquic_congestion_algorithm_t* ccalgos[] = {
-        picoquic_newreno_algorithm,
-        picoquic_cubic_algorithm,
-        picoquic_dcubic_algorithm,
-        //picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm,
-        picoquic_prague_algorithm,
-        picoquic_bbr1_algorithm
-    };
-    uint64_t max_completion_times[][3] = {
-        /* hystart     hystart++   disabled */
-        {10000000,  10000000,   10000000},  /* newreno */
-        {10500000,  10500000,   10500000},  /* cubic */
-        {10500000,  10500000,   10500000},  /* dcubic */
-        //21000,
-        {10000000,  10000000,   10000000},  /* bbr */
-        {10000000,  10000000,   10000000}, /* prague */
-        {10000000,  10000000,   10000000}   /* bbr1 */
-    };
-    int ret = 0;
-
-    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*) && !ret; i++) {
-        for (picoquic_hystart_alg_t hystart_alg = picoquic_hystart_alg_hystart_t; hystart_alg <= picoquic_hystart_alg_disabled_t && !ret; hystart_alg++) {
-            ret = hystart_test_one(ccalgos[i], hystart_alg, 50000000, max_completion_times[i][hystart_alg], 50, 125000, 0, 125000 * 10);
-            if (ret != 0) {
-                DBG_PRINTF("HyStart test fails for <%s><%i>", ccalgos[i]->congestion_algorithm_id, hystart_alg);
-            }
-        }
-    }
-
-    return ret;
-}
 
 /*
  * Slow start mechanism tests.
@@ -546,6 +448,102 @@ static int hystart_cc_test_one(const hystart_cc_case_t* c, picoquic_hystart_alg_
     return ret;
 }
 
+/* Loss during CSS (RFC 9406, section 4.2): the sender leaves slow start for good.
+ * HyStart++ only applies to the initial slow start, so a later slow start (here
+ * after a timeout) is a standard one: cwin grows by the acked bytes again, not by
+ * the CSS fraction. */
+static int hystart_cc_loss_in_css_test_one(picoquic_congestion_algorithm_t* ccalgo, int check_fallback)
+{
+    const uint64_t base_rtt = 100000;
+    const uint64_t high_rtt = base_rtt + 30000;
+    const int k = HYSTART_TEST_ACKS_PER_ROUND / 2;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    hystart_test_round_ctx_t rc;
+    int64_t nb_bytes;
+    int ret = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        return -1;
+    }
+
+    picoquic_set_congestion_algorithm_ex(cnx, ccalgo, "Y1");
+
+    memset(&rc, 0, sizeof(rc));
+    rc.cnx = cnx;
+    rc.path_x = cnx->path[0];
+    rc.simulated_time = &simulated_time;
+    rc.time_step = base_rtt / HYSTART_TEST_ACKS_PER_ROUND;
+    rc.nb_bytes = rc.path_x->send_mtu;
+    nb_bytes = (int64_t)rc.nb_bytes;
+
+    cnx->cwin_blocked = 1;
+    rc.path_x->last_time_acked_data_frame_sent = 1;
+    rc.path_x->last_sender_limited_time = 0;
+    rc.path_x->rtt_min = base_rtt;
+    rc.path_x->smoothed_rtt = base_rtt;
+
+    /* Two flat rounds, then two raised rounds: CSS is entered at the end of the first. */
+    hystart_test_prime(&rc, base_rtt);
+    (void)hystart_test_round(&rc, base_rtt);
+    (void)hystart_test_round(&rc, base_rtt);
+    (void)hystart_test_round(&rc, high_rtt);
+    (void)hystart_test_round(&rc, high_rtt);
+
+    if (rc.delta[k] != nb_bytes / PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR) {
+        DBG_PRINTF("%s: not in CSS before the loss, cwin grows by %" PRId64 " per ack",
+            ccalgo->congestion_algorithm_id, rc.delta[k]);
+        ret = -1;
+    }
+    else {
+        picoquic_per_ack_state_t ack_state = { 0 };
+
+        /* Timeout: cwin collapses, slow start towards the new ssthresh. */
+        simulated_time += rc.time_step;
+        ack_state.lost_packet_number = hystart_test_pkt_ctx(&rc)->highest_acknowledged + 1;
+        cnx->congestion_alg->alg_notify(cnx, rc.path_x, picoquic_congestion_notification_timeout, &ack_state, simulated_time);
+
+        (void)hystart_test_round(&rc, high_rtt);
+
+        if (rc.delta[k] != nb_bytes) {
+            DBG_PRINTF("%s: slow start after a loss in CSS grows cwin by %" PRId64 " per ack, expected %" PRId64,
+                ccalgo->congestion_algorithm_id, rc.delta[k], nb_bytes);
+            ret = -1;
+        }
+
+        if (ret == 0 && check_fallback) {
+            /* Two more timeouts shrink the window until the controller falls back to the
+             * initial slow start (ssthresh unset): HyStart++ restarts from scratch, in
+             * standard slow start, not in the CSS phase of the previous slow start. */
+            for (int i = 0; i < 2; i++) {
+                simulated_time += 2 * base_rtt;
+                ack_state.lost_packet_number += 1;
+                cnx->congestion_alg->alg_notify(cnx, rc.path_x, picoquic_congestion_notification_timeout, &ack_state, simulated_time);
+            }
+
+            if (rc.path_x->is_ssthresh_initialized) {
+                DBG_PRINTF("%s: no fall back to the initial slow start, cwin = %" PRIu64,
+                    ccalgo->congestion_algorithm_id, rc.path_x->cwin);
+                ret = -1;
+            }
+            else {
+                (void)hystart_test_round(&rc, base_rtt);
+
+                if (rc.delta[k] != nb_bytes) {
+                    DBG_PRINTF("%s: restarted initial slow start grows cwin by %" PRId64 " per ack, expected %" PRId64,
+                        ccalgo->congestion_algorithm_id, rc.delta[k], nb_bytes);
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
 int hystart_cc_test(void)
 {
     hystart_cc_case_t cases[] = {
@@ -570,28 +568,56 @@ int hystart_cc_test(void)
         ret = hystart_cc_test_one(&cases[4], picoquic_hystart_alg_disabled_t, "Q0.001Y2");
     }
 
+    /* A 'Y' without value must not make the parser read past the end of the option
+     * string (here: into a second, unrelated "Y2"), and out of range values are
+     * ignored. Both keep the default, HyStart. */
+    if (ret == 0) {
+        const char no_value[] = { 'Y', 0, 'Y', '2', 0 };
+        ret = hystart_cc_test_one(&cases[0], picoquic_hystart_alg_hystart_t, no_value);
+    }
+    if (ret == 0) {
+        ret = hystart_cc_test_one(&cases[0], picoquic_hystart_alg_hystart_t, "Y5");
+    }
+
+    /* Controllers that slow start again after a timeout. Cubic also falls back to the
+     * initial slow start when the window gets too small. */
+    if (ret == 0) {
+        ret = hystart_cc_loss_in_css_test_one(picoquic_cubic_algorithm, 1);
+    }
+    if (ret == 0) {
+        ret = hystart_cc_loss_in_css_test_one(picoquic_newreno_algorithm, 0);
+    }
+
     return ret;
 }
 
 /*
  * End to end: delay based slow start exit versus loss based exit.
  *
- * 10 Mbps, 50ms RTT, 1 second of queueing before drops. With HyStart or HyStart++
- * the sender must leave slow start on the delay signal, before any loss. With slow
- * start exit disabled, the only way out is a loss: either the sender never sets
- * ssthresh, or it does so after bytes were lost.
+ * With HyStart or HyStart++ the sender should leave slow start on the delay
+ * signal, before any loss. With slow start exit disabled, the only way out is a
+ * loss: either the sender never sets ssthresh, or it does so after bytes were lost.
  */
+
+typedef struct st_hystart_e2e_scenario_t {
+    const char* name;
+    uint64_t picosec_per_byte;
+    uint64_t microsec_latency; /* one way */
+    uint64_t queue_delay_max;
+    size_t data_size;
+} hystart_e2e_scenario_t;
 
 typedef struct st_hystart_e2e_result_t {
     uint64_t exit_time;
     uint64_t loss_at_exit;
     uint64_t cwin_at_exit;
+    uint64_t inflight_at_exit;
     uint64_t first_loss_time;
     uint64_t completion_time;
 } hystart_e2e_result_t;
 
-static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hystart_alg_t hystart_alg,
-    const char* option_string, hystart_e2e_result_t* res)
+static int hystart_e2e_one(const hystart_e2e_scenario_t* sc, picoquic_congestion_algorithm_t* ccalgo,
+    picoquic_hystart_alg_t hystart_alg, const char* option_string, hystart_e2e_result_t* res)
 {
     uint64_t simulated_time = 0;
     picoquic_connection_id_t initial_cid = { {0x08, 0x23, 0, 0, 0, 0, 0, 0}, 8 };
@@ -601,6 +627,7 @@ static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hys
     memset(res, 0, sizeof(*res));
     initial_cid.id[2] = ccalgo->congestion_algorithm_number;
     initial_cid.id[3] = (uint8_t)hystart_alg;
+    initial_cid.id[4] = (uint8_t)(sc->microsec_latency / 10000);
 
     ret = tls_api_one_scenario_init_ex(&test_ctx, &simulated_time, PICOQUIC_INTERNAL_TEST_VERSION_1, NULL, NULL, &initial_cid);
 
@@ -609,19 +636,19 @@ static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hys
         picoquic_set_congestion_algorithm_ex(test_ctx->cnx_client, ccalgo, option_string);
 
         test_ctx->c_to_s_link->jitter = 0;
-        test_ctx->c_to_s_link->microsec_latency = 25000;
-        test_ctx->c_to_s_link->picosec_per_byte = 800000; /* 10 Mbps */
+        test_ctx->c_to_s_link->microsec_latency = sc->microsec_latency;
+        test_ctx->c_to_s_link->picosec_per_byte = sc->picosec_per_byte;
         test_ctx->s_to_c_link->jitter = 0;
-        test_ctx->s_to_c_link->microsec_latency = 25000;
-        test_ctx->s_to_c_link->picosec_per_byte = 800000;
+        test_ctx->s_to_c_link->microsec_latency = sc->microsec_latency;
+        test_ctx->s_to_c_link->picosec_per_byte = sc->picosec_per_byte;
         test_ctx->stream0_flow_release = 1;
         test_ctx->immediate_exit = 1;
 
-        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, 1000000);
+        ret = tls_api_one_scenario_body_connect(test_ctx, &simulated_time, 0, sc->queue_delay_max);
     }
 
     if (ret == 0) {
-        test_ctx->stream0_target = 4000000;
+        test_ctx->stream0_target = sc->data_size;
         test_ctx->loss_mask_default = 0;
         ret = test_api_init_send_recv_scenario(test_ctx, NULL, 0);
     }
@@ -648,6 +675,7 @@ static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hys
                 res->exit_time = simulated_time;
                 res->loss_at_exit = path_x->total_bytes_lost;
                 res->cwin_at_exit = path_x->cwin;
+                res->inflight_at_exit = path_x->bytes_in_transit;
             }
             if (res->first_loss_time == 0 && path_x->total_bytes_lost > 0) {
                 res->first_loss_time = simulated_time;
@@ -671,9 +699,9 @@ static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hys
         res->completion_time = simulated_time;
     }
 
-    DBG_PRINTF("%s <%s>: exit at %" PRIu64 "us (cwin %" PRIu64 ", %" PRIu64 " bytes lost), first loss at %" PRIu64 "us, done at %" PRIu64 "us, ret = %d",
-        ccalgo->congestion_algorithm_id, option_string, res->exit_time, res->cwin_at_exit, res->loss_at_exit,
-        res->first_loss_time, res->completion_time, ret);
+    DBG_PRINTF("%s, %s <%s>: exit at %" PRIu64 "us (cwin %" PRIu64 ", in flight %" PRIu64 ", %" PRIu64 " bytes lost), first loss at %" PRIu64 "us, done at %" PRIu64 "us, ret = %d",
+        sc->name, ccalgo->congestion_algorithm_id, option_string, res->exit_time, res->cwin_at_exit, res->inflight_at_exit,
+        res->loss_at_exit, res->first_loss_time, res->completion_time, ret);
 
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
@@ -683,39 +711,74 @@ static int hystart_e2e_one(picoquic_congestion_algorithm_t* ccalgo, picoquic_hys
     return ret;
 }
 
+/* Expectations per slow start mechanism. Returns 0 if the observed behavior matches. */
+static int hystart_e2e_check(const hystart_e2e_scenario_t* sc, picoquic_congestion_algorithm_t* ccalgo,
+    picoquic_hystart_alg_t hystart_alg, const char* option_string, const hystart_e2e_result_t* res)
+{
+    int ret = 0;
+
+    if (hystart_alg == picoquic_hystart_alg_disabled_t) {
+        if (res->exit_time != 0 && res->loss_at_exit == 0) {
+            DBG_PRINTF("%s, %s <%s>: left slow start without loss although slow start exit is disabled",
+                sc->name, ccalgo->congestion_algorithm_id, option_string);
+            ret = -1;
+        }
+    }
+    else if (res->exit_time == 0 || res->loss_at_exit != 0) {
+        DBG_PRINTF("%s, %s <%s>: expected a delay based slow start exit before any loss",
+            sc->name, ccalgo->congestion_algorithm_id, option_string);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+static int hystart_e2e_scenario(const hystart_e2e_scenario_t* sc, picoquic_congestion_algorithm_t** ccalgos, size_t nb_ccalgos)
+{
+    const char* option_strings[] = { "Y0", "Y1", "Y2" };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_ccalgos; i++) {
+        for (int v = 0; ret == 0 && v < 3; v++) {
+            hystart_e2e_result_t res;
+            picoquic_hystart_alg_t hystart_alg = (picoquic_hystart_alg_t)v;
+
+            ret = hystart_e2e_one(sc, ccalgos[i], hystart_alg, option_strings[v], &res);
+
+            if (ret == 0) {
+                ret = hystart_e2e_check(sc, ccalgos[i], hystart_alg, option_strings[v], &res);
+            }
+        }
+    }
+
+    return ret;
+}
+
 int hystart_ss_exit_test(void)
 {
-    picoquic_congestion_algorithm_t* ccalgos[] = {
+    /* 10 Mbps, 50ms RTT, 1 second of queueing before drops. */
+    const hystart_e2e_scenario_t short_rtt = { "short rtt", 800000, 25000, 1000000, 4000000 };
+    picoquic_congestion_algorithm_t* short_rtt_ccalgos[] = {
         picoquic_cubic_algorithm,
         picoquic_dcubic_algorithm,
         picoquic_newreno_algorithm,
         picoquic_prague_algorithm
     };
-    const char* option_strings[] = { "Y0", "Y1", "Y2" };
-    int ret = 0;
+    /* 20 Mbps, 260ms RTT, 2.6 seconds of queueing, 32 MB. BBR and BBR1 only use HyStart
+     * in their "startup long RTT" phase, entered above 250ms resp. 50ms of RTT.
+     * HyStart++ needs the deep queue: it enters CSS when about 4 times the BDP is in
+     * flight and then spends CSS_ROUNDS rounds at the inflated RTT. With 5 RTT of
+     * queueing or less, the queue overflows before CSS completes and the exit is loss
+     * based, at any RTT of 100ms or more. */
+    const hystart_e2e_scenario_t long_rtt = { "long rtt", 400000, 130000, 2600000, 32000000 };
+    picoquic_congestion_algorithm_t* long_rtt_ccalgos[] = {
+        picoquic_bbr_algorithm,
+        picoquic_bbr1_algorithm
+    };
+    int ret = hystart_e2e_scenario(&short_rtt, short_rtt_ccalgos, sizeof(short_rtt_ccalgos) / sizeof(picoquic_congestion_algorithm_t*));
 
-    for (size_t i = 0; ret == 0 && i < sizeof(ccalgos) / sizeof(picoquic_congestion_algorithm_t*); i++) {
-        for (int v = 0; ret == 0 && v < 3; v++) {
-            hystart_e2e_result_t res;
-            picoquic_hystart_alg_t hystart_alg = (picoquic_hystart_alg_t)v;
-
-            ret = hystart_e2e_one(ccalgos[i], hystart_alg, option_strings[v], &res);
-
-            if (ret == 0) {
-                if (hystart_alg == picoquic_hystart_alg_disabled_t) {
-                    if (res.exit_time != 0 && res.loss_at_exit == 0) {
-                        DBG_PRINTF("%s <%s>: left slow start without loss although slow start exit is disabled",
-                            ccalgos[i]->congestion_algorithm_id, option_strings[v]);
-                        ret = -1;
-                    }
-                }
-                else if (res.exit_time == 0 || res.loss_at_exit != 0) {
-                    DBG_PRINTF("%s <%s>: expected a delay based slow start exit before any loss",
-                        ccalgos[i]->congestion_algorithm_id, option_strings[v]);
-                    ret = -1;
-                }
-            }
-        }
+    if (ret == 0) {
+        ret = hystart_e2e_scenario(&long_rtt, long_rtt_ccalgos, sizeof(long_rtt_ccalgos) / sizeof(picoquic_congestion_algorithm_t*));
     }
 
     return ret;

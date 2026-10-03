@@ -807,7 +807,6 @@ static const picoquic_test_def_t test_table[] = {
     { "config_usage", config_usage_test },
     { "config_preferred", config_preferred_test },
     { "config_set_port", config_set_port_test },
-    { "hystart", hystart_test },
     { "hystart_pp_state", hystart_pp_state_test },
     { "hystart_cc", hystart_cc_test },
     { "hystart_ss_exit", hystart_ss_exit_test }

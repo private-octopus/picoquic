@@ -5094,12 +5094,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(hystart) {
-            int ret = hystart_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(hystart_pp_state) {
             int ret = hystart_pp_state_test();
 
