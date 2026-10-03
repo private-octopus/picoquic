@@ -265,6 +265,26 @@ uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t n
     return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
 }
 
+const char* picoquic_cc_parse_hystart_option(const char* x, picoquic_hystart_alg_t* hystart_alg)
+{
+    uint64_t v = 0;
+    int has_digits = 0;
+
+    while (*x >= '0' && *x <= '9') {
+        if (v <= picoquic_hystart_alg_disabled_t) {
+            v = 10 * v + (uint64_t)(*x - '0');
+        }
+        has_digits = 1;
+        x++;
+    }
+
+    if (has_digits && v <= picoquic_hystart_alg_disabled_t) {
+        *hystart_alg = (picoquic_hystart_alg_t)v;
+    }
+
+    return x;
+}
+
 /*
  * HyStart++
  */

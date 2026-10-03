@@ -109,6 +109,11 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 #define IS_HYSTART_PP(hystart_alg) (hystart_alg == picoquic_hystart_alg_hystart_pp_t)
 #define IS_IN_CSS(hystart_pp_state) (hystart_pp_state.css_baseline_min_rtt != UINT64_MAX)
 
+/* Parse the value of the 'Y' congestion control option (slow start exit mechanism):
+ * decimal digits, 0 = HyStart, 1 = HyStart++, 2 = disabled. A missing or out of range
+ * value is ignored. Returns the position after the value. */
+const char* picoquic_cc_parse_hystart_option(const char* x, picoquic_hystart_alg_t* hystart_alg);
+
 typedef struct st_picoquic_hystart_pp_round_t {
     uint64_t last_round_min_rtt;
     uint64_t current_round_min_rtt;

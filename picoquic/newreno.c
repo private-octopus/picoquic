@@ -193,12 +193,9 @@ static void newreno_set_options(picoquic_newreno_state_t* nr_state)
         while ((c = *x) != 0) {
             x++;
             switch (c) {
-                case 'Y': {
-                    /* Reading digits into an uint64_t  */
-                    nr_state->hystart_alg = atoi(x);
-                    x++;
+                case 'Y':
+                    x = picoquic_cc_parse_hystart_option(x, &nr_state->hystart_alg);
                     break;
-                }
                 case ':':
                 default:
                     break;
@@ -270,14 +267,13 @@ static void picoquic_newreno_notify(
 
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 /* TODO app limited. */
-                if (IS_HYSTART_PP(nr_state->hystart_alg) && nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start) {
+                /* HyStart++ only applies to the initial slow start: after a loss in CSS,
+                 * later slow starts are standard ones. */
+                if (IS_HYSTART_PP(nr_state->hystart_alg) && nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start &&
+                    nr_state->nrss.ssthresh == UINT64_MAX) {
                     path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
                             IS_IN_CSS(nr_state->hystart_pp_state));
                     nr_state->nrss.cwin = path_x->cwin;
-
-                    if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {
-                        nr_state->nrss.alg_state = picoquic_newreno_alg_congestion_avoidance;
-                    }
                 } else {
                     picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
                     path_x->cwin = nr_state->nrss.cwin;

@@ -188,12 +188,9 @@ static void prague_set_options(picoquic_prague_state_t* pr_state)
         while ((c = *x) != 0) {
             x++;
             switch (c) {
-                case 'Y': {
-                    /* Reading digits into an uint64_t  */
-                    pr_state->hystart_alg = atoi(x);
-                    x++;
+                case 'Y':
+                    x = picoquic_cc_parse_hystart_option(x, &pr_state->hystart_alg);
                     break;
-                }
                 case ':':
                 default:
                     break;

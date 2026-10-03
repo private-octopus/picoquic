@@ -64,12 +64,9 @@ static void cubic_set_options(picoquic_cubic_state_t* cubic_state)
         while ((c = *x) != 0) {
             x++;
             switch (c) {
-            case 'Y': {
-                /* Reading digits into an uint64_t  */
-                cubic_state->hystart_alg = atoi(x);
-                x++;
+            case 'Y':
+                x = picoquic_cc_parse_hystart_option(x, &cubic_state->hystart_alg);
                 break;
-            }
             case ':':
             default:
                 break;
@@ -212,6 +209,10 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
         cubic_state->start_of_epoch = current_time;
         cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        /* Back to the initial slow start: HyStart++ restarts from scratch. */
+        if (IS_HYSTART_PP(cubic_state->hystart_alg)) {
+            picoquic_hystart_pp_reset(&cubic_state->hystart_pp_state, cnx, path_x);
+        }
     }
     else {
         if (notification == picoquic_congestion_notification_timeout) {
@@ -296,9 +297,11 @@ static void cubic_notify(
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                             /* cubic_state->hystart_pp_state.css_baseline_min_rtt == UINT64_MAX -> in SS
-                             * cubic_state->hystart_pp_state.css_baseline_min_rtt < UINT64_MAX -> in CSS */
+                             * cubic_state->hystart_pp_state.css_baseline_min_rtt < UINT64_MAX -> in CSS
+                             * HyStart++ only applies to the initial slow start: after a loss in CSS,
+                             * later slow starts are standard ones. */
                             path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
-                            (IS_HYSTART_PP(cubic_state->hystart_alg)) ? IS_IN_CSS(cubic_state->hystart_pp_state) : 0);
+                            (IS_HYSTART_PP(cubic_state->hystart_alg) && cubic_state->ssthresh == UINT64_MAX) ? IS_IN_CSS(cubic_state->hystart_pp_state) : 0);
 
                             /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
                             if (path_x->cwin >= cubic_state->ssthresh) {

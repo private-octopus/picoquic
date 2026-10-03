@@ -443,9 +443,7 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
                 break;
             }
             case 'Y':
-                /* Reading digits into an uint64_t  */
-                bbr1_state->hystart_alg = atoi(x);
-                x++;
+                x = picoquic_cc_parse_hystart_option(x, &bbr1_state->hystart_alg);
                 break;
             case ':': /* Ignore. */
             default:
