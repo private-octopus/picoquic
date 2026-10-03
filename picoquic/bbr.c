@@ -586,6 +586,7 @@ static void BBRSetOptions(picoquic_bbr_state_t* bbr_state)
                     bbr_state->quantum_ratio = d;
                     break;
                 }
+                break;
             }
             case 'Y':
                 /* Reading digits into an uint64_t  */

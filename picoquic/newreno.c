@@ -270,10 +270,9 @@ static void picoquic_newreno_notify(
 
             if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 /* TODO app limited. */
-                /* TODO CSS increase. */
-                if (IS_HYSTART_PP(nr_state->hystart_alg)) {
+                if (IS_HYSTART_PP(nr_state->hystart_alg) && nr_state->nrss.alg_state == picoquic_newreno_alg_slow_start) {
                     path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
-                            (IS_HYSTART_PP(nr_state->hystart_alg)) ? IS_IN_CSS(nr_state->hystart_pp_state) : 0);
+                            IS_IN_CSS(nr_state->hystart_pp_state));
                     nr_state->nrss.cwin = path_x->cwin;
 
                     if (nr_state->nrss.cwin >= nr_state->nrss.ssthresh) {

@@ -570,12 +570,7 @@ static void dcubic_notify(
                             case picoquic_hystart_alg_hystart_pp_t:
                                 /* HyStart++. */
                                 if (picoquic_cc_hystart_pp_test(&cubic_state->hystart_pp_state, cnx, path_x, ack_state->rtt_measurement)) {
-                                    /* Enter CA. */
-                                    cubic_state->ssthresh = path_x->cwin;
-                                    cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
-                                    cubic_state->W_last_max = cubic_state->W_max;
-                                    cubic_state->W_reno = ((double)path_x->cwin);
-                                    path_x->is_ssthresh_initialized = 1;
+                                    /* Enter CA (sets ssthresh, W_max, W_reno and enters avoidance). */
                                     dcubic_exit_slow_start(cnx, path_x, notification, cubic_state, current_time);
                                 }
                                 break;

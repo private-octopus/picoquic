@@ -410,7 +410,8 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
         picoquic_prague_enter_recovery(cnx, path_x, pr_state, current_time);
     }
     else {
-        path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
+        path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged,
+            (IS_HYSTART_PP(pr_state->hystart_alg)) ? IS_IN_CSS(pr_state->hystart_pp_state) : 0);
 
 #if 0
         /* Not reachable: ssthresh is always UINT64_MAX whenever this function runs (it is only

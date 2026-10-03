@@ -440,6 +440,7 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
                     bbr1_state->quantum_ratio = d;
                     break;
                 }
+                break;
             }
             case 'Y':
                 /* Reading digits into an uint64_t  */
