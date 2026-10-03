@@ -356,8 +356,9 @@ void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
         /* In conservative slow start (CSS) */
         if (hystart_pp_state->current_round.rtt_sample_count >= PICOQUIC_HYSTART_PP_N_RTT_SAMPLE) {
             if (hystart_pp_state->current_round.current_round_min_rtt < hystart_pp_state->css_baseline_min_rtt) {
-                /* Resume slow start including hystart++. */
+                /* Resume slow start including hystart++. CSS_ROUNDS applies per CSS phase. */
                 hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
+                hystart_pp_state->css_round_count = 0;
             }
         }
     }

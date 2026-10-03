@@ -45,8 +45,8 @@ extern "C" {
  * L = infinity if paced, L = 8 if non-paced
  */
 /* Take a look at the RFC for more information. */
-#define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* msec */
-#define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* msec */
+#define PICOQUIC_HYSTART_PP_MIN_RTT_THRESH 4000 /* usec (4 msec) */
+#define PICOQUIC_HYSTART_PP_MAX_RTT_THRESH 16000 /* usec (16 msec) */
 #define PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR 8
 #define PICOQUIC_HYSTART_PP_N_RTT_SAMPLE 8
 #define PICOQUIC_HYSTART_PP_CSS_GROWTH_DIVISOR 4
