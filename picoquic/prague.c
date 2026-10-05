@@ -327,17 +327,22 @@ void picoquic_prague_process_ack(picoquic_cnx_t* cnx,
         int64_t delta_ce = pkt_ctx->ecn_ce_total_remote - pr_state->l4s_epoch_ce;
 
         if (delta_ect1 >= 0 && delta_ce >= 0 && delta_ce + delta_ect1 > 0 ) {
-            /* We are receiving ECN signals, so update alpha and do CWND reduction */
-            uint64_t delta_cwin;
+            /* We are receiving ECN signals, so update alpha */
             picoquic_prague_update_alpha(path_x, pr_state, delta_ect1, delta_ce, current_time);
 
-            /* Update the ssthresh and the CWIN */
-            delta_cwin = (path_x->cwin * pr_state->alpha) / 2048;
-            path_x->cwin -= delta_cwin;
-            if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-                path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+            /* Only reduce CWND if CE marks were received during this period.
+             * Alpha decays slowly, by 1/16th per period. Reducing the window on
+             * every period for which alpha is not zero would keep shrinking it
+             * for many round trips after the congestion is gone. */
+            if (delta_ce > 0) {
+                /* Update the ssthresh and the CWIN */
+                uint64_t delta_cwin = (path_x->cwin * pr_state->alpha) / 2048;
+                path_x->cwin -= delta_cwin;
+                if (path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
+                    path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+                }
+                pr_state->ssthresh = path_x->cwin;
             }
-            pr_state->ssthresh = path_x->cwin;
         }
         /* reset the era limits */
         picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
