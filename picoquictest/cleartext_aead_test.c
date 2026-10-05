@@ -919,7 +919,12 @@ int draft17_vector_test(void)
     uint8_t master_secret[256];
     uint8_t client_secret[256];
     uint8_t server_secret[256];
-    ptls_cipher_suite_t* cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v(0);
+    ptls_cipher_suite_t* cipher;
+
+    /* The cipher suites are only registered when the TLS API is initialized.
+     * Do it here, so the test does not depend on a previous test having done it. */
+    picoquic_tls_api_init();
+    cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v(0);
 
     if (cipher == NULL) {
         DBG_PRINTF("%s", "Could not find the default cipher suite.");

@@ -1241,6 +1241,20 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    /* In the "socket error on path 0" scenario, the failing path is only removed after the
+     * path challenge fails and the demotion delay expires. The transfer may well complete
+     * before that, so allow for some delay for the clearing of paths. */
+    if (ret == 0 && test_id == multipath_test_break3) {
+        uint64_t timeout = 1100000;
+
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
+
+        if (ret != 0)
+        {
+            DBG_PRINTF("Wait for %" PRIu64 "us returns %d\n", timeout, ret);
+        }
+    }
+
     if (ret == 0 && test_id == multipath_test_keep_alive) {
         ret = multipath_test_do_keep_alive(test_ctx, &simulated_time);
     }
@@ -1563,7 +1577,7 @@ int multipath_break1_test(void)
  */
 int multipath_socket_error_test(void)
 {
-    uint64_t max_completion_microsec = 11000000;
+    uint64_t max_completion_microsec = 11100000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break2);
 }
