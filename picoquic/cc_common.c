@@ -209,7 +209,7 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 
 uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
     /* App limited. We test that the path is CWIN limited rather than
-     * using a connection level flage, because this condition is
+     * using a connection level flag, because this condition is
      * path specific.
      */
     if (path_x->last_cwin_blocked_time < path_x->last_time_acked_data_frame_sent) {
