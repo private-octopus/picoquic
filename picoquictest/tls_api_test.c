@@ -1128,8 +1128,13 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     else {
         /* avoid too much variability by setting a "test order" of key exchange algorithms
         * before the client connection is created.
+        * The table of key exchange algorithms is only filled when the TLS API is
+        * initialized, which otherwise happens when the first QUIC context is created.
+        * Initialize it here, or the sort would do nothing for the first test run in
+        * a process, and that test would use the default order instead.
          */
         uint16_t keyex_test_order[2] = { PTLS_GROUP_SECP256R1, PTLS_GROUP_X25519 };
+        picoquic_tls_api_init();
         picoquic_sort_key_exchange_algorithms(keyex_test_order, 2);
 
         test_ctx = (picoquic_test_tls_api_ctx_t*)
