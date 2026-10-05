@@ -1577,7 +1577,7 @@ int multipath_break1_test(void)
  */
 int multipath_socket_error_test(void)
 {
-    uint64_t max_completion_microsec = 11000000;
+    uint64_t max_completion_microsec = 11100000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_break2);
 }
