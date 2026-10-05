@@ -1500,6 +1500,9 @@ static void cc_algo_reset_ramp_up(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
         *simulated_time += 20000;
         path_x->bandwidth_estimate = 10000000;
         path_x->last_time_acked_data_frame_sent = *simulated_time;
+        /* Not app-limited: required for reno/cubic/prague's slow-start growth (cc_common.c's
+         * picoquic_cc_slow_start_increase). */
+        path_x->last_cwin_blocked_time = *simulated_time;
         ack_state.rtt_measurement = 20000;
         ack_state.nb_bytes_acknowledged = 5000;
         ack_state.nb_bytes_delivered_since_packet_sent = 5000;
@@ -1533,9 +1536,6 @@ static int cc_algo_reset_test_one(picoquic_congestion_algorithm_t* ccalgo)
     else {
         picoquic_set_congestion_algorithm(cnx, ccalgo);
         cnx->cnx_state = picoquic_state_ready;
-        /* Not app-limited: required for reno/cubic/prague's slow-start growth (cc_common.c's
-         * picoquic_cc_slow_start_increase) and for fastcc's own growth gate. */
-        cnx->cwin_blocked = 1;
         cc_algo_reset_ramp_up(cnx, cnx->path[0], &simulated_time);
         cwin_fresh = cnx->path[0]->cwin;
     }
@@ -1550,7 +1550,6 @@ static int cc_algo_reset_test_one(picoquic_congestion_algorithm_t* ccalgo)
 
         picoquic_set_congestion_algorithm(cnx, ccalgo);
         cnx->cnx_state = picoquic_state_ready;
-        cnx->cwin_blocked = 1;
 
         /* Run the connection for a short while, so there is real learned state to discard. */
         cc_algo_reset_ramp_up(cnx, path_x, &simulated_time);
@@ -1634,8 +1633,10 @@ int cc_common_slow_start_increase_test(void)
         picoquic_path_t* path_x = cnx->path[0];
         uint64_t delta;
 
-        /* App limited: no growth, regardless of in_css. */
-        cnx->cwin_blocked = 0;
+        /* App limited: the path was last blocked by CWIN before the acked data was sent.
+         * No growth, regardless of in_css. */
+        path_x->last_cwin_blocked_time = 1000;
+        path_x->last_time_acked_data_frame_sent = 2000;
         delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 0);
         if (delta != 0) {
             DBG_PRINTF("App limited traditional slow start returns %" PRIu64 ", expected 0", delta);
@@ -1648,7 +1649,7 @@ int cc_common_slow_start_increase_test(void)
         }
 
         /* Not app limited: traditional slow start grows by the full delivered amount. */
-        cnx->cwin_blocked = 1;
+        path_x->last_cwin_blocked_time = 2000;
         delta = picoquic_cc_slow_start_increase_ex(path_x, 4000, 0);
         if (ret == 0 && delta != 4000) {
             DBG_PRINTF("Traditional slow start returns %" PRIu64 ", expected 4000", delta);

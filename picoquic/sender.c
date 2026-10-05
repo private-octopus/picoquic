@@ -698,6 +698,11 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
         path_x->is_cc_data_updated = 1;
+        if (path_x->bytes_in_transit >= path_x->cwin) {
+            /* This packet filled the congestion window: the path is CWIN limited,
+             * even if no further send attempt is made on it. */
+            path_x->last_cwin_blocked_time = current_time;
+        }
         /* Update the pacing data */
         picoquic_update_pacing_after_send(path_x, length, current_time);
     }

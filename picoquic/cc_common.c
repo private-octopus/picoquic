@@ -208,13 +208,17 @@ int picoquic_cc_hystart_test(picoquic_min_max_rtt_t* rtt_track, uint64_t rtt_mea
 }
 
 uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_delivered) {
-    /* App limited. */
-    /* TODO discuss
-     * path_x->cwin < path_x->bytes_in_transit returns false in cc code
-     * path_x->cnx->cwin_blocked is set to true
-     * (path_x->cwin < path_x->bytes_in_transit) != path_x->cnx->cwin_blocked?
+    /* App limited.
+     * The connection level flag cnx->cwin_blocked cannot be used here: it is
+     * reset on every call to picoquic_prepare_segment, for any path, and thus
+     * only describes the very last send attempt. Testing cwin against
+     * bytes_in_transit does not work either, because the acknowledged bytes
+     * were already removed from bytes_in_transit.
+     * Instead, consider the path CWIN limited if it was blocked by CWIN at or
+     * after the time at which the most recently acknowledged data was sent,
+     * i.e., at some point during the last round trip.
      */
-    if (!path_x->cnx->cwin_blocked) {
+    if (path_x->last_cwin_blocked_time < path_x->last_time_acked_data_frame_sent) {
         return 0;
     }
 
