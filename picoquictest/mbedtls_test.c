@@ -1191,6 +1191,195 @@ int mbedtls_sign_verify_test(void)
     return ret;
 }
 
+/*
+* ECDSA signature encoding test.
+* TLS 1.3 (RFC 8446, section 4.2.3) requires ECDSA signatures in
+* CertificateVerify to be DER encoded ECDSA-Sig-Value:
+*     SEQUENCE { r INTEGER, s INTEGER }
+* PSA's psa_sign_hash() produces the raw r || s form instead. Because the
+* mbedtls verifier in picoquic makes the same assumption, the sign/verify
+* self test above does not catch an encoding error. This test checks the
+* encoding directly, then verifies the signature with mbedtls_pk_verify()
+* against the public key in the certificate, which expects DER encoding
+* for ECDSA, like other TLS stacks.
+*/
+
+/* Parse a DER length starting at der[*x]; returns -1 on error. */
+static int test_ecdsa_der_parse_length(const uint8_t* der, size_t der_len, size_t* x, size_t* l)
+{
+    if (*x >= der_len) {
+        return -1;
+    }
+    if ((der[*x] & 0x80) == 0) {
+        *l = der[*x];
+        *x += 1;
+    }
+    else {
+        size_t nb_bytes = der[*x] & 0x7f;
+        *x += 1;
+        if (nb_bytes == 0 || nb_bytes > 2 || *x + nb_bytes > der_len) {
+            return -1;
+        }
+        *l = 0;
+        for (size_t i = 0; i < nb_bytes; i++) {
+            *l = (*l << 8) | der[*x];
+            *x += 1;
+        }
+        if (*l < 128) {
+            /* Not minimal encoding */
+            return -1;
+        }
+    }
+    return (*x + *l <= der_len) ? 0 : -1;
+}
+
+/* Parse a DER INTEGER at der[*x], check that it is a positive, minimally
+* encoded value of at most max_bytes significant bytes. */
+static int test_ecdsa_der_parse_integer(const uint8_t* der, size_t der_len, size_t* x, size_t max_bytes)
+{
+    size_t l = 0;
+
+    if (*x >= der_len || der[*x] != 0x02) {
+        return -1;
+    }
+    *x += 1;
+    if (test_ecdsa_der_parse_length(der, der_len, x, &l) != 0 || l == 0) {
+        return -1;
+    }
+    if ((der[*x] & 0x80) != 0) {
+        /* Negative value */
+        return -1;
+    }
+    if (l > 1 && der[*x] == 0 && (der[*x + 1] & 0x80) == 0) {
+        /* Not minimal encoding */
+        return -1;
+    }
+    if (l > max_bytes + 1 || (l == max_bytes + 1 && der[*x] != 0)) {
+        /* Larger than the curve order */
+        return -1;
+    }
+    *x += l;
+    return 0;
+}
+
+static int test_ecdsa_der_check_format(const uint8_t* sig, size_t sig_len, size_t curve_bytes)
+{
+    size_t x = 0;
+    size_t l = 0;
+
+    if (sig_len < 2 || sig[0] != 0x30) {
+        return -1;
+    }
+    x = 1;
+    if (test_ecdsa_der_parse_length(sig, sig_len, &x, &l) != 0 || x + l != sig_len) {
+        return -1;
+    }
+    if (test_ecdsa_der_parse_integer(sig, sig_len, &x, curve_bytes) != 0 ||
+        test_ecdsa_der_parse_integer(sig, sig_len, &x, curve_bytes) != 0) {
+        return -1;
+    }
+    return (x == sig_len) ? 0 : -1;
+}
+
+static int test_ecdsa_der_one(char const* key_path_ref, char const* cert_path_ref,
+    uint16_t expected_scheme, mbedtls_md_type_t md_type, size_t curve_bytes)
+{
+    int ret = 0;
+    char cert_path[512];
+    char key_path[512];
+    ptls_context_t ctx = { 0 };
+    mbedtls_x509_crt crt;
+    uint16_t selected_algorithm = 0;
+    uint8_t signature_smallbuf[256];
+    ptls_buffer_t signature;
+    ptls_iovec_t input;
+
+    input.base = (uint8_t*)test_sign_verify_message;
+    input.len = test_sign_verify_message_size;
+    mbedtls_x509_crt_init(&crt);
+    ptls_buffer_init(&signature, signature_smallbuf, sizeof(signature_smallbuf));
+
+    if ((ret = picoquic_get_input_path(cert_path, sizeof(cert_path), picoquic_solution_dir, cert_path_ref)) != 0 ||
+        (ret = picoquic_get_input_path(key_path, sizeof(key_path), picoquic_solution_dir, key_path_ref)) != 0) {
+        DBG_PRINTF("Cannot build path from %s or %s", cert_path_ref, key_path_ref);
+    }
+    else if ((ret = ptls_mbedtls_load_private_key(key_path, &ctx)) != 0) {
+        DBG_PRINTF("Cannot load private key from: %s, ret = %d", key_path, ret);
+    }
+    else if ((ret = mbedtls_x509_crt_parse_file(&crt, cert_path)) != 0) {
+        DBG_PRINTF("Cannot load certificate from: %s, ret = -0x%x", cert_path, (unsigned int)-ret);
+    }
+    else if ((ret = ctx.sign_certificate->cb(ctx.sign_certificate, NULL, NULL, &selected_algorithm, &signature, input,
+        test_sign_signature_algorithms, num_test_sign_signature_algorithms)) != 0) {
+        DBG_PRINTF("sign_certificate (%s) returns 0x%x (%d)", key_path, ret, ret);
+    }
+    else if (selected_algorithm != expected_scheme) {
+        DBG_PRINTF("sign_certificate (%s) selected 0x%04x, expected 0x%04x", key_path, selected_algorithm, expected_scheme);
+        ret = -1;
+    }
+    else if (test_ecdsa_der_check_format(signature.base, signature.off, curve_bytes) != 0) {
+        DBG_PRINTF("Signature (%s, 0x%04x, %zu bytes) is not a DER encoded ECDSA-Sig-Value",
+            key_path, selected_algorithm, signature.off);
+        ret = -1;
+    }
+    else {
+        unsigned char hash[MBEDTLS_MD_MAX_SIZE];
+        const mbedtls_md_info_t* md_info = mbedtls_md_info_from_type(md_type);
+
+        if (md_info == NULL ||
+            mbedtls_md(md_info, input.base, input.len, hash) != 0) {
+            DBG_PRINTF("Cannot hash message for %s", key_path);
+            ret = -1;
+        }
+        else if ((ret = mbedtls_pk_verify(&crt.pk, md_type, hash, mbedtls_md_get_size(md_info),
+            signature.base, signature.off)) != 0) {
+            DBG_PRINTF("mbedtls_pk_verify (%s, 0x%04x) returns -0x%x", cert_path, selected_algorithm, (unsigned int)-ret);
+            ret = -1;
+        }
+    }
+
+    ptls_buffer_dispose(&signature);
+    mbedtls_x509_crt_free(&crt);
+    if (ctx.sign_certificate != NULL) {
+        ptls_mbedtls_dispose_sign_certificate(ctx.sign_certificate);
+    }
+    return ret;
+}
+
+int mbedtls_ecdsa_der_test(void)
+{
+    int ret = 0;
+
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
+    }
+    else {
+        if (ret == 0) {
+            ret = test_ecdsa_der_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT,
+                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, 32);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_der_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT,
+                PTLS_SIGNATURE_ECDSA_SECP384R1_SHA384, MBEDTLS_MD_SHA384, 48);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_der_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT,
+                PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, MBEDTLS_MD_SHA512, 66);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_der_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT,
+                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, 32);
+        }
+
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
+    }
+    return ret;
+}
+
 int mbedtls_configure_test(void)
 {
     int ret = 0;
