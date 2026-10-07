@@ -684,6 +684,8 @@ int mbedtls_load_key_test(void);
 int mbedtls_load_key_fail_test(void);
 int mbedtls_retrieve_pubkey_test(void);
 int mbedtls_sign_verify_test(void);
+int mbedtls_ecdsa_der_test(void);
+int mbedtls_ecdsa_verify_test(void);
 int mbedtls_configure_test(void);
 #endif
 int mbedtls_test(void);
