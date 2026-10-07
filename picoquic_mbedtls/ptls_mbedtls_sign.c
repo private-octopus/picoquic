@@ -677,29 +677,36 @@ static int ptls_mbedtls_ecdsa_der_get_length(const uint8_t *der, size_t der_len,
 * Only positive, minimally encoded values that fit in coord_len bytes are accepted. */
 static int ptls_mbedtls_ecdsa_der_get_integer(const uint8_t *der, size_t der_len, size_t *x, uint8_t *raw, size_t coord_len)
 {
+    const uint8_t *v;
     size_t l = 0;
 
     if (*x >= der_len || der[*x] != 0x02) {
         return -1;
     }
     *x += 1;
-    if (ptls_mbedtls_ecdsa_der_get_length(der, der_len, x, &l) != 0 || l == 0 || (der[*x] & 0x80) != 0) {
+    if (ptls_mbedtls_ecdsa_der_get_length(der, der_len, x, &l) != 0 || l == 0) {
         return -1;
     }
-    if (der[*x] == 0) {
-        if (l > 1 && (der[*x + 1] & 0x80) == 0) {
+    v = der + *x;
+    *x += l;
+    if ((v[0] & 0x80) != 0) {
+        /* Negative value */
+        return -1;
+    }
+    if (l > 1 && v[0] == 0) {
+        if ((v[1] & 0x80) == 0) {
             /* Not minimally encoded */
             return -1;
         }
-        *x += 1;
-        l -= 1;
+        /* Skip the padding byte for integer with most significant byte > 127 */
+        v++;
+        l--;
     }
     if (l > coord_len) {
         return -1;
     }
     memset(raw, 0, coord_len - l);
-    memcpy(raw + coord_len - l, der + *x, l);
-    *x += l;
+    memcpy(raw + coord_len - l, v, l);
     return 0;
 }
 
