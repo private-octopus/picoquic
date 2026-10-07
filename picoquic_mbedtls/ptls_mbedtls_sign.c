@@ -636,7 +636,7 @@ static int ptls_mbedtls_ecdsa_raw_to_der(ptls_buffer_t *outbuf, const uint8_t *r
     uint8_t body[2 * (PSA_SIGNATURE_MAX_SIZE / 2 + 4)];
     uint8_t *p = body;
 
-    if (raw_len == 0 || (raw_len & 1) != 0 || coord_len > 127) {
+    if (raw_len == 0 || (raw_len & 1) != 0 || coord_len > 124) {
         return PTLS_ERROR_LIBRARY;
     }
     p = ptls_mbedtls_ecdsa_der_set_integer(p, raw, coord_len);
