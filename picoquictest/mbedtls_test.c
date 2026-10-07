@@ -1007,8 +1007,10 @@ static ptls_context_t* test_sign_set_ptls_context(char const* key_path, char con
     switch (config) {
     case 0:
         ctx->random_bytes = ptls_mbedtls_random_bytes;
+        break;
     case 1:
     default:
+        ctx->random_bytes = ptls_minicrypto_random_bytes;
         break;
     }
 
@@ -1282,7 +1284,7 @@ static int test_ecdsa_der_check_format(const uint8_t* sig, size_t sig_len, size_
 }
 
 static int test_ecdsa_der_one(char const* key_path_ref, char const* cert_path_ref,
-    uint16_t expected_scheme, mbedtls_md_type_t md_type, size_t curve_bytes)
+    uint16_t expected_scheme, mbedtls_md_type_t md_type, psa_algorithm_t hash_alg, size_t curve_bytes)
 {
     int ret = 0;
     char cert_path[512];
@@ -1323,15 +1325,14 @@ static int test_ecdsa_der_one(char const* key_path_ref, char const* cert_path_re
         ret = -1;
     }
     else {
-        unsigned char hash[MBEDTLS_MD_MAX_SIZE];
-        const mbedtls_md_info_t* md_info = mbedtls_md_info_from_type(md_type);
+        unsigned char hash[PSA_HASH_MAX_SIZE];
+        size_t hash_length = 0;
 
-        if (md_info == NULL ||
-            mbedtls_md(md_info, input.base, input.len, hash) != 0) {
+        if (psa_hash_compute(hash_alg, input.base, input.len, hash, sizeof(hash), &hash_length) != PSA_SUCCESS) {
             DBG_PRINTF("Cannot hash message for %s", key_path);
             ret = -1;
         }
-        else if ((ret = mbedtls_pk_verify(&crt.pk, md_type, hash, mbedtls_md_get_size(md_info),
+        else if ((ret = mbedtls_pk_verify(&crt.pk, md_type, hash, hash_length,
             signature.base, signature.off)) != 0) {
             DBG_PRINTF("mbedtls_pk_verify (%s, 0x%04x) returns -0x%x", cert_path, selected_algorithm, (unsigned int)-ret);
             ret = -1;
@@ -1356,22 +1357,226 @@ int mbedtls_ecdsa_der_test(void)
     else {
         if (ret == 0) {
             ret = test_ecdsa_der_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT,
-                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, 32);
+                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, PSA_ALG_SHA_256, 32);
         }
 
         if (ret == 0) {
             ret = test_ecdsa_der_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT,
-                PTLS_SIGNATURE_ECDSA_SECP384R1_SHA384, MBEDTLS_MD_SHA384, 48);
+                PTLS_SIGNATURE_ECDSA_SECP384R1_SHA384, MBEDTLS_MD_SHA384, PSA_ALG_SHA_384, 48);
         }
 
         if (ret == 0) {
             ret = test_ecdsa_der_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT,
-                PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, MBEDTLS_MD_SHA512, 66);
+                PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, MBEDTLS_MD_SHA512, PSA_ALG_SHA_512, 66);
         }
 
         if (ret == 0) {
             ret = test_ecdsa_der_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT,
-                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, 32);
+                PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, PSA_ALG_SHA_256, 32);
+        }
+
+        /* Deinitialize the PSA crypto library. */
+        ptls_mbedtls_free();
+    }
+    return ret;
+}
+
+/*
+* ECDSA verification test.
+* Check that the mbedtls verifier accepts DER encoded ECDSA signatures,
+* as sent by other TLS stacks, and rejects anything else -- in particular
+* the raw r || s form.
+* The P-256 signature is produced by the minicrypto signer, which shares no
+* code with the mbedtls backend. The P-384 and P-521 signatures are produced
+* by the mbedtls signer, whose encoding is verified independently by
+* mbedtls_ecdsa_der_test.
+*/
+
+/* Verify one signature on the client side, and check that it is accepted
+* or rejected as expected. Returns 0 if the expectation is met. */
+static int test_ecdsa_verify_expect(ptls_context_t* client_ctx, ptls_context_t* server_ctx, char const* server_name,
+    uint16_t algo, ptls_iovec_t input, const uint8_t* sig_bytes, size_t sig_len, int expect_accept, char const* label)
+{
+    int ret = 0;
+    int verify_ret = 0;
+    ptls_t* client_tls = ptls_new(client_ctx, 0);
+    int (*verify_cb)(void* verify_ctx, uint16_t algo, ptls_iovec_t data, ptls_iovec_t signature) = NULL;
+    void* verify_ctx = NULL;
+
+    if (client_tls == NULL) {
+        DBG_PRINTF("ptls_new (client, %s) returns NULL", server_name);
+        return -1;
+    }
+    /* The verify context is released after each use, so the certificate
+    * must be verified again for each signature. */
+    ret = client_ctx->verify_certificate->cb(client_ctx->verify_certificate, client_tls, server_name,
+        &verify_cb, &verify_ctx, server_ctx->certificates.list, server_ctx->certificates.count);
+    if (ret != 0) {
+        DBG_PRINTF("verify_certificate (%s) returns 0x%x (%d)", server_name, ret, ret);
+        if (verify_cb != NULL) {
+            ptls_iovec_t empty = { NULL, 0 };
+            (void)verify_cb(verify_ctx, 0, empty, empty);
+        }
+        ret = -1;
+    }
+    else {
+        ptls_iovec_t sig;
+        sig.base = (uint8_t*)sig_bytes;
+        sig.len = sig_len;
+        verify_ret = verify_cb(verify_ctx, algo, input, sig);
+        if ((verify_ret == 0) != (expect_accept != 0)) {
+            DBG_PRINTF("%s signature (%s, 0x%04x, %zu bytes): expected %s, got 0x%x",
+                label, server_name, algo, sig_len, (expect_accept) ? "accept" : "reject", verify_ret);
+            ret = -1;
+        }
+    }
+    ptls_free(client_tls);
+    return ret;
+}
+
+static int test_ecdsa_verify_one(char const* key_path_ref, char const* cert_path_ref, char const* server_name,
+    int server_config, uint16_t expected_scheme, psa_algorithm_t hash_alg)
+{
+    int ret = 0;
+    char cert_path[512];
+    char key_path[512];
+    char trusted_path[512];
+    ptls_context_t* server_ctx = NULL;
+    ptls_context_t* client_ctx = NULL;
+    ptls_t* server_tls = NULL;
+    uint16_t selected_algorithm = 0;
+    uint8_t signature_smallbuf[256];
+    ptls_buffer_t signature;
+    uint8_t mutated[256];
+    ptls_iovec_t input;
+
+    input.base = (uint8_t*)test_sign_verify_message;
+    input.len = test_sign_verify_message_size;
+    ptls_buffer_init(&signature, signature_smallbuf, sizeof(signature_smallbuf));
+
+    if ((ret = picoquic_get_input_path(cert_path, sizeof(cert_path), picoquic_solution_dir, cert_path_ref)) != 0 ||
+        (ret = picoquic_get_input_path(key_path, sizeof(key_path), picoquic_solution_dir, key_path_ref)) != 0 ||
+        (ret = picoquic_get_input_path(trusted_path, sizeof(trusted_path), picoquic_solution_dir, ASSET_TEST_CA)) != 0) {
+        DBG_PRINTF("Cannot build path from %s or %s", cert_path_ref, key_path_ref);
+    }
+    else if ((server_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 1, server_config)) == NULL ||
+        (client_ctx = test_sign_set_ptls_context(key_path, cert_path, trusted_path, 0, 0)) == NULL ||
+        (server_tls = ptls_new(server_ctx, 1)) == NULL) {
+        DBG_PRINTF("Cannot create contexts for %s", key_path);
+        ret = -1;
+    }
+    else if ((ret = server_ctx->sign_certificate->cb(server_ctx->sign_certificate, server_tls, NULL,
+        &selected_algorithm, &signature, input,
+        test_sign_signature_algorithms, num_test_sign_signature_algorithms)) != 0) {
+        DBG_PRINTF("sign_certificate (%s) returns 0x%x (%d)", key_path, ret, ret);
+    }
+    else if (selected_algorithm != expected_scheme || signature.off < 8 || signature.off + 2 > sizeof(mutated)) {
+        DBG_PRINTF("Unexpected signature (%s), scheme 0x%04x, %zu bytes", key_path, selected_algorithm, signature.off);
+        ret = -1;
+    }
+    else {
+        const uint8_t* der = signature.base;
+        size_t der_len = signature.off;
+
+        /* The valid DER signature must be accepted */
+        ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+            der, der_len, 1, "Valid DER");
+        /* Trailing data after the signature */
+        if (ret == 0) {
+            memcpy(mutated, der, der_len);
+            mutated[der_len] = 0;
+            ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                mutated, der_len + 1, 0, "Trailing byte");
+        }
+        /* Wrong SEQUENCE tag */
+        if (ret == 0) {
+            memcpy(mutated, der, der_len);
+            mutated[0] = 0x31;
+            ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                mutated, der_len, 0, "SET tag");
+        }
+        /* Truncated signature */
+        if (ret == 0) {
+            ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                der, der_len - 1, 0, "Truncated");
+        }
+        /* Corrupted value of s */
+        if (ret == 0) {
+            memcpy(mutated, der, der_len);
+            mutated[der_len - 1] ^= 1;
+            ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                mutated, der_len, 0, "Corrupted");
+        }
+        /* Non minimal encoding of r, with an extra leading zero. Only tested
+        * when the lengths are in short form, i.e., not for P-521. */
+        if (ret == 0 && der[1] < 0x7f && der[2] == 0x02 && der[3] < 0x7f) {
+            mutated[0] = 0x30;
+            mutated[1] = der[1] + 1;
+            mutated[2] = 0x02;
+            mutated[3] = der[3] + 1;
+            mutated[4] = 0;
+            memcpy(mutated + 5, der + 4, der_len - 4);
+            ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                mutated, der_len + 1, 0, "Non minimal DER");
+        }
+        /* The raw r || s form produced by PSA must be rejected. This requires
+        * access to the private key, so it is only tested with mbedtls. */
+        if (ret == 0 && server_config == 0) {
+            ptls_mbedtls_sign_certificate_t* signer = (ptls_mbedtls_sign_certificate_t*)
+                (((unsigned char*)server_ctx->sign_certificate) - offsetof(struct st_ptls_mbedtls_sign_certificate_t, super));
+            uint8_t hash[PSA_HASH_MAX_SIZE];
+            size_t hash_length = 0;
+            size_t raw_length = 0;
+
+            if (psa_hash_compute(hash_alg, input.base, input.len, hash, sizeof(hash), &hash_length) != PSA_SUCCESS ||
+                psa_sign_hash(signer->key_id, psa_get_key_algorithm(&signer->attributes), hash, hash_length,
+                    mutated, sizeof(mutated), &raw_length) != PSA_SUCCESS) {
+                DBG_PRINTF("Cannot compute raw signature (%s)", key_path);
+                ret = -1;
+            }
+            else {
+                ret = test_ecdsa_verify_expect(client_ctx, server_ctx, server_name, selected_algorithm, input,
+                    mutated, raw_length, 0, "Raw r || s");
+            }
+        }
+    }
+
+    ptls_buffer_dispose(&signature);
+    if (server_tls != NULL) {
+        ptls_free(server_tls);
+    }
+    test_sign_free_context(server_ctx, server_config);
+    test_sign_free_context(client_ctx, 0);
+    return ret;
+}
+
+int mbedtls_ecdsa_verify_test(void)
+{
+    int ret = 0;
+
+    if ((ret = ptls_mbedtls_init()) != 0) {
+        DBG_PRINTF("%s", "psa_crypto_init fails.");
+    }
+    else {
+        /* P-256 signature produced by minicrypto */
+        if (ret == 0) {
+            ret = test_ecdsa_verify_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT, ASSET_SECP256R1_PKCS8_NAME,
+                1, PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PSA_ALG_SHA_256);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_verify_one(ASSET_SECP256R1_KEY, ASSET_SECP256R1_CERT, ASSET_SECP256R1_NAME,
+                0, PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, PSA_ALG_SHA_256);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_verify_one(ASSET_SECP384R1_KEY, ASSET_SECP384R1_CERT, ASSET_SECP384R1_NAME,
+                0, PTLS_SIGNATURE_ECDSA_SECP384R1_SHA384, PSA_ALG_SHA_384);
+        }
+
+        if (ret == 0) {
+            ret = test_ecdsa_verify_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT, ASSET_SECP521R1_NAME,
+                0, PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, PSA_ALG_SHA_512);
         }
 
         /* Deinitialize the PSA crypto library. */

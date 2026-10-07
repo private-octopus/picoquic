@@ -717,6 +717,7 @@ static const picoquic_test_def_t test_table[] = {
     { "mbedtls_retrieve_pubkey", mbedtls_retrieve_pubkey_test },
     { "mbedtls_sign_verify", mbedtls_sign_verify_test },
     { "mbedtls_ecdsa_der", mbedtls_ecdsa_der_test },
+    { "mbedtls_ecdsa_verify", mbedtls_ecdsa_verify_test },
     { "mbedtls_configure", mbedtls_configure_test },
 #endif
     { "openssl_cert", openssl_cert_test },
