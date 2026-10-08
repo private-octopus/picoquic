@@ -501,6 +501,7 @@ const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const 
         (bytes = picoquic_parse_reset_stream_at_frame(bytes, bytes_max, &stream_id, &error_code_64, &final_offset, &reliable_size)) == NULL) {
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             picoquic_frame_type_reset_stream);
+        bytes = NULL;
     }
     else {
         bytes = picoquic_apply_reset_stream_frame(cnx, bytes, error_code_64, stream_id, final_offset, reliable_size);
@@ -876,11 +877,14 @@ const uint8_t* picoquic_parse_retire_connection_id_frame(const uint8_t* bytes, c
 }
 
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, int is_mp)
+    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp)
 {
     /* store the connection ID in order to support migration. */
     uint64_t sequence;
     uint64_t unique_path_id;
+    /* The CID that must not be retired is the DCID of the arriving packet */
+    picoquic_local_cnxid_t* arrival_cid = (l_cid != NULL) ? l_cid : path_x->first_tuple->p_local_cnxid;
+    uint64_t arrival_path_id = (l_cid != NULL) ? l_cid->path_id : path_x->unique_path_id;
 
     if (is_mp && !cnx->is_multipath_enabled) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
@@ -892,9 +896,9 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
             (is_mp)?picoquic_frame_type_path_retire_connection_id:picoquic_frame_type_retire_connection_id);
     }
-    else if (path_x->first_tuple->p_local_cnxid != NULL &&
-        (!is_mp || path_x->unique_path_id == unique_path_id) &&
-        sequence == path_x->first_tuple->p_local_cnxid->sequence) {
+    else if (arrival_cid != NULL &&
+        (!is_mp || arrival_path_id == unique_path_id) &&
+        sequence == arrival_cid->sequence) {
         /* Cannot delete the path through which it arrives */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             (is_mp) ? picoquic_frame_type_path_retire_connection_id : picoquic_frame_type_retire_connection_id,
@@ -5578,11 +5582,11 @@ const uint8_t* picoquic_skip_immediate_ack_frame(const uint8_t* bytes, const uin
     return bytes;
 }
 
-const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t * cnx,
+const uint8_t* picoquic_decode_immediate_ack_frame(const uint8_t* bytes, picoquic_cnx_t * cnx,
     picoquic_path_t * path_x, uint64_t current_time)
 {
     /* This code assumes that the frame type is already skipped */
-    if (bytes != NULL && bytes < bytes_max){
+    if (bytes != NULL){
         if (!cnx->is_ack_frequency_negotiated) {
             picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
                 picoquic_frame_type_immediate_ack);
@@ -6345,6 +6349,7 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
         /* Frame is unexpected */
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION,
             ftype, "address discovery not negotiated as receiver");
+        bytes = NULL;
     }
     else if ((bytes = picoquic_parse_observed_address_frame(bytes, bytes_max, ftype, &sequence, &addr, &port)) == NULL) {
         /* Bad frame encoding */
@@ -6549,6 +6554,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
     struct sockaddr* addr_from,
     struct sockaddr* addr_to,
     uint64_t pn64, int path_is_not_allocated,
+    picoquic_local_cnxid_t* l_cid,
     uint64_t current_time)
 {
     const uint8_t *bytes_max = bytes + bytes_maxsize;
@@ -6694,7 +6700,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_retire_connection_id:
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, 0);
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, l_cid, 0);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_handshake_done:
@@ -6729,7 +6735,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_immediate_ack:
-                            bytes = picoquic_decode_immediate_ack_frame(bytes, bytes_max, cnx, path_x, current_time);
+                            bytes = picoquic_decode_immediate_ack_frame(bytes, cnx, path_x, current_time);
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_time_stamp:
@@ -6770,7 +6776,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_path_retire_connection_id:
-                            bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, path_x, 1);
+                            bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, path_x, l_cid, 1);
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_bdp:

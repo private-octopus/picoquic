@@ -609,6 +609,7 @@ int app_limited_bbr_post_idle_test(void);
 int app_limited_cubic_test(void);
 int app_limited_reno_test(void);
 int app_limited_rpr_test(void);
+int app_limited_cubic_idle_test(void);
 int cwin_max_test(void);
 int bbr1_seed_bdp_test(void);
 int bbr1_seed_startup_test(void);
@@ -675,6 +676,7 @@ int wifi_reno_hard_test(void);
 int wifi_reno_long_test(void);
 int migration_controlled_test(void);
 int migration_mtu_drop_test(void);
+int migration_retire_old_cid_test(void);
 int minicrypto_test(void);
 int minicrypto_is_last_test(void);
 #ifdef PICOQUIC_WITH_MBEDTLS
@@ -683,6 +685,8 @@ int mbedtls_load_key_test(void);
 int mbedtls_load_key_fail_test(void);
 int mbedtls_retrieve_pubkey_test(void);
 int mbedtls_sign_verify_test(void);
+int mbedtls_ecdsa_der_test(void);
+int mbedtls_ecdsa_verify_test(void);
 int mbedtls_configure_test(void);
 #endif
 int mbedtls_test(void);

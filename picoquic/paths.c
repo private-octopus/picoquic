@@ -30,6 +30,70 @@
 
 uint64_t  picoquic_tuple_challenge_time(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 
+/* The challenge of this tuple failed.
+ * Update its status, and move it to the end of the list.
+ */
+static void picoquic_set_tuple_challenge_failed(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time)
+{
+    picoquic_tuple_t* next_tuple = path_x->first_tuple;
+    picoquic_tuple_t* previous_tuple = NULL;
+
+    tuple->challenge_failed = 1;
+    tuple->demotion_time = current_time + (path_x->retransmit_timer << PICOQUIC_CHALLENGE_REPEAT_MAX);
+
+    while (next_tuple != NULL) {
+        if (next_tuple == tuple) {
+            if (previous_tuple == NULL) {
+                path_x->first_tuple = next_tuple->next_tuple;
+                next_tuple = path_x->first_tuple;
+            }
+            else
+            {
+                previous_tuple->next_tuple = next_tuple->next_tuple;
+                next_tuple = previous_tuple->next_tuple;
+            }
+        }
+        else {
+            previous_tuple = next_tuple;
+            next_tuple = next_tuple->next_tuple;
+
+        }
+    }
+    if (previous_tuple == NULL) {
+        path_x->first_tuple = tuple;
+    }
+    else
+    {
+        previous_tuple->next_tuple = tuple;
+    }
+    tuple->next_tuple = NULL;
+}
+
+/* picoquic_check_tuple_challenge_expired:
+ * Mark as failed the tuples for which all challenge repeats were sent and the
+ * last one timed out. This is done when selecting the next path, before checking
+ * whether a path needs to be abandoned, so that the failure is acted upon in the
+ * same call. Otherwise, an idle connection would only notice the failed
+ * challenge on its next wake up, i.e., after some unrelated event.
+ */
+static void picoquic_check_tuple_challenge_expired(picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_tuple_t* tuple = path_x->first_tuple;
+
+    while (tuple != NULL) {
+        if (!tuple->challenge_failed && tuple->challenge_required && !tuple->challenge_verified &&
+            tuple->challenge_repeat_count >= PICOQUIC_CHALLENGE_REPEAT_MAX &&
+            current_time >= picoquic_tuple_challenge_time(path_x, tuple, current_time)) {
+            /* The failed tuple moves to the end of the list: restart from the top. */
+            picoquic_set_tuple_challenge_failed(path_x, tuple, current_time);
+            tuple = path_x->first_tuple;
+        }
+        else {
+            tuple = tuple->next_tuple;
+        }
+    }
+}
+
 uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_tuple_t* tuple,
     uint8_t* bytes_next, uint8_t* bytes_max,
@@ -84,41 +148,9 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 }
             }
             else {
-                /* This particular tuple failed.
-                 * Update its status, and move it to the end of the list.
-                 */
-                picoquic_tuple_t* next_tuple = path_x->first_tuple;
-                picoquic_tuple_t* previous_tuple = NULL;
-
-                tuple->challenge_failed = 1;
-                tuple->demotion_time = current_time + (path_x->retransmit_timer << PICOQUIC_CHALLENGE_REPEAT_MAX);
-
-                while (next_tuple != NULL) {
-                    if (next_tuple == tuple) {
-                        if (previous_tuple == NULL) {
-                            path_x->first_tuple = next_tuple->next_tuple;
-                            next_tuple = path_x->first_tuple;
-                        }
-                        else
-                        {
-                            previous_tuple->next_tuple = next_tuple->next_tuple;
-                            next_tuple = previous_tuple->next_tuple;
-                        }
-                    }
-                    else {
-                        previous_tuple = next_tuple;
-                        next_tuple = next_tuple->next_tuple;
-
-                    }
-                }
-                if (previous_tuple == NULL) {
-                    path_x->first_tuple = tuple;
-                }
-                else
-                {
-                    previous_tuple->next_tuple = tuple;
-                }
-                tuple->next_tuple = NULL;
+                /* This particular tuple failed. Normally, this is already detected
+                 * when selecting the next path, see picoquic_check_tuple_challenge_expired. */
+                picoquic_set_tuple_challenge_failed(path_x, tuple, current_time);
             }
         }
     }
@@ -529,7 +561,13 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         if (cnx->path[path_index]->path_is_demoted) {
             continue;
         }
-        else if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
+
+        if (path_index == 0 || cnx->cnx_state >= picoquic_state_ready) {
+            /* Detect the challenges that just failed, before deciding to abandon the path */
+            picoquic_check_tuple_challenge_expired(cnx->path[path_index], current_time);
+        }
+
+        if (cnx->is_multipath_enabled && cnx->path[path_index]->first_tuple->challenge_failed && !cnx->path[path_index]->path_abandon_sent) {
             if (picoquic_abandon_path(cnx, cnx->path[path_index]->unique_path_id,
                 PICOQUIC_TRANSPORT_UNSTABLE_INTERFACE, current_time) == PICOQUIC_ERROR_PATH_LAST_REMAINING) {
                 /* This was the only path left, and it just failed validation.

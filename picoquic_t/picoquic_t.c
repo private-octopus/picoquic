@@ -641,6 +641,7 @@ static const picoquic_test_def_t test_table[] = {
     { "app_limited_cubic", app_limited_cubic_test },
     { "app_limited_reno", app_limited_reno_test },
     { "app_limited_rpr", app_limited_rpr_test },
+    { "app_limited_cubic_idle", app_limited_cubic_idle_test },
     { "cwin_max", cwin_max_test },
     { "bbr1_seed_bdp", bbr1_seed_bdp_test },
     { "bbr1_seed_startup", bbr1_seed_startup_test },
@@ -706,6 +707,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wifi_reno_long", wifi_reno_long_test },
     { "migration_controlled", migration_controlled_test },
     { "migration_mtu_drop", migration_mtu_drop_test },
+    { "migration_retire_old_cid", migration_retire_old_cid_test },
     { "minicrypto", minicrypto_test },
     { "minicrypto_is_last", minicrypto_is_last_test },
 #ifdef PICOQUIC_WITH_MBEDTLS
@@ -715,6 +717,8 @@ static const picoquic_test_def_t test_table[] = {
     { "mbedtls_load_key_fail", mbedtls_load_key_fail_test },
     { "mbedtls_retrieve_pubkey", mbedtls_retrieve_pubkey_test },
     { "mbedtls_sign_verify", mbedtls_sign_verify_test },
+    { "mbedtls_ecdsa_der", mbedtls_ecdsa_der_test },
+    { "mbedtls_ecdsa_verify", mbedtls_ecdsa_verify_test },
     { "mbedtls_configure", mbedtls_configure_test },
 #endif
     { "openssl_cert", openssl_cert_test },

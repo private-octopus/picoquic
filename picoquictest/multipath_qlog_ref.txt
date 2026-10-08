@@ -432,7 +432,6 @@
     "frame_type": "max_path_id", "max_path_id": 3}, { 
     "frame_type": "ping"}, { 
     "frame_type": "padding"}]}],
-[246523, 0, "recovery", "metrics_updated", {"cwnd": 3072,"pacing_rate": 11520000000,"smoothed_rtt": 22076}],
 [246523, 0, "transport", "datagram_sent", { "byte_length": 55}],
 [263894, 0, "transport", "datagram_received", { "byte_length": 55}],
 [263894, 0, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 55, "packet_number": 16, "dcid": "0a09080706050403" }, "frames": [{ 
@@ -462,7 +461,7 @@
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 5, "retire_before": 0, "connection_id": "2608070605040302", "reset_token": "8305b341d3a2a1014f4461e91249557a"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 6, "retire_before": 0, "connection_id": "2708070605040302", "reset_token": "82866b14f1bddf751f4b21435c1d4798"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 7, "retire_before": 0, "connection_id": "2808070605040302", "reset_token": "3136eac1cba8d0f2cee4455bf90a6672"}]}],
-[266789, 0, "recovery", "metrics_updated", {"bytes_in_flight": 267,"smoothed_rtt": 21849,"latest_rtt": 20266}],
+[266789, 0, "recovery", "metrics_updated", {"pacing_rate": 10008688,"bytes_in_flight": 267,"smoothed_rtt": 21849,"latest_rtt": 20266}],
 [266789, 0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 21, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 33348}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[10, 17]]}, { 
@@ -474,7 +473,7 @@
     "frame_type": "time_stamp", "time_stamp": 35979}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[20, 21]]}, { 
     "frame_type": "padding"}]}],
-[286875, 0, "recovery", "metrics_updated", {"bytes_in_flight": 0,"smoothed_rtt": 21628,"latest_rtt": 20086}],
+[286875, 0, "recovery", "metrics_updated", {"pacing_rate": 10105263,"bytes_in_flight": 0,"smoothed_rtt": 21628,"latest_rtt": 20086}],
 [356607, 0, "transport", "datagram_received", { "byte_length": 42}],
 [356607, 0, "transport", "packet_received", { "packet_type": "1RTT", "header": { "packet_size": 42, "packet_number": 19, "dcid": "0a09080706050403" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 44696}, { 

@@ -352,23 +352,28 @@ static uint8_t test_frame_reset_stream_at[] = {
 
 #define TEST_SKIP_ITEM_OLD(n, x, a, l, e, err, skip_err)    \
     {                                                       \
-        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0       \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, 0, parse_option_none \
     }
 
 #define TEST_SKIP_ITEM_OLD_MPATH(n, x, a, l, e, err, skip_err, mpath) \
     {                                                             \
-        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0         \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, 0, parse_option_none \
     }
 
 
 #define TEST_SKIP_ITEM(n, x, a, l, e, err, skip_err, varints) \
     {                                                         \
-        n, x, sizeof(x), a, l, e, err, skip_err, 0, varints   \
+        n, x, sizeof(x), a, l, e, err, skip_err, 0, varints, parse_option_none \
     }
 
 #define TEST_SKIP_ITEM_MPATH(n, x, a, l, e, err, skip_err, mpath, varints) \
     {                                                                      \
-        n, x, sizeof(x), a, l, e, err, skip_err, mpath, varints         \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, varints, parse_option_none \
+    }
+
+#define TEST_SKIP_ITEM_OPTION(n, x, a, l, e, err, skip_err, mpath, varints, option) \
+    {                                                                               \
+        n, x, sizeof(x), a, l, e, err, skip_err, mpath, varints, option             \
     }
 
 test_skip_frames_t test_skip_list[] = {
@@ -402,14 +407,14 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("crypto_hs", test_frame_type_crypto_hs, 0, 0, 2, 0, 0, 2),
     TEST_SKIP_ITEM("retire_connection_id", test_frame_type_retire_connection_id, 0, 0, 3, 0, 0, 1),
 
-    TEST_SKIP_ITEM("datagram", test_frame_type_datagram, 0, 1, 3, 0, 0, 0),
-    TEST_SKIP_ITEM("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_OPTION("datagram", test_frame_type_datagram, 0, 1, 3, 0, 0, 0, 0, parse_option_datagram),
+    TEST_SKIP_ITEM_OPTION("datagram_l", test_frame_type_datagram_l, 0, 0, 3, 0, 0, 0, 1, parse_option_datagram),
     TEST_SKIP_ITEM("handshake_done", test_frame_type_handshake_done, 0, 0, 3, 0, 0, 0),
-    TEST_SKIP_ITEM("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0, 4),
-    TEST_SKIP_ITEM("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0, 4),
+    TEST_SKIP_ITEM_OPTION("ack_frequency", test_frame_type_ack_frequency, 0, 0, 3, 0, 0, 0, 4, parse_option_ack_frequency),
+    TEST_SKIP_ITEM_OPTION("ack_frequency_t5", test_frame_type_ack_frequency_t5, 0, 0, 3, 0, 0, 0, 4, parse_option_ack_frequency),
 
-    TEST_SKIP_ITEM("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0, 0),
-    TEST_SKIP_ITEM("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0, 1),
+    TEST_SKIP_ITEM_OPTION("immediate_ack", test_frame_type_immediate_ack, 0, 0, 3, 0, 0, 0, 0, parse_option_ack_frequency),
+    TEST_SKIP_ITEM_OPTION("time_stamp", test_frame_type_time_stamp, 1, 0, 3, 0, 0, 0, 1, parse_option_time_stamp),
     TEST_SKIP_ITEM_MPATH("path_abandon_0", test_frame_type_path_abandon_0, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("path_abandon_1", test_frame_type_path_abandon_1, 0, 0, 3, 0, 0, 1, 2),
     TEST_SKIP_ITEM_MPATH("path_backup", test_frame_type_path_backup, 0, 0, 3, 0, 0, 1, 2),
@@ -421,12 +426,12 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM_MPATH("paths blocked", test_frame_type_paths_blocked, 0, 0, 3, 0, 0, 1, 1),
     TEST_SKIP_ITEM_MPATH("path cid blocked", test_frame_type_path_cid_blocked, 0, 0, 3, 0, 0, 1, 1),
 
-    TEST_SKIP_ITEM("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0, 4),
-    TEST_SKIP_ITEM_MPATH("observed_address_v4", test_frame_observed_address_v4, 0, 0, 3, 0, 0, 2, 1),
-    TEST_SKIP_ITEM_MPATH("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1),
+    TEST_SKIP_ITEM_OPTION("bdp", test_frame_type_bdp, 0, 0, 3, 0, 0, 0, 4, parse_option_bdp),
+    TEST_SKIP_ITEM_OPTION("observed_address_v4", test_frame_observed_address_v4, 0, 0, 3, 0, 0, 2, 1, parse_option_address_discovery),
+    TEST_SKIP_ITEM_OPTION("observed_address_v6", test_frame_observed_address_v6, 0, 0, 3, 0, 0, 2, 1, parse_option_address_discovery),
     TEST_SKIP_ITEM_MPATH("path_ack", test_frame_type_path_ack, 1, 0, 3, 0, 0, 1, 9),
     TEST_SKIP_ITEM_MPATH("path_ack_ecn", test_frame_type_path_ack_ecn, 1, 0, 3, 0, 0, 1, 12),
-    TEST_SKIP_ITEM("reset_stream_at", test_frame_reset_stream_at, 0, 0, 3, 0, 0, 3)
+    TEST_SKIP_ITEM_OPTION("reset_stream_at", test_frame_reset_stream_at, 0, 0, 3, 0, 0, 0, 3, parse_option_reset_stream_at)
 };
 
 size_t nb_test_skip_list = sizeof(test_skip_list) / sizeof(test_skip_frames_t);
@@ -947,8 +952,36 @@ void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int
     }
 }
 
-int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t * buffer, size_t byte_max, int epoch, int* ack_needed, uint64_t * err, int mpath)
+/* Clear one of the options set by parse_test_packet_cnx_fix */
+static void parse_test_clear_option(picoquic_cnx_t* cnx, parse_option_enum option_off)
+{
+    switch (option_off) {
+    case parse_option_time_stamp:
+        cnx->is_time_stamp_enabled = 0;
+        break;
+    case parse_option_datagram:
+        cnx->local_parameters.max_datagram_frame_size = 0;
+        break;
+    case parse_option_ack_frequency:
+        cnx->is_ack_frequency_negotiated = 0;
+        break;
+    case parse_option_bdp:
+        cnx->local_parameters.enable_bdp_frame = 0;
+        break;
+    case parse_option_address_discovery:
+        cnx->is_address_discovery_provider = 0;
+        cnx->is_address_discovery_receiver = 0;
+        break;
+    case parse_option_reset_stream_at:
+        cnx->is_reset_stream_at_enabled = 0;
+        break;
+    default:
+        break;
+    }
+}
+
+static int parse_test_packet_ex(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t * buffer, size_t byte_max, int epoch, int* ack_needed, uint64_t * err, int mpath, parse_option_enum option_off)
 {
     int ret = 0;
     picoquic_packet_context_enum pc = picoquic_context_from_epoch(epoch);
@@ -965,9 +998,10 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
     }
     else {
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        parse_test_clear_option(cnx, option_off);
 
         ret = picoquic_decode_frames(cnx, cnx->path[0], buffer, byte_max, NULL, epoch, 
-            NULL, NULL, 0, 0, simulated_time);
+            NULL, NULL, 0, 0, NULL, simulated_time);
 
         *ack_needed = cnx->ack_ctx[pc].act[0].ack_needed;
 
@@ -983,6 +1017,12 @@ int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t
     }
 
     return ret;
+}
+
+int parse_test_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t byte_max, int epoch, int* ack_needed, uint64_t* err, int mpath)
+{
+    return parse_test_packet_ex(qclient, saddr, simulated_time, buffer, byte_max, epoch, ack_needed, err, mpath, parse_option_none);
 }
 
 int parse_frame_varint_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
@@ -1026,6 +1066,53 @@ int parse_frame_not_mpath_test(picoquic_quic_t* qclient, struct sockaddr* saddr,
                 test_skip_list[i].epoch, &ack_needed, &err, 0) == 0) {
                 ret = -1;
             }
+        }
+    }
+    return ret;
+}
+
+/* With each option cleared, frames requiring it must be rejected and the others must decode as before */
+int parse_frame_option_off_test(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
+    uint8_t* buffer, size_t buffer_size)
+{
+    int ret = 0;
+
+    for (int option = parse_option_none + 1; ret == 0 && option < parse_option_max; option++) {
+        int nb_gated = 0;
+
+        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+            size_t len = test_skip_list[i].len;
+            int ack_needed = 0;
+            uint64_t err = 0;
+            int is_gated = (test_skip_list[i].option == (parse_option_enum)option);
+            int ret_with = 0;
+            int ret_without = 0;
+
+            if (len > buffer_size) {
+                DBG_PRINTF("Test frame <%s> is too long for buffer, len = %d\n", test_skip_list[i].name, (int)len);
+                ret = -1;
+            }
+            else {
+                nb_gated += is_gated;
+                memcpy(buffer, test_skip_list[i].val, len);
+                ret_with = parse_test_packet_ex(qclient, saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath, parse_option_none);
+                memcpy(buffer, test_skip_list[i].val, len);
+                ret_without = parse_test_packet_ex(qclient, saddr, simulated_time, buffer, len,
+                    test_skip_list[i].epoch, &ack_needed, &err, test_skip_list[i].mpath, (parse_option_enum)option);
+                if (is_gated && ret_without == 0) {
+                    DBG_PRINTF("Frame <%s> accepted without option %d\n", test_skip_list[i].name, option);
+                    ret = -1;
+                }
+                else if (!is_gated && (ret_without == 0) != (ret_with == 0)) {
+                    DBG_PRINTF("Frame <%s> result changes without option %d\n", test_skip_list[i].name, option);
+                    ret = -1;
+                }
+            }
+        }
+        if (ret == 0 && nb_gated == 0) {
+            DBG_PRINTF("No test frame requires option %d\n", option);
+            ret = -1;
         }
     }
     return ret;
@@ -1157,6 +1244,12 @@ int parse_frame_test(void)
             buffer, sizeof(buffer));
     }
 
+    /* Decode the frames that require an option, with that option not set */
+    if (ret == 0) {
+        ret = parse_frame_option_off_test(qclient, (struct sockaddr*)&saddr, simulated_time,
+            buffer, sizeof(buffer));
+    }
+
     /* Verify that 0rtt tests are properly implemented */
     if (ret == 0) {
         ret = parse_frame_0rtt_test(qclient, (struct sockaddr*)&saddr, simulated_time,
@@ -1265,7 +1358,7 @@ int parse_frame_test(void)
 }
 
 int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    uint8_t* bytes, size_t bytes_max, int epoch, int mpath, int expect_error)
+    uint8_t* bytes, size_t bytes_max, int epoch, int mpath, parse_option_enum option_off, int expect_error)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
@@ -1299,7 +1392,8 @@ int frame_repeat_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
         }
 
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
-       
+        parse_test_clear_option(cnx, option_off);
+
         c_ret = picoquic_check_frame_needs_repeat(cnx, bytes, bytes_max, p_type,
             &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed);
         
@@ -1331,17 +1425,62 @@ int frames_repeat_test(void)
         ret = -1;
     }
     else {
-        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
-            size_t len = test_skip_list[i].len;
-            uint64_t frame_type = 0;
-            const uint8_t* type_byte = NULL;
-            if ((type_byte = picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type)) != NULL) {
-                memcpy(buffer, test_skip_list[i].val, len);
-                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
-                    test_skip_list[i].epoch, test_skip_list[i].mpath, 0) != 0) {
-                    ret = -1;
+        /* Frames may be corrupted or injected when fuzzing, so also test with each option cleared */
+        for (int option = parse_option_none; ret == 0 && option < parse_option_max; option++) {
+            parse_option_enum option_off = (parse_option_enum)option;
+
+            for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+                size_t len = test_skip_list[i].len;
+                uint64_t frame_type = 0;
+                const uint8_t* type_byte = NULL;
+                if ((type_byte = picoquic_frames_varint_decode(test_skip_list[i].val, test_skip_list[i].val + test_skip_list[i].len, &frame_type)) != NULL) {
+                    memcpy(buffer, test_skip_list[i].val, len);
+                    if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
+                        test_skip_list[i].epoch, test_skip_list[i].mpath, option_off, 0) != 0) {
+                        DBG_PRINTF("Repeat check of frame <%s> fails, option %d off\n", test_skip_list[i].name, option);
+                        ret = -1;
+                    }
+                    else if (len > 1 && !test_skip_list[i].is_pure_ack) {
+                        switch (frame_type) {
+                        case picoquic_frame_type_connection_close:
+                        case picoquic_frame_type_application_close:
+                        case picoquic_frame_type_new_token:
+                        case picoquic_frame_type_path_abandon:
+                        case picoquic_frame_type_bdp:
+                        case picoquic_frame_type_observed_address_v4:
+                        case picoquic_frame_type_observed_address_v6:
+                            break;
+                        default:
+                            if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
+                                test_skip_list[i].epoch, test_skip_list[i].mpath, option_off, 1) != 0) {
+                                if (test_skip_list[i].nb_varints > 0) {
+                                    /* Try again with shorter length */
+                                    size_t type_len = type_byte - test_skip_list[i].val;
+                                    if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, type_len,
+                                        test_skip_list[i].epoch, test_skip_list[i].mpath, option_off, 1) != 0) {
+                                        DBG_PRINTF("Repeat check of truncated <%s> fails, option %d off\n", test_skip_list[i].name, option);
+                                        ret = -1;
+                                    }
+                                }
+                                else {
+                                    DBG_PRINTF("Repeat check of truncated <%s> fails, option %d off\n", test_skip_list[i].name, option);
+                                    ret = -1;
+                                }
+                            }
+                        }
+                    }
                 }
-                else if (len > 1 && !test_skip_list[i].is_pure_ack) {
+            }
+
+            /* Feed the known-bad frames through the same path, to exercise the "parse error" branch of each picoquic_check_XXXX_needs_repeat function.
+             * Some frame types are never content-checked by picoquic_check_frame_needs_repeat -- either because they are pure acks,
+             * or because the "needs repeat" logic for that type does not parse the frame body. Skip those, as the truncation loop above does. */
+            for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
+                size_t len = test_frame_error_list[i].len;
+                uint64_t frame_type = 0;
+
+                if (!test_frame_error_list[i].is_pure_ack &&
+                    picoquic_frames_varint_decode(test_frame_error_list[i].val, test_frame_error_list[i].val + len, &frame_type) != NULL) {
                     switch (frame_type) {
                     case picoquic_frame_type_connection_close:
                     case picoquic_frame_type_application_close:
@@ -1350,54 +1489,18 @@ int frames_repeat_test(void)
                     case picoquic_frame_type_bdp:
                     case picoquic_frame_type_observed_address_v4:
                     case picoquic_frame_type_observed_address_v6:
+                    case picoquic_frame_type_max_streams_bidir:
+                    case picoquic_frame_type_max_streams_unidir:
                         break;
                     default:
-                        if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
-                            test_skip_list[i].epoch, test_skip_list[i].mpath, 1) != 0) {
-                            if (test_skip_list[i].nb_varints > 0) {
-                                /* Try again with shorter length */
-                                size_t type_len = type_byte - test_skip_list[i].val;
-                                if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, type_len,
-                                    test_skip_list[i].epoch, test_skip_list[i].mpath, 1) != 0) {
-                                    ret = -1;
-                                }
-                            }
-                            else {
-                                ret = -1;
-                            }
+                        memcpy(buffer, test_frame_error_list[i].val, len);
+                        if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
+                            test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, option_off, 1) != 0) {
+                            DBG_PRINTF("Repeat check of error frame <%s> fails, option %d off\n", test_frame_error_list[i].name, option);
+                            ret = -1;
                         }
+                        break;
                     }
-                }
-            }
-        }
-
-        /* Feed the known-bad frames through the same path, to exercise the "parse error" branch of each picoquic_check_XXXX_needs_repeat function.
-         * Some frame types are never content-checked by picoquic_check_frame_needs_repeat -- either because they are pure acks,
-         * or because the "needs repeat" logic for that type does not parse the frame body. Skip those, as the truncation loop above does. */
-        for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
-            size_t len = test_frame_error_list[i].len;
-            uint64_t frame_type = 0;
-
-            if (!test_frame_error_list[i].is_pure_ack &&
-                picoquic_frames_varint_decode(test_frame_error_list[i].val, test_frame_error_list[i].val + len, &frame_type) != NULL) {
-                switch (frame_type) {
-                case picoquic_frame_type_connection_close:
-                case picoquic_frame_type_application_close:
-                case picoquic_frame_type_new_token:
-                case picoquic_frame_type_path_abandon:
-                case picoquic_frame_type_bdp:
-                case picoquic_frame_type_observed_address_v4:
-                case picoquic_frame_type_observed_address_v6:
-                case picoquic_frame_type_max_streams_bidir:
-                case picoquic_frame_type_max_streams_unidir:
-                    break;
-                default:
-                    memcpy(buffer, test_frame_error_list[i].val, len);
-                    if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len,
-                        test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, 1) != 0) {
-                        ret = -1;
-                    }
-                    break;
                 }
             }
         }
@@ -1480,7 +1583,7 @@ void frame_init_test_packet(picoquic_packet_t* p, picoquic_cnx_t* cnx, int epoch
 }
 
 int frame_ackack_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    picoquic_packet_t* p, size_t i, int v, int epoch, int mpath, int * disconnected)
+    picoquic_packet_t* p, size_t i, int v, int epoch, int mpath, parse_option_enum option_off, int * disconnected)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
@@ -1497,6 +1600,7 @@ int frame_ackack_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, 
         picoquic_state_enum previous_state;
 
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        parse_test_clear_option(cnx, option_off);
         frame_init_test_packet(p, cnx, epoch, simulated_time);
         len = create_test_varint_frame(p->bytes + p->offset, PICOQUIC_MAX_PACKET_SIZE, i, v);
         p->length = p->offset + len;
@@ -1526,14 +1630,17 @@ int frames_ackack_error_test(void)
         ret = -1;
     }
     else {
-        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
-            for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
-                int disconnected = 0;
-                
-                frame_ackack_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p, i, v,
-                        test_skip_list[i].epoch, test_skip_list[i].mpath, &disconnected);
-                nb_trials++;
-                nb_disconnected += disconnected;
+        /* Frames may be corrupted or injected when fuzzing, so also test with each option cleared */
+        for (int option = parse_option_none; ret == 0 && option < parse_option_max; option++) {
+            for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+                for (int v = 1; v <= test_skip_list[i].nb_varints; v++) {
+                    int disconnected = 0;
+
+                    frame_ackack_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p, i, v,
+                        test_skip_list[i].epoch, test_skip_list[i].mpath, (parse_option_enum)option, &disconnected);
+                    nb_trials++;
+                    nb_disconnected += disconnected;
+                }
             }
         }
         picoquic_free(qclient);
@@ -1544,7 +1651,7 @@ int frames_ackack_error_test(void)
 }
 
 int frame_ackof_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, uint64_t simulated_time,
-    picoquic_packet_t* p, const uint8_t* bytes, size_t len, int epoch, int mpath, int* disconnected)
+    picoquic_packet_t* p, const uint8_t* bytes, size_t len, int epoch, int mpath, parse_option_enum option_off, int* disconnected)
 {
     int ret = 0;
     picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
@@ -1560,6 +1667,7 @@ int frame_ackof_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, u
         picoquic_state_enum previous_state;
 
         parse_test_packet_cnx_fix(cnx, simulated_time, epoch, mpath);
+        parse_test_clear_option(cnx, option_off);
         frame_init_test_packet(p, cnx, epoch, simulated_time);
         memcpy(p->bytes + p->offset, bytes, len);
         p->length = p->offset + len;
@@ -1573,7 +1681,7 @@ int frame_ackof_error_packet(picoquic_quic_t* qclient, struct sockaddr* saddr, u
     return ret;
 }
 
-/* Feed truncated (good frame minus one byte) and malformed frames directly to
+/* Feed complete, truncated (good frame minus one byte) and malformed frames directly to
  * picoquic_process_ack_of_frames, to exercise the "parse error" branch of each
  * picoquic_process_ack_of_XXXX_frame function. The function is void, so the only
  * observable outcomes are that it does not crash and does not spuriously change
@@ -1594,27 +1702,41 @@ int frames_ackof_error_test(void)
         ret = -1;
     }
     else {
-        for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
-            if (test_skip_list[i].len > 1 && !test_skip_list[i].is_pure_ack) {
+        /* Frames may be corrupted or injected when fuzzing, so also test with each option cleared */
+        for (int option = parse_option_none; ret == 0 && option < parse_option_max; option++) {
+            parse_option_enum option_off = (parse_option_enum)option;
+
+            for (size_t i = 0; ret == 0 && i < nb_test_skip_list; i++) {
+                int disconnected = 0;
+                /* Full frame, as injected by a fuzzer when the option is not negotiated */
+                if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
+                    test_skip_list[i].val, test_skip_list[i].len,
+                    test_skip_list[i].epoch, test_skip_list[i].mpath, option_off, &disconnected) != 0) {
+                    ret = -1;
+                }
+                nb_trials++;
+                nb_disconnected += disconnected;
+                if (ret == 0 && test_skip_list[i].len > 1 && !test_skip_list[i].is_pure_ack) {
+                    disconnected = 0;
+                    if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
+                        test_skip_list[i].val, test_skip_list[i].len - 1,
+                        test_skip_list[i].epoch, test_skip_list[i].mpath, option_off, &disconnected) != 0) {
+                        ret = -1;
+                    }
+                    nb_trials++;
+                    nb_disconnected += disconnected;
+                }
+            }
+            for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
                 int disconnected = 0;
                 if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
-                    test_skip_list[i].val, test_skip_list[i].len - 1,
-                    test_skip_list[i].epoch, test_skip_list[i].mpath, &disconnected) != 0) {
+                    test_frame_error_list[i].val, test_frame_error_list[i].len,
+                    test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, option_off, &disconnected) != 0) {
                     ret = -1;
                 }
                 nb_trials++;
                 nb_disconnected += disconnected;
             }
-        }
-        for (size_t i = 0; ret == 0 && i < nb_test_frame_error_list; i++) {
-            int disconnected = 0;
-            if (frame_ackof_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, &p,
-                test_frame_error_list[i].val, test_frame_error_list[i].len,
-                test_frame_error_list[i].epoch, test_frame_error_list[i].mpath, &disconnected) != 0) {
-                ret = -1;
-            }
-            nb_trials++;
-            nb_disconnected += disconnected;
         }
         picoquic_free(qclient);
     }
