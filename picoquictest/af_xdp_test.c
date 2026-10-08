@@ -1,7 +1,9 @@
 /*
  * Unit tests for the AF_XDP transmit helpers that do not need a NIC:
  * UDP checksums, unicast MAC checks, ARP cache checks, and neighbor
- * candidate selection.
+ * candidate selection. Creating a socket, transmitting, falling back to
+ * sendmsg, and tearing the socket down need Linux, an AF_XDP-capable
+ * interface, and CAP_NET_ADMIN, which CI runners do not provide.
  */
 
 #include "picoquic_internal.h"

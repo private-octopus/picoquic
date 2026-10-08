@@ -42,6 +42,14 @@ int picoquic_neigh_lookup(int netlink_fd, uint32_t* seq, int family,
     const uint8_t* addr, size_t addr_len, int ifindex, uint8_t mac[6]);
 
 /*
+ * Ask the kernel to resolve the next hop. RTM_NEWNEIGH with NTF_USE makes
+ * the kernel send ARP or a Neighbor Solicitation. No UDP datagram is sent.
+ * Returns 0 when the kernel accepts the request.
+ */
+int picoquic_neigh_probe(int netlink_fd, uint32_t* seq, int family,
+    const uint8_t* addr, size_t addr_len, int ifindex);
+
+/*
  * Walk one netlink dump buffer.
  * Returns 0 if a valid neighbor was copied to mac, -1 on NLMSG_ERROR or
  * NLMSG_DONE, and 1 when this buffer has no match and the caller should

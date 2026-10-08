@@ -428,6 +428,38 @@ else()
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
 
+# Current picotls appends ptls_save_ticket_properties_t to save_ticket.
+# The commits picoquic fetches by default do not. Assign the matching callback.
+cmake_push_check_state()
+set(CMAKE_REQUIRED_INCLUDES ${PTLS_INCLUDE_DIRS} ${PICOQUIC_OPENSSL_INCLUDE_DIRS})
+if(NOT WITH_OPENSSL)
+    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_OPENSSL)
+endif()
+if(NOT PTLS_WITH_FUSION)
+    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_FUSION)
+endif()
+set(PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+check_c_source_compiles("
+#include <picotls.h>
+int probe(const ptls_save_ticket_properties_t *properties)
+{
+    return properties != 0;
+}
+int main(void)
+{
+    return probe(0);
+}
+" PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE ${PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE})
+cmake_pop_check_state()
+if(PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+    message(STATUS "picotls save_ticket includes ticket properties")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+else()
+    message(STATUS "picotls save_ticket has no ticket properties argument")
+endif()
+
 
 OPTION(WITH_SELECT "build with select" OFF)
 if(WITH_SELECT)

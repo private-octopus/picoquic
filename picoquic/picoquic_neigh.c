@@ -213,4 +213,56 @@ int picoquic_neigh_lookup(int netlink_fd, uint32_t* seq, int family,
     }
 }
 
+int picoquic_neigh_probe(int netlink_fd, uint32_t* seq, int family,
+    const uint8_t* addr, size_t addr_len, int ifindex)
+{
+    uint8_t buf[256];
+    struct {
+        struct nlmsghdr nlh;
+        struct ndmsg ndm;
+        char attrbuf[64];
+    } req;
+    struct rtattr* rta;
+    ssize_t n;
+    unsigned int remain;
+    struct nlmsghdr* nlh;
+
+    if (netlink_fd < 0 || seq == NULL || addr == NULL || addr_len == 0 ||
+        addr_len > 16 || ifindex <= 0) {
+        return -1;
+    }
+    memset(&req, 0, sizeof(req));
+    req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg));
+    req.nlh.nlmsg_type = RTM_NEWNEIGH;
+    req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE;
+    req.nlh.nlmsg_seq = ++(*seq);
+    req.ndm.ndm_family = (unsigned char)family;
+    req.ndm.ndm_ifindex = ifindex;
+    req.ndm.ndm_state = NUD_NONE;
+    req.ndm.ndm_flags = NTF_USE;
+
+    rta = (struct rtattr*)(((uint8_t*)&req) + NLMSG_ALIGN(req.nlh.nlmsg_len));
+    rta->rta_type = NDA_DST;
+    rta->rta_len = (unsigned short)RTA_LENGTH(addr_len);
+    memcpy(RTA_DATA(rta), addr, addr_len);
+    req.nlh.nlmsg_len = (uint32_t)((uint8_t*)rta - (uint8_t*)&req) + RTA_ALIGN(rta->rta_len);
+
+    neigh_nl_drain(netlink_fd);
+    if (send(netlink_fd, &req, req.nlh.nlmsg_len, 0) < 0) {
+        return -1;
+    }
+    n = recv(netlink_fd, buf, sizeof(buf), 0);
+    if (n <= 0) {
+        return -1;
+    }
+    remain = (unsigned int)n;
+    for (nlh = (struct nlmsghdr*)buf; NLMSG_OK(nlh, remain); nlh = NLMSG_NEXT(nlh, remain)) {
+        if (nlh->nlmsg_type == NLMSG_ERROR) {
+            struct nlmsgerr* err = (struct nlmsgerr*)NLMSG_DATA(nlh);
+            return err->error == 0 ? 0 : -1;
+        }
+    }
+    return -1;
+}
+
 #endif

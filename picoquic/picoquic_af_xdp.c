@@ -60,6 +60,15 @@ picoquic_af_xdp_delete(void* UNUSED(xdp))
 #endif
 }
 
+uint32_t
+picoquic_af_xdp_kick_failures(void* UNUSED(xdp))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(xdp);
+#endif
+    return 0;
+}
+
 int
 picoquic_af_xdp_send(void* UNUSED(xdp), struct sockaddr* UNUSED(addr_dest), struct sockaddr* UNUSED(addr_from),
     int UNUSED(dest_if), const char* UNUSED(bytes), int UNUSED(length), int UNUSED(send_msg_size), int* sock_err)
@@ -194,6 +203,8 @@ typedef struct st_picoquic_af_xdp {
     int src_mac_ok;
     int method;
     uint32_t queue_id;
+    uint32_t kick_failures;
+    int last_kick_errno;
     xdp_neigh_t neigh[PICOQUIC_XDP_NEIGH_CACHE];
 } picoquic_af_xdp_t;
 
@@ -201,6 +212,10 @@ static pthread_mutex_t xdp_global_mu = PTHREAD_MUTEX_INITIALIZER;
 static picoquic_af_xdp_t* xdp_by_queue[PICOQUIC_XDP_MAX_QUEUES];
 static int xdp_dummy_prog_ifindex;
 static char xdp_dummy_prog_mode[16];
+/* Set only when this process attached the XDP_PASS program. An existing
+ * program (XDP_FLAGS_UPDATE_IF_NOEXIST reported EEXIST) is left alone. */
+static int xdp_attached_ifindex;
+static uint32_t xdp_attached_flags;
 
 static int xdp_nl_open(void);
 static int xdp_ifindex_from_default_route(void);
@@ -448,6 +463,10 @@ xdp_attach_dummy_prog(int ifindex)
             snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode),
                 "%s", rc == 1 ? "existing" : tries[i].name);
             xdp_dummy_prog_ifindex = ifindex;
+            if (rc == 0) {
+                xdp_attached_ifindex = ifindex;
+                xdp_attached_flags = tries[i].flags & ~XDP_FLAGS_UPDATE_IF_NOEXIST;
+            }
             ok = 0;
             break;
         }
@@ -457,6 +476,50 @@ xdp_attach_dummy_prog(int ifindex)
         snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode), "none");
     }
     return ok;
+}
+
+static int
+xdp_ifindex_has_socket(int ifindex)
+{
+    uint32_t q;
+
+    for (q = 0; q < PICOQUIC_XDP_MAX_QUEUES; q++) {
+        if (xdp_by_queue[q] != NULL && xdp_by_queue[q]->ifindex == ifindex) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* close(prog_fd) only drops the descriptor. The program stays attached
+ * until RTM_SETLINK is sent with IFLA_XDP_FD = -1 in the same mode. */
+static void
+xdp_detach_dummy_prog(int ifindex)
+{
+    int fd = -1;
+    int rc;
+
+    if (xdp_attached_ifindex != ifindex) {
+        return;
+    }
+    rc = xdp_nl_attach_prog(ifindex, fd, xdp_attached_flags);
+    if (rc < 0) {
+        return;
+    }
+    xdp_attached_ifindex = 0;
+    xdp_attached_flags = 0;
+    if (xdp_dummy_prog_ifindex == ifindex) {
+        xdp_dummy_prog_ifindex = 0;
+        snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode), "none");
+    }
+}
+
+static void
+xdp_release_prog_if_idle(int ifindex)
+{
+    if (!xdp_ifindex_has_socket(ifindex)) {
+        xdp_detach_dummy_prog(ifindex);
+    }
 }
 
 static int
@@ -616,20 +679,6 @@ xdp_connect_prefsrc(const struct sockaddr* dest, uint8_t* prefsrc, size_t addr_l
     return -1;
 }
 
-static void
-xdp_nudge_neigh(const struct sockaddr* dest)
-{
-    int fd = socket(dest->sa_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-    socklen_t alen;
-    if (fd < 0) {
-        return;
-    }
-    alen = dest->sa_family == AF_INET ? (socklen_t)sizeof(struct sockaddr_in)
-                                      : (socklen_t)sizeof(struct sockaddr_in6);
-    (void)sendto(fd, "", 1, MSG_DONTWAIT, dest, alen);
-    close(fd);
-}
-
 static int
 xdp_lookup_neigh(picoquic_af_xdp_t* x, const struct sockaddr* dest, int ifindex,
     uint8_t smac[ETH_ALEN], uint8_t dmac[ETH_ALEN], uint8_t prefsrc[16])
@@ -697,7 +746,9 @@ xdp_lookup_neigh(picoquic_af_xdp_t* x, const struct sockaddr* dest, int ifindex,
     if (family == AF_INET && picoquic_arp_lookup(ifindex, nexthop, dmac) == 0) {
         /* gateway (or on-link dest) from ARP */
     } else if (picoquic_neigh_lookup(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex, dmac) != 0) {
-        xdp_nudge_neigh(dest);
+        /* Probe the next hop, not the peer. The kernel emits ARP or an
+         * IPv6 Neighbor Solicitation; no application UDP is sent. */
+        (void)picoquic_neigh_probe(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex);
         if (family != AF_INET || picoquic_arp_lookup(ifindex, nexthop, dmac) != 0) {
             if (picoquic_neigh_lookup(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex, dmac) != 0) {
                 return -1;
@@ -1020,6 +1071,7 @@ picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE UNUSED(udp_fd),
         }
         picoquic_af_xdp_t* x = xdp_new_unbound(ifindex, reason, reason_len);
         if (x == NULL) {
+            xdp_release_prog_if_idle(ifindex);
             pthread_mutex_unlock(&xdp_global_mu);
             return NULL;
         }
@@ -1054,6 +1106,7 @@ picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE UNUSED(udp_fd),
     }
 
     xdp_set_reason(reason, reason_len, "AF_XDP bind failed: Device or resource busy");
+    xdp_release_prog_if_idle(ifindex);
     pthread_mutex_unlock(&xdp_global_mu);
     return NULL;
 }
@@ -1062,15 +1115,28 @@ void
 picoquic_af_xdp_delete(void* xp)
 {
     picoquic_af_xdp_t* x = (picoquic_af_xdp_t*)xp;
+    int ifindex;
     if (x == NULL) {
         return;
     }
+    ifindex = x->ifindex;
     pthread_mutex_lock(&xdp_global_mu);
     if (x->queue_id < PICOQUIC_XDP_MAX_QUEUES && xdp_by_queue[x->queue_id] == x) {
         xdp_by_queue[x->queue_id] = NULL;
     }
+    xdp_release_prog_if_idle(ifindex);
     pthread_mutex_unlock(&xdp_global_mu);
     xdp_free_instance(x);
+}
+
+uint32_t
+picoquic_af_xdp_kick_failures(void* xp)
+{
+    picoquic_af_xdp_t* x = (picoquic_af_xdp_t*)xp;
+    if (x == NULL) {
+        return 0;
+    }
+    return x->kick_failures;
 }
 
 int
@@ -1229,7 +1295,10 @@ picoquic_af_xdp_send(void* xp,
         if (woke < 0 &&
             errno != EAGAIN && errno != EWOULDBLOCK &&
             errno != EBUSY && errno != ENOBUFS) {
-            /* Frames stay queued. Success is reported below. */
+            /* Frames stay queued. Success is reported below so sockloop
+             * does not sendmsg the same datagram. */
+            x->kick_failures++;
+            x->last_kick_errno = errno;
         }
     }
     return length;
