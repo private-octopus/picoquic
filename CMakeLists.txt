@@ -129,6 +129,8 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/siphash.c
     picoquic/sockloop.c
     picoquic/picoquic_af_xdp.c
+    picoquic/picoquic_l3tx.c
+    picoquic/picoquic_neigh.c
     picoquic/spinbit.c
     picoquic/streams.c
     picoquic/ticket_store.c
@@ -168,7 +170,9 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_binlog.h
     picoquic/picoquic_crypto_provider_api.h
     picoquic/picoquic_internal.h
+    picoquic/picoquic_l3tx.h
     picoquic/picoquic_logger.h
+    picoquic/picoquic_neigh.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
@@ -247,6 +251,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
+    picoquictest/af_xdp_test.c
     picoquictest/spinbit_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
@@ -421,6 +426,38 @@ else()
     message(STATUS "Building without picotls-openssl")
     set(PICOQUIC_OPENSSL_INCLUDE_DIRS "")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
+endif()
+
+# Current picotls appends ptls_save_ticket_properties_t to save_ticket.
+# The commits picoquic fetches by default do not. Assign the matching callback.
+cmake_push_check_state()
+set(CMAKE_REQUIRED_INCLUDES ${PTLS_INCLUDE_DIRS} ${PICOQUIC_OPENSSL_INCLUDE_DIRS})
+if(NOT WITH_OPENSSL)
+    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_OPENSSL)
+endif()
+if(NOT PTLS_WITH_FUSION)
+    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_FUSION)
+endif()
+set(PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+check_c_source_compiles("
+#include <picotls.h>
+int probe(const ptls_save_ticket_properties_t *properties)
+{
+    return properties != 0;
+}
+int main(void)
+{
+    return probe(0);
+}
+" PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE ${PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE})
+cmake_pop_check_state()
+if(PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+    message(STATUS "picotls save_ticket includes ticket properties")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
+else()
+    message(STATUS "picotls save_ticket has no ticket properties argument")
 endif()
 
 

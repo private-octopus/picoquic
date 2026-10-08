@@ -1375,9 +1375,13 @@ int sockloop_send_source_test(void)
     return ret;
 }
 
-static int sockloop_delete_thread_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum UNUSED(cb_mode),
-    void* UNUSED(callback_ctx), void* UNUSED(callback_argv))
+static int sockloop_delete_thread_test_cb(picoquic_quic_t* UNUSED(quic), picoquic_packet_loop_cb_enum cb_mode,
+    void* callback_ctx, void* UNUSED(callback_argv))
 {
+    int* wake_up_count = (int*)callback_ctx;
+    if (cb_mode == picoquic_packet_loop_wake_up && wake_up_count != NULL) {
+        (*wake_up_count)++;
+    }
     return 0;
 }
 
@@ -1391,6 +1395,7 @@ int sockloop_delete_thread_allocated_param_test(void)
     char test_server_cert_file[512];
     char test_server_key_file[512];
     picoquic_quic_t* quic = NULL;
+    int wake_up_count = 0;
 
     ret = picoquic_get_input_path(test_server_cert_file, sizeof(test_server_cert_file), picoquic_solution_dir,
         PICOQUIC_TEST_FILE_SERVER_CERT);
@@ -1416,7 +1421,7 @@ int sockloop_delete_thread_allocated_param_test(void)
             picoquic_network_thread_ctx_t* thread_ctx;
             memset(param, 0, sizeof(picoquic_packet_loop_param_t));
 
-            thread_ctx = picoquic_start_network_thread(quic, param, sockloop_delete_thread_test_cb, NULL, &ret);
+            thread_ctx = picoquic_start_network_thread(quic, param, sockloop_delete_thread_test_cb, &wake_up_count, &ret);
             if (thread_ctx == NULL) {
                 free(param);
                 if (ret == 0) {
@@ -1427,8 +1432,14 @@ int sockloop_delete_thread_allocated_param_test(void)
                 for (int i = 0; i < 2000 && !thread_ctx->thread_is_ready; i++) {
                     SLEEP(1);
                 }
+                if (!thread_ctx->thread_is_ready) {
+                    ret = -1;
+                }
                 thread_ctx->is_param_allocated = 1;
                 picoquic_delete_network_thread(thread_ctx);
+                if (wake_up_count != 1) {
+                    ret = -1;
+                }
             }
         }
     }

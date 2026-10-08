@@ -22,8 +22,6 @@ const char*
 picoquic_tx_method_to_string(int method)
 {
     switch (method) {
-    case picoquic_tx_method_af_xdp_zerocopy:
-        return "AF_XDP zero-copy (GSO as TX batch)";
     case picoquic_tx_method_af_xdp_copy:
         return "AF_XDP copy (GSO as TX batch)";
     default:
@@ -34,11 +32,13 @@ picoquic_tx_method_to_string(int method)
 #if !defined(__linux__) || !defined(AF_XDP)
 
 void*
-picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE udp_fd,
+picoquic_af_xdp_create(int requested, int UNUSED(dest_if), SOCKET_TYPE UNUSED(udp_fd),
     int* tx_method, char* reason, size_t reason_len)
 {
-    (void)dest_if;
-    (void)udp_fd;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(dest_if);
+    UNREFERENCED_PARAMETER(udp_fd);
+#endif
     if (tx_method != NULL) {
         *tx_method = picoquic_tx_method_sendmsg;
     }
@@ -53,22 +53,35 @@ picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE udp_fd,
 }
 
 void
-picoquic_af_xdp_delete(void* xdp)
+picoquic_af_xdp_delete(void* UNUSED(xdp))
 {
-    (void)xdp;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(xdp);
+#endif
+}
+
+uint32_t
+picoquic_af_xdp_kick_failures(void* UNUSED(xdp))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(xdp);
+#endif
+    return 0;
 }
 
 int
-picoquic_af_xdp_send(void* xdp, struct sockaddr* addr_dest, struct sockaddr* addr_from,
-    int dest_if, const char* bytes, int length, int send_msg_size, int* sock_err)
+picoquic_af_xdp_send(void* UNUSED(xdp), struct sockaddr* UNUSED(addr_dest), struct sockaddr* UNUSED(addr_from),
+    int UNUSED(dest_if), const char* UNUSED(bytes), int UNUSED(length), int UNUSED(send_msg_size), int* sock_err)
 {
-    (void)xdp;
-    (void)addr_dest;
-    (void)addr_from;
-    (void)dest_if;
-    (void)bytes;
-    (void)length;
-    (void)send_msg_size;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(xdp);
+    UNREFERENCED_PARAMETER(addr_dest);
+    UNREFERENCED_PARAMETER(addr_from);
+    UNREFERENCED_PARAMETER(dest_if);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(send_msg_size);
+#endif
     if (sock_err != NULL) {
 #ifdef EOPNOTSUPP
         *sock_err = EOPNOTSUPP;
@@ -83,21 +96,20 @@ picoquic_af_xdp_send(void* xdp, struct sockaddr* addr_dest, struct sockaddr* add
 
 #else
 
+#include "picoquic_l3tx.h"
+#include "picoquic_neigh.h"
+
 #include <arpa/inet.h>
 #include <fcntl.h>
-#include <linux/sockios.h>
 #include <linux/if_ether.h>
 #include <linux/if_link.h>
 #include <linux/bpf.h>
 #include <linux/if_xdp.h>
-#include <linux/neighbour.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <sys/syscall.h>
 #include <net/if.h>
-#include <net/if_arp.h>
 #include <netinet/in.h>
-#include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/udp.h>
 #include <sys/ioctl.h>
@@ -173,7 +185,6 @@ typedef struct st_picoquic_af_xdp {
     int fd;
     int netlink_fd;
     int ifindex;
-    int zerocopy;
     uint8_t* umem;
     size_t umem_size;
     uint8_t* tx_map;
@@ -191,9 +202,9 @@ typedef struct st_picoquic_af_xdp {
     uint8_t src_mac[ETH_ALEN];
     int src_mac_ok;
     int method;
-    int refs;
     uint32_t queue_id;
-    pthread_mutex_t tx_mu;
+    uint32_t kick_failures;
+    int last_kick_errno;
     xdp_neigh_t neigh[PICOQUIC_XDP_NEIGH_CACHE];
 } picoquic_af_xdp_t;
 
@@ -201,116 +212,13 @@ static pthread_mutex_t xdp_global_mu = PTHREAD_MUTEX_INITIALIZER;
 static picoquic_af_xdp_t* xdp_by_queue[PICOQUIC_XDP_MAX_QUEUES];
 static int xdp_dummy_prog_ifindex;
 static char xdp_dummy_prog_mode[16];
+/* Set only when this process attached the XDP_PASS program. An existing
+ * program (XDP_FLAGS_UPDATE_IF_NOEXIST reported EEXIST) is left alone. */
+static int xdp_attached_ifindex;
+static uint32_t xdp_attached_flags;
 
 static int xdp_nl_open(void);
 static int xdp_ifindex_from_default_route(void);
-
-static uint16_t
-xdp_checksum(const void* data, size_t len)
-{
-    const uint16_t* p = (const uint16_t*)data;
-    uint32_t sum = 0;
-    while (len > 1) {
-        sum += *p++;
-        len -= 2;
-    }
-    if (len) {
-        uint16_t last = 0;
-        memcpy(&last, p, 1);
-        sum += last;
-    }
-    while (sum >> 16) {
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    return (uint16_t)~sum;
-}
-
-static uint16_t
-xdp_udp_checksum_v4(const struct iphdr* ip, const struct udphdr* udp, const uint8_t* payload, size_t payload_len)
-{
-    struct {
-        uint32_t src;
-        uint32_t dst;
-        uint8_t zero;
-        uint8_t proto;
-        uint16_t len;
-    } ph;
-    ph.src = ip->saddr;
-    ph.dst = ip->daddr;
-    ph.zero = 0;
-    ph.proto = IPPROTO_UDP;
-    ph.len = udp->len;
-
-    uint32_t sum = 0;
-    const uint16_t* p = (const uint16_t*)&ph;
-    for (size_t i = 0; i < sizeof(ph) / 2; i++) {
-        sum += p[i];
-    }
-    p = (const uint16_t*)udp;
-    sum += p[0];
-    sum += p[1];
-    sum += p[2];
-    /* skip checksum field */
-    p = (const uint16_t*)payload;
-    size_t len = payload_len;
-    while (len > 1) {
-        sum += *p++;
-        len -= 2;
-    }
-    if (len) {
-        uint16_t last = 0;
-        memcpy(&last, p, 1);
-        sum += last;
-    }
-    while (sum >> 16) {
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    uint16_t c = (uint16_t)~sum;
-    return c == 0 ? 0xffff : c;
-}
-
-static uint16_t
-xdp_udp_checksum_v6(const struct ip6_hdr* ip6, const struct udphdr* udp, const uint8_t* payload, size_t payload_len)
-{
-    struct {
-        struct in6_addr src;
-        struct in6_addr dst;
-        uint32_t len;
-        uint8_t zero[3];
-        uint8_t nxt;
-    } ph;
-    memset(&ph, 0, sizeof(ph));
-    ph.src = ip6->ip6_src;
-    ph.dst = ip6->ip6_dst;
-    ph.len = htonl((uint32_t)(sizeof(struct udphdr) + payload_len));
-    ph.nxt = IPPROTO_UDP;
-
-    uint32_t sum = 0;
-    const uint16_t* p = (const uint16_t*)&ph;
-    for (size_t i = 0; i < sizeof(ph) / 2; i++) {
-        sum += p[i];
-    }
-    p = (const uint16_t*)udp;
-    sum += p[0];
-    sum += p[1];
-    sum += p[2];
-    p = (const uint16_t*)payload;
-    size_t len = payload_len;
-    while (len > 1) {
-        sum += *p++;
-        len -= 2;
-    }
-    if (len) {
-        uint16_t last = 0;
-        memcpy(&last, p, 1);
-        sum += last;
-    }
-    while (sum >> 16) {
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    uint16_t c = (uint16_t)~sum;
-    return c == 0 ? 0xffff : c;
-}
 
 static void
 xdp_ring_init(xdp_ring_t* r, uint8_t* map_base, const struct xdp_ring_offset* off, uint32_t n, size_t desc_size)
@@ -464,15 +372,22 @@ xdp_load_dummy_xdp_prog(void)
 static int
 xdp_nl_attach_prog(int ifindex, int prog_fd, uint32_t flags)
 {
+    int ret = -1;
     int nl = xdp_nl_open();
-    if (nl < 0) {
-        return -1;
-    }
+    uint8_t buf[512];
+    ssize_t n = 0;
     struct {
         struct nlmsghdr nlh;
         struct ifinfomsg ifm;
-        char buf[256];
+        char attr[256];
     } req;
+    struct rtattr* nest;
+    struct rtattr* fd_attr;
+    struct rtattr* fl_attr;
+
+    if (nl < 0) {
+        return -1;
+    }
     memset(&req, 0, sizeof(req));
     req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
     req.nlh.nlmsg_type = RTM_SETLINK;
@@ -481,17 +396,17 @@ xdp_nl_attach_prog(int ifindex, int prog_fd, uint32_t flags)
     req.ifm.ifi_family = AF_UNSPEC;
     req.ifm.ifi_index = ifindex;
 
-    struct rtattr* nest = (struct rtattr*)(((uint8_t*)&req) + NLMSG_ALIGN(req.nlh.nlmsg_len));
+    nest = (struct rtattr*)(((uint8_t*)&req) + NLMSG_ALIGN(req.nlh.nlmsg_len));
     nest->rta_type = (unsigned short)(IFLA_XDP | NLA_F_NESTED);
     nest->rta_len = RTA_LENGTH(0);
 
-    struct rtattr* fd_attr = (struct rtattr*)((uint8_t*)nest + RTA_ALIGN(nest->rta_len));
+    fd_attr = (struct rtattr*)((uint8_t*)nest + RTA_ALIGN(nest->rta_len));
     fd_attr->rta_type = IFLA_XDP_FD;
     fd_attr->rta_len = RTA_LENGTH(sizeof(int));
     memcpy(RTA_DATA(fd_attr), &prog_fd, sizeof(prog_fd));
     nest->rta_len = (unsigned short)(RTA_ALIGN(nest->rta_len) + RTA_ALIGN(fd_attr->rta_len));
 
-    struct rtattr* fl_attr = (struct rtattr*)((uint8_t*)nest + RTA_ALIGN(nest->rta_len));
+    fl_attr = (struct rtattr*)((uint8_t*)nest + RTA_ALIGN(nest->rta_len));
     fl_attr->rta_type = IFLA_XDP_FLAGS;
     fl_attr->rta_len = RTA_LENGTH(sizeof(uint32_t));
     memcpy(RTA_DATA(fl_attr), &flags, sizeof(flags));
@@ -500,26 +415,26 @@ xdp_nl_attach_prog(int ifindex, int prog_fd, uint32_t flags)
     req.nlh.nlmsg_len = (uint32_t)((uint8_t*)nest - (uint8_t*)&req) + RTA_ALIGN(nest->rta_len);
 
     xdp_nl_drain_fd(nl);
-    if (send(nl, &req, req.nlh.nlmsg_len, 0) < 0) {
-        close(nl);
-        return -1;
+    if (send(nl, &req, req.nlh.nlmsg_len, 0) >= 0) {
+        n = recv(nl, buf, sizeof(buf), 0);
     }
-    uint8_t buf[512];
-    ssize_t n = recv(nl, buf, sizeof(buf), 0);
-    close(nl);
-    if (n <= 0) {
-        return -1;
-    }
-    for (struct nlmsghdr* nlh = (struct nlmsghdr*)buf; NLMSG_OK(nlh, (unsigned)n); nlh = NLMSG_NEXT(nlh, n)) {
-        if (nlh->nlmsg_type == NLMSG_ERROR) {
-            struct nlmsgerr* e = (struct nlmsgerr*)NLMSG_DATA(nlh);
-            if (e->error == 0 || e->error == -EEXIST) {
-                return e->error == -EEXIST ? 1 : 0;
+    if (n > 0) {
+        unsigned int remain = (unsigned int)n;
+        struct nlmsghdr* nlh;
+        for (nlh = (struct nlmsghdr*)buf; NLMSG_OK(nlh, remain); nlh = NLMSG_NEXT(nlh, remain)) {
+            if (nlh->nlmsg_type == NLMSG_ERROR) {
+                struct nlmsgerr* e = (struct nlmsgerr*)NLMSG_DATA(nlh);
+                if (e->error == 0) {
+                    ret = 0;
+                } else if (e->error == -EEXIST) {
+                    ret = 1;
+                }
+                break;
             }
-            return -1;
         }
     }
-    return -1;
+    close(nl);
+    return ret;
 }
 
 static int
@@ -548,6 +463,10 @@ xdp_attach_dummy_prog(int ifindex)
             snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode),
                 "%s", rc == 1 ? "existing" : tries[i].name);
             xdp_dummy_prog_ifindex = ifindex;
+            if (rc == 0) {
+                xdp_attached_ifindex = ifindex;
+                xdp_attached_flags = tries[i].flags & ~XDP_FLAGS_UPDATE_IF_NOEXIST;
+            }
             ok = 0;
             break;
         }
@@ -557,6 +476,50 @@ xdp_attach_dummy_prog(int ifindex)
         snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode), "none");
     }
     return ok;
+}
+
+static int
+xdp_ifindex_has_socket(int ifindex)
+{
+    uint32_t q;
+
+    for (q = 0; q < PICOQUIC_XDP_MAX_QUEUES; q++) {
+        if (xdp_by_queue[q] != NULL && xdp_by_queue[q]->ifindex == ifindex) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* close(prog_fd) only drops the descriptor. The program stays attached
+ * until RTM_SETLINK is sent with IFLA_XDP_FD = -1 in the same mode. */
+static void
+xdp_detach_dummy_prog(int ifindex)
+{
+    int fd = -1;
+    int rc;
+
+    if (xdp_attached_ifindex != ifindex) {
+        return;
+    }
+    rc = xdp_nl_attach_prog(ifindex, fd, xdp_attached_flags);
+    if (rc < 0) {
+        return;
+    }
+    xdp_attached_ifindex = 0;
+    xdp_attached_flags = 0;
+    if (xdp_dummy_prog_ifindex == ifindex) {
+        xdp_dummy_prog_ifindex = 0;
+        snprintf(xdp_dummy_prog_mode, sizeof(xdp_dummy_prog_mode), "none");
+    }
+}
+
+static void
+xdp_release_prog_if_idle(int ifindex)
+{
+    if (!xdp_ifindex_has_socket(ifindex)) {
+        xdp_detach_dummy_prog(ifindex);
+    }
 }
 
 static int
@@ -643,155 +606,11 @@ xdp_ifindex_from_default_route(void)
 }
 
 static int
-xdp_parse_lladdr(struct nlmsghdr* nlh, uint8_t mac[ETH_ALEN])
-{
-    struct ndmsg* ndm = (struct ndmsg*)NLMSG_DATA(nlh);
-    int len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*ndm));
-    struct rtattr* rta = (struct rtattr*)((uint8_t*)ndm + NLMSG_ALIGN(sizeof(*ndm)));
-    for (; RTA_OK(rta, len); rta = RTA_NEXT(rta, len)) {
-        if (rta->rta_type == NDA_LLADDR && RTA_PAYLOAD(rta) >= ETH_ALEN) {
-            memcpy(mac, RTA_DATA(rta), ETH_ALEN);
-            return 0;
-        }
-    }
-    return -1;
-}
-
-static void
-xdp_nl_drain(picoquic_af_xdp_t* x)
-{
-    uint8_t buf[256];
-    while (recv(x->netlink_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0) {
-    }
-}
-
-static int
-xdp_neigh_dst_match(struct nlmsghdr* nlh, int family, const uint8_t* addr, size_t addr_len)
-{
-    struct ndmsg* ndm = (struct ndmsg*)NLMSG_DATA(nlh);
-    int len = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*ndm));
-    struct rtattr* rta = (struct rtattr*)((uint8_t*)ndm + NLMSG_ALIGN(sizeof(*ndm)));
-    if (ndm->ndm_family != family) {
-        return 0;
-    }
-    for (; RTA_OK(rta, len); rta = RTA_NEXT(rta, len)) {
-        if (rta->rta_type == NDA_DST && RTA_PAYLOAD(rta) >= addr_len &&
-            memcmp(RTA_DATA(rta), addr, addr_len) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int
-xdp_neigh_query(picoquic_af_xdp_t* x, int family, const uint8_t* addr, size_t addr_len, int ifindex, uint8_t mac[ETH_ALEN])
-{
-    uint8_t buf[8192];
-    struct {
-        struct nlmsghdr nlh;
-        struct ndmsg ndm;
-        char attrbuf[256];
-    } req;
-    memset(&req, 0, sizeof(req));
-    req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg));
-    req.nlh.nlmsg_type = RTM_GETNEIGH;
-    req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-    req.nlh.nlmsg_seq = ++x->nl_seq;
-    req.ndm.ndm_family = (unsigned char)family;
-    req.ndm.ndm_ifindex = ifindex;
-
-    xdp_nl_drain(x);
-    if (send(x->netlink_fd, &req, req.nlh.nlmsg_len, 0) < 0) {
-        return -1;
-    }
-    for (;;) {
-        ssize_t n = recv(x->netlink_fd, buf, sizeof(buf), 0);
-        if (n <= 0) {
-            return -1;
-        }
-        for (struct nlmsghdr* nlh = (struct nlmsghdr*)buf; NLMSG_OK(nlh, (unsigned)n); nlh = NLMSG_NEXT(nlh, n)) {
-            if (nlh->nlmsg_type == NLMSG_ERROR) {
-                return -1;
-            }
-            if (nlh->nlmsg_type == NLMSG_DONE) {
-                return -1;
-            }
-            if (nlh->nlmsg_type == RTM_NEWNEIGH &&
-                xdp_neigh_dst_match(nlh, family, addr, addr_len) &&
-                xdp_parse_lladdr(nlh, mac) == 0) {
-                return 0;
-            }
-        }
-    }
-}
-
-static int
 xdp_route_nexthop(picoquic_af_xdp_t* x, int family, const uint8_t* dest, size_t dest_len,
     uint8_t* nexthop, uint8_t* prefsrc, int* oif)
 {
     *oif = x->ifindex;
     return xdp_route_query_fd(x->netlink_fd, &x->nl_seq, family, dest, dest_len, nexthop, prefsrc, oif);
-}
-
-static int
-xdp_arp_query(int ifindex, const uint8_t* addr4, uint8_t mac[ETH_ALEN])
-{
-    struct arpreq req;
-    struct sockaddr_in* sin;
-    char ifname[IF_NAMESIZE];
-    int fd;
-    if (if_indextoname((unsigned)ifindex, ifname) == NULL) {
-        return -1;
-    }
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return -1;
-    }
-    memset(&req, 0, sizeof(req));
-    sin = (struct sockaddr_in*)&req.arp_pa;
-    sin->sin_family = AF_INET;
-    memcpy(&sin->sin_addr, addr4, 4);
-    snprintf(req.arp_dev, sizeof(req.arp_dev), "%s", ifname);
-    if (ioctl(fd, SIOCGARP, &req) != 0) {
-        close(fd);
-        return -1;
-    }
-    close(fd);
-#ifndef ATF_COM
-#define ATF_COM 0x02
-#endif
-    if ((req.arp_flags & ATF_COM) == 0) {
-        return -1;
-    }
-    memcpy(mac, req.arp_ha.sa_data, ETH_ALEN);
-    {
-        int i;
-        int nz = 0;
-        for (i = 0; i < ETH_ALEN; i++) {
-            if (mac[i] != 0) {
-                nz = 1;
-                break;
-            }
-        }
-        if (!nz || (mac[0] & 0x01)) {
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static int
-xdp_mac_unicast(const uint8_t mac[ETH_ALEN])
-{
-    int i;
-    int nz = 0;
-    for (i = 0; i < ETH_ALEN; i++) {
-        if (mac[i] != 0) {
-            nz = 1;
-            break;
-        }
-    }
-    return nz && (mac[0] & 0x01) == 0;
 }
 
 static int
@@ -860,20 +679,6 @@ xdp_connect_prefsrc(const struct sockaddr* dest, uint8_t* prefsrc, size_t addr_l
     return -1;
 }
 
-static void
-xdp_nudge_neigh(const struct sockaddr* dest)
-{
-    int fd = socket(dest->sa_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-    socklen_t alen;
-    if (fd < 0) {
-        return;
-    }
-    alen = dest->sa_family == AF_INET ? (socklen_t)sizeof(struct sockaddr_in)
-                                      : (socklen_t)sizeof(struct sockaddr_in6);
-    (void)sendto(fd, "", 1, MSG_DONTWAIT, dest, alen);
-    close(fd);
-}
-
 static int
 xdp_lookup_neigh(picoquic_af_xdp_t* x, const struct sockaddr* dest, int ifindex,
     uint8_t smac[ETH_ALEN], uint8_t dmac[ETH_ALEN], uint8_t prefsrc[16])
@@ -902,7 +707,7 @@ xdp_lookup_neigh(picoquic_af_xdp_t* x, const struct sockaddr* dest, int ifindex,
         memcpy(smac, e->smac, ETH_ALEN);
         memcpy(dmac, e->dmac, ETH_ALEN);
         memcpy(prefsrc, e->prefsrc, sizeof(e->prefsrc));
-        return xdp_mac_unicast(dmac) ? 0 : -1;
+        return picoquic_mac_is_unicast(dmac) ? 0 : -1;
     }
     memset(prefsrc, 0, 16);
 
@@ -938,17 +743,19 @@ xdp_lookup_neigh(picoquic_af_xdp_t* x, const struct sockaddr* dest, int ifindex,
         return -1;
     }
 
-    if (family == AF_INET && xdp_arp_query(ifindex, nexthop, dmac) == 0) {
+    if (family == AF_INET && picoquic_arp_lookup(ifindex, nexthop, dmac) == 0) {
         /* gateway (or on-link dest) from ARP */
-    } else if (xdp_neigh_query(x, family, nexthop, addr_len, ifindex, dmac) != 0) {
-        xdp_nudge_neigh(dest);
-        if (family != AF_INET || xdp_arp_query(ifindex, nexthop, dmac) != 0) {
-            if (xdp_neigh_query(x, family, nexthop, addr_len, ifindex, dmac) != 0) {
+    } else if (picoquic_neigh_lookup(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex, dmac) != 0) {
+        /* Probe the next hop, not the peer. The kernel emits ARP or an
+         * IPv6 Neighbor Solicitation; no application UDP is sent. */
+        (void)picoquic_neigh_probe(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex);
+        if (family != AF_INET || picoquic_arp_lookup(ifindex, nexthop, dmac) != 0) {
+            if (picoquic_neigh_lookup(x->netlink_fd, &x->nl_seq, family, nexthop, addr_len, ifindex, dmac) != 0) {
                 return -1;
             }
         }
     }
-    if (!xdp_mac_unicast(dmac)) {
+    if (!picoquic_mac_is_unicast(dmac)) {
         return -1;
     }
     e->used = 1;
@@ -993,7 +800,7 @@ xdp_build_frame(uint8_t* frame, size_t frame_max,
         ip[9] = IPPROTO_UDP;
         memcpy(ip + 12, &((const struct sockaddr_in*)src)->sin_addr, 4);
         memcpy(ip + 16, &((const struct sockaddr_in*)dest)->sin_addr, 4);
-        ip_csum = xdp_checksum(ip, 20);
+        ip_csum = picoquic_inet_checksum(ip, 20);
         memcpy(ip + 10, &ip_csum, 2);
         udp = (struct udphdr*)(ip + 20);
         udp->source = ((const struct sockaddr_in*)src)->sin_port;
@@ -1002,11 +809,12 @@ xdp_build_frame(uint8_t* frame, size_t frame_max,
         udp->check = 0;
         memcpy(udp + 1, payload, payload_len);
         {
-            struct iphdr iph;
-            memset(&iph, 0, sizeof(iph));
-            memcpy(&iph.saddr, ip + 12, 4);
-            memcpy(&iph.daddr, ip + 16, 4);
-            udp->check = xdp_udp_checksum_v4(&iph, udp, payload, payload_len);
+            uint32_t saddr;
+            uint32_t daddr;
+            memcpy(&saddr, ip + 12, 4);
+            memcpy(&daddr, ip + 16, 4);
+            udp->check = picoquic_udp_checksum_v4(saddr, daddr,
+                udp->source, udp->dest, udp->len, payload, payload_len);
         }
         total = ETH_HLEN + 20 + sizeof(struct udphdr) + payload_len;
     } else if (dest->sa_family == AF_INET6) {
@@ -1027,7 +835,9 @@ xdp_build_frame(uint8_t* frame, size_t frame_max,
         udp->len = htons((uint16_t)(sizeof(struct udphdr) + payload_len));
         udp->check = 0;
         memcpy(udp + 1, payload, payload_len);
-        udp->check = xdp_udp_checksum_v6(ip6, udp, payload, payload_len);
+        udp->check = picoquic_udp_checksum_v6(
+            (const uint8_t*)&ip6->ip6_src, (const uint8_t*)&ip6->ip6_dst,
+            udp->source, udp->dest, udp->len, payload, payload_len);
         total = ETH_HLEN + sizeof(struct ip6_hdr) + sizeof(struct udphdr) + payload_len;
     } else {
         return 0;
@@ -1097,7 +907,6 @@ xdp_try_open_xsk(picoquic_af_xdp_t* x)
     if (xdp_open_xsk(x, XDP_COPY | XDP_USE_NEED_WAKEUP) == 0 ||
         xdp_open_xsk(x, XDP_COPY) == 0) {
         x->method = picoquic_tx_method_af_xdp_copy;
-        x->zerocopy = 0;
         return 0;
     }
     return -1;
@@ -1184,7 +993,6 @@ xdp_free_instance(picoquic_af_xdp_t* x)
     if (x->umem != NULL && x->umem != MAP_FAILED) {
         munmap(x->umem, x->umem_size);
     }
-    pthread_mutex_destroy(&x->tx_mu);
     free(x->free_idx);
     free(x);
 }
@@ -1200,9 +1008,7 @@ xdp_new_unbound(int ifindex, char* reason, size_t reason_len)
     x->fd = -1;
     x->netlink_fd = -1;
     x->ifindex = ifindex;
-    x->refs = 1;
     x->umem_size = (size_t)PICOQUIC_XDP_FRAME_SIZE * PICOQUIC_XDP_FRAME_COUNT;
-    pthread_mutex_init(&x->tx_mu, NULL);
     x->free_idx = (uint32_t*)malloc(sizeof(uint32_t) * PICOQUIC_XDP_FRAME_COUNT);
     if (x->free_idx == NULL) {
         xdp_set_reason(reason, reason_len, "out of memory");
@@ -1233,10 +1039,9 @@ xdp_new_unbound(int ifindex, char* reason, size_t reason_len)
 }
 
 void*
-picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE udp_fd,
+picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE UNUSED(udp_fd),
     int* tx_method, char* reason, size_t reason_len)
 {
-    (void)udp_fd;
     if (tx_method != NULL) {
         *tx_method = picoquic_tx_method_sendmsg;
     }
@@ -1266,6 +1071,7 @@ picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE udp_fd,
         }
         picoquic_af_xdp_t* x = xdp_new_unbound(ifindex, reason, reason_len);
         if (x == NULL) {
+            xdp_release_prog_if_idle(ifindex);
             pthread_mutex_unlock(&xdp_global_mu);
             return NULL;
         }
@@ -1292,39 +1098,15 @@ picoquic_af_xdp_create(int requested, int dest_if, SOCKET_TYPE udp_fd,
         int err = errno;
         xdp_free_instance(x);
         if (err != EBUSY && err != EADDRINUSE && err != EEXIST) {
-            /* No such queue, or a hard failure. Stop scanning if the NIC
-             * rejected this queue id; still allow sharing below. */
+            /* This NIC has no further queues. */
             if (err == ENODEV || err == EINVAL) {
                 break;
             }
         }
     }
 
-    for (uint32_t q = 0; q < PICOQUIC_XDP_MAX_QUEUES; q++) {
-        picoquic_af_xdp_t* x = xdp_by_queue[q];
-        if (x == NULL || x->ifindex != ifindex) {
-            continue;
-        }
-        x->refs++;
-        if (tx_method != NULL) {
-            *tx_method = x->method;
-        }
-        {
-            char ok[160];
-            char ifname[IF_NAMESIZE];
-            if (if_indextoname((unsigned)ifindex, ifname) == NULL) {
-                snprintf(ifname, sizeof(ifname), "?");
-            }
-            snprintf(ok, sizeof(ok), "ifindex=%d (%s) queue=%u shared refs=%d xdp-prog=%s",
-                ifindex, ifname, x->queue_id, x->refs,
-                xdp_dummy_prog_mode[0] != '\0' ? xdp_dummy_prog_mode : "none");
-            xdp_set_reason(reason, reason_len, ok);
-        }
-        pthread_mutex_unlock(&xdp_global_mu);
-        return x;
-    }
-
     xdp_set_reason(reason, reason_len, "AF_XDP bind failed: Device or resource busy");
+    xdp_release_prog_if_idle(ifindex);
     pthread_mutex_unlock(&xdp_global_mu);
     return NULL;
 }
@@ -1333,20 +1115,28 @@ void
 picoquic_af_xdp_delete(void* xp)
 {
     picoquic_af_xdp_t* x = (picoquic_af_xdp_t*)xp;
+    int ifindex;
     if (x == NULL) {
         return;
     }
+    ifindex = x->ifindex;
     pthread_mutex_lock(&xdp_global_mu);
-    x->refs--;
-    if (x->refs > 0) {
-        pthread_mutex_unlock(&xdp_global_mu);
-        return;
-    }
     if (x->queue_id < PICOQUIC_XDP_MAX_QUEUES && xdp_by_queue[x->queue_id] == x) {
         xdp_by_queue[x->queue_id] = NULL;
     }
+    xdp_release_prog_if_idle(ifindex);
     pthread_mutex_unlock(&xdp_global_mu);
     xdp_free_instance(x);
+}
+
+uint32_t
+picoquic_af_xdp_kick_failures(void* xp)
+{
+    picoquic_af_xdp_t* x = (picoquic_af_xdp_t*)xp;
+    if (x == NULL) {
+        return 0;
+    }
+    return x->kick_failures;
 }
 
 int
@@ -1407,15 +1197,14 @@ picoquic_af_xdp_send(void* xp,
         return -1;
     }
 
-    pthread_mutex_lock(&x->tx_mu);
-
-    int ret = -1;
+    /* One picoquic instance sends from its network thread only. Another
+     * instance is another process, with its own AF_XDP socket. */
     int ifindex = x->ifindex;
     if (dest_if > 0 && dest_if != x->ifindex) {
         if (sock_err != NULL) {
             *sock_err = ENETUNREACH;
         }
-        goto out;
+        return -1;
     }
 
     uint8_t smac[ETH_ALEN];
@@ -1426,7 +1215,7 @@ picoquic_af_xdp_send(void* xp,
         if (sock_err != NULL) {
             *sock_err = ENETUNREACH;
         }
-        goto out;
+        return -1;
     }
 
     struct sockaddr_in src_fix4;
@@ -1438,7 +1227,7 @@ picoquic_af_xdp_send(void* xp,
             src_fix4.sin_port = ((const struct sockaddr_in*)src_sa)->sin_port;
             memcpy(&src_fix4.sin_addr, prefsrc, 4);
             if (src_fix4.sin_addr.s_addr == 0) {
-                goto out;
+                return -1;
             }
             src_sa = (struct sockaddr*)&src_fix4;
         } else if (dest_sa->sa_family == AF_INET6) {
@@ -1447,7 +1236,7 @@ picoquic_af_xdp_send(void* xp,
             src_fix6.sin6_port = ((const struct sockaddr_in6*)src_sa)->sin6_port;
             memcpy(&src_fix6.sin6_addr, prefsrc, 16);
             if (IN6_IS_ADDR_UNSPECIFIED(&src_fix6.sin6_addr)) {
-                goto out;
+                return -1;
             }
             src_sa = (struct sockaddr*)&src_fix6;
         }
@@ -1460,7 +1249,7 @@ picoquic_af_xdp_send(void* xp,
         if (sock_err != NULL) {
             *sock_err = EAGAIN;
         }
-        goto out;
+        return -1;
     }
 
     int offset = 0;
@@ -1480,7 +1269,7 @@ picoquic_af_xdp_send(void* xp,
             if (sock_err != NULL) {
                 *sock_err = EINVAL;
             }
-            goto out;
+            return -1;
         }
         struct xdp_desc* d = &((struct xdp_desc*)x->tx.desc)[prod & x->tx.mask];
         d->addr = (uint64_t)idx * PICOQUIC_XDP_FRAME_SIZE;
@@ -1489,14 +1278,30 @@ picoquic_af_xdp_send(void* xp,
         prod++;
         offset += chunk;
     }
-    /* Copy-mode TX often silently drops frames unless an XDP program is attached. */
+    /* Copy-mode TX often silently drops frames unless an XDP program is attached.
+     * Publish the batch, then kick the driver. This sendto carries no
+     * payload; the frames are already in the TX ring. Retry if the kick
+     * is interrupted. EAGAIN, EBUSY and ENOBUFS are normal for a
+     * non-blocking wakeup. Any other failure still leaves the frames
+     * queued, so this function reports success: returning an error would
+     * make the caller sendmsg the same datagram again. */
     __atomic_thread_fence(__ATOMIC_RELEASE);
     *x->tx.producer = prod;
-    (void)sendto(x->fd, NULL, 0, MSG_DONTWAIT, NULL, 0);
-    ret = length;
-out:
-    pthread_mutex_unlock(&x->tx_mu);
-    return ret;
+    {
+        ssize_t woke;
+        do {
+            woke = sendto(x->fd, NULL, 0, MSG_DONTWAIT, NULL, 0);
+        } while (woke < 0 && errno == EINTR);
+        if (woke < 0 &&
+            errno != EAGAIN && errno != EWOULDBLOCK &&
+            errno != EBUSY && errno != ENOBUFS) {
+            /* Frames stay queued. Success is reported below so sockloop
+             * does not sendmsg the same datagram. */
+            x->kick_failures++;
+            x->last_kick_errno = errno;
+        }
+    }
+    return length;
 }
 
 #endif

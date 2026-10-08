@@ -2774,6 +2774,11 @@ int picoquic_packet_loop_do_udp_send(
         else {
             sock_ret = -1;
             sock_err = 0;
+            /* AF_XDP is opened once, when the network thread starts. If that
+             * failed, af_xdp is NULL and every datagram uses sendmsg. If it
+             * succeeded, try AF_XDP for this datagram and use sendmsg only
+             * when this datagram cannot be queued (loopback, missing neighbor,
+             * full TX ring). The next datagram tries AF_XDP again. */
             if (thread_ctx != NULL && thread_ctx->af_xdp != NULL) {
                 sock_ret = picoquic_af_xdp_send(thread_ctx->af_xdp,
                     (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
@@ -3637,20 +3642,19 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 {
     /* set the should_close flag, so the thread knows the loop should stop */
     thread_ctx->thread_should_close = 1;
-    /* Delete the wake up event. This ought to create a fault 
-     * in the wait for event call, causing the thread to wake up,
-     * notice the flag, and exit.
-     */
-    picoquic_close_network_wake_up(thread_ctx);
-    /* Clear the thread context in the quic context, to avoid any risk of
-     * use after free. */
+    /* Wake the packet loop through its normal wait mechanism. Closing a file
+     * descriptor from another thread does not reliably interrupt select() on
+     * all platforms, and closing the wake-up handle before the worker exits
+     * would let it use an invalid handle. */
+    if (thread_ctx->is_threaded) {
+        (void)picoquic_wake_up_network_thread(thread_ctx);
+        thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
+    }
+    /* The worker no longer uses the QUIC context or wake-up handle. */
     if (thread_ctx->quic != NULL) {
         thread_ctx->quic->v_thread_ctx = NULL;
     }
-    /* delete the thread */
-    if (thread_ctx->is_threaded) {
-        thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
-    }
+    picoquic_close_network_wake_up(thread_ctx);
     /* If the param component was allocated as part of frame context, free it */
     if (thread_ctx->is_param_allocated) {
         free(thread_ctx->param);

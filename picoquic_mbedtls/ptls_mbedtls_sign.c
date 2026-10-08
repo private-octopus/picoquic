@@ -586,6 +586,145 @@ int ptls_mbedtls_set_available_schemes(ptls_mbedtls_sign_certificate_t *signer)
 * (padding + hash), defined further down and shared with the verify path. */
 psa_algorithm_t mbedtls_get_psa_alg_from_tls_number(uint16_t tls_algo);
 
+/*
+* ECDSA signature encoding.
+* PSA produces and consumes ECDSA signatures in the raw form r || s, with
+* each of r and s encoded on exactly the size of the curve order. TLS 1.3
+* (RFC 8446, section 4.2.3) requires the DER encoding of ECDSA-Sig-Value:
+*     ECDSA-Sig-Value ::= SEQUENCE { r INTEGER, s INTEGER }
+* We implement the conversion locally rather than using mbedtls_ecdsa_raw_to_der
+* and mbedtls_ecdsa_der_to_raw, because these are not available in versions
+* of MbedTLS before 3.6. We cannot use the picotls ASN.1 macros either,
+* because they do not support the long length form needed for secp521r1.
+*/
+
+/* Encode a DER length, assuming it is less than 256 */
+static uint8_t *ptls_mbedtls_ecdsa_der_set_length(uint8_t *p, size_t l)
+{
+    if (l >= 128) {
+        *p++ = 0x81;
+    }
+    *p++ = (uint8_t)l;
+    return p;
+}
+
+/* Encode a coordinate as a minimal DER INTEGER, adding a leading
+* zero if the high bit is set, so that the value remains positive. */
+static uint8_t *ptls_mbedtls_ecdsa_der_set_integer(uint8_t *p, const uint8_t *v, size_t coord_len)
+{
+    size_t l;
+
+    while (coord_len > 1 && *v == 0) {
+        v++;
+        coord_len--;
+    }
+    l = coord_len + ((*v & 0x80) != 0);
+    *p++ = 0x02;
+    p = ptls_mbedtls_ecdsa_der_set_length(p, l);
+    if (l > coord_len) {
+        *p++ = 0;
+    }
+    memcpy(p, v, coord_len);
+    return p + coord_len;
+}
+
+static int ptls_mbedtls_ecdsa_raw_to_der(ptls_buffer_t *outbuf, const uint8_t *raw, size_t raw_len)
+{
+    int ret = 0;
+    size_t coord_len = raw_len / 2;
+    /* each INTEGER takes at most 3 bytes of header and 1 byte of padding */
+    uint8_t body[2 * (PSA_SIGNATURE_MAX_SIZE / 2 + 4)];
+    uint8_t *p = body;
+
+    if (raw_len == 0 || (raw_len & 1) != 0 || coord_len > 124) {
+        return PTLS_ERROR_LIBRARY;
+    }
+    p = ptls_mbedtls_ecdsa_der_set_integer(p, raw, coord_len);
+    p = ptls_mbedtls_ecdsa_der_set_integer(p, raw + coord_len, coord_len);
+    if ((ret = ptls_buffer_reserve(outbuf, 3 + (p - body))) == 0) {
+        uint8_t *q = outbuf->base + outbuf->off;
+        *q++ = 0x30;
+        q = ptls_mbedtls_ecdsa_der_set_length(q, p - body);
+        memcpy(q, body, p - body);
+        outbuf->off = q + (p - body) - outbuf->base;
+    }
+    return ret;
+}
+
+/* Parse a DER length at der[*x], and check that the content fits in the buffer. */
+static int ptls_mbedtls_ecdsa_der_get_length(const uint8_t *der, size_t der_len, size_t *x, size_t *l)
+{
+    if (*x >= der_len) {
+        return -1;
+    }
+    if ((der[*x] & 0x80) == 0) {
+        *l = der[*x];
+        *x += 1;
+    } else if (der[*x] == 0x81) {
+        /* Signatures are smaller than 256 bytes, longer forms are not needed */
+        if (*x + 1 >= der_len || der[*x + 1] < 0x80) {
+            return -1;
+        }
+        *l = der[*x + 1];
+        *x += 2;
+    } else {
+        return -1;
+    }
+    return (*l <= der_len - *x) ? 0 : -1;
+}
+
+/* Parse a DER INTEGER at der[*x], and copy it to raw, left padded to coord_len bytes.
+* Only positive, minimally encoded values that fit in coord_len bytes are accepted. */
+static int ptls_mbedtls_ecdsa_der_get_integer(const uint8_t *der, size_t der_len, size_t *x, uint8_t *raw, size_t coord_len)
+{
+    const uint8_t *v;
+    size_t l = 0;
+
+    if (*x >= der_len || der[*x] != 0x02) {
+        return -1;
+    }
+    *x += 1;
+    if (ptls_mbedtls_ecdsa_der_get_length(der, der_len, x, &l) != 0 || l == 0) {
+        return -1;
+    }
+    v = der + *x;
+    *x += l;
+    if ((v[0] & 0x80) != 0) {
+        /* Negative value */
+        return -1;
+    }
+    if (l > 1 && v[0] == 0) {
+        if ((v[1] & 0x80) == 0) {
+            /* Not minimally encoded */
+            return -1;
+        }
+        /* Skip the padding byte for integer with most significant byte > 127 */
+        v++;
+        l--;
+    }
+    if (l > coord_len) {
+        return -1;
+    }
+    memset(raw, 0, coord_len - l);
+    memcpy(raw + coord_len - l, v, l);
+    return 0;
+}
+
+static int ptls_mbedtls_ecdsa_der_to_raw(const uint8_t *der, size_t der_len, uint8_t *raw, size_t coord_len)
+{
+    size_t x = 1;
+    size_t l = 0;
+
+    if (der_len < 2 || der[0] != 0x30 ||
+        ptls_mbedtls_ecdsa_der_get_length(der, der_len, &x, &l) != 0 || x + l != der_len ||
+        ptls_mbedtls_ecdsa_der_get_integer(der, der_len, &x, raw, coord_len) != 0 ||
+        ptls_mbedtls_ecdsa_der_get_integer(der, der_len, &x, raw + coord_len, coord_len) != 0 ||
+        x != der_len) {
+        return -1;
+    }
+    return 0;
+}
+
 int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, ptls_async_job_t **async,
     uint16_t *selected_algorithm, ptls_buffer_t *outbuf, ptls_iovec_t input,
     const uint16_t *algorithms, size_t num_algorithms)
@@ -626,29 +765,31 @@ int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, p
             * ECDSA algorithm: the (r,s) signature it produces verifies
             * correctly under plain ECDSA regardless of how the nonce was
             * derived, and the key policy only permits that one algorithm. */
-            psa_algorithm_t sign_algo = is_rsa ?
-                mbedtls_get_psa_alg_from_tls_number(*selected_algorithm) :
-                psa_get_key_algorithm(&self->attributes);
-            size_t nb_bits = psa_get_key_bits(&self->attributes);
-            size_t nb_bytes = (nb_bits + 7) / 8;
-            if (nb_bits == 0) {
-                if (is_rsa) {
-                    /* assume at most 4096 bit key */
-                    nb_bytes = 512;
-                } else {
-                    /* Max size assumed, secp521r1 */
-                    nb_bytes = 124;
+            if (is_rsa) {
+                psa_algorithm_t sign_algo = mbedtls_get_psa_alg_from_tls_number(*selected_algorithm);
+                size_t nb_bits = psa_get_key_bits(&self->attributes);
+                /* if the size is unknown, assume at most 4096 bit key */
+                size_t nb_bytes = (nb_bits == 0) ? 512 : (nb_bits + 7) / 8;
+
+                if ((ret = ptls_buffer_reserve(outbuf, nb_bytes)) == 0) {
+                    size_t signature_length = 0;
+                    if (psa_sign_hash(self->key_id, sign_algo, hash_value, hash_length, outbuf->base + outbuf->off, nb_bytes,
+                        &signature_length) != 0) {
+                        ret = PTLS_ERROR_INCOMPATIBLE_KEY;
+                    } else {
+                        outbuf->off += signature_length;
+                    }
                 }
-            } else if (!is_rsa) {
-                nb_bytes *= 2;
-            }
-            if ((ret = ptls_buffer_reserve(outbuf, nb_bytes)) == 0) {
-                size_t signature_length = 0;
-                if (psa_sign_hash(self->key_id, sign_algo, hash_value, hash_length, outbuf->base + outbuf->off, nb_bytes,
-                    &signature_length) != 0) {
+            } else {
+                /* PSA produces the raw form r || s, which must be DER encoded for TLS */
+                uint8_t raw_signature[PSA_SIGNATURE_MAX_SIZE];
+                size_t raw_length = 0;
+
+                if (psa_sign_hash(self->key_id, psa_get_key_algorithm(&self->attributes), hash_value, hash_length,
+                    raw_signature, sizeof(raw_signature), &raw_length) != 0) {
                     ret = PTLS_ERROR_INCOMPATIBLE_KEY;
                 } else {
-                    outbuf->off += signature_length;
+                    ret = ptls_mbedtls_ecdsa_raw_to_der(outbuf, raw_signature, raw_length);
                 }
             }
         }
@@ -1120,7 +1261,33 @@ int mbedtls_verify_sign(void *verify_ctx, uint16_t algo, ptls_iovec_t data, ptls
             ret = PTLS_ALERT_ILLEGAL_PARAMETER;
         }
         else {
-            psa_status_t status = psa_verify_message(message_verify_ctx->key_id, alg, data.base, data.len, signature.base, signature.len);
+            psa_status_t status = PSA_SUCCESS;
+            uint8_t raw_signature[PSA_SIGNATURE_MAX_SIZE];
+
+            if (PSA_ALG_IS_ECDSA(alg)) {
+                /* TLS carries DER encoded ECDSA signatures, PSA expects r || s */
+                psa_key_attributes_t attributes = psa_key_attributes_init();
+                size_t coord_len = 0;
+
+                if (psa_get_key_attributes(message_verify_ctx->key_id, &attributes) != PSA_SUCCESS) {
+                    status = PSA_ERROR_GENERIC_ERROR;
+                }
+                else {
+                    coord_len = (psa_get_key_bits(&attributes) + 7) / 8;
+                    psa_reset_key_attributes(&attributes);
+                    if (coord_len == 0 || 2 * coord_len > sizeof(raw_signature) ||
+                        ptls_mbedtls_ecdsa_der_to_raw(signature.base, signature.len, raw_signature, coord_len) != 0) {
+                        status = PSA_ERROR_INVALID_SIGNATURE;
+                    }
+                    else {
+                        signature.base = raw_signature;
+                        signature.len = 2 * coord_len;
+                    }
+                }
+            }
+            if (status == PSA_SUCCESS) {
+                status = psa_verify_message(message_verify_ctx->key_id, alg, data.base, data.len, signature.base, signature.len);
+            }
 
             if (status != PSA_SUCCESS) {
                 switch (status) {

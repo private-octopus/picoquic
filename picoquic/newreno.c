@@ -99,13 +99,8 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_acknowledgement: {
         switch (nr_state->alg_state) {
         case picoquic_newreno_alg_slow_start:
-            /* TODO discuss app limited for pure reno too? */
-            /* following tests will fail:
-             * memlog keylog_test packet_trace ready_to_send ready_to_skip ready_to_zfin ready_to_zero pacing_update
-             * quality_update multipath_callback multipath_quality multipath_stream_af
-             */
-            nr_state->cwin += ack_state->nb_bytes_acknowledged;
-            /* nr_state->cwin += picoquic_cc_slow_start_increase(path_x, ack_state->nb_bytes_acknowledged); */
+            /* Only increase CWIN if the path is CWIN limited. */
+            nr_state->cwin += picoquic_cc_slow_start_increase(path_x, ack_state->nb_bytes_acknowledged);
 
             /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
             if (nr_state->cwin >= nr_state->ssthresh) {

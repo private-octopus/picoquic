@@ -3509,6 +3509,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(app_limited_cubic_idle) {
+            int ret = app_limited_cubic_idle_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cwin_max) {
             int ret = cwin_max_test();
 
@@ -3872,6 +3878,12 @@ namespace UnitTest1
 
         TEST_METHOD(migration_mtu_drop) {
             int ret = migration_mtu_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_retire_old_cid) {
+            int ret = migration_retire_old_cid_test();
 
             Assert::AreEqual(ret, 0);
         }

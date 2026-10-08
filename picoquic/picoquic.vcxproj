@@ -188,6 +188,8 @@
     <ClCompile Include="siphash.c" />
     <ClCompile Include="sockloop.c" />
     <ClCompile Include="picoquic_af_xdp.c" />
+    <ClCompile Include="picoquic_l3tx.c" />
+    <ClCompile Include="picoquic_neigh.c" />
     <ClCompile Include="spinbit.c" />
     <ClCompile Include="streams.c" />
     <ClCompile Include="ticket_store.c" />
@@ -220,6 +222,8 @@
     <ClInclude Include="picoquic_logger.h" />
     <ClInclude Include="picoquic_packet_loop.h" />
     <ClInclude Include="picoquic_af_xdp.h" />
+    <ClInclude Include="picoquic_l3tx.h" />
+    <ClInclude Include="picoquic_neigh.h" />
     <ClInclude Include="picoquic_set_binlog.h" />
     <ClInclude Include="picoquic_set_textlog.h" />
     <ClInclude Include="picoquic_unified_log.h" />

@@ -61,7 +61,8 @@
 #define C4_ALPHA_PUSH_200_0 3072 /* 150.0% % */
 
 #define C4_INITIAL_PACING 0x20000 /* 1,048,576 bit/s */
-#define C4_ALPHA_DRAINING 896 /* 75 % */
+#define C4_ALPHA_DRAINING 758 /* 75 % */ /* was 896 */
+#define C4_ALPHA_DRAINING_MID 896 /* 7/8th -- as used in initial draining tests */
 
 uint64_t c4_push_rate_by_probe_level[C4_PROBE_LEVEL_MAX + 1] = {
     C4_ALPHA_PUSH_VERY_LOW_1024, C4_ALPHA_PUSH_LOW_1024, C4_ALPHA_PUSH_50_0, C4_ALPHA_PUSH_200_0
@@ -94,6 +95,7 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t nominal_max_rtt; /* Estimate of queue-free max RTT */
     uint64_t initial_cwnd; /* CWND value used during Initial phase */
+    uint64_t backlog_1024; /* estimate of the queue buildup during push or initial, as a fraction of epoch */
     uint64_t initial_last_time; /* time of exit from last initial */
     uint64_t running_min_rtt; /* Rough estimate of min RTT, for buffer estimation */
     uint64_t alpha_1024_current;
@@ -139,7 +141,6 @@ typedef struct st_c4_state_t {
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
     unsigned int excess_ce_after_push : 1;
-    unsigned int is_drain_required : 1;
     /* Handling of options. */
     char const* option_string;
 } c4_state_t;
@@ -546,16 +547,23 @@ void c4_seed_cwin(picoquic_path_t * path_x, c4_state_t* c4_state, uint64_t bytes
 static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
     if (c4_state->nominal_rate > 0) {
+        /* Can we compute a backlog?
+        * By default, that would be initial cwnd minus ssthresh.
+        * Then we can estimate how much of that backlog is drained per epoch:
+        * something like drain rate = (1 - beta)*nominal_rate.
+        * Diminish the backlog after each epoch, only exit recovery when backlog is
+        * cleared?
+         */
         /* We assume that any required correction is done prior to calling this */
         uint64_t ssthresh = c4_state->initial_cwnd / 2;
+        c4_state->backlog_1024 = 1024; /* assume one full RTT of traffic */
         c4_state->nominal_max_rtt = ssthresh * 1000000 / c4_state->nominal_rate;
-        c4_state->is_drain_required = 1;
         if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
             c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
-            c4_state->is_drain_required = 0;
+            c4_state->backlog_1024 = 0;
         }
         else if (path_x->smoothed_rtt < C4_MAX_RTT_MIN) {
-            c4_state->is_drain_required = 0;
+            c4_state->backlog_1024 = 0;
         }
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
         c4_state->nb_eras_no_increase = 0;
@@ -674,10 +682,18 @@ static void c4_enter_recovery(
     * will not reinitialize the state if C4 is already in recovery.
      */
     if (c4_state->alg_state != c4_recovery) {
+        if ((c4_state->backlog_1024 <= (1024 - C4_ALPHA_RECOVER_1024)) || (c4_state->nominal_max_rtt <= C4_MAX_RTT_MIN)) {
+            c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+        }
+        else if (c4_state->backlog_1024 <= (1024 - C4_ALPHA_DRAINING_MID)){
+            c4_state->alpha_1024_current = C4_ALPHA_DRAINING_MID;
+        }
+        else {
+            c4_state->alpha_1024_current = C4_ALPHA_DRAINING;
+        }
         c4_state->excess_ce_after_push = (c_mode != c4_congestion_ecn) ? 0 : 1;
         c4_state->alg_state = c4_recovery;
         c4_era_reset(path_x, c4_state);
-        c4_state->alpha_1024_current = (c4_state->is_drain_required)? C4_ALPHA_DRAINING:C4_ALPHA_RECOVER_1024;
     }
 }
 
@@ -698,7 +714,13 @@ static void c4_exit_recovery(
         c4_state->initial_last_time = current_time;
     }
 
-    c4_state->is_drain_required = 0;
+    /* Estimate remaining backlog */
+    if (c4_state->backlog_1024 > (1024 - c4_state->alpha_1024_current)) {
+        c4_state->backlog_1024 -= (1024 - c4_state->alpha_1024_current);
+    }
+    else {
+        c4_state->backlog_1024 = 0;
+    }
 
     if (is_growing) {
         if (!c4_state->excess_ce_after_push && c4_state->nb_era_resuming == 0) {
@@ -729,7 +751,7 @@ static void c4_exit_recovery(
             if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
                 c4_state->push_was_not_limited &&
                 path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
-                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate)/2;
+                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate) / 2;
             }
         }
     }
@@ -794,7 +816,7 @@ static void c4_enter_cruise(
 static void c4_enter_probing(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
-{
+{ 
     c4_state->alpha_1024_current = c4_push_rate_by_probe_level[c4_state->probe_level];
     c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_era_reset(path_x, c4_state);
@@ -854,6 +876,11 @@ static void c4_on_pushing_era_end(
     else {
         if (c4_state->alpha_1024_previous >= C4_ALPHA_PUSH_25) {
             /* Move to recovery */
+            c4_state->backlog_1024 += (c4_state->alpha_1024_current > 1024) ?
+                c4_state->alpha_1024_current - 1024 : 0;
+            if (c4_state->backlog_1024 > 1024) {
+                DBG_PRINTF("%s", "bug");
+            }
             c4_enter_recovery(path_x, c4_state, c4_congestion_none);
         }
     }
@@ -926,9 +953,6 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
     if (path_x->rtt_sample < c4_state->era_min_rtt) {
         c4_state->era_min_rtt = path_x->rtt_sample;
-        if (path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
-            c4_state->is_drain_required = 1;
-        }
     }
 
     /* TODO: some of that logic might be located at the end of the RTT cycle, or the end of the era.
@@ -956,7 +980,6 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
             /* TODO: move this specific bit to the exit recovery function. */
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
-            c4_state->is_drain_required = 1;
         }
         /* Recompute the delay threshold as the max RTT was updated. */
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
@@ -968,7 +991,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     }
 
     if (c4_state->nominal_max_rtt < C4_MAX_RTT_MIN) {
-        c4_state->is_drain_required = 0;
+        c4_state->backlog_1024 = 0;
         c4_state->nominal_max_rtt = C4_MAX_RTT_MIN;
         c4_state->delay_threshold = c4_delay_threshold(c4_state);
     }
@@ -996,7 +1019,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             c4_state->push_was_not_limited = 1;
             c4_state->nominal_rate = rate_measurement;
             c4_state->delay_threshold = c4_delay_threshold(c4_state);
-            c4_state->is_drain_required = 0;
+            c4_state->backlog_1024 = 0;
         }
         else {
             /* The ACK rate did not grow, but that's not a proof.
@@ -1106,6 +1129,8 @@ static void c4_notify_congestion(
             /* capping beta to the standard 1/4th. */
             beta = C4_BETA_LOSS_1024;
         }
+        /* Do not try to apply backlog reduction if ECN drives it */
+        c4_state->backlog_1024 = 0;
     }
     
     if (c_mode == c4_congestion_delay) {

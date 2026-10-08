@@ -1442,8 +1442,13 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
  * the "save ticket" callback in the client's quic context.
  */
 
+#ifdef PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES
+int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
+    ptls_t* tls, ptls_iovec_t input, const ptls_save_ticket_properties_t* UNUSED(properties))
+#else
 int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     ptls_t* tls, ptls_iovec_t input)
+#endif
 {
     int ret = 0;
     picoquic_quic_t* quic = *((picoquic_quic_t**)(((char*)save_ticket_ctx) + sizeof(ptls_save_ticket_t)));
@@ -2278,13 +2283,10 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
             else {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
 
-                /* Newer picotls appends a ticket-properties argument. This callback
-                 * does not use it. Copy the pointer so both signatures compile. */
-                {
-                    int (*save_ticket_cb)(ptls_save_ticket_t*, ptls_t*, ptls_iovec_t) =
-                        picoquic_client_save_ticket_call_back;
-                    memcpy(&save_ticket->cb, &save_ticket_cb, sizeof(save_ticket->cb));
-                }
+                /* The callback matches ptls_save_ticket_t.cb. CMake sets
+                 * PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES when picotls passes
+                 * a ticket-properties argument. The callback does not use it. */
+                save_ticket->cb = picoquic_client_save_ticket_call_back;
                 ctx->save_ticket = save_ticket;
                 *ppquic = quic;
             }

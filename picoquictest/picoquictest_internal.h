@@ -262,6 +262,18 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquic_datagram_ack_fn datagram_ack_fn;
 } picoquic_test_tls_api_ctx_t;
 
+/* Options required to decode a test frame, set by parse_test_packet_cnx_fix and cleared one at a time */
+typedef enum {
+    parse_option_none = 0,
+    parse_option_time_stamp,
+    parse_option_datagram,
+    parse_option_ack_frequency,
+    parse_option_bdp,
+    parse_option_address_discovery,
+    parse_option_reset_stream_at,
+    parse_option_max
+} parse_option_enum;
+
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -273,6 +285,7 @@ typedef struct st_test_skip_frames_t {
     int skip_fails;
     int mpath;
     int nb_varints;
+    parse_option_enum option;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
