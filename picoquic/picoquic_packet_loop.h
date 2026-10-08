@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #define PICOQUIC_PACKET_LOOP_SOCKETS_MAX 4
-#define PICOQUIC_PACKET_LOOP_RECV_MAX 10
+#define PICOQUIC_PACKET_LOOP_RECV_MAX 32
 #ifndef PICOQUIC_PACKET_LOOP_SEND_MAX
 #define PICOQUIC_PACKET_LOOP_SEND_MAX 10
 #endif
@@ -55,6 +55,7 @@ typedef struct st_picoquic_socket_ctx_t {
     /* Receive data buffer and fields */
     size_t recv_buffer_size;
     uint8_t* recv_buffer;
+    void* recv_batch; /* Linux recvmmsg cache; NULL elsewhere */
     struct sockaddr_storage addr_from;
     struct sockaddr_storage addr_dest;
     socklen_t from_length;
