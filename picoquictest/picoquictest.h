@@ -310,6 +310,7 @@ int packet_trace_test(void);
 int qlog_auto_test(void);
 int qlog_error_test(void);
 int qlog_fns_trim_path_contexts_test(void);
+int qlog_quic_fallback_test(void);
 int qlog_trace_test(void);
 int qlog_trace_ecn_test(void);
 int qlog_trace_parallel_test(void);

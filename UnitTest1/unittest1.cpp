@@ -2318,6 +2318,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qlog_quic_fallback)
+        {
+            int ret = qlog_quic_fallback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_trace)
         {
             int ret = qlog_trace_test();

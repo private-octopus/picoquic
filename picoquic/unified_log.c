@@ -78,6 +78,28 @@ void picoquic_log_close_logs(picoquic_quic_t* quic)
     }
 }
 
+/* Qlog messages can only be logged in the context of a connection.
+* Quic level messages such as logging version negotiation or stateless
+* reset packets are not directly attached to a connection, but play
+* an important role when debugging issues. We try here to find a
+* connection context where they can be logged, and if we find one,
+* then reuse the app message path.
+*
+* Note that this is a provisional solution, merely picking the first
+* connection context in the list. It is OK for simple debugging scenarios
+* with just one connection per context. If there are many, it might be
+* better to pick a context based on a criteria like the incoming source
+* address of a packet, but that would be a bigger change, and it would require
+* mitigating a possible DOS if match per address requires searching through
+* a large number of connections.
+*/
+static picoquic_cnx_t* picoquic_find_cnx_for_quic_log(picoquic_quic_t* quic)
+{
+    picoquic_cnx_t* cnx = quic->cnx_list;
+
+    return cnx;
+}
+
 /* Log arrival or departure of an UDP datagram for an unknown connection */
 void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t current_time, uint64_t cid64,
     const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length)
@@ -87,12 +109,20 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
             if (quic->log_fns[i]->log_quic_pdu != NULL) {
                 quic->log_fns[i]->log_quic_pdu(quic, quic->log_params[i], receiving, current_time, cid64, addr_peer, addr_local, packet_length);
             }
+            else {
+                picoquic_cnx_t* cnx = picoquic_find_cnx_for_quic_log(quic);
+                if (cnx != NULL && cnx->log_ctx[i] != NULL) {
+                    cnx->quic->log_fns[i]->log_pdu(cnx, cnx->log_ctx[i], receiving, current_time, addr_peer, addr_local, packet_length,
+                        0 /* unique_path_id*/, 0 /* ecn */);
+                }
+            }
         }
         else {
             break;
         }
     }
 }
+
 
 /* Log an event relating to a specific connection */
 
@@ -132,6 +162,15 @@ void picoquic_log_context_free_app_message(picoquic_quic_t* quic, const picoquic
                 va_list args;
                 va_start(args, fmt);
                 quic->log_fns[i]->log_quic_app_message(quic, quic->log_params[i], cid, fmt, args);
+            }
+            else {
+                picoquic_cnx_t * cnx = picoquic_find_cnx_for_quic_log(quic);
+                if (cnx != NULL && cnx->log_ctx[i] != NULL) {
+                    va_list args;
+                    va_start(args, fmt);
+                    quic->log_fns[i]->log_app_message(cnx, cnx->log_ctx[i], fmt, args);
+                    va_end(args);
+                }
             }
         }
         else {
