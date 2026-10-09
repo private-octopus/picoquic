@@ -1163,7 +1163,7 @@ static void BBRUpdateACKAggregation(picoquic_bbr_state_t* bbr_state, picoquic_pa
 {
     /* Find excess ACKed beyond expected amount over this interval */
     uint64_t interval = (current_time - bbr_state->extra_acked_interval_start);
-    uint64_t expected_delivered = bbr_state->bw * interval;
+    uint64_t expected_delivered = PICOQUIC_BYTES_FROM_RATE(interval, bbr_state->bw);
     /* Reset interval if ACK rate is below expected rate: */
     if (bbr_state->extra_acked_delivered <= expected_delivered) {
         bbr_state->extra_acked_delivered = 0;
@@ -1978,8 +1978,10 @@ static void BBREnterStartupResume(picoquic_bbr_state_t* bbr_state)
 static void BBRCheckStartupResume(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs)
 {
     if (bbr_state->state == picoquic_bbr_alg_startup_resume) {
+        uint64_t min_rtt = (bbr_state->min_rtt == UINT64_MAX) ? path_x->rtt_sample : bbr_state->min_rtt;
         BBRCheckStartupHighLoss(bbr_state, path_x, rs);
-        if (!bbr_state->filled_pipe && (double)bbr_state->max_bw > BBRStartupResumeIncreaseThreshold * bbr_state->bdp_seed) {
+        if (!bbr_state->filled_pipe && PICOQUIC_BYTES_FROM_RATE(min_rtt, bbr_state->max_bw) > 
+            (uint64_t)(BBRStartupResumeIncreaseThreshold * bbr_state->bdp_seed)) {
             BBREnterStartup(bbr_state, path_x);
         }
         else {
@@ -2184,7 +2186,7 @@ void BBRSetBdpSeed(picoquic_bbr_state_t* bbr_state, uint64_t bdp_seed)
 {
     bbr_state->bdp_seed = bdp_seed;
     if (bbr_state->state == picoquic_bbr_alg_startup &&
-        bbr_state->bdp_seed > bbr_state->max_bw) {
+        bbr_state->bdp_seed > PICOQUIC_BYTES_FROM_RATE(bbr_state->min_rtt, bbr_state->max_bw)){
         BBREnterStartupResume(bbr_state);
     }
 }
