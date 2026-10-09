@@ -571,7 +571,11 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 {
     /* register the stream ID as session ID */
     int ret = 0;
-    if (h3zero_find_stream_prefix(ctx, stream_ctx->stream_id) == NULL) {
+
+    if (ctx->nb_wt_connections > 0) {
+        ret = -1;
+    } 
+    else if (h3zero_find_stream_prefix(ctx, stream_ctx->stream_id) == NULL) {
         ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
     }
     if (ret == 0 && cnx != NULL) {
@@ -580,6 +584,9 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 
     if (ret == 0) {
         size_t connect_length = 0;
+
+        ctx->nb_wt_connections++;
+        stream_ctx->is_wt_counted = 1;
 
         /* set the required stream parameters for the state of the stream. */
         stream_ctx->is_open = 1;
@@ -633,6 +640,15 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_strea
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx, char const* wt_available_protocols)
 {
     return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, wt_available_protocols, NULL, 0);
+}
+
+/* Remove the session from the count of concurrent WT connections, at most once per session. */
+void picowt_uncount_session(h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx)
+{
+    if (control_stream_ctx->is_wt_counted) {
+        control_stream_ctx->is_wt_counted = 0;
+        h3_ctx->nb_wt_connections--;
+    }
 }
 
 /*
@@ -853,5 +869,8 @@ void picowt_deregister(picoquic_cnx_t* cnx,
         control_stream_ctx->ps.stream_state.is_fin_sent = 1;
     }
     picoquic_unlink_app_stream_ctx(cnx, control_stream_ctx->stream_id);
+    /* Then reduce the count of concurrent wt_connections */
+    picowt_uncount_session(h3_ctx, control_stream_ctx);
+
     picoquic_log_app_message(cnx, "Prefix for control stream %"PRIu64 " was unregistered", control_stream_id);
 }
