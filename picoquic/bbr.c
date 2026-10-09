@@ -368,7 +368,7 @@ static void BBRResetLowerBounds(picoquic_bbr_state_t* bbr_state);
 static uint64_t BBRInflightWithBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain, uint64_t bw);
 static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
 static uint64_t BBRInflightWithHeadroom(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x);
-static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain);
+static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, double gain);
 static void BBRAdaptUpperBounds(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, bbr_per_ack_state_t* rs, uint64_t current_time);
 static int InLossRecovery(picoquic_bbr_state_t* bbr_state);
 static int BBRHasElapsedInPhase(picoquic_bbr_state_t* bbr_state, uint64_t interval, uint64_t current_time);
@@ -708,7 +708,7 @@ static void BBRBoundCwndForModel(picoquic_bbr_state_t* bbr_state, picoquic_path_
 
 static uint64_t BBRProbeRTTCwnd(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    uint64_t probe_rtt_cwnd = BBRBDPMultiple( bbr_state, path_x, BBRProbeRTTCwndGain);
+    uint64_t probe_rtt_cwnd = BBRBDPMultiple( bbr_state, BBRProbeRTTCwndGain);
     if (probe_rtt_cwnd < BBRMinPipeCwnd * path_x->send_mtu) {
         probe_rtt_cwnd = BBRMinPipeCwnd * path_x->send_mtu;
     }
@@ -903,7 +903,7 @@ static void BBRCheckRecovery(picoquic_bbr_state_t* bbr_state, picoquic_path_t* p
 }
 
 /* Computing the congestion window */
-static uint64_t BBRBDPMultipleWithBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain, uint64_t bw)
+static uint64_t BBRBDPMultipleWithBw(picoquic_bbr_state_t* bbr_state, double gain, uint64_t bw)
 {
     if (bbr_state->min_rtt == UINT64_MAX) {
         return PICOQUIC_CWIN_INITIAL; /* no valid RTT samples yet */
@@ -912,9 +912,9 @@ static uint64_t BBRBDPMultipleWithBw(picoquic_bbr_state_t* bbr_state, picoquic_p
     return (uint64_t)(gain * (double)bbr_state->bdp);
 }
 
-static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain)
+static uint64_t BBRBDPMultiple(picoquic_bbr_state_t* bbr_state, double gain)
 {
-    return BBRBDPMultipleWithBw(bbr_state, path_x, gain, bbr_state->bw);
+    return BBRBDPMultipleWithBw(bbr_state, gain, bbr_state->bw);
 }
 
 static void BBRUpdateOffloadBudget(picoquic_bbr_state_t* bbr_state)
@@ -939,7 +939,7 @@ static uint64_t BBRQuantizationBudget(picoquic_bbr_state_t* bbr_state, picoquic_
 
 static uint64_t BBRInflightWithBw(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, double gain, uint64_t bw)
 {
-    uint64_t inflight = BBRBDPMultipleWithBw(bbr_state, path_x, gain, bw);
+    uint64_t inflight = BBRBDPMultipleWithBw(bbr_state, gain, bw);
     return BBRQuantizationBudget(bbr_state, path_x, inflight);
 }
 
@@ -956,7 +956,7 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
     * BBRUpdateACKAggregation(), which is called as part of 
     * BBRUpdateModelAndState(). There is probably no need to do an extra
     * call here. */
-    uint64_t inflight = BBRBDPMultiple(bbr_state, path_x, bbr_state->cwnd_gain);
+    uint64_t inflight = BBRBDPMultiple(bbr_state, bbr_state->cwnd_gain);
 
     inflight += bbr_state->extra_acked;
 
