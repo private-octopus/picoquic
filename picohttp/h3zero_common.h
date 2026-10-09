@@ -131,6 +131,7 @@ extern "C" {
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
+        unsigned int is_wt_counted : 1; /* This WT session is counted in nb_wt_connections */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
@@ -231,6 +232,8 @@ extern "C" {
         uint64_t last_datagram_prefix;
         /* control stream ID remembered for uniqueness checks. */
         uint64_t remote_control_stream_id;
+        /* Number of concurrent WT connections for the connection */
+        int nb_wt_connections;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;

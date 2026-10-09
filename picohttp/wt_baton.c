@@ -804,6 +804,12 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             picoquic_log_app_message(cnx, "WT Connection refused on stream %" PRIu64 ", status= %d",
                 stream_ctx->stream_id,
                 stream_ctx->ps.stream_state.header.status);
+
+            /* Wt_connect limits the number of connections to 1 per context.
+            * Since the connection was refused, we need to 
+            * reduce the count of concurrent wt_connections 
+            * by calling picowt_uncount_session */
+            picowt_uncount_session((h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx), stream_ctx);
             break;
         case picohttp_callback_connect_accepted: /* Connection request was accepted by peer */
             /* The response from the server has arrived and it is positive.
