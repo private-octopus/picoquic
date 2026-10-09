@@ -449,6 +449,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_auto", qlog_auto_test },
     { "qlog_error", qlog_error_test },
     { "qlog_fns_trim_path_contexts", qlog_fns_trim_path_contexts_test },
+    { "qlog_quic_fallback", qlog_quic_fallback_test },
     { "qlog_trace", qlog_trace_test },
     { "qlog_trace_ecn", qlog_trace_ecn_test },
     { "qlog_trace_parallel", qlog_trace_parallel_test },
