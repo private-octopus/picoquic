@@ -222,4 +222,16 @@ or submitted to the application after that callback is issued.
 Data queued by the client after the callback `picoquic_callback_almost_ready`
 will always be sent as 1RTT data, and cannot be replayed by attackers.
 
+## Controlling usage of 0RTT
 
+Applications that do not want to deal with the risk of 0RTT replay attacks
+may use the API on the server:
+
+```
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt);
+```
+
+Setting `accept_0rtt` to 0 will tell the server to not enable 0RTT in the
+session resume tickets that it issues to clients. That API can be issued at any
+time, and will apply to all connections created after the setting is set.
+The action can be reverse by calling the API with `accept_0rtt` set to 1.

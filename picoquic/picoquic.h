@@ -825,6 +825,12 @@ void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 /* Export keying material from the TLS connection using the given exporter label */
 int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
 
+/* By default, picoquic servers configured to support session resume in TLS 
+* also support 0RTT. This API allows application to disallow 0RTT by setting
+* accept_0rtt = 0. Applications may want to do that if they want isolation
+* from replay attacks possible with 0RTT. */
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt);
+
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
  * will also have certificaye and key. In that case, the function "enforce_client_only"
