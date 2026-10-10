@@ -810,7 +810,10 @@ static const picoquic_test_def_t test_table[] = {
     { "config_qmux", config_qmux_test },
     { "config_usage", config_usage_test },
     { "config_preferred", config_preferred_test },
-    { "config_set_port", config_set_port_test }
+    { "config_set_port", config_set_port_test },
+    { "hystart_pp_state", hystart_pp_state_test },
+    { "hystart_cc", hystart_cc_test },
+    { "hystart_ss_exit", hystart_ss_exit_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(picoquic_test_def_t);

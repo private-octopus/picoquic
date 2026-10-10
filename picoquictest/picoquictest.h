@@ -406,6 +406,7 @@ int cubic_jitter_test(void);
 int c4_test(void);
 int c4_jitter_test(void);
 int cc_compete_cubic2_test(void);
+int cc_compete_cubic2_hystart_pp_test(void);
 int cc_compete_c4c4_test(void);
 int cc_compete_prague2_test(void);
 int cc_compete_d_cubic_test(void);
@@ -881,6 +882,9 @@ int perf_loopback_multistream_test(void);
 int perf_loopback_multiconn_test(void);
 int cplusplustest(void);
 int error_name_test(void);
+int hystart_pp_state_test(void);
+int hystart_cc_test(void);
+int hystart_ss_exit_test(void);
 
 #ifdef __cplusplus
 }

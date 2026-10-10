@@ -245,6 +245,7 @@ static const picoquic_test_def_t test_table[] = {
     { "perf_loopback_multistream", perf_loopback_multistream_test },
     { "perf_loopback_multiconn", perf_loopback_multiconn_test },
     { "cc_compete_cubic2", cc_compete_cubic2_test },
+    { "cc_compete_cubic2_hystart_pp", cc_compete_cubic2_hystart_pp_test },
     { "cc_compete_prague2", cc_compete_prague2_test },
     { "cc_compete_c4c4", cc_compete_c4c4_test },
     { "cc_compete_d_cubic", cc_compete_d_cubic_test },
