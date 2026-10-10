@@ -2061,6 +2061,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 #endif
+        TEST_METHOD(zero_rtt_refused) {
+            int ret = zero_rtt_refused_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cnxid_transmit)
         {
             int ret = transmit_cnxid_test();

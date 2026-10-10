@@ -221,6 +221,7 @@ int zero_rtt_many_losses_test(void);
 int zero_rtt_long_test(void);
 int zero_rtt_delay_test(void);
 int zero_rtt_ech_test(void);
+int zero_rtt_refused_test(void);
 int parse_frame_test(void);
 int frames_repeat_test(void);
 int frames_ackack_error_test(void);
