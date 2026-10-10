@@ -502,7 +502,6 @@ int main(int argc, char** argv)
                         else if (test_status[test_number] == test_not_run) {
                             test_status[test_number] = test_success;
                         }
-                        break;
                     }
                 }
             }
