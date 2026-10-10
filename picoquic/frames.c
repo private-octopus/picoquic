@@ -1290,6 +1290,7 @@ void picoquic_stream_data_callback(picoquic_cnx_t* cnx, picoquic_stream_head_t* 
             picoquic_stream_data_chunk_callback(cnx, stream, data->bytes + start, data_length);
         }
         picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
+        cnx->nb_stream_data_nodes--;
     }
 
     /* handle the case where the fin frame does not carry any data */
@@ -1473,9 +1474,12 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             }
         } else {
             int new_data_available = 0;
+            int nb_nodes_before = stream->stream_data_tree.size;
 
             ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
                 offset, bytes, length, is_last_frame, received_data, &new_data_available);
+            /* Only adds nodes, count them even if an error occured after a partial insertion */
+            cnx->nb_stream_data_nodes += (uint64_t)(stream->stream_data_tree.size - nb_nodes_before);
             if (ret != 0) {
                 ret = picoquic_connection_error(cnx, (int64_t)ret, 0);
             }

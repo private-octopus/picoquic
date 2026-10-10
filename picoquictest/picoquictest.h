@@ -391,6 +391,7 @@ int reset_loop_test(void);
 int reset_stream_at_basic_test(void);
 int reset_stream_at_limit_test(void);
 int reset_stream_at_loss_test(void);
+int stream_data_nodes_test(void);
 int stream_state_local_reuse_test(void);
 int add_to_stream_fin_only_wakes_cnx_test(void);
 int initial_pto_test(void);

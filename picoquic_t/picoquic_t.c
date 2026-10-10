@@ -528,6 +528,7 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_stream_at_basic", reset_stream_at_basic_test },
     { "reset_stream_at_limit_test", reset_stream_at_limit_test },
     { "reset_stream_at_loss", reset_stream_at_loss_test },
+    { "stream_data_nodes", stream_data_nodes_test },
     { "stream_state_local_reuse", stream_state_local_reuse_test },
     { "add_to_stream_fin_only_wakes_cnx", add_to_stream_fin_only_wakes_cnx_test },
     { "initial_pto", initial_pto_test },

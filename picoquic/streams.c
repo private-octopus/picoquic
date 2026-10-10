@@ -139,6 +139,8 @@ static void picoquic_stream_node_delete(void* UNUSED(tree), picosplay_node_t* no
 {
     picoquic_stream_head_t* stream = picoquic_stream_node_value(node);
 
+    /* Not in picoquic_clear_stream, which also clears the uncounted crypto streams */
+    stream->cnx->nb_stream_data_nodes -= (uint64_t)stream->stream_data_tree.size;
     picoquic_clear_stream(stream);
 
     free(stream);
@@ -996,6 +998,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
 
             if (ret == 0) {
                 picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
+                cnx->nb_stream_data_nodes--;
             }
             else {
                 break;

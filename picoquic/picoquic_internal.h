@@ -1493,6 +1493,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
+    uint64_t nb_stream_data_nodes; /* Sum of stream_data_tree.size over all data streams */
     picoquic_output_stream_t output_streams;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];

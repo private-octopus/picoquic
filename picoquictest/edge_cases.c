@@ -2321,3 +2321,142 @@ int error_name_test(void)
     }
     return ret;
 }
+
+/* Verify the connection-wide count of stream data nodes, cnx->nb_stream_data_nodes,
+ * through each path that adds or removes nodes: out of order arrival, in order
+ * delivery, switch to direct receive, and stream deletion. */
+static int stream_data_nodes_noop_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t UNUSED(fin_or_event), void* UNUSED(callback_ctx), void* UNUSED(v_stream_ctx))
+{
+    return 0;
+}
+
+static int stream_data_nodes_direct_receive(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), int UNUSED(fin), const uint8_t* UNUSED(bytes), uint64_t UNUSED(offset), size_t UNUSED(length),
+    void* UNUSED(direct_receive_ctx))
+{
+    return 0;
+}
+
+static int stream_data_nodes_receive_byte(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t offset, uint64_t simulated_time)
+{
+    int ret = 0;
+    uint8_t frame[32];
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + sizeof(frame);
+
+    /* STREAM frame with OFF and LEN bits, carrying one byte. */
+    *bytes++ = picoquic_frame_type_stream_range_min | 0x04 | 0x02;
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        *bytes++ = (uint8_t)offset;
+        ret = picoquic_decode_frames(cnx, cnx->path[0], frame, bytes - frame, NULL, picoquic_epoch_1rtt,
+            (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
+            123, 0, NULL, simulated_time);
+        if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Stream %" PRIu64 ", offset %" PRIu64 ": error 0x%x", stream_id, offset, ret);
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+/* Return 0 if nb_stream_data_nodes equals the sum of stream_data_tree.size over all streams, -1 otherwise */
+static int picoquic_check_stream_data_nodes(picoquic_cnx_t* cnx)
+{
+    uint64_t nb_nodes = 0;
+    picoquic_stream_head_t* stream = picoquic_first_stream(cnx);
+
+    while (stream != NULL) {
+        nb_nodes += (uint64_t)stream->stream_data_tree.size;
+        stream = picoquic_next_stream(stream);
+    }
+    return (nb_nodes == cnx->nb_stream_data_nodes) ? 0 : -1;
+}
+
+static int stream_data_nodes_check(picoquic_cnx_t* cnx, uint64_t expected, char const* step)
+{
+    int ret = 0;
+
+    if (picoquic_check_stream_data_nodes(cnx) != 0) {
+        DBG_PRINTF("%s: count %" PRIu64 " does not match the stream trees", step, cnx->nb_stream_data_nodes);
+        ret = -1;
+    }
+    else if (cnx->nb_stream_data_nodes != expected) {
+        DBG_PRINTF("%s: count %" PRIu64 ", expected %" PRIu64, step, cnx->nb_stream_data_nodes, expected);
+        ret = -1;
+    }
+    return ret;
+}
+
+int stream_data_nodes_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0 && (cnx = test_ctx->cnx_server) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_callback(cnx, stream_data_nodes_noop_callback, NULL);
+        ret = stream_data_nodes_check(cnx, 0, "start");
+    }
+
+    /* One byte at odd offsets 1, 3, 5 on streams 0, 4 and 8: 9 nodes. */
+    for (uint64_t stream_id = 0; ret == 0 && stream_id <= 8; stream_id += 4) {
+        for (uint64_t offset = 1; ret == 0 && offset <= 5; offset += 2) {
+            ret = stream_data_nodes_receive_byte(cnx, stream_id, offset, simulated_time);
+        }
+    }
+    if (ret == 0) {
+        ret = stream_data_nodes_check(cnx, 9, "out of order");
+    }
+    /* Duplicate data does not add nodes. */
+    if (ret == 0 && (ret = stream_data_nodes_receive_byte(cnx, 0, 3, simulated_time)) == 0) {
+        ret = stream_data_nodes_check(cnx, 9, "duplicate");
+    }
+    /* Offset 0 on stream 0 delivers offsets 0 and 1, consuming the node at offset 1. */
+    if (ret == 0 && (ret = stream_data_nodes_receive_byte(cnx, 0, 0, simulated_time)) == 0) {
+        ret = stream_data_nodes_check(cnx, 8, "in order");
+    }
+    /* Switching stream 4 to direct receive passes and removes its 3 nodes. */
+    if (ret == 0) {
+        if (picoquic_mark_direct_receive_stream(cnx, 4, stream_data_nodes_direct_receive, NULL) != 0) {
+            DBG_PRINTF("%s", "Cannot mark stream 4 for direct receive");
+            ret = -1;
+        }
+        else {
+            ret = stream_data_nodes_check(cnx, 5, "direct receive");
+        }
+    }
+    /* Deleting stream 8 removes its 3 nodes. */
+    if (ret == 0) {
+        picoquic_stream_head_t* stream = picoquic_find_stream(cnx, 8);
+        if (stream == NULL) {
+            DBG_PRINTF("%s", "Cannot find stream 8");
+            ret = -1;
+        }
+        else {
+            picoquic_delete_stream(cnx, stream);
+            ret = stream_data_nodes_check(cnx, 2, "stream deleted");
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
