@@ -40,6 +40,7 @@ int util_connection_id_parse_test(void);
 int util_sprintf_test(void);
 int util_debug_print_test(void);
 int util_debug_pop_stream_test(void);
+int util_addr_text_test(void);
 int util_uint8_to_str_test(void);
 int util_memcmp_test(void);
 int util_threading_test(void);

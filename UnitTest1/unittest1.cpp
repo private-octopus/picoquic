@@ -146,6 +146,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(util_addr_text)
+        {
+            int ret = util_addr_text_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(util_uint8_to_str)
         {
             int ret = util_uint8_to_str_test();
