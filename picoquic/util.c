@@ -605,7 +605,10 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
     return ret;
 }
 
-/* Get text string for address and port */
+/* Get text string for address and port.
+* By convention, all port values in socket structure are encoded in
+* network order. Print them in host order for visibility.
+*/
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size)
 {
     char addr_buffer[128];
@@ -618,7 +621,7 @@ char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t t
             addr_text = inet_ntop(AF_INET,
                 (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
                 addr_buffer, sizeof(addr_buffer));
-            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*)addr)->sin_port) == 0) {
+            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*)addr)->sin_port)) == 0) {
                 ret_text = text;
             }
             break;
@@ -626,7 +629,7 @@ char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t t
             addr_text = inet_ntop(AF_INET6,
                 (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
                 addr_buffer, sizeof(addr_buffer));
-            if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ((struct sockaddr_in6*)addr)->sin6_port) == 0) {
+            if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*)addr)->sin6_port)) == 0) {
                 ret_text = text;
             }
         default:

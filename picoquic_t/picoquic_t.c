@@ -119,6 +119,7 @@ static const picoquic_test_def_t test_table[] = {
     { "util_sprintf", util_sprintf_test },
     { "util_debug_print", util_debug_print_test },
     { "util_debug_pop_stream", util_debug_pop_stream_test },
+    { "util_addr_text", util_addr_text_test },
     { "util_uint8_to_str", util_uint8_to_str_test },
     { "util_memcmp", util_memcmp_test },
     { "threading", util_threading_test },
@@ -408,6 +409,7 @@ static const picoquic_test_def_t test_table[] = {
 #if 0
     { "zero_rtt_ech", zero_rtt_ech_test },
 #endif
+    { "zero_rtt_refused", zero_rtt_refused_test },
     { "random_tester", random_tester_test},
     { "random_gauss", random_gauss_test},
     { "random_public_tester", random_public_tester_test},

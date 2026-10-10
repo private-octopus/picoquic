@@ -205,6 +205,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_fin_before_baton", picowt_baton_fin_before_baton_test },
     { "picowt_baton_wrong_stream", picowt_baton_wrong_stream_test },
     { "picowt_baton_wildcard", picowt_baton_wildcard_test },
+    { "picowt_one_session", picowt_one_session_test },
     { "picowt_baton_overflow", picowt_baton_overflow_test },
     { "picowt_drain", picowt_drain_test },
     { "picowt_reset_stream_remote_unidir", picowt_reset_stream_remote_unidir_test },
@@ -501,7 +502,6 @@ int main(int argc, char** argv)
                         else if (test_status[test_number] == test_not_run) {
                             test_status[test_number] = test_success;
                         }
-                        break;
                     }
                 }
             }

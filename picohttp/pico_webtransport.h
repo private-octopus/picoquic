@@ -65,6 +65,8 @@ extern "C" {
      */
     int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback,
         void* wt_ctx, char const* wt_available_protocols);
+    /* Remove a WT session from the count of concurrent sessions, e.g., after the connection was refused. Safe to call more than once. */
+    void picowt_uncount_session(h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */

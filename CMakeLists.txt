@@ -304,11 +304,8 @@ OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 OPTION(PICOQUIC_FETCH_AEGIS "Fetch libaegis during configuration when WITH_AEGIS is enabled" OFF)
 OPTION(PICOQUIC_AEGIS_FAVOR_PERFORMANCE "Build fetched libaegis with FAVOR_PERFORMANCE enabled" ON)
 OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for this host CPU" OFF)
-if(WITH_AEGIS)
-    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "7c32032f91449d695b24b82955f20d04d47e6cff")
-else()
-    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "bfa67875982afc4c24f21e146cef4747fa189c2f")
-endif()
+# Set to picotls build as of 2026-10-08, which includes AEGIS support when available.
+set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "f06553b877ada93c860dd1db9002eabf7365292d")
 set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
 set(PICOQUIC_FETCH_AEGIS_TAG "0.10.1" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
 if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
@@ -427,39 +424,6 @@ else()
     set(PICOQUIC_OPENSSL_INCLUDE_DIRS "")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
-
-# Current picotls appends ptls_save_ticket_properties_t to save_ticket.
-# The commits picoquic fetches by default do not. Assign the matching callback.
-cmake_push_check_state()
-set(CMAKE_REQUIRED_INCLUDES ${PTLS_INCLUDE_DIRS} ${PICOQUIC_OPENSSL_INCLUDE_DIRS})
-if(NOT WITH_OPENSSL)
-    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_OPENSSL)
-endif()
-if(NOT PTLS_WITH_FUSION)
-    list(APPEND CMAKE_REQUIRED_DEFINITIONS -DPTLS_WITHOUT_FUSION)
-endif()
-set(PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
-set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-check_c_source_compiles("
-#include <picotls.h>
-int probe(const ptls_save_ticket_properties_t *properties)
-{
-    return properties != 0;
-}
-int main(void)
-{
-    return probe(0);
-}
-" PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
-set(CMAKE_TRY_COMPILE_TARGET_TYPE ${PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE})
-cmake_pop_check_state()
-if(PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
-    message(STATUS "picotls save_ticket includes ticket properties")
-    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES)
-else()
-    message(STATUS "picotls save_ticket has no ticket properties argument")
-endif()
-
 
 OPTION(WITH_SELECT "build with select" OFF)
 if(WITH_SELECT)

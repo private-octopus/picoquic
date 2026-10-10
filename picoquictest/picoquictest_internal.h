@@ -433,6 +433,7 @@ typedef struct st_zero_rtt_test_t {
     int propose_ech;
     int change_params;
     int cipher_suite_id;
+    int refuse_0rtt;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);

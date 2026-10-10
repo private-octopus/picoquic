@@ -1441,14 +1441,8 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
  * The client signals its willingness to receive session resume tickets by providing
  * the "save ticket" callback in the client's quic context.
  */
-
-#ifdef PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES
 int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
-    ptls_t* tls, ptls_iovec_t input, const ptls_save_ticket_properties_t* UNUSED(properties))
-#else
-int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
-    ptls_t* tls, ptls_iovec_t input)
-#endif
+        ptls_t* tls, ptls_iovec_t input, const ptls_save_ticket_properties_t* UNUSED(properties))
 {
     int ret = 0;
     picoquic_quic_t* quic = *((picoquic_quic_t**)(((char*)save_ticket_ctx) + sizeof(ptls_save_ticket_t)));
@@ -1456,6 +1450,9 @@ int picoquic_client_save_ticket_call_back(ptls_save_ticket_t* save_ticket_ctx,
     const char* alpn = ptls_get_negotiated_protocol(tls);
     picoquic_cnx_t * cnx = (picoquic_cnx_t *)*ptls_get_data_ptr(tls);
     uint32_t version = picoquic_supported_versions[cnx->version_index].version;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(properties);
+#endif
 
     if (alpn == NULL && quic != NULL) {
         alpn = quic->default_alpn;
@@ -2283,9 +2280,6 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
             else {
                 picoquic_quic_t** ppquic = (picoquic_quic_t**)(((char*)save_ticket) + sizeof(ptls_save_ticket_t));
 
-                /* The callback matches ptls_save_ticket_t.cb. CMake sets
-                 * PICOQUIC_PTLS_SAVE_TICKET_PROPERTIES when picotls passes
-                 * a ticket-properties argument. The callback does not use it. */
                 save_ticket->cb = picoquic_client_save_ticket_call_back;
                 ctx->save_ticket = save_ticket;
                 *ppquic = quic;
@@ -3356,6 +3350,17 @@ int picoquic_tls_client_authentication_activated(picoquic_quic_t* quic) {
 void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
     ((ptls_context_t*)quic->tls_master_ctx)->use_exporter = use_exporter;
 }
+
+/* Control usage of 0 RTT. This is done through a picotls "early data size" in the
+* TLS context. The only legitimate values per RFC9001 are UINT32_MAX (allow)
+* and 0 (refuse).
+*/
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt)
+{
+    PICOQUIC_THREAD_CHECK(quic);
+    ((ptls_context_t*)quic->tls_master_ctx)->max_early_data_size = (accept_0rtt) ? 0xFFFFFFFF : 0;
+}
+
 
 /* 
  * Create or verify a token. Tokens are tied to an IP address and a time of

@@ -146,6 +146,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(util_addr_text)
+        {
+            int ret = util_addr_text_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(util_uint8_to_str)
         {
             int ret = util_uint8_to_str_test();
@@ -2061,6 +2068,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 #endif
+        TEST_METHOD(zero_rtt_refused) {
+            int ret = zero_rtt_refused_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cnxid_transmit)
         {
             int ret = transmit_cnxid_test();
@@ -4838,6 +4851,12 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_baton_wildcard) {
             int ret = picowt_baton_wildcard_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_one_session) {
+            int ret = picowt_one_session_test();
 
             Assert::AreEqual(ret, 0);
         }
