@@ -205,6 +205,10 @@ int picoquic_flow_control_check_stream_offset(picoquic_cnx_t* cnx, picoquic_stre
         } else {
             cnx->offset_received += new_bytes;
             stream->fin_offset = new_fin_offset;
+            if (stream->direct_receive_fn != NULL) {
+                /* Direct receive data is passed to the application on arrival, count it as delivered */
+                cnx->data_received += new_bytes;
+            }
         }
     }
 
@@ -1498,6 +1502,11 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 /* This simple check detects abusive scenarios, like sending lots of tiny out of
                  * order packets */
                  ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
+            }
+            else if (cnx->nb_stream_data_nodes > 128 &&
+                cnx->nb_stream_data_nodes * 1536 > (cnx->maxdata_local - cnx->data_received) * 6) {
+                /* Same check at the connection level, for tiny out of order packets spread over many streams */
+                ret = picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
             }
         }
     }

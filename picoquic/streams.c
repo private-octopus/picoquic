@@ -974,6 +974,10 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         ret = PICOQUIC_ERROR_NO_CALLBACK_PROVIDED;
     }
     else {
+        if (stream->direct_receive_fn == NULL && stream->fin_offset > stream->consumed_offset) {
+            /* Data not yet delivered is now passed to the application, count it as delivered */
+            cnx->data_received += stream->fin_offset - stream->consumed_offset;
+        }
         stream->direct_receive_fn = direct_receive_fn;
         stream->direct_receive_ctx = direct_receive_ctx;
         /* If there is pending data, pass it. */
