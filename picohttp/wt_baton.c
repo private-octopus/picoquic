@@ -342,7 +342,12 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      * The control stream should only carry capsule data, and these are
      * processed directly at the web transport layer.
      */
-    if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
+    if (baton_ctx == NULL) {
+        /* No session context, e.g., data on a stream whose CONNECT was not accepted. */
+        picoquic_log_app_message(cnx, "Baton data without session context on stream %" PRIu64, stream_ctx->stream_id);
+        ret = -1;
+    }
+    else if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
             ret = picowt_receive_capsule(cnx, bytes, (bytes == NULL)?NULL:(bytes + length), &baton_ctx->capsule);
             if (ret == 0 &&
                 baton_ctx->capsule.h3_capsule.is_stored &&
@@ -595,8 +600,14 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     {
         int ret = 0;
         h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
-        wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
-        if (baton_ctx == NULL) {
+        wt_baton_ctx_t* baton_ctx = NULL;
+
+        if (!picowt_is_webtransport_connect(stream_ctx)) {
+            /* Classic CONNECT, or other protocol: not a web transport session */
+            picoquic_log_app_message(cnx, "Baton refuses non web transport CONNECT on stream %" PRIu64, stream_ctx->stream_id);
+            ret = -1;
+        }
+        else if ((baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t))) == NULL) {
             ret = -1;
         }
         else {
@@ -958,4 +969,15 @@ int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
     }
 
     return ret;
+}
+
+void wt_baton_set_path_item(picohttp_server_path_item_t* item, char const* path, void* path_app_ctx)
+{
+    memset(item, 0, sizeof(picohttp_server_path_item_t));
+    item->path = path;
+    item->path_length = strlen(path);
+    item->path_callback = wt_baton_callback;
+    item->path_app_ctx = path_app_ctx;
+    item->connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
+    item->connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1;
 }

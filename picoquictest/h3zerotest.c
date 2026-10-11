@@ -4636,6 +4636,8 @@ int h3zero_process_request_frame_test(void)
     h3zero_process_request_test_cb_ctx_t post_cb_ctx = { 5, 0 };
     h3zero_process_request_test_cb_ctx_t connect_accept_cb_ctx = { 0, 0 };
     h3zero_process_request_test_cb_ctx_t connect_refuse_cb_ctx = { -1, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_no_protocol_cb_ctx = { 0, 0 };
+    h3zero_process_request_test_cb_ctx_t connect_classic_cb_ctx = { 0, 0 };
 
     picohttp_server_path_item_t path_table[] = {
         { post_path, sizeof(post_path) - 1, h3zero_process_request_test_callback, &post_cb_ctx,
@@ -4690,6 +4692,69 @@ int h3zero_process_request_frame_test(void)
 
             if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
                 stream_ctx.path_callback != NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Extended CONNECT on a path item that does not declare a connect protocol:
+     * rejected before the app is consulted, even for a valid web transport request.
+     */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.path_app_ctx = &connect_no_protocol_cb_ctx;
+        item.connect_protocol = NULL;
+        item.connect_protocol_length = 0;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        stream_ctx.ps.stream_state.header.protocol = (const uint8_t*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                connect_no_protocol_cb_ctx.called || stream_ctx.path_callback != NULL ||
+                local_app_ctx.nb_wt_connections != 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Classic CONNECT (no :protocol) on a path item that does not declare a connect
+     * protocol: accepted as in RFC 9114, and not counted as a web transport session. */
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t item = path_table[1];
+        item.path_app_ctx = &connect_classic_cb_ctx;
+        item.connect_protocol = NULL;
+        item.connect_protocol_length = 0;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = next_stream_id;
+        next_stream_id += 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+
+        {
+            picohttp_server_path_item_t local_table[] = { item };
+            h3zero_callback_ctx_t local_app_ctx = { 0 };
+            local_app_ctx.path_table = local_table;
+            local_app_ctx.path_table_nb = 1;
+
+            if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+                !connect_classic_cb_ctx.called || stream_ctx.path_callback == NULL ||
+                local_app_ctx.nb_wt_connections != 0 || stream_ctx.is_wt_counted) {
                 ret = -1;
             }
         }

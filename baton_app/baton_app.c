@@ -439,10 +439,7 @@ int wt_baton_server(char const* path, picoquic_quic_config_t* config)
     * The "path_app_context" is null because the baton app does not use it.
      */
     picoquic_file_param.web_folder = config->www_dir;
-    path_item_list[0].path = path;
-    path_item_list[0].path_length = strlen(path);
-    path_item_list[0].path_callback = wt_baton_callback;
-    path_item_list[0].path_app_ctx = NULL; 
+    wt_baton_set_path_item(&path_item_list[0], path, NULL);
     picoquic_file_param.path_table = path_item_list;
     picoquic_file_param.path_table_nb = 1;
 
