@@ -2310,6 +2310,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(log_packet_limit)
+        {
+            int ret = log_packet_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_auto)
         {
             int ret = qlog_auto_test();
@@ -2327,6 +2334,13 @@ namespace UnitTest1
         TEST_METHOD(qlog_fns_trim_path_contexts)
         {
             int ret = qlog_fns_trim_path_contexts_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_max_simultaneous_logs)
+        {
+            int ret = qlog_max_simultaneous_logs_test();
 
             Assert::AreEqual(ret, 0);
         }
