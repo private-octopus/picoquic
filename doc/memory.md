@@ -108,9 +108,42 @@ another when queuing the packet for later delivery on a stream. Instead,
 the code keeps a copy of the received packet in memory until the stream data
 has been delivered. If the peer sends packets in small data frames, the
 amount of memory used will be significantly higher than the flow control
-limit. (OK, arguably this is a bug, or a bad trade-off between performance
-and memory allocation. We may need to fix that.)
+limit.
 
+## Resisting fragmentation attacks
+
+Picoquic nodes can receive out of order stream fragments due to the natural
+process of packet loss and recovery. These fragments must be queued when awaiting
+in order delivery. The "max stream data" and "max data" settings limit the
+amount of memory used per stream or for the connection, but bad actors can try
+to create memory usage in excess of these limits.
+
+According to RFC 9000, stream data fragments are received in individual stream
+frames, and can be received out of order. Picoquic stores each fragment in a
+fixed size structure, regardless of its size. The fixed size structure is designed
+to accommodate a maximum length segment, and the code is designed so that
+such fragments can be created with zero copy. This increases performance
+in normal conditions, but attackers can mount a fragmentation-reassembly
+attack by deliberately sending small fragments, out of order. For example,
+they could send one byte data frames at odd offsets, and never send the
+hole filling data at even offsets.
+
+Picoquic is designed to resist such attacks, but it has to use a loose heuristic
+because small fragments may be naturally produced by some traffic patterns or
+some loss recovery patterns. Picoquic will detect an attack and close the
+connection if there are more than 128 fragments stored for a stream and
+the memory required for these fragments is more than 6 times the
+stream's flow control window counted from the last byte delivered to the
+application, or if there are more than 128 fragments stored across all the
+streams and the memory required for holding these fragments is larger than
+6 times the connection's flow control window counted from the data
+delivered to the application.
+
+Applications can obtain the amount of memory used for reordering stream data
+before delivery through the API:
+```
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx);
+```
 ## No global limit yet
 
 In theory, we could devise an algorithm that automatically sets the sender or
