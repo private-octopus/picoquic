@@ -258,8 +258,16 @@ int getter_test(void)
     }
 
     if (ret == 0) {
-        picoquic_set_default_congestion_algorithm_by_name(test_ctx->qclient, "dcubic");
-        if (test_ctx->qclient->default_congestion_alg != picoquic_dcubic_algorithm) {
+        ret = picoquic_set_default_congestion_algorithm_by_name(test_ctx->qclient, "dcubic");
+        if (ret == 0 && test_ctx->qclient->default_congestion_alg != picoquic_dcubic_algorithm) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* An unknown name must not leave new connections without congestion control */
+        if (picoquic_set_default_congestion_algorithm_by_name(test_ctx->qclient, "wuovipfwds") == 0 ||
+            test_ctx->qclient->default_congestion_alg != picoquic_dcubic_algorithm) {
             ret = -1;
         }
     }

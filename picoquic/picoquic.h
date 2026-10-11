@@ -1879,7 +1879,10 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
 
-void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
+/* CC algorithm names are resolved in the registered list (see picoquic_register_congestion_control_algorithms
+ * and picoquic_register_congestion_control_algorithms.
+ * Retruns 0 iif success, -1 if the name is unknown, in which case the default algorithm unchanged. */
+int picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
