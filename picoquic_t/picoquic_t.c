@@ -531,6 +531,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_data_nodes", stream_data_nodes_test },
     { "stream_data_nodes_attack", stream_data_nodes_attack_test },
     { "stream_data_nodes_window", stream_data_nodes_window_test },
+    { "direct_receive_flow_control", direct_receive_flow_control_test },
     { "stream_state_local_reuse", stream_state_local_reuse_test },
     { "add_to_stream_fin_only_wakes_cnx", add_to_stream_fin_only_wakes_cnx_test },
     { "initial_pto", initial_pto_test },

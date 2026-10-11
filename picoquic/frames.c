@@ -205,10 +205,6 @@ int picoquic_flow_control_check_stream_offset(picoquic_cnx_t* cnx, picoquic_stre
         } else {
             cnx->offset_received += new_bytes;
             stream->fin_offset = new_fin_offset;
-            if (stream->direct_receive_fn != NULL) {
-                /* Direct receive data is passed to the application on arrival, count it as delivered */
-                cnx->data_received += new_bytes;
-            }
         }
     }
 
@@ -1461,6 +1457,10 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
             else if (ret != 0) {
                 uint64_t err = (ret >= PICOQUIC_ERROR_CLASS) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : (uint64_t)ret;
                 ret = picoquic_connection_error(cnx, err, 0);
+            }
+            if (ret == 0) {
+                /* Account for the bytes passed to the application, not the offset gap. */
+                cnx->data_received += length;
             }
         } else if (stream->consumed_offset >= offset &&  cnx->callback_fn != NULL){
             if (new_fin_offset >= stream->consumed_offset) {

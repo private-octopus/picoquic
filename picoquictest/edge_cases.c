@@ -2339,6 +2339,14 @@ static int stream_data_nodes_direct_receive(picoquic_cnx_t* UNUSED(cnx),
     return 0;
 }
 
+static int stream_data_nodes_counted_direct_receive(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), int UNUSED(fin), const uint8_t* UNUSED(bytes), uint64_t UNUSED(offset), size_t length,
+    void* direct_receive_ctx)
+{
+    *(size_t*)direct_receive_ctx += length;
+    return 0;
+}
+
 /* Decode a STREAM frame carrying length bytes, return the result of picoquic_decode_frames */
 static int stream_data_nodes_decode_chunk(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t offset, size_t length,
     uint64_t simulated_time)
@@ -2471,6 +2479,64 @@ int stream_data_nodes_test(void)
         }
     }
 
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+/* Verify that flow-control accounting counts delivered bytes, not offset gaps,
+ * both when queued data switches to direct receive and on later direct input. */
+int direct_receive_flow_control_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t data_received_before = 0;
+    size_t callback_bytes = 0;
+    size_t callback_bytes_before = 0;
+    int accounting_failed = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0 && (cnx = test_ctx->cnx_server) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_callback(cnx, stream_data_nodes_noop_callback, NULL);
+        for (uint64_t offset = 1; ret == 0 && offset <= 5; offset += 2) {
+            ret = stream_data_nodes_receive_byte(cnx, 4, offset, simulated_time);
+        }
+    }
+
+    if (ret == 0) {
+        data_received_before = cnx->data_received;
+        ret = picoquic_mark_direct_receive_stream(cnx, 4, stream_data_nodes_counted_direct_receive, &callback_bytes);
+        if (ret == 0 && (callback_bytes != 3 || cnx->data_received != data_received_before + 3)) {
+            DBG_PRINTF("Switch to direct receive delivered %zu bytes, data_received advanced by %" PRIu64,
+                callback_bytes, cnx->data_received - data_received_before);
+            accounting_failed = 1;
+        }
+    }
+
+    if (ret == 0) {
+        data_received_before = cnx->data_received;
+        callback_bytes_before = callback_bytes;
+        ret = stream_data_nodes_receive_byte(cnx, 4, 60000, simulated_time);
+        if (ret == 0 && (callback_bytes != callback_bytes_before + 1 || cnx->data_received != data_received_before + 1)) {
+            DBG_PRINTF("High-offset direct receive delivered %zu bytes, data_received advanced by %" PRIu64,
+                callback_bytes - callback_bytes_before, cnx->data_received - data_received_before);
+            accounting_failed = 1;
+        }
+    }
+
+    if (ret == 0 && accounting_failed) {
+        ret = -1;
+    }
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
     }
