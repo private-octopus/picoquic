@@ -364,6 +364,8 @@ int quicctx_remember_issued_ticket_oversized_addr_test(void);
 int quicctx_check_new_path_allowed_limit_test(void);
 int perflog_test(void);
 int rebinding_stress_test(void);
+int rebinding_stress_dead_tuple_test(void);
+int rebinding_stress_cid_exhaustion_test(void);
 int many_short_loss_test(void);
 int random_padding_test(void);
 int ec00_zero_test(void);
