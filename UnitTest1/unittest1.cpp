@@ -2827,6 +2827,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_after_fin) {
+            int ret = reset_after_fin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_after_fin_partial) {
+            int ret = reset_after_fin_partial_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_after_fin_acked) {
+            int ret = reset_after_fin_acked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_before_fin) {
+            int ret = reset_before_fin_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_data_nodes) {
             int ret = stream_data_nodes_test();
 
