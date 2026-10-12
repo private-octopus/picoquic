@@ -1,4 +1,5 @@
 /build/
+/build-*/
 */Debug
 Debug
 */Release
@@ -31,3 +32,12 @@ Release
 /coverage-report/
 *.gcda
 *.gcno
+*.log
+*.qlog
+*.svg
+*.csv
+!picoquictest/*.log
+!picoquictest/*.qlog
+!picoquictest/*.svg
+!picoquictest/*.csv
+!loglib/*.svg
