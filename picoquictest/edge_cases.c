@@ -2183,6 +2183,261 @@ int reset_stream_at_loss_test(void)
     return reset_stream_at_test_one(rsat_loss);
 }
 
+/*
+ * Reset a stream after its FIN was sent. RFC 9000 section 3.1 allows
+ * RESET_STREAM in the "Data Sent" state, i.e., after the FIN was sent
+ * but before all data was acknowledged. The reset shall be refused only
+ * in the "Data Recvd" state, once all data and the FIN are acknowledged.
+ * The client sends data on a stream while all client to server packets
+ * are lost, resets the stream, and then the link recovers. A second
+ * stream is then sent to verify that the connection still works.
+ */
+
+typedef enum {
+    reset_after_fin_none_acked,
+    reset_after_fin_part_acked,
+    reset_after_fin_all_acked,
+    reset_after_fin_before_fin
+} reset_after_fin_test_enum;
+
+typedef struct st_reset_after_fin_stream_t {
+    uint64_t stream_id;
+    uint64_t received;
+    int fin_received;
+    int reset_received;
+    uint64_t reset_error;
+} reset_after_fin_stream_t;
+
+typedef struct st_reset_after_fin_ctx_t {
+    reset_after_fin_stream_t stream[2];
+} reset_after_fin_ctx_t;
+
+static int reset_after_fin_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+{
+    reset_after_fin_ctx_t* ctx = (reset_after_fin_ctx_t*)callback_ctx;
+    (void)bytes;
+    (void)v_stream_ctx;
+
+    if (ctx != NULL && !cnx->client_mode) {
+        for (int i = 0; i < 2; i++) {
+            reset_after_fin_stream_t* s = &ctx->stream[i];
+            if (stream_id != s->stream_id) {
+                continue;
+            }
+            switch (fin_or_event) {
+            case picoquic_callback_stream_data:
+                s->received += length;
+                break;
+            case picoquic_callback_stream_fin:
+                s->received += length;
+                s->fin_received = 1;
+                break;
+            case picoquic_callback_stream_reset:
+                s->reset_received = 1;
+                s->reset_error = picoquic_get_remote_stream_error(cnx, stream_id);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Run the simulation until the server has received "received" bytes on the
+ * first stream, and the client has received acks up to "acked_max".
+ */
+static int reset_after_fin_wait(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time,
+    reset_after_fin_ctx_t* ctx, uint64_t received, uint64_t acked_max)
+{
+    int ret = 0;
+    int nb_rounds = 0;
+
+    while (ret == 0 && TEST_CLIENT_READY && TEST_SERVER_READY) {
+        int was_active = 0;
+        picoquic_stream_head_t* c_stream = picoquic_find_stream(test_ctx->cnx_client, ctx->stream[0].stream_id);
+
+        if (c_stream == NULL) {
+            DBG_PRINTF("Stream %" PRIu64 " was deleted", ctx->stream[0].stream_id);
+            ret = -1;
+            break;
+        }
+        if (ctx->stream[0].received >= received &&
+            picoquic_check_sack_list(&c_stream->sack_list, 0, acked_max) != 0) {
+            break;
+        }
+        if (++nb_rounds > 1024) {
+            DBG_PRINTF("%s", "Stream did not reach the expected state");
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_sim_round(test_ctx, simulated_time, 0, &was_active);
+        }
+    }
+    return ret;
+}
+
+static int reset_after_fin_test_one(reset_after_fin_test_enum raf_spec)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t drop_mask = UINT64_MAX;
+    uint64_t first_length = 0;
+    uint8_t data[4000];
+    reset_after_fin_ctx_t ctx;
+    picoquic_stream_head_t* c_stream = NULL;
+    picoquic_connection_id_t icid = { { 0x7e, 0x5e, 0xaf, 0x7e, 0, 0, 0, 0}, 8 };
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int reset_ret = 0;
+    int ret;
+
+    icid.id[4] = (uint8_t)raf_spec;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.stream[1].stream_id = UINT64_MAX;
+    memset(data, 0x5a, sizeof(data));
+
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &icid);
+
+    if (ret == 0) {
+        picoquic_set_default_callback(test_ctx->qserver, reset_after_fin_callback, &ctx);
+        picoquic_set_callback(test_ctx->cnx_client, reset_after_fin_callback, &ctx);
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        /* Use a bidir stream when all data is acked, because a unidir
+         * stream would be deleted as soon as its FIN is acked. */
+        ctx.stream[0].stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client,
+            raf_spec != reset_after_fin_all_acked);
+        if (raf_spec == reset_after_fin_part_acked) {
+            /* Get the first part of the data delivered and acknowledged */
+            first_length = 3000;
+            ret = picoquic_add_to_stream(test_ctx->cnx_client, ctx.stream[0].stream_id, data, (size_t)first_length, 0);
+            if (ret == 0) {
+                ret = reset_after_fin_wait(test_ctx, &simulated_time, &ctx, first_length, first_length - 1);
+            }
+            if (ret == 0 && ctx.stream[0].received != first_length) {
+                DBG_PRINTF("Expected %" PRIu64 " bytes before the loss, got %" PRIu64,
+                    first_length, ctx.stream[0].received);
+                ret = -1;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        if (raf_spec != reset_after_fin_all_acked) {
+            test_ctx->c_to_s_link->loss_mask = &drop_mask;
+        }
+        ret = picoquic_add_to_stream(test_ctx->cnx_client, ctx.stream[0].stream_id, data + first_length,
+            sizeof(data) - (size_t)first_length, raf_spec != reset_after_fin_before_fin);
+        if (ret == 0) {
+            if (raf_spec == reset_after_fin_all_acked) {
+                /* Wait until all data and the FIN, at offset sizeof(data), are acknowledged */
+                ret = reset_after_fin_wait(test_ctx, &simulated_time, &ctx, sizeof(data), sizeof(data));
+            }
+            else {
+                /* Let the client send the data, which is lost */
+                ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 20000);
+            }
+        }
+        if (ret == 0 && (c_stream = picoquic_find_stream(test_ctx->cnx_client, ctx.stream[0].stream_id)) == NULL) {
+            DBG_PRINTF("Stream %" PRIu64 " deleted before the reset", ctx.stream[0].stream_id);
+            ret = -1;
+        }
+        if (ret == 0 && c_stream->fin_sent != (raf_spec != reset_after_fin_before_fin)) {
+            DBG_PRINTF("Unexpected fin_sent=%d before the reset", c_stream->fin_sent);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        reset_ret = picoquic_reset_stream(test_ctx->cnx_client, ctx.stream[0].stream_id, 0x2);
+        if (raf_spec == reset_after_fin_all_acked) {
+            if (reset_ret != PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                DBG_PRINTF("Reset after all data acked returns 0x%x", reset_ret);
+                ret = -1;
+            }
+        }
+        else if (reset_ret != 0) {
+            DBG_PRINTF("Reset returns 0x%x", reset_ret);
+            ret = -1;
+        }
+        /* Restore the link and send a second stream */
+        test_ctx->c_to_s_link->loss_mask = &loss_mask;
+    }
+
+    if (ret == 0) {
+        ctx.stream[1].stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, 1);
+        ret = picoquic_add_to_stream(test_ctx->cnx_client, ctx.stream[1].stream_id, data, 2000, 1);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 2000000);
+    }
+
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+        DBG_PRINTF("%s", "Connection closed after the reset");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        reset_after_fin_stream_t* s = &ctx.stream[0];
+        if (raf_spec == reset_after_fin_all_acked) {
+            if (s->reset_received || !s->fin_received || s->received != sizeof(data)) {
+                DBG_PRINTF("Expected complete stream, got reset=%d, fin=%d, %" PRIu64 " bytes",
+                    s->reset_received, s->fin_received, s->received);
+                ret = -1;
+            }
+        }
+        else if (!s->reset_received || s->reset_error != 0x2 || s->fin_received || s->received != first_length) {
+            DBG_PRINTF("Expected reset 0x2 after %" PRIu64 " bytes, got reset=%d (0x%" PRIx64 "), fin=%d, %" PRIu64 " bytes",
+                first_length, s->reset_received, s->reset_error, s->fin_received, s->received);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && (ctx.stream[1].reset_received || !ctx.stream[1].fin_received || ctx.stream[1].received != 2000)) {
+        DBG_PRINTF("Second stream not delivered: reset=%d, fin=%d, %" PRIu64 " bytes",
+            ctx.stream[1].reset_received, ctx.stream[1].fin_received, ctx.stream[1].received);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+int reset_after_fin_test(void)
+{
+    return reset_after_fin_test_one(reset_after_fin_none_acked);
+}
+
+int reset_after_fin_partial_test(void)
+{
+    return reset_after_fin_test_one(reset_after_fin_part_acked);
+}
+
+int reset_after_fin_acked_test(void)
+{
+    return reset_after_fin_test_one(reset_after_fin_all_acked);
+}
+
+int reset_before_fin_test(void)
+{
+    return reset_after_fin_test_one(reset_after_fin_before_fin);
+}
+
 /* Unit test for picoquic_error_name() */
 
 typedef struct {
