@@ -113,7 +113,7 @@ void picoquic_log_quic_pdu(picoquic_quic_t* quic, int receiving, uint64_t curren
                 picoquic_cnx_t* cnx = picoquic_find_cnx_for_quic_log(quic);
                 if (cnx != NULL && cnx->log_ctx[i] != NULL) {
                     cnx->quic->log_fns[i]->log_pdu(cnx, cnx->log_ctx[i], receiving, current_time, addr_peer, addr_local, packet_length,
-                        0 /* unique_path_id*/, 0 /* ecn */);
+                        0 /* unique_path_id*/, 0xff /* ecn */);
                 }
             }
         }

@@ -1079,8 +1079,6 @@ void picoquic_prepare_version_negotiation(
             sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
             sp->ptype = picoquic_packet_version_negotiation;
 
-            picoquic_log_quic_pdu(quic, 1, picoquic_get_quic_time(quic), 0, addr_to, addr_from, sp->length);
-
             picoquic_queue_stateless_packet(quic, sp);
         }
     }
