@@ -1142,7 +1142,7 @@ void picoquic_process_unexpected_cnxid(
             sp->initial_cid = ph->dest_cnx_id;
             sp->cnxid_log64 = picoquic_val64_connection_id(sp->initial_cid);
 
-            picoquic_log_context_free_app_message(quic, &sp->initial_cid, "Unexpected connection ID, sending stateless reset.\n");
+            picoquic_log_context_free_app_message(quic, &sp->initial_cid, "Unexpected connection ID %" PRIu64 ", sending stateless reset.", sp->cnxid_log64);
 
             picoquic_queue_stateless_packet(quic, sp);
             quic->stateless_reset_next_time = current_time + quic->stateless_reset_min_interval;
