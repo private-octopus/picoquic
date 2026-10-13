@@ -2278,6 +2278,10 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
 {
     int no_space_left = 0;
     picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
+
+    /* Delete the local CID retired by the peer once their grace period expires */
+    picoquic_delete_retired_local_cnxid(cnx, current_time, next_wake_time);
+
     if (cnx->is_multipath_enabled) {
         /* If the number of local list is lower than the max number of paths, 
         * update that number and queue a MAX PATH ID frame.

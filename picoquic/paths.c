@@ -817,9 +817,13 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
              */
             if (tuple == path_x->first_tuple &&
                 picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
-                path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-                if (cnx->client_mode == 0) {
-                    (void)picoquic_renew_connection_id(cnx, path_id);
+                /* A late packet with a CID retired by the peer is not a migration: the CID is not in the list. */
+                picoquic_local_cnxid_t* l_cid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
+                if (l_cid != NULL) {
+                    path_x->first_tuple->p_local_cnxid = l_cid;
+                    if (cnx->client_mode == 0) {
+                        (void)picoquic_renew_connection_id(cnx, path_id);
+                    }
                 }
             }
         }

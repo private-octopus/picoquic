@@ -7908,6 +7908,163 @@ int cnxid_renewal_test(void)
 }
 
 
+/* A packet sent with a CID just before the peer retires it can arrive after the retirement,
+ * for example on a slower path. The receiver must still accept it, instead of sending a
+ * stateless reset, and must delete the retired CID once the grace period expires. */
+int retired_cnxid_late_packet_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint8_t held_packet[PICOQUIC_MAX_PACKET_SIZE];
+    size_t held_length = 0;
+    picoquic_connection_id_t old_cid = picoquic_null_connection_id;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+    /* The server prepares a packet with the current CID, which is held as if delayed in the network. */
+    if (ret == 0) {
+        uint8_t ping = picoquic_frame_type_ping;
+        struct sockaddr_storage addr_to;
+        struct sockaddr_storage addr_from;
+        int if_index = 0;
+
+        old_cid = test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->cnx_id;
+        if ((ret = picoquic_queue_misc_frame(test_ctx->cnx_server, &ping, 1, 0, picoquic_packet_context_application)) == 0) {
+            ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time, held_packet, sizeof(held_packet), &held_length,
+                &addr_to, &addr_from, &if_index);
+        }
+        if (ret == 0 && held_length == 0) {
+            DBG_PRINTF("%s", "No packet prepared by the server");
+            ret = -1;
+        }
+    }
+    /* The server switches to a new CID and retires the old one; wait until the client processes the retirement. */
+    if (ret == 0 && (ret = picoquic_renew_connection_id(test_ctx->cnx_server, 0)) == 0) {
+        uint64_t time_out = simulated_time + 1000000;
+
+        while (ret == 0 && simulated_time < time_out &&
+            picoquic_find_local_cnxid(test_ctx->cnx_client, 0, &old_cid) != NULL) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+        if (ret == 0 && picoquic_find_local_cnxid(test_ctx->cnx_client, 0, &old_cid) != NULL) {
+            DBG_PRINTF("%s", "The client did not retire the old CID");
+            ret = -1;
+        }
+    }
+    /* The delayed packet arrives: it is accepted, and no stateless reset is sent. */
+    if (ret == 0) {
+        uint64_t nb_received = test_ctx->cnx_client->nb_packets_received;
+
+        (void)picoquic_incoming_packet(test_ctx->qclient, held_packet, held_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr, 0, 0, simulated_time);
+        if (test_ctx->qclient->pending_stateless_packet != NULL) {
+            DBG_PRINTF("%s", "Stateless reset sent for a packet with a retired CID");
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_packets_received != nb_received + 1) {
+            DBG_PRINTF("%s", "Packet with a retired CID was not accepted");
+            ret = -1;
+        }
+    }
+    /* After the grace period, the retired CID is deleted. */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 2000000;
+
+        while (ret == 0 && simulated_time < time_out && TEST_CLIENT_READY && TEST_SERVER_READY) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+        if (ret == 0 && test_ctx->cnx_client->first_retired_local_cnxid != NULL) {
+            DBG_PRINTF("%s", "The retired CID was not deleted after the grace period");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* The list of local CID retired by the peer is bounded: if the peer retires many CID, only the most
+ * recent ones remain registered, and all are deleted once their grace period expires. */
+#define RETIRED_CNXID_CAP_NB 12
+
+int retired_cnxid_cap_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t cid[RETIRED_CNXID_CAP_NB];
+    uint64_t sequence[RETIRED_CNXID_CAP_NB];
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    for (int i = 0; ret == 0 && i < RETIRED_CNXID_CAP_NB; i++) {
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+        if (l_cid == NULL) {
+            ret = -1;
+        }
+        else {
+            cid[i] = l_cid->cnx_id;
+            sequence[i] = l_cid->sequence;
+        }
+    }
+    if (ret == 0) {
+        uint64_t next_wake_time = UINT64_MAX;
+
+        for (int i = 0; i < RETIRED_CNXID_CAP_NB; i++) {
+            picoquic_retire_local_cnxid(cnx, 0, sequence[i], simulated_time);
+        }
+        if (cnx->nb_retired_local_cnxid != PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
+            DBG_PRINTF("%d retired CID kept, expected %d", cnx->nb_retired_local_cnxid, PICOQUIC_MAX_RETIRED_LOCAL_CNXID);
+            ret = -1;
+        }
+        /* The oldest retired CID were deleted, the most recent are still registered. */
+        for (int i = 0; ret == 0 && i < RETIRED_CNXID_CAP_NB; i++) {
+            int is_kept = (i >= RETIRED_CNXID_CAP_NB - PICOQUIC_MAX_RETIRED_LOCAL_CNXID);
+            if ((picoquic_cnx_by_id(quic, cid[i], NULL) == cnx) != is_kept) {
+                DBG_PRINTF("Retired CID %d is %s registered", i, (is_kept) ? "not" : "still");
+                ret = -1;
+            }
+        }
+        /* Before the end of the grace period, nothing is deleted and the wake time is set. */
+        if (ret == 0) {
+            picoquic_delete_retired_local_cnxid(cnx, simulated_time, &next_wake_time);
+            if (cnx->nb_retired_local_cnxid != PICOQUIC_MAX_RETIRED_LOCAL_CNXID ||
+                next_wake_time != cnx->first_retired_local_cnxid->retired_until) {
+                DBG_PRINTF("%s", "Retired CID deleted too early, or wake time not set");
+                ret = -1;
+            }
+        }
+        /* After the grace period, all are deleted. */
+        if (ret == 0) {
+            picoquic_delete_retired_local_cnxid(cnx, simulated_time + 10000000, NULL);
+            if (cnx->nb_retired_local_cnxid != 0 || cnx->first_retired_local_cnxid != NULL ||
+                cnx->last_retired_local_cnxid != NULL ||
+                picoquic_cnx_by_id(quic, cid[RETIRED_CNXID_CAP_NB - 1], NULL) != NULL) {
+                DBG_PRINTF("%s", "Retired CID not deleted after the grace period");
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 /*
  * Perform a test of the "retire connection id" function.
  * The test will artificially retire connection ID on the client,

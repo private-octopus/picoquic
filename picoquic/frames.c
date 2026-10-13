@@ -877,7 +877,7 @@ const uint8_t* picoquic_parse_retire_connection_id_frame(const uint8_t* bytes, c
 }
 
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp)
+    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp, uint64_t current_time)
 {
     /* store the connection ID in order to support migration. */
     uint64_t sequence;
@@ -907,7 +907,7 @@ const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, c
     }
     else {
         /* Go through the list of paths to find the connection ID */
-        picoquic_retire_local_cnxid(cnx, unique_path_id, sequence);
+        picoquic_retire_local_cnxid(cnx, unique_path_id, sequence, current_time);
     }
 
     return bytes;
@@ -6713,7 +6713,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 break;
             case picoquic_frame_type_retire_connection_id:
                 /* the old code point for ACK frames, but this is taken care of in the ACK tests above */
-                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, l_cid, 0);
+                bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes, bytes_max, path_x, l_cid, 0, current_time);
                 ack_needed = 1;
                 break;
             case picoquic_frame_type_handshake_done:
@@ -6789,7 +6789,7 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_path_retire_connection_id:
-                            bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, path_x, l_cid, 1);
+                            bytes = picoquic_decode_retire_connection_id_frame(cnx, bytes0, bytes_max, path_x, l_cid, 1, current_time);
                             ack_needed = 1;
                             break;
                         case picoquic_frame_type_bdp:

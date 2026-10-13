@@ -2184,6 +2184,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(retired_cnxid_late_packet)
+        {
+            int ret = retired_cnxid_late_packet_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_cap)
+        {
+            int ret = retired_cnxid_cap_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_retire_cnxid)
         {
             int ret = retire_cnxid_test();
@@ -4190,6 +4204,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_cid_retire) {
             int ret = multipath_cid_retire_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_idle_rotation) {
+            int ret = multipath_idle_rotation_test();
 
             Assert::AreEqual(ret, 0);
         }
