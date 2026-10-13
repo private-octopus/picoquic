@@ -460,7 +460,7 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
     }
     else {
         stream->app_stream_ctx = NULL;
-        if (stream->fin_sent && picoquic_check_sack_list(&stream->sack_list, 0, stream->fin_offset) != 0) {
+        if (stream->fin_sent && picoquic_check_sack_list(&stream->sack_list, 0, stream->sent_offset) != 0) {
             /* All the stream bytes and the FIN were acknowledged: nothing left to reset, not an error. */
             ret = 0;
         }

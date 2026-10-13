@@ -1363,8 +1363,9 @@ int reset_need_stop_test(void)
     return reset_repeat_test_one(reset_need_stop_sending);
 }
 
-/* Queue 5 bytes and the FIN on the stream, then mark them as sent and, optionally, as acknowledged. */
-static int reset_at_end_prepare(picoquic_cnx_t* cnx, uint64_t stream_id, int is_acked)
+/* Queue 5 bytes and the FIN on the stream, mark them as sent, and acknowledge the first nb_acked units.
+ * The FIN counts as one extra unit, so nb_acked = 6 acknowledges everything. */
+static int reset_at_end_prepare(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t nb_acked)
 {
     int ret = picoquic_add_to_stream(cnx, stream_id, (uint8_t*)"Hello", 5, 1);
     picoquic_stream_head_t* stream = (ret == 0) ? picoquic_find_stream(cnx, stream_id) : NULL;
@@ -1373,12 +1374,11 @@ static int reset_at_end_prepare(picoquic_cnx_t* cnx, uint64_t stream_id, int is_
         ret = -1;
     }
     else {
+        /* As on a real sending stream, only sent_offset marks the end; fin_offset is for received data. */
         stream->sent_offset = 5;
-        stream->fin_offset = 5;
         stream->fin_sent = 1;
-        if (is_acked) {
-            /* The acknowledged range of a stream includes one extra unit for the FIN. */
-            ret = picoquic_update_sack_list(&stream->sack_list, 0, 5, 0);
+        if (nb_acked > 0) {
+            ret = picoquic_update_sack_list(&stream->sack_list, 0, nb_acked - 1, 0);
         }
     }
     return ret;
@@ -1413,8 +1413,14 @@ int reset_at_end_test(void)
             (ret = picoquic_reset_stream(cnx, 8, 0)) != 0) {
             DBG_PRINTF("Reset after FIN sent returns 0x%x", ret);
         }
+        /* FIN sent and only the first bytes acknowledged: the reset is queued. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 28, 2)) == 0 &&
+            ((ret = picoquic_reset_stream(cnx, 28, 0)) != 0 || !picoquic_find_stream(cnx, 28)->reset_requested)) {
+            DBG_PRINTF("Reset after FIN partially acknowledged returns 0x%x or does not queue a reset", ret);
+            ret = -1;
+        }
         /* FIN sent and everything acknowledged: nothing left to reset, success without queuing a reset. */
-        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 12, 1)) == 0 &&
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 12, 6)) == 0 &&
             ((ret = picoquic_reset_stream(cnx, 12, 0)) != 0 || picoquic_find_stream(cnx, 12)->reset_requested)) {
             DBG_PRINTF("Reset after FIN acknowledged returns 0x%x or queues a reset", ret);
             ret = -1;
