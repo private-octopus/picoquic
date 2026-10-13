@@ -76,6 +76,8 @@ extern "C" {
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
+        /* Expected ":protocol" of extended CONNECT requests, e.g., H3ZERO_WEBTRANSPORT_H3_PROTOCOL.
+         * If NULL, only classic CONNECT requests (without ":protocol") are accepted. */
         char const* connect_protocol;
         size_t connect_protocol_length;
         picohttp_origin_validator_fn origin_validator;
@@ -87,6 +89,9 @@ extern "C" {
         const uint8_t* origin, size_t origin_length,
         const uint8_t* authority, size_t authority_length,
         void* origin_validator_ctx);
+
+    /* Return 1 if the CONNECT protocol is web transport, 0 otherwise */
+    int h3zero_is_wt_protocol(const uint8_t* protocol, size_t protocol_length);
 
     /* Define stream context common to http 3 and http 09 callbacks
     */
