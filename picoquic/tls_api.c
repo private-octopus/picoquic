@@ -3351,6 +3351,17 @@ void picoquic_tls_set_use_exporter(picoquic_quic_t* quic, int use_exporter) {
     ((ptls_context_t*)quic->tls_master_ctx)->use_exporter = use_exporter;
 }
 
+/* Control usage of 0 RTT. This is done through a picotls "early data size" in the
+* TLS context. The only legitimate values per RFC9001 are UINT32_MAX (allow)
+* and 0 (refuse).
+*/
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt)
+{
+    PICOQUIC_THREAD_CHECK(quic);
+    ((ptls_context_t*)quic->tls_master_ctx)->max_early_data_size = (accept_0rtt) ? 0xFFFFFFFF : 0;
+}
+
+
 /* 
  * Create or verify a token. Tokens are tied to an IP address and a time of
  * issue, and come in two variations:

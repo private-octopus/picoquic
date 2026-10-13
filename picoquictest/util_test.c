@@ -113,6 +113,52 @@ int util_sprintf_test(void)
     return ret;
 }
 
+int util_addr_text_test(void)
+{
+    int ret = 0;
+    char text[64];
+    char const* addr_text;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+    struct sockaddr_storage addr0 = { 0 };
+
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    addr4.sin_port = htons(4433);
+    memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_family = AF_INET6;
+    addr6.sin6_port = htons(4433);
+
+    if (inet_pton(AF_INET, "10.0.0.1", &addr4.sin_addr) != 1 ||
+        inet_pton(AF_INET6, "::1", &addr6.sin6_addr) != 1) {
+        DBG_PRINTF("%s", "Cannot set the test addresses.");
+        ret = -1;
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr4, text, sizeof(text));
+        if (strcmp(addr_text, "10.0.0.1:4433") != 0) {
+            DBG_PRINTF("IPv4 address text: %s, expected 10.0.0.1:4433", addr_text);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr6, text, sizeof(text));
+        if (strcmp(addr_text, "[::1]:4433") != 0) {
+            DBG_PRINTF("IPv6 address text: %s, expected [::1]:4433", addr_text);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr0, text, sizeof(text));
+        if (strcmp(addr_text, "?:?") != 0) {
+            DBG_PRINTF("Zeroed address text: %s, expected ?:?", addr_text);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 uint8_t util_uint8_to_str_input[] = {
     'a', 'z', 'A', 'Z', '0', '9', '.', 0xff, 
 };

@@ -825,6 +825,12 @@ void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 /* Export keying material from the TLS connection using the given exporter label */
 int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
 
+/* By default, picoquic servers configured to support session resume in TLS 
+* also support 0RTT. This API allows application to disallow 0RTT by setting
+* accept_0rtt = 0. Applications may want to do that if they want isolation
+* from replay attacks possible with 0RTT. */
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt);
+
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
  * will also have certificaye and key. In that case, the function "enforce_client_only"
@@ -1801,6 +1807,10 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
+/* Memory used by out of order stream fragments waiting for in order delivery.
+ * With picoquic_set_max_data_control(max_data), it stays below about 6 * max_data. */
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx);
+
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
 
 /* Congestion algorithm definition */
@@ -1873,7 +1883,10 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
 
-void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
+/* CC algorithm names are resolved in the registered list (see picoquic_register_congestion_control_algorithms
+ * and picoquic_register_congestion_control_algorithms.
+ * Retruns 0 iif success, -1 if the name is unknown, in which case the default algorithm unchanged. */
+int picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);

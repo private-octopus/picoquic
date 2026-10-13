@@ -128,6 +128,9 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sim_link.c
     picoquic/siphash.c
     picoquic/sockloop.c
+    picoquic/picoquic_af_xdp.c
+    picoquic/picoquic_l3tx.c
+    picoquic/picoquic_neigh.c
     picoquic/spinbit.c
     picoquic/streams.c
     picoquic/ticket_store.c
@@ -144,6 +147,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
+     picoquic/picoquic_af_xdp.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
@@ -166,7 +170,9 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_binlog.h
     picoquic/picoquic_crypto_provider_api.h
     picoquic/picoquic_internal.h
+    picoquic/picoquic_l3tx.h
     picoquic/picoquic_logger.h
+    picoquic/picoquic_neigh.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
@@ -245,6 +251,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
+    picoquictest/af_xdp_test.c
     picoquictest/spinbit_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
@@ -417,7 +424,6 @@ else()
     set(PICOQUIC_OPENSSL_INCLUDE_DIRS "")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
-
 
 OPTION(WITH_SELECT "build with select" OFF)
 if(WITH_SELECT)
