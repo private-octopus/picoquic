@@ -2841,6 +2841,30 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_data_nodes) {
+            int ret = stream_data_nodes_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_data_nodes_attack) {
+            int ret = stream_data_nodes_attack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stream_data_nodes_window) {
+            int ret = stream_data_nodes_window_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(direct_receive_flow_control) {
+            int ret = direct_receive_flow_control_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(initial_pto)
         {
             int ret = initial_pto_test();
@@ -4871,6 +4895,12 @@ namespace UnitTest1
 
         TEST_METHOD(picowt_one_session) {
             int ret = picowt_one_session_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picowt_one_session_baton_route) {
+            int ret = picowt_one_session_baton_route_test();
 
             Assert::AreEqual(ret, 0);
         }

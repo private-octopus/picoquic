@@ -52,6 +52,7 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_st
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length);
 int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zero_stream_ctx_t* stream_ctx);
+int h3zero_process_request_frame(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_callback_ctx_t* app_ctx);
 int picowt_process_pending_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx);
 int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected_protocol);
 
@@ -734,33 +735,13 @@ static int picowt_one_session_close(picoquic_test_tls_api_ctx_t* test_ctx, h3zer
     return ret;
 }
 
-int picowt_one_session_test(void)
+static int picowt_one_session_test_one(picohttp_server_path_item_t* table, size_t table_nb, uint8_t test_id)
 {
-    picohttp_server_path_item_t two_path_table[2] = {
-        {
-            .path = "/baton",
-            .path_length = 6,
-            .path_callback = wt_baton_callback,
-            .path_app_ctx = &baton_test_ctx,
-            .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
-            .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
-            .origin_validator = h3zero_origin_validator_allow_all
-        },
-        {
-            .path = "/baton2",
-            .path_length = 7,
-            .path_callback = wt_baton_callback,
-            .path_app_ctx = &baton_test_ctx,
-            .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
-            .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
-            .origin_validator = h3zero_origin_validator_allow_all
-        }
-    };
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picohttp_server_parameters_t server_param = { 0 };
-    picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0x01, 0, 0, 0, 0}, 8 };
+    picoquic_connection_id_t initial_cid = { {0x77, 0x74, 0xba, 0x01, test_id, 0, 0, 0}, 8 };
     h3zero_callback_ctx_t* h3zero_cb = NULL;
     h3zero_stream_ctx_t* control_stream_ctx[4] = { NULL, NULL, NULL, NULL };
     picowt_one_session_probe_t probe[4];
@@ -778,8 +759,8 @@ int picowt_one_session_test(void)
         picoquic_set_qlog(test_ctx->qserver, ".");
         picoquic_set_qlog(test_ctx->qclient, ".");
         picowt_set_default_transport_parameters(test_ctx->qserver);
-        server_param.path_table = two_path_table;
-        server_param.path_table_nb = 2;
+        server_param.path_table = table;
+        server_param.path_table_nb = table_nb;
         picoquic_set_alpn_select_fn_v2(test_ctx->qserver, picoquic_demo_server_callback_select_alpn);
         picoquic_set_default_callback(test_ctx->qserver, h3zero_callback, &server_param);
         ret = picowt_prepare_client_cnx(test_ctx->qclient, (struct sockaddr*)NULL,
@@ -789,7 +770,7 @@ int picowt_one_session_test(void)
     /* First session, deferred until the H3 connection is established. */
     if (ret == 0) {
         ret = picowt_connect(test_ctx->cnx_client, h3zero_cb, control_stream_ctx[0],
-            PICOQUIC_TEST_SNI, "/baton", picowt_one_session_probe_callback, &probe[0], PICOWT_BATON_ALPN_AVAILABLE);
+            PICOQUIC_TEST_SNI, table[0].path, picowt_one_session_probe_callback, &probe[0], PICOWT_BATON_ALPN_AVAILABLE);
     }
     if (ret == 0) {
         ret = picoquic_start_client_cnx(test_ctx->cnx_client);
@@ -807,7 +788,7 @@ int picowt_one_session_test(void)
     }
 
     /* The client must refuse to open a second session. */
-    if (ret == 0 && picowt_one_session_connect(test_ctx, h3zero_cb, "/baton", &probe[1], &control_stream_ctx[1]) == 0) {
+    if (ret == 0 && picowt_one_session_connect(test_ctx, h3zero_cb, table[0].path, &probe[1], &control_stream_ctx[1]) == 0) {
         DBG_PRINTF("%s", "Client accepted to open a second WT session");
         ret = -1;
     }
@@ -816,7 +797,7 @@ int picowt_one_session_test(void)
      * a second session, whether on the same path or on a different path. */
     for (int i = 1; ret == 0 && i <= 2; i++) {
         h3zero_cb->nb_wt_connections = 0;
-        if ((ret = picowt_one_session_connect(test_ctx, h3zero_cb, (i == 1) ? "/baton" : "/baton2",
+        if ((ret = picowt_one_session_connect(test_ctx, h3zero_cb, table[(i <= (int)table_nb) ? i - 1 : 0].path,
             &probe[i], &control_stream_ctx[i])) != 0) {
             DBG_PRINTF("Cannot send second CONNECT, case %d", i);
         }
@@ -824,12 +805,25 @@ int picowt_one_session_test(void)
             w.probe = &probe[i];
             if ((ret = picowt_one_session_wait(test_ctx, &simulated_time, &w, "second session")) == 0 &&
                 probe[i].nb_refused != 1) {
-                DBG_PRINTF("Server accepted a second WT session on %s", (i == 1) ? "the same path" : "a different path");
+                DBG_PRINTF("Server accepted an extra WT session on %s", table[(i <= (int)table_nb) ? i - 1 : 0].path);
                 ret = -1;
             }
             else if (ret == 0 && h3zero_cb->nb_wt_connections != 0) {
                 DBG_PRINTF("Refused session still counted, nb_wt_connections = %d", h3zero_cb->nb_wt_connections);
                 ret = -1;
+            }
+            else if (ret == 0) {
+                /* Data sent after a refused CONNECT must be dropped by the server, not passed to the path callback. */
+                uint8_t data_frame[3] = { h3zero_frame_data, 0x01, 0x41 };
+
+                if ((ret = picoquic_add_to_stream(test_ctx->cnx_client, control_stream_ctx[i]->stream_id,
+                    data_frame, sizeof(data_frame), 0)) == 0 &&
+                    (ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 100000)) == 0 &&
+                    (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state != picoquic_state_ready ||
+                    test_ctx->cnx_client->cnx_state != picoquic_state_ready)) {
+                    DBG_PRINTF("Connection broken after data on refused CONNECT stream %" PRIu64, control_stream_ctx[i]->stream_id);
+                    ret = -1;
+                }
             }
         }
         /* Restore the count for the first session. */
@@ -850,7 +844,7 @@ int picowt_one_session_test(void)
         ret = picowt_one_session_close(test_ctx, h3zero_cb, &simulated_time, control_stream_ctx[0], "close first session");
     }
     if (ret == 0) {
-        if ((ret = picowt_one_session_connect(test_ctx, h3zero_cb, "/baton", &probe[3], &control_stream_ctx[3])) != 0) {
+        if ((ret = picowt_one_session_connect(test_ctx, h3zero_cb, table[0].path, &probe[3], &control_stream_ctx[3])) != 0) {
             DBG_PRINTF("%s", "Client refused to open a session after the first one was closed");
         }
         else {
@@ -893,6 +887,42 @@ int picowt_one_session_test(void)
     }
 
     return ret;
+}
+
+int picowt_one_session_test(void)
+{
+    picohttp_server_path_item_t two_path_table[2] = {
+        {
+            .path = "/baton",
+            .path_length = 6,
+            .path_callback = wt_baton_callback,
+            .path_app_ctx = &baton_test_ctx,
+            .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+            .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+            .origin_validator = h3zero_origin_validator_allow_all
+        },
+        {
+            .path = "/baton2",
+            .path_length = 7,
+            .path_callback = wt_baton_callback,
+            .path_app_ctx = &baton_test_ctx,
+            .connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL,
+            .connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1,
+            .origin_validator = h3zero_origin_validator_allow_all
+        }
+    };
+
+    return picowt_one_session_test_one(two_path_table, 2, 0);
+}
+
+/* Same test, using the path table item set by wt_baton_server() in baton_app */
+int picowt_one_session_baton_route_test(void)
+{
+    picohttp_server_path_item_t baton_route;
+
+    wt_baton_set_path_item(&baton_route, "/baton", NULL);
+
+    return picowt_one_session_test_one(&baton_route, 1, 1);
 }
 
 static int picowt_noop_callback(picoquic_cnx_t* UNUSED(cnx),
@@ -1216,6 +1246,115 @@ static int h3zero_check_connect_protocol_test(void)
         }
     }
 
+    /* Strings that only start with "webtransport": rejected, the equivalence is limited to the two exact tokens */
+    if (ret == 0) {
+        char const* prefixed[] = { "webtransportXYZ", "webtransport-h3x" };
+        for (size_t i = 0; ret == 0 && i < sizeof(prefixed) / sizeof(prefixed[0]); i++) {
+            stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)prefixed[i];
+            stream_ctx.ps.stream_state.header.protocol_length = strlen(prefixed[i]);
+            if (h3zero_check_connect_protocol(&item, &stream_ctx) == 0) {
+                DBG_PRINTF("Protocol %s accepted on a web transport path", prefixed[i]);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Classic CONNECT, without ":protocol": rejected on a path that declares a protocol */
+    if (ret == 0) {
+        stream_ctx.ps.stream_state.header.protocol = NULL;
+        stream_ctx.ps.stream_state.header.protocol_length = 0;
+        if (h3zero_check_connect_protocol(&item, &stream_ctx) == 0) {
+            ret = -1;
+        }
+    }
+
+    /* New draft name against an old-draft path item: accepted */
+    if (ret == 0) {
+        item.connect_protocol = old_protocol;
+        item.connect_protocol_length = strlen(old_protocol);
+        stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)new_protocol;
+        stream_ctx.ps.stream_state.header.protocol_length = strlen(new_protocol);
+        if (h3zero_check_connect_protocol(&item, &stream_ctx) != 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* picowt_is_webtransport_connect accepts the current and old web transport tokens,
+ * and rejects other protocols, prefixes of the tokens, and classic CONNECT. */
+static int picowt_is_webtransport_connect_test(void)
+{
+    int ret = 0;
+    h3zero_stream_ctx_t stream_ctx;
+    struct {
+        char const* protocol;
+        int expected;
+    } test_cases[] = {
+        { H3ZERO_WEBTRANSPORT_H3_PROTOCOL, 1 },
+        { H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD, 1 },
+        { "connect-udp", 0 },
+        { "webtrans", 0 },
+        { "webtransport-h3x", 0 },
+        { NULL, 0 }
+    };
+
+    for (size_t i = 0; ret == 0 && i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
+        memset(&stream_ctx, 0, sizeof(h3zero_stream_ctx_t));
+        if (test_cases[i].protocol != NULL) {
+            stream_ctx.ps.stream_state.header.protocol = (uint8_t const*)test_cases[i].protocol;
+            stream_ctx.ps.stream_state.header.protocol_length = strlen(test_cases[i].protocol);
+        }
+        if (picowt_is_webtransport_connect(&stream_ctx) != test_cases[i].expected) {
+            DBG_PRINTF("picowt_is_webtransport_connect(%s) != %d",
+                (test_cases[i].protocol == NULL) ? "NULL" : test_cases[i].protocol, test_cases[i].expected);
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+/* A classic CONNECT (no :protocol) on a path that does not declare a connect protocol
+ * is accepted by h3zero, but the baton app refuses it with picowt_is_webtransport_connect,
+ * so no uncounted web transport session is created. */
+static int picowt_baton_refuses_classic_connect_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    static const char connect_path[] = "/baton";
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        h3zero_stream_ctx_t stream_ctx;
+        picohttp_server_path_item_t local_table[1];
+        h3zero_callback_ctx_t local_app_ctx = { 0 };
+
+        memset(local_table, 0, sizeof(local_table));
+        local_table[0].path = connect_path;
+        local_table[0].path_length = sizeof(connect_path) - 1;
+        local_table[0].path_callback = wt_baton_callback;
+        local_app_ctx.path_table = local_table;
+        local_app_ctx.path_table_nb = 1;
+
+        memset(&stream_ctx, 0, sizeof(stream_ctx));
+        stream_ctx.stream_id = 4;
+        stream_ctx.ps.stream_state.header.method = h3zero_method_connect;
+        stream_ctx.ps.stream_state.header.path = (const uint8_t*)connect_path;
+        stream_ctx.ps.stream_state.header.path_length = sizeof(connect_path) - 1;
+        /* wt_baton_accept finds the h3 context through the connection callback context */
+        picoquic_set_callback(cnx, h3zero_callback, &local_app_ctx);
+
+        if (h3zero_process_request_frame(cnx, &stream_ctx, &local_app_ctx) != 0 ||
+            stream_ctx.path_callback != NULL || local_app_ctx.stream_prefixes.first != NULL) {
+            DBG_PRINTF("%s", "Baton accepted a classic CONNECT");
+            ret = -1;
+        }
+        picoquic_set_callback(cnx, NULL, NULL);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
     return ret;
 }
 
@@ -1323,6 +1462,12 @@ int picowt_tp_test(void)
     }
     if (ret == 0) {
         ret = h3zero_check_connect_protocol_test();
+    }
+    if (ret == 0) {
+        ret = picowt_is_webtransport_connect_test();
+    }
+    if (ret == 0) {
+        ret = picowt_baton_refuses_classic_connect_test();
     }
     if (ret == 0) {
         ret = h3zero_delete_stream_prefix_not_found_test(cnx);

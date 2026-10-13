@@ -1807,6 +1807,10 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
+/* Memory used by out of order stream fragments waiting for in order delivery.
+ * With picoquic_set_max_data_control(max_data), it stays below about 6 * max_data. */
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx);
+
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
 
 /* Congestion algorithm definition */

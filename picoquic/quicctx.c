@@ -5308,6 +5308,12 @@ uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
     return cnx->data_received;
 }
 
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx)
+{
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    return (size_t)cnx->nb_stream_data_nodes * sizeof(picoquic_stream_data_node_t);
+}
+
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {
     PICOQUIC_THREAD_CHECK(quic);
     picoquic_tls_set_client_authentication(quic, client_authentication);
