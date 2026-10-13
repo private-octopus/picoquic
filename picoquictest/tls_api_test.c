@@ -43,6 +43,7 @@
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
 #include "picoquic_fastcc.h"
 #include "picoquic_prague.h"
 
@@ -1123,7 +1124,19 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
 
     if (ret != 0) {
         DBG_PRINTF("%s", "Cannot set the cert, key or store file names.\n");
-    } else {
+    }
+    else {
+        /* avoid too much variability by setting a "test order" of key exchange algorithms
+        * before the client connection is created.
+        * The table of key exchange algorithms is only filled when the TLS API is
+        * initialized, which otherwise happens when the first QUIC context is created.
+        * Initialize it here, or the sort would do nothing for the first test run in
+        * a process, and that test would use the default order instead.
+         */
+        uint16_t keyex_test_order[2] = { PTLS_GROUP_SECP256R1, PTLS_GROUP_X25519 };
+        picoquic_tls_api_init();
+        picoquic_sort_key_exchange_algorithms(keyex_test_order, 2);
+
         test_ctx = (picoquic_test_tls_api_ctx_t*)
             malloc(sizeof(picoquic_test_tls_api_ctx_t));
 
@@ -4567,6 +4580,10 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
                 ret = picoquic_ech_configure_quic_ctx(test_ctx->qclient, NULL, NULL);
             }
 
+            if (ret == 0 && (zrt->refuse_0rtt == 1 || (zrt->refuse_0rtt == 2 && i == 1))) {
+                picoquic_set_accept_0rtt(test_ctx->qserver, 0);
+            }
+
             if (ret == 0 && zrt->cipher_suite_id != 0 &&
                 (picoquic_set_cipher_suite(test_ctx->qclient, zrt->cipher_suite_id) != 0 ||
                     picoquic_set_cipher_suite(test_ctx->qserver, zrt->cipher_suite_id) != 0)) {
@@ -4628,7 +4645,9 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
             int rtt_is_available = picoquic_is_0rtt_available(test_ctx->cnx_client);
 
             if ((rtt_is_available && i == 0) ||
-                (!rtt_is_available && i != 0)) {
+                (rtt_is_available && zrt->refuse_0rtt == 1) ||
+                (!rtt_is_available && i != 0 && zrt->refuse_0rtt != 1)) {
+                DBG_PRINTF("Zero RTT test, connection %d, 0-RTT available: %d.\n", i, rtt_is_available);
                 ret = -1;
             }
         }
@@ -4688,9 +4707,24 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
             }
         }
 
-        /* Verify that the 0RTT data was sent and acknowledged */
+        /* Verify that the 0RTT data was sent and acknowledged, if allowed. */
         if (ret == 0 && i == 1) {
-            if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && zrt->change_params == 0) {
+            if (zrt->refuse_0rtt) {
+                /* With a ticket issued before the server refused 0-RTT, the client tries 0-RTT */
+                if ((test_ctx->cnx_client->nb_zero_rtt_sent == 0) != (zrt->refuse_0rtt == 1) ||
+                    test_ctx->cnx_client->nb_zero_rtt_acked != 0 ||
+                    test_ctx->cnx_client->zero_rtt_data_accepted ||
+                    (test_ctx->cnx_server != NULL && test_ctx->cnx_server->nb_zero_rtt_received != 0) ||
+                    test_ctx->sum_data_received_at_server == 0) {
+                    DBG_PRINTF("Zero RTT refused test (mode %d), sent %d, acked %d, accepted %d, server received %d, data %d.\n",
+                        zrt->refuse_0rtt, (int)test_ctx->cnx_client->nb_zero_rtt_sent,
+                        (int)test_ctx->cnx_client->nb_zero_rtt_acked, (int)test_ctx->cnx_client->zero_rtt_data_accepted,
+                        (test_ctx->cnx_server == NULL) ? -1 : (int)test_ctx->cnx_server->nb_zero_rtt_received,
+                        test_ctx->sum_data_received_at_server);
+                    ret = -1;
+                }
+            }
+            else if (zrt->use_badcrypt == 0 && zrt->hardreset == 0 && zrt->change_params == 0) {
                 if (test_ctx->cnx_client->nb_zero_rtt_sent == 0) {
                     DBG_PRINTF("Zero RTT test (badcrypt: %d, hard: %d), no zero RTT sent.\n",
                         zrt->use_badcrypt, zrt->hardreset);
@@ -4938,6 +4972,26 @@ int zero_rtt_ech_test(void)
     zero_rtt_test_t zrt = { 0 };
     zrt.propose_ech = 1;
     return zero_rtt_test_one(&zrt);
+}
+
+/*
+* 0-RTT refused. Exercise option to refuse 0-RTT, and verify
+* that it works correctly.
+*/
+int zero_rtt_refused_test(void)
+{
+    int ret = 0;
+
+    for (int refuse_0rtt = 1; ret == 0 && refuse_0rtt <= 2; refuse_0rtt++) {
+        zero_rtt_test_t zrt = { 0 };
+        zrt.refuse_0rtt = refuse_0rtt;
+        ret = zero_rtt_test_one(&zrt);
+        if (ret != 0) {
+            DBG_PRINTF("Zero RTT refused test fails, mode %d.\n", refuse_0rtt);
+        }
+    }
+
+    return ret;
 }
 
 /*
@@ -5275,6 +5329,12 @@ int mtu_drop_newreno_test(void)
     return ret;
 }
 
+int mtu_drop_bbr1_test(void)
+{
+    int ret = mtu_drop_cc_algotest(picoquic_bbr1_algorithm, 10000000);
+    return ret;
+}
+
 /*
  * Trying to reproduce the scenario that resulted in
  * spurious retransmissions,and checking that it is fixed.
@@ -5609,6 +5669,76 @@ int set_verify_certificate_callback_test(void)
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Verify the client certificate verification policy applied when a client connection
+ * has no root store to check against: fail if the cert verification policy is strict,
+ * continue with a null verifier otherwise. */
+int client_cert_verification_policy_test(void)
+{
+    int ret = 0;
+
+    /* Default policy: no root store, picoquic_start_client_cnx proceeds unverified */
+    if (ret == 0) {
+        uint64_t simulated_time = 0;
+        picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC context");
+            ret = -1;
+        }
+        else {
+            picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+                NULL, 0, 0, PICOQUIC_TEST_SNI, "test", 1);
+            if (cnx == NULL) {
+                DBG_PRINTF("%s", "Cannot create client cnx");
+                ret = -1;
+            }
+            else if (picoquic_start_client_cnx(cnx) != 0) {
+                DBG_PRINTF("%s", "Default policy unexpectedly refused to start the connection");
+                ret = -1;
+            }
+            else if (quic->is_cert_store_not_empty) {
+                DBG_PRINTF("%s", "Default policy unexpectedly reports a non-empty cert store");
+                ret = -1;
+            }
+            picoquic_free(quic);
+        }
+    }
+
+    /* Strict policy: no root store, picoquic_start_client_cnx must refuse instead of proceeding unverified. */
+    if (ret == 0) {
+        uint64_t simulated_time = 0;
+        picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, 0, &simulated_time, NULL, NULL, 0);
+
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "Cannot create QUIC context");
+            ret = -1;
+        }
+        else {
+            picoquic_cnx_t* cnx;
+            picoquic_set_client_cert_verification_policy(quic, 1);
+            cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+                NULL, 0, 0, PICOQUIC_TEST_SNI, "test", 1);
+            if (cnx == NULL) {
+                DBG_PRINTF("%s", "Cannot create client cnx");
+                ret = -1;
+            }
+            else if (picoquic_start_client_cnx(cnx) == 0) {
+                DBG_PRINTF("%s", "Strict policy did not refuse to start the connection");
+                ret = -1;
+            }
+            else if (cnx->cnx_state != picoquic_state_client_init) {
+                DBG_PRINTF("Strict policy unexpectedly changed the connection state to %d", cnx->cnx_state);
+                ret = -1;
+            }
+            picoquic_free(quic);
+        }
     }
 
     return ret;
@@ -9485,7 +9615,10 @@ int packet_trace_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
-
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
     /* Set the logging policy on the server side, to store data in the
      * current working directory, and run a basic test scenario */
     if (ret == 0) {
@@ -11171,6 +11304,12 @@ int pacing_update_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
+
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
+
     if (ret == 0) {
         /* Open a file to log bandwidth updates and document it in context */
         test_ctx->bw_update = picoquic_file_open(PACING_RATE_CSV, "w");
@@ -11234,6 +11373,12 @@ int quality_update_test(void)
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
+
+    /* Fix the key exchange to avoid variations in log */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
+    }
+
     if (ret == 0) {
         /* Open a file to log bandwidth updates and document it in context */
         test_ctx->default_path_update = picoquic_file_open(QUALITY_UPDATE_CSV, "w");
@@ -12200,23 +12345,25 @@ static int multi_segment_test_one(picoquic_congestion_algorithm_t* cc_algo, uint
 
 int multi_segment_test(void)
 {
-    picoquic_congestion_algorithm_t* algo_list[5] = {
+    picoquic_congestion_algorithm_t* algo_list[6] = {
         picoquic_newreno_algorithm,
         picoquic_cubic_algorithm,
         picoquic_dcubic_algorithm,
         picoquic_fastcc_algorithm,
-        picoquic_bbr_algorithm
+        picoquic_bbr_algorithm,
+        picoquic_bbr1_algorithm
     };
-    uint64_t algo_time[5] = {
+    uint64_t algo_time[6] = {
         1220000,
         1050000,
         1250000,
         1350000,
-        1280000
+        1280000,
+        1050000
     };
     int ret = 0;
 
-    for (int i = 0; i < 5 && ret == 0; i++) {
+    for (int i = 0; i < 6 && ret == 0; i++) {
         ret = multi_segment_test_one(algo_list[i], algo_time[i], 65536);
         if (ret != 0) {
             DBG_PRINTF("Multi segment test fails for CC=%s", algo_list[i]->congestion_algorithm_id);
@@ -12891,6 +13038,17 @@ static uint8_t chello_malformed[] = {
     0xe8,
 };
 
+
+uint16_t bad_hello_key_exchanges[] = {
+    PTLS_GROUP_SECP256R1, /* default classic group. */
+    PTLS_GROUP_X25519MLKEM768, /* Preferred hybrid PQC + classic group. */
+    PTLS_GROUP_X25519, /* Preferred classic group */
+    PTLS_GROUP_MLKEM1024, /* CNSA 2.0 compliance */
+    PTLS_GROUP_SECP256R1MLKEM768 /* legacy hybrid PQC + classic group. */
+};
+
+size_t nb_bad_hello_key_exchanges = sizeof(bad_hello_key_exchanges) / sizeof(uint16_t);
+
 int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buffer_size, uint8_t * chello,  size_t chello_length)
 {
     int ret = 0;
@@ -12980,6 +13138,7 @@ int bad_chello_test(void)
         ret = -1;
     }
     else {
+        picoquic_sort_key_exchange_algorithms(bad_hello_key_exchanges, nb_bad_hello_key_exchanges);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* Create an initial packet with a bad chello */
         ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
@@ -13192,6 +13351,11 @@ int test_stateless_blowback(void)
         DBG_PRINTF("Stateless reset interval set to T=%" PRIu64, test_ctx->qserver->stateless_reset_min_interval);
         ret = -1;
 
+    }
+
+    /* Fix the key exchange to avoid variations between platforms */
+    if (ret == 0) {
+        ret = picoquic_set_key_exchange(test_ctx->qclient, PTLS_GROUP_SECP256R1);
     }
 
     /* Format a random packet and submit it, verify that the stateless reset is queued */
@@ -14045,6 +14209,351 @@ int af_undef_test(void)
     if (test_ctx != NULL) {
         tls_api_delete_ctx(test_ctx);
         test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* test whether the specified key exchange is supported, and if it is force a
+* connection to use it and test that the exchange succeeds.
+*/
+
+int tls_is_key_exchange_supported(uint16_t id)
+{
+    int ret = 0;
+
+    for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        if (picoquic_key_exchanges[i]->id == id) {
+            ret = 1;
+            break;
+        }
+    }
+    return ret;
+}
+
+int tls_key_exchange_test_one(uint16_t key_exchange_id)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t icid = { { 0xce, 0xea, 0, 0, 0, 0, 0, 0 }, 8 };
+
+    icid.id[2] = (uint8_t)((key_exchange_id >> 8) & 0xff);
+    icid.id[3] = (uint8_t)(key_exchange_id & 0xff);
+
+    /* create a test context with default settings */
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI,
+        PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* test whether the list of key exchanges includes x25519mlkem */
+    if (ret == 0 && !tls_is_key_exchange_supported(key_exchange_id)) {
+        /* This platform does not support the algorithm. Stop the test. */
+        if (test_ctx != NULL) {
+            tls_api_delete_ctx(test_ctx);
+        }
+        DBG_PRINTF("Algorithm not supported: %d", key_exchange_id);
+        return 0;
+    }
+
+    if (ret == 0) {
+        /* Free the client connection before creating a new one with the
+         * proper settings. */
+        if (test_ctx->cnx_client != NULL) {
+            picoquic_delete_cnx(test_ctx->cnx_client);
+            test_ctx->cnx_client = NULL;
+        }
+        /* Reset the context to use the preferred ID.
+        */
+        ret = picoquic_set_key_exchange(test_ctx->qclient, key_exchange_id);
+    }
+
+    if (ret == 0) {
+        test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, icid,
+            picoquic_null_connection_id,
+            (struct sockaddr*)&test_ctx->server_addr, 0, 0,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, 1);
+
+        if (test_ctx->cnx_client == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    
+    if (ret == 0) {
+        ret = tls_api_test_with_loss_final(test_ctx, PICOQUIC_TEST_SNI,
+            PICOQUIC_TEST_ALPN, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int tls_x25519_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519));
+}
+
+int tls_x25519mlkem_test(void)
+{
+    return(tls_key_exchange_test_one(PTLS_GROUP_X25519MLKEM768));
+}
+
+ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
+    unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx* p_free_certificate_verifier_fn);
+void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier);
+
+/* picoquic_dispose_certificate_verifier is a public wrapper with no callers anywhere in the
+ * codebase -- picoquic itself disposes a verify_certificate callback by invoking the captured
+ * function pointer directly (see picoquic_dispose_verify_certificate_callback_ctx in
+ * tls_api.c), never through this wrapper. Exercised here by obtaining a real verifier from
+ * whichever crypto provider is active and disposing it through the public API.
+ * A picoquic_quic_t must be created first: crypto provider registration (which sets
+ * picoquic_get_certificate_verifier_fn) is a one-time lazy init triggered by the first
+ * picoquic_create call in the process, not something this test can assume already ran when
+ * it is invoked in isolation (e.g. by test name). */
+int tls_api_dispose_certificate_verifier_test(void)
+{
+    int ret = 0;
+    unsigned int is_cert_store_not_empty = 0;
+    picoquic_free_verify_certificate_ctx free_fn = NULL;
+    ptls_verify_certificate_t* verifier;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        verifier = picoquic_get_certificate_verifier(NULL, &is_cert_store_not_empty, &free_fn);
+
+        if (verifier == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_dispose_certificate_verifier(verifier);
+        }
+        picoquic_free(quic);
+    }
+
+    return ret;
+}
+
+/* picoquic_tlscontext_remove_ticket has no callers anywhere in the codebase -- exercised
+ * here directly on a minimal client connection's TLS context. */
+int tls_api_remove_ticket_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_tls_ctx_t* ctx = (picoquic_tls_ctx_t*)cnx->tls_ctx;
+        uint8_t dummy_ticket[1] = { 0 };
+
+        ctx->handshake_properties.client.session_ticket.base = dummy_ticket;
+        ctx->handshake_properties.client.session_ticket.len = sizeof(dummy_ticket);
+
+        picoquic_tlscontext_remove_ticket(cnx);
+
+        if (ctx->handshake_properties.client.session_ticket.base != NULL ||
+            ctx->handshake_properties.client.session_ticket.len != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* A batch of simple public-API guard-clause branches that no existing test hits, because
+ * every existing caller always supplies well-formed arguments. Grouped into one test since
+ * each is a single trivial NULL/bad-argument check with no state setup. */
+int tls_api_null_arg_checks_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t secret_out[32];
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        if (picoquic_export_secret(cnx, NULL, secret_out, sizeof(secret_out)) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a NULL label");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_export_secret(cnx, "test", NULL, sizeof(secret_out)) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a NULL output buffer");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_export_secret(cnx, "test", secret_out, 0) == 0) {
+            DBG_PRINTF("%s", "picoquic_export_secret did not reject a zero output length");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_set_ticket_key(quic, NULL, 16) == 0) {
+            DBG_PRINTF("%s", "picoquic_set_ticket_key did not reject a NULL key");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_aead_decrypt_generic(secret_out, secret_out, sizeof(secret_out),
+            0, NULL, 0, NULL) != SIZE_MAX) {
+            DBG_PRINTF("%s", "picoquic_aead_decrypt_generic did not reject a NULL aead context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_aead_decrypt_mp(secret_out, secret_out, sizeof(secret_out),
+            0, 0, NULL, 0, NULL) != SIZE_MAX) {
+            DBG_PRINTF("%s", "picoquic_aead_decrypt_mp did not reject a NULL aead context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_hp_enc_create_for_test(-1, secret_out) != NULL) {
+            DBG_PRINTF("%s", "picoquic_hp_enc_create_for_test did not reject an invalid cipher suite id");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_add_proposed_alpn(NULL, "h3") == 0) {
+            DBG_PRINTF("%s", "picoquic_add_proposed_alpn did not reject a NULL tls context");
+            ret = -1;
+        }
+        if (ret == 0 && picoquic_refresh_tls_certificate(quic, NULL, NULL) == 0) {
+            DBG_PRINTF("%s", "picoquic_refresh_tls_certificate did not reject NULL file names");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_server_decrypt_retry_token rejects a token shorter than 8 bytes -- never
+ * exercised, since every existing test that builds a retry token uses the real
+ * picoquic_prepare_retry_token, which always emits a well-formed token. */
+int tls_api_server_decrypt_short_token_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    struct sockaddr_in addr;
+    uint8_t short_token[4] = { 1, 2, 3, 4 };
+    uint8_t text[256];
+    size_t text_length = 0;
+    int is_new_token = -1;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+
+        if (picoquic_server_decrypt_retry_token(quic, (struct sockaddr*)&addr, &is_new_token,
+            short_token, sizeof(short_token), text, &text_length) == 0) {
+            DBG_PRINTF("%s", "picoquic_server_decrypt_retry_token did not reject a too-short token");
+            ret = -1;
+        }
+        else if (is_new_token != 0) {
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_set_key_exchange rejects a quic context whose TLS master context is not set --
+ * never exercised, since picoquic_create always sets it up. Null it out and restore it
+ * before deleting the context, the same save/restore pattern used elsewhere in this suite
+ * for forcing a "not registered" branch safely. */
+int tls_api_set_key_exchange_no_master_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        void* saved_master_ctx = quic->tls_master_ctx;
+
+        quic->tls_master_ctx = NULL;
+        if (picoquic_set_key_exchange(quic, 0) == 0) {
+            DBG_PRINTF("%s", "picoquic_set_key_exchange did not reject a missing TLS master context");
+            ret = -1;
+        }
+        quic->tls_master_ctx = saved_master_ctx;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_set_key_log_file's "already have a log_event" branch is only reached on a
+ * second call -- every existing test calls it at most once per quic context. */
+int tls_api_set_key_log_file_twice_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_key_log_file(quic, "tls_api_key_log_file_test_1.txt");
+        picoquic_set_key_log_file(quic, "tls_api_key_log_file_test_2.txt");
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+/* picoquic_verify_retry_protection rejects a length too small to contain the AEAD checksum
+ * -- never exercised, since every existing retry test builds a full-size, well-formed
+ * protected retry packet via picoquic_encode_retry_protection. */
+int tls_api_verify_retry_protection_short_test(void)
+{
+    int ret = 0;
+    size_t version_index = 0;
+    void* integrity_aead = NULL;
+
+    for (version_index = 0; version_index < picoquic_nb_supported_versions; version_index++) {
+        if (picoquic_supported_versions[version_index].version_retry_key != NULL) {
+            integrity_aead = picoquic_create_retry_protection_context(0,
+                picoquic_supported_versions[version_index].version_retry_key,
+                picoquic_supported_versions[version_index].tls_prefix_label);
+            break;
+        }
+    }
+
+    if (integrity_aead == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t bytes[16] = { 0 };
+        size_t length = 0;
+
+        if (picoquic_verify_retry_protection(integrity_aead, bytes, &length, 0, &picoquic_null_connection_id) == 0) {
+            DBG_PRINTF("%s", "picoquic_verify_retry_protection did not reject a too-short length");
+            ret = -1;
+        }
+        picoquic_aead_free(integrity_aead);
     }
 
     return ret;

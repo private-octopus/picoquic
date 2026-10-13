@@ -92,5 +92,137 @@
 { "test": "path_ack_ecn", "frame": { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351]], "ect0": 3, "ect1": 0, "ce": 1}},
 { "test": "reset_stream_at", "frame": { 
-    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}}
+    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}},
+{ "test": "reset_stream_truncated", "frame": { 
+    "frame_type": "reset_stream"}},
+{ "test": "max_data_truncated", "frame": { 
+    "frame_type": "max_data"}},
+{ "test": "max_stream_data_truncated", "frame": { 
+    "frame_type": "max_stream_data"}},
+{ "test": "max_streams_bidir_truncated", "frame": { 
+    "frame_type": "max_streams", "stream_type": "bidirectional"}},
+{ "test": "max_streams_unidir_truncated", "frame": { 
+    "frame_type": "max_streams", "stream_type": "unidirectional"}},
+{ "test": "blocked_truncated", "frame": { 
+    "frame_type": "data_blocked"}},
+{ "test": "stream_data_blocked_truncated", "frame": { 
+    "frame_type": "stream_data_blocked"}},
+{ "test": "streams_blocked_bidir_truncated", "frame": { 
+    "frame_type": "streams_blocked", "stream_type": "bidirectional"}},
+{ "test": "streams_blocked_unidir_truncated", "frame": { 
+    "frame_type": "streams_blocked", "stream_type": "unidirectional"}},
+{ "test": "new_connection_id_truncated", "frame": { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "0102030405060708", "reset_token": "... coding error!"}},
+{ "test": "stop_sending_truncated", "frame": { 
+    "frame_type": "stop_sending"}},
+{ "test": "new_token_truncated", "frame": { 
+    "frame_type": "new_token", "new_token": "... coding error!"}},
+{ "test": "stream_min_truncated", "frame": { 
+    "frame_type": "stream", "id": 1, "offset": 0, "length": 15, "fin": false , "has_length": false, "begins_with": "a0a1a2a3a4a5a6a7"}},
+{ "test": "stream_max_truncated", "frame": { 
+    "frame_type": "stream"}},
+{ "test": "crypto_hs_truncated", "frame": { 
+    "frame_type": "crypto", "offset": 0, "length": 16}},
+{ "test": "retire_connection_id_truncated", "frame": { 
+    "frame_type": "retire_connection_id"}},
+{ "test": "datagram_truncated", "frame": { 
+    "frame_type": "datagram"}},
+{ "test": "datagram_l_truncated", "frame": { 
+    "frame_type": "datagram"}},
+{ "test": "ack_frequency_truncated", "frame": { 
+    "frame_type": "ack_frequency"}},
+{ "test": "ack_frequency_t5_truncated", "frame": { 
+    "frame_type": "ack_frequency"}},
+{ "test": "path_abandon_0_truncated", "frame": { 
+    "frame_type": "path_abandon"}},
+{ "test": "path_abandon_1_truncated", "frame": { 
+    "frame_type": "path_abandon"}},
+{ "test": "path_backup_truncated", "frame": { 
+    "frame_type": "path_backup"}},
+{ "test": "path_available_truncated", "frame": { 
+    "frame_type": "path_available"}},
+{ "test": "max paths_truncated", "frame": { 
+    "frame_type": "max_path_id"}},
+{ "test": "path_new_connection_id_truncated", "frame": { 
+    "frame_type": "path_new_connection_id", "path_id": 1, "sequence_number": 7, "retire_before": 0, "connection_id": "0102030405060708", "reset_token": "... coding error!"}},
+{ "test": "path_retire_connection_id_truncated", "frame": { 
+    "frame_type": "path_retire_connection_id"}},
+{ "test": "paths blocked_truncated", "frame": { 
+    "frame_type": "paths_blocked"}},
+{ "test": "path cid blocked_truncated", "frame": { 
+    "frame_type": "path_cid_blocked"}},
+{ "test": "bdp_truncated", "frame": { 
+    "frame_type": "bdp"}},
+{ "test": "observed_address_v4_truncated", "frame": { 
+    "frame_type": "observed_address_v4"}},
+{ "test": "observed_address_v6_truncated", "frame": { 
+    "frame_type": "observed_address_v6"}},
+{ "test": "reset_stream_at_truncated", "frame": { 
+    "frame_type": "reset_stream_at"}},
+{ "test": "bad_reset_stream_offset", "frame": { 
+    "frame_type": "reset_stream", "stream_id": 17, "error_code": 1, "final_size": 4611686018427387903}},
+{ "test": "bad_reset_stream", "frame": { 
+    "frame_type": "reset_stream", "stream_id": 4611686018427387903, "error_code": 1, "final_size": 1}},
+{ "test": "bad_reset_stream2", "frame": { 
+    "frame_type": "reset_stream"}},
+{ "test": "bad_connection_close", "frame": { 
+    "frame_type": "connection_close", "error_space": "transport", "error_code": 53247, "reason": "encoding error"}},
+{ "test": "bad_connection_close2", "frame": { 
+    "frame_type": "connection_close"}},
+{ "test": "bad_application_close", "frame": { 
+    "frame_type": "connection_close", "error_space": "application", "error_code": 1028, "reason": "encoding error"}},
+{ "test": "bad_max_stream_stream", "frame": { 
+    "frame_type": "max_stream_data", "stream_id": 4611686018427387903, "maximum": 65536}},
+{ "test": "bad_max_streams_bidir", "frame": { 
+    "frame_type": "max_streams", "stream_type": "bidirectional", "maximum": 4611686018427387903}},
+{ "test": "bad_max_streams_unidir", "frame": { 
+    "frame_type": "max_streams", "stream_type": "unidirectional", "maximum": 4611686018427387903}},
+{ "test": "bad_new_connection_id_length", "frame": { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "... coding error!"}},
+{ "test": "bad_new_connection_id_retire", "frame": { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 4611686018427387903, "connection_id": "0102030405060708", "reset_token": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"}},
+{ "test": "illegal_new_cid_retire", "frame": { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 8, "connection_id": "0102030405060708", "reset_token": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"}},
+{ "test": "too_long_new_cid", "frame": { 
+    "frame_type": "new_connection_id", "sequence_number": 7, "retire_before": 0, "connection_id": "010203040506070809000102030405060708090001", "reset_token": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"}},
+{ "test": "bad_stop_sending", "frame": { 
+    "frame_type": "stop_sending", "stream_id": 19, "error_code": 23}},
+{ "test": "bad_stop_sending2", "frame": { 
+    "frame_type": "stop_sending"}},
+{ "test": "bad_new_token", "frame": { 
+    "frame_type": "new_token", "new_token": "... coding error!"}},
+{ "test": "bad_ack_range", "frame": { 
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365][-1, -1]]}, { 
+    "frame_type": "stop_sending"}},
+{ "test": "bad_ack_first_range", "frame": { 
+    "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[-1, -1]]}, { 
+    "frame_type": "padding"}},
+{ "test": "bad_ack_gaps", "frame": { 
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365][-1, -1]]}, { 
+    "frame_type": "stop_sending"}},
+{ "test": "bad_ack_blocks", "frame": { 
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351], [4328719334, 4328719334][-1, -1]]}},
+{ "test": "bad_crypto_hs", "frame": { 
+    "frame_type": "crypto", "offset": 0, "length": 268435455}},
+{ "test": "bad_datagram", "frame": { 
+    "frame_type": "datagram"}},
+{ "test": "stream_hang", "frame": { 
+    "frame_type": "ping"}, { 
+    "frame_type": "padding"}, { 
+    "frame_type": "stream", "id": 4611684923227504639, "offset": 4611686018427387903, "length": 3, "fin": true , "has_length": false, "begins_with": "ffffff"}},
+{ "test": "bad_abandon_0", "frame": { 
+    "frame_type": "path_abandon"}},
+{ "test": "bad_abandon_1", "frame": { 
+    "frame_type": "path_abandon"}},
+{ "test": "bad_path_available", "frame": { 
+    "frame_type": "path_available"}},
+{ "test": "bad_bdp", "frame": { 
+    "frame_type": "bdp"}},
+{ "test": "bad_bdp_addr", "frame": { 
+    "frame_type": "bdp"}},
+{ "test": "bad_bdp_length", "frame": { 
+    "frame_type": "bdp"}},
+{ "test": "bad_frame_id", "frame": { 
+    "frame_type": "unknown", "unknown_frame_type": 1073741823}, { 
+    "frame_type": "stream", "id": 2, "offset": 0, "length": 9, "fin": false , "has_length": false, "begins_with": "048fffffff010203"}}
 ]

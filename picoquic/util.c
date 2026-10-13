@@ -605,7 +605,10 @@ int picoquic_store_text_addr(struct sockaddr_storage* stored_addr, const char* i
     return ret;
 }
 
-/* Get text string for address and port */
+/* Get text string for address and port.
+* By convention, all port values in socket structure are encoded in
+* network order. Print them in host order for visibility.
+*/
 char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t text_size)
 {
     char addr_buffer[128];
@@ -618,7 +621,7 @@ char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t t
             addr_text = inet_ntop(AF_INET,
                 (const void*)(&((struct sockaddr_in*)addr)->sin_addr),
                 addr_buffer, sizeof(addr_buffer));
-            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ((struct sockaddr_in*)addr)->sin_port) == 0) {
+            if (picoquic_sprintf(text, text_size, NULL, "%s:%d", addr_text, ntohs(((struct sockaddr_in*)addr)->sin_port)) == 0) {
                 ret_text = text;
             }
             break;
@@ -626,7 +629,7 @@ char const* picoquic_addr_text(const struct sockaddr* addr, char* text, size_t t
             addr_text = inet_ntop(AF_INET6,
                 (const void*)(&((struct sockaddr_in6*)addr)->sin6_addr),
                 addr_buffer, sizeof(addr_buffer));
-            if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ((struct sockaddr_in6*)addr)->sin6_port) == 0) {
+            if (picoquic_sprintf(text, text_size, NULL, "[%s]:%d", addr_text, ntohs(((struct sockaddr_in6*)addr)->sin6_port)) == 0) {
                 ret_text = text;
             }
         default:
@@ -762,6 +765,52 @@ FILE * picoquic_file_close(FILE * F)
     return NULL;
 }
 
+/* Reject unsafe path components (traversal, absolute-ish or backslash paths, odd characters);
+ * a leading '/' is accepted but not required, so both URL paths and bare relative file names
+ * can be checked with the same function. */
+int picoquic_is_path_sane(const uint8_t* path, size_t path_length)
+{
+    int ret = 0;
+    size_t i = 0;
+    int past_is_dot = 0;
+    int nb_good = 0;
+
+    if (path_length == 0) {
+        ret = -1;
+    }
+    else {
+        if (path[0] == '/') {
+            i++;
+        }
+
+        for (; ret == 0 && i < path_length; i++) {
+            int c = path[i];
+            if ((c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') ||
+                c == '-' || c == '_') {
+                nb_good++;
+                past_is_dot = 0;
+            }
+            else if (c == '/' && i < path_length - 1 && nb_good > 0) {
+                nb_good++;
+            }
+            else if (c == '.' && !past_is_dot && nb_good > 0) {
+                past_is_dot = 1;
+            }
+            else {
+                ret = -1;
+            }
+        }
+
+        if (ret == 0 && nb_good == 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 /* Safely delete file in a portable way */
 int picoquic_file_delete(char const * file_name, int * last_err)
 {
@@ -783,14 +832,8 @@ int picoquic_file_delete(char const * file_name, int * last_err)
 
  /* Skip and decode function.
   * These functions return NULL in case of a failure (insufficient buffer).
+  * picoquic_frames_fixed_skip lives in picoquic_utils.h (static inline).
   */
-
-const uint8_t* picoquic_frames_fixed_skip(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t size)
-{
-    /* Write this test so as to avoid integer overflows, especially on 32 bit arch. */
-    return size <= (uint64_t)(bytes_max - bytes) ? (bytes + size) : NULL;
-}
-
 
 const uint8_t* picoquic_frames_varint_skip(const uint8_t* bytes, const uint8_t* bytes_max)
 {

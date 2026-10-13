@@ -10,7 +10,7 @@ else()
 endif()
 
 project(picoquic
-        VERSION 1.1.52.0
+        VERSION 1.1.53.0
         DESCRIPTION "picoquic library"
         LANGUAGES C CXX)
 
@@ -29,6 +29,8 @@ option(BUILD_HTTP "Build picohttp" ON)
 option(BUILD_PQBENCH "Build pqbench" ON)
 option(BUILD_LOGLIB "Build picoquic-log" ON)
 option(BUILD_LOGREADER "Build picolog_t the log reader" ON)
+# Surfaces the standard BUILD_SHARED_LIBS variable as a discoverable option.
+option(BUILD_SHARED_LIBS "Build picoquic libraries as shared libraries" OFF)
 
 message(STATUS "Initial CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
 
@@ -126,6 +128,9 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/sim_link.c
     picoquic/siphash.c
     picoquic/sockloop.c
+    picoquic/picoquic_af_xdp.c
+    picoquic/picoquic_l3tx.c
+    picoquic/picoquic_neigh.c
     picoquic/spinbit.c
     picoquic/streams.c
     picoquic/ticket_store.c
@@ -142,6 +147,7 @@ set(PICOQUIC_CORE_HEADERS
      picoquic/picosocks.h
      picoquic/picoquic_utils.h
      picoquic/picoquic_packet_loop.h
+     picoquic/picoquic_af_xdp.h
      picoquic/picoquic_config.h
      picoquic/picoquic_lb.h
      picoquic/picoquic_newreno.h
@@ -164,7 +170,9 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_binlog.h
     picoquic/picoquic_crypto_provider_api.h
     picoquic/picoquic_internal.h
+    picoquic/picoquic_l3tx.h
     picoquic/picoquic_logger.h
+    picoquic/picoquic_neigh.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
@@ -223,14 +231,18 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/openssl_test.c
     picoquictest/p2p_test.c
     picoquictest/pacing_test.c
+    picoquictest/packet_names_test.c
     picoquictest/parseheadertest.c
+    picoquictest/performance_log_test.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
+    picoquictest/picoquic_ptls_fusion_test.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
     picoquictest/qmux_test.c
     picoquictest/quic_tester.c
+    picoquictest/quicctx_test.c
     picoquictest/red_aqm.c
     picoquictest/rctl_aqm.c
     picoquictest/sacktest.c
@@ -239,6 +251,7 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/skip_frame_test.c
     picoquictest/socket_test.c
     picoquictest/sockloop_test.c
+    picoquictest/af_xdp_test.c
     picoquictest/spinbit_test.c
     picoquictest/splay_test.c
     picoquictest/stream0_frame_test.c
@@ -291,11 +304,8 @@ OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 OPTION(PICOQUIC_FETCH_AEGIS "Fetch libaegis during configuration when WITH_AEGIS is enabled" OFF)
 OPTION(PICOQUIC_AEGIS_FAVOR_PERFORMANCE "Build fetched libaegis with FAVOR_PERFORMANCE enabled" ON)
 OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for this host CPU" OFF)
-if(WITH_AEGIS)
-    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "7c32032f91449d695b24b82955f20d04d47e6cff")
-else()
-    set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "bfa67875982afc4c24f21e146cef4747fa189c2f")
-endif()
+# Set to picotls build as of 2026-10-08, which includes AEGIS support when available.
+set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "f06553b877ada93c860dd1db9002eabf7365292d")
 set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
 set(PICOQUIC_FETCH_AEGIS_TAG "0.10.1" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
 if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
@@ -315,6 +325,7 @@ if(WITH_AEGIS AND PICOQUIC_FETCH_AEGIS)
     set(AEGIS_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
     set(aegis_LIBRARIES aegis CACHE STRING "Fetched libaegis target" FORCE)
 endif()
+
 if(PICOQUIC_FETCH_PTLS)
     if(WITH_AEGIS)
         FetchContent_Declare(picotls
@@ -376,13 +387,28 @@ int main(void)
     list(APPEND PICOQUIC_CRYPTO_EXTRA_LIBRARIES ${AEGIS_LIBRARIES})
 endif()
 
-OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" ${PTLS_WITH_FUSION_DEFAULT})
+# Fusion's do_encrypt_v and the streaming do_encrypt_init/update/final are still unimplemented
+# stubs (assert(!"FIXME")) in the vendored picotls Fusion backend, and picotls's own record-layer
+# code (e.g. NewSessionTicket) calls do_encrypt_v -- so enabling Fusion crashes real connections.
+# Default it OFF everywhere until that is fixed upstream; explicitly pass -DPTLS_WITH_FUSION=ON
+# to override for local experimentation.
+OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" OFF)
 if(PTLS_WITH_FUSION)
     message(STATUS "PTLS Fusion is enabled")
 else()
     message(STATUS "PTLS compiled without support for Fusion")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
 endif()
+
+
+OPTION(PQC_RECOMMENDED_ONLY "only support recommended post quantum algorithms" ON)
+if(PQC_RECOMMENDED_ONLY)
+    message(STATUS "Only recommended PQC algorithms are enabled.")
+else()
+    message(STATUS "All PQC algorithms are enabled.")
+    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PICOQUIC_WITH_ALL_PQC_ALGORITHMS)
+endif()
+
 
 if(WITH_OPENSSL)
     find_package(OpenSSL REQUIRED)
@@ -398,7 +424,6 @@ else()
     set(PICOQUIC_OPENSSL_INCLUDE_DIRS "")
     list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_OPENSSL)
 endif()
-
 
 OPTION(WITH_SELECT "build with select" OFF)
 if(WITH_SELECT)
@@ -565,6 +590,20 @@ if (BUILD_HTTP)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>)
     set_picoquic_compile_settings(wt_baton)
+endif()
+
+# VERSION/SOVERSION give shared objects conventional versioned names
+# (libpicoquic-core.so.<major> etc.); WINDOWS_EXPORT_ALL_SYMBOLS makes DLL
+# builds produce import libraries despite the unannotated headers.
+if(BUILD_SHARED_LIBS)
+    foreach(picoquic_public_lib picoquic-core picoquic-log picohttp-core)
+        if(TARGET ${picoquic_public_lib})
+            set_target_properties(${picoquic_public_lib} PROPERTIES
+                VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}
+                SOVERSION ${PROJECT_VERSION_MAJOR}
+                WINDOWS_EXPORT_ALL_SYMBOLS ON)
+        endif()
+    endforeach()
 endif()
 
 if (BUILD_DEMO)
@@ -753,6 +792,8 @@ if (TARGET picohttp-core)
     install(TARGETS picohttp-core
         EXPORT picoquic-targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES
         ${PICOHTTP_HEADERS}
@@ -768,6 +809,8 @@ if (TARGET picoquic-log)
     install(TARGETS picoquic-log
         EXPORT picoquic-targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     install(FILES
@@ -779,20 +822,34 @@ endif()
 install(TARGETS picoquic-core
     EXPORT picoquic-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+# The exported LIB_PATH must name the artifacts that were actually built:
+# static archives by default, shared objects when BUILD_SHARED_LIBS is ON.
+if(BUILD_SHARED_LIBS)
+    set(_picoquic_lib_prefix "${CMAKE_SHARED_LIBRARY_PREFIX}")
+    set(_picoquic_lib_suffix "${CMAKE_SHARED_LIBRARY_SUFFIX}")
+else()
+    set(_picoquic_lib_prefix "${CMAKE_STATIC_LIBRARY_PREFIX}")
+    set(_picoquic_lib_suffix "${CMAKE_STATIC_LIBRARY_SUFFIX}")
+endif()
+
 if(PICOQUIC_FETCH_PTLS)
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}picoquic-core${_picoquic_lib_suffix}")
     foreach(_ptls_lib ${PTLS_LIBRARIES})
-        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/lib${_ptls_lib}.a")
+        string(APPEND LIB_PATH ";${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}${_ptls_lib}${_picoquic_lib_suffix}")
     endforeach()
     set(LIB_PATH "${LIB_PATH}" CACHE PATH "Path of library files")
 
     install(TARGETS ${PTLS_LIBRARIES}
         EXPORT picoquic-targets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 else()
-    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/libpicoquic-core.a" CACHE PATH "Path of library file")
+    set(LIB_PATH "${CMAKE_INSTALL_LIBDIR}/${_picoquic_lib_prefix}picoquic-core${_picoquic_lib_suffix}" CACHE PATH "Path of library file")
 endif()
 
 install(EXPORT picoquic-targets

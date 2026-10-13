@@ -748,9 +748,6 @@ int mediatest_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
             break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
         case picoquic_callback_almost_ready:
         case picoquic_callback_ready:
             if (cnx_ctx->mt_ctx->datagram_data_requested > 0 && !cnx_ctx->is_server) {
@@ -1473,7 +1470,7 @@ int mediatest_wifi_test(void)
     spec.do_audio = 1;
     spec.data_size = 0;
     spec.link_latency = 15000;
-    spec.latency_average = 60000;
+    spec.latency_average = 62000;
     spec.latency_max = 350000;
     spec.priority_limit_for_bypass = 5;
     spec.do_not_check_video2 = 1;

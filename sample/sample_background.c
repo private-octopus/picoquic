@@ -343,9 +343,6 @@ int sample_background_callback(picoquic_cnx_t* cnx,
             }
             fprintf(stdout, "\n");
             break;
-        case picoquic_callback_stream_gap:
-            /* This callback is never used. */
-            break;
         case picoquic_callback_prepare_to_send:
             /* Active sending API */
             if (stream_ctx == NULL) {

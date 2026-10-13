@@ -31,6 +31,7 @@
 #include "picoquic_newreno.h"
 #include "picoquic_cubic.h"
 #include "picoquic_bbr.h"
+#include "picoquic_bbr1.h"
 #include "picoquic_prague.h"
 #include "c4.h"
 
@@ -144,7 +145,7 @@ int l4s_prague_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = picoquic_prague_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 4100000, 9, 4500, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 4200000, 9, 4500, 0, NULL);
 
     return ret;
 }
@@ -159,11 +160,20 @@ int l4s_bbr_test(void)
 }
 
 
+int l4s_bbr1_test(void)
+{
+    picoquic_congestion_algorithm_t* ccalgo = picoquic_bbr1_algorithm;
+
+    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 150, 3000, 0, NULL);
+
+    return ret;
+}
+
 int l4s_c4_test(void)
 {
     picoquic_congestion_algorithm_t* ccalgo = c4_algorithm;
 
-    int ret = l4s_congestion_test(ccalgo, 1, 3600000, 32, 3000, 0, NULL);
+    int ret = l4s_congestion_test(ccalgo, 1, 3650000, 50, 3000, 0, NULL);
 
     return ret;
 }

@@ -264,6 +264,13 @@ int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected
     return ret;
 }
 
+/* Check that the incoming CONNECT request carries a web transport ":protocol" */
+int picowt_is_webtransport_connect(h3zero_stream_ctx_t* stream_ctx)
+{
+    return h3zero_is_wt_protocol(stream_ctx->ps.stream_state.header.protocol,
+        stream_ctx->ps.stream_state.header.protocol_length);
+}
+
 /*
 * Set selected web transport protocol
 * - Compare the incoming 'wt_available_protocol" to the server list.
@@ -349,7 +356,8 @@ static const char* picowt_connect_protocol_from_settings(const h3zero_settings_t
         H3ZERO_WEBTRANSPORT_H3_PROTOCOL : H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD;
 }
 
-static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+/* Not declared static because used in tests. */
+int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
 {
     const picoquic_tp_t* remote_tp = (cnx == NULL) ? NULL : picoquic_get_transport_parameters(cnx, 0);
     int has_webtransport_settings = ctx != NULL &&
@@ -367,7 +375,8 @@ static int picowt_webtransport_requirements_met(picoquic_cnx_t* cnx, h3zero_call
         remote_tp->is_reset_stream_at_enabled;
 }
 
-static int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
+/* Not declared static because used in tests. */
+int picowt_format_connect_frame(h3zero_stream_ctx_t* stream_ctx,
     const char* authority, const char* path, const char* connect_protocol,
     char const* wt_available_protocols, uint8_t* extra, size_t extra_length,
     size_t* connect_length)
@@ -569,7 +578,11 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 {
     /* register the stream ID as session ID */
     int ret = 0;
-    if (h3zero_find_stream_prefix(ctx, stream_ctx->stream_id) == NULL) {
+
+    if (ctx->nb_wt_connections > 0) {
+        ret = -1;
+    } 
+    else if (h3zero_find_stream_prefix(ctx, stream_ctx->stream_id) == NULL) {
         ret = h3zero_declare_stream_prefix(ctx, stream_ctx->stream_id, wt_callback, wt_ctx);
     }
     if (ret == 0 && cnx != NULL) {
@@ -578,6 +591,9 @@ int picowt_connect_ex(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx,  h3zero_s
 
     if (ret == 0) {
         size_t connect_length = 0;
+
+        ctx->nb_wt_connections++;
+        stream_ctx->is_wt_counted = 1;
 
         /* set the required stream parameters for the state of the stream. */
         stream_ctx->is_open = 1;
@@ -631,6 +647,15 @@ int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_strea
     const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback, void* wt_ctx, char const* wt_available_protocols)
 {
     return picowt_connect_ex(cnx, ctx, stream_ctx, authority, path, wt_callback, wt_ctx, wt_available_protocols, NULL, 0);
+}
+
+/* Remove the session from the count of concurrent WT connections, at most once per session. */
+void picowt_uncount_session(h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx)
+{
+    if (control_stream_ctx->is_wt_counted) {
+        control_stream_ctx->is_wt_counted = 0;
+        h3_ctx->nb_wt_connections--;
+    }
 }
 
 /*
@@ -706,11 +731,13 @@ int picowt_send_drain_session_message(picoquic_cnx_t* cnx,
 
 
 /* Receive a WT capsule.
-* With web transport, we expect three types of capsule:
-* - Datagram, if datagram was not negotiated at the QUIC level,
+* Over HTTP/3, WebTransport expects only two capsule types on the stream:
 * - Drain session,
 * - Close session.
-* 
+* HTTP Datagrams are always sent as QUIC DATAGRAM frames when running over
+* HTTP/3 (RFC 9297, Section 2.1); the DATAGRAM capsule is the fallback used
+* over transports without native datagram support, e.g. HTTP/2. Receiving
+* one here would be unexpected.
 */
 int picowt_receive_capsule(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, picowt_capsule_t * capsule)
 {
@@ -849,5 +876,8 @@ void picowt_deregister(picoquic_cnx_t* cnx,
         control_stream_ctx->ps.stream_state.is_fin_sent = 1;
     }
     picoquic_unlink_app_stream_ctx(cnx, control_stream_ctx->stream_id);
+    /* Then reduce the count of concurrent wt_connections */
+    picowt_uncount_session(h3_ctx, control_stream_ctx);
+
     picoquic_log_app_message(cnx, "Prefix for control stream %"PRIu64 " was unregistered", control_stream_id);
 }

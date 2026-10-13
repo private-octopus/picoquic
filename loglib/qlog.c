@@ -29,6 +29,7 @@
 #include "bytestream.h"
 #include "logreader.h"
 #include "logconvert.h"
+#include "picoquic_qlog_fns.h"
 
 typedef struct qlog_context_st {
 
@@ -90,23 +91,12 @@ int qlog_string(FILE* f, bytestream* s, uint64_t l)
 
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
 {
-    uint64_t x;
     int error_found = (s->ptr + (size_t)l > s->size);
+    size_t actual_len = error_found ? (s->size - s->ptr) : (size_t)l;
 
     fprintf(f, "\"");
-
-    for (x = 0; x < l && s->ptr < s->size; x++) {
-        int c = s->data[s->ptr++];
-        if (c == '"' || c == '\\') {
-            fprintf(f, "\\%c", c);
-        }
-        else if (c >= ' ' && c < 127) {
-            fprintf(f, "%c", c);
-        }
-        else {
-            fprintf(f, "\\%02x", c);
-        }
-    }
+    qlog_fns_char_content(f, s->data + s->ptr, actual_len);
+    s->ptr += actual_len;
 
     if (error_found) {
         fprintf(f, "... coding error!");
@@ -231,7 +221,7 @@ void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
         s->size = s->ptr + (size_t)len;
         fprintf(f, "{ ");
         if ((len & 3) != 0 || len == 0) {
-            fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+            fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
         }
         else {
             fprintf(f, "\"chosen\": \"");
@@ -806,28 +796,37 @@ void qlog_path_available_frame(FILE* f, bytestream* s)
     fprintf(f, ", \"sequence\": %"PRIu64, sequence);
 }
 
+/* max_path_id, paths_blocked and path_cid_blocked have no dedicated binlog writer
+ * (picoquic_binlog_frames falls back to picoquic_log_erroring_frame for them), so a
+ * truncated frame can reach this decoder with fewer bytes than a full field needs --
+ * byteread_vint's return must be checked, or a failed read silently prints the
+ * variable's initialized value (0) as if it had been read successfully. */
 void qlog_max_path_id_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_paths_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t max_path_id = 0;
-    byteread_vint(s, &max_path_id);
-    fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    if (byteread_vint(s, &max_path_id) == 0) {
+        fprintf(f, ", \"max_path_id\": %"PRIu64, max_path_id);
+    }
 }
 
 void qlog_path_cid_blocked_frame(FILE* f, bytestream* s)
 {
     uint64_t path_id = 0;
     uint64_t next_sequence_number = 0;
-    byteread_vint(s, &path_id);
-    byteread_vint(s, &next_sequence_number);
-    fprintf(f, ", \"path_id\": %"PRIu64, path_id);
-    fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    if (byteread_vint(s, &path_id) == 0) {
+        fprintf(f, ", \"path_id\": %"PRIu64, path_id);
+    }
+    if (byteread_vint(s, &next_sequence_number) == 0) {
+        fprintf(f, ", \"next_sequence_number\": %"PRIu64, next_sequence_number);
+    }
 }
 
 void qlog_reset_stream_frame(FILE* f, bytestream* s)

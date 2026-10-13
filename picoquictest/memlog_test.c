@@ -71,6 +71,10 @@ int memlog_test_one(int is_multipath, char const * memlog_file_name, int expect_
             /* Initialize memory log on client or server */
             ret = memlog_init(test_ctx->cnx_client, 100, memlog_file_name);
         }
+
+        if (ret == 0) {
+            ret = picoquic_set_key_exchange(test_ctx->qclient, PICOQUIC_GROUP_SECP256R1);
+        }
     }
 
     if (is_multipath) {

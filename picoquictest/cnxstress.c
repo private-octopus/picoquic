@@ -411,10 +411,6 @@ int cnx_stress_callback(picoquic_cnx_t* cnx,
         cnx_stress_callback_delete_context(cnx_ctx);
         picoquic_set_callback(cnx, NULL, NULL);
         break;
-    case picoquic_callback_stream_gap:
-        /* Gap indication, when unreliable streams are supported */
-        /* Should trigger a failure */
-        break;
     case picoquic_callback_prepare_to_send:
         ret = cnx_stress_callback_prepare_to_send(cnx_ctx, stream_ctx, stream_id, (void*)bytes, length);
         break;

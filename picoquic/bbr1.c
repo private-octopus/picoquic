@@ -299,7 +299,9 @@ typedef struct st_picoquic_bbr1_state_t {
 } picoquic_bbr1_state_t;
 
 void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, uint64_t current_time);
+#if 0
 static void BBR1ResetProbeBwMode(picoquic_bbr1_state_t* bbr1_state, uint64_t current_time);
+#endif
 
 static uint64_t BBR1GetBtlBW(picoquic_bbr1_state_t* bbr1_state)
 {
@@ -538,11 +540,16 @@ void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x
     if (bbr1_state->lt_use_bw) {
         if (bbr1_state->state == picoquic_bbr1_alg_probe_bw && bbr1_state->round_start) {
             bbr1_state->lt_rtt_cnt++;
+#if 0
+            /* Not reachable: the round_start block below shares lt_rtt_cnt and resets it (via
+             * BBR1ltbwResetSampling or a completed interval) once it exceeds BBR1_LT_BW_INTERVAL_MAX_RTT
+             * (16), well before it could ever exceed BBR1_LT_BW_MAX_RTTS (48) here. */
             if (bbr1_state->lt_rtt_cnt > BBR1_LT_BW_MAX_RTTS) {
                 BBR1ltbwResetSampling(bbr1_state, path_x, current_time);
                 BBR1ResetProbeBwMode(bbr1_state, current_time);
                 return;
             }
+#endif
         }
     }
     
@@ -761,12 +768,15 @@ void BBR1CheckCyclePhase(picoquic_bbr1_state_t* bbr1_state, uint64_t packets_los
     }
 }
 
+#if 0
+/* Not called: the only call site, in BBR1ltbwSampling, is itself unreachable -- see comment there. */
 static void BBR1ResetProbeBwMode(picoquic_bbr1_state_t* bbr1_state, uint64_t current_time)
 {
     bbr1_state->state = picoquic_bbr1_alg_probe_bw;
     bbr1_state->cycle_index = 2;
     BBR1AdvanceCyclePhase(bbr1_state, current_time);
 }
+#endif
 
 void BBR1CheckFullPipe(picoquic_bbr1_state_t* bbr1_state, int rs_is_app_limited)
 {
@@ -994,9 +1004,13 @@ void BBR1SetPacingRate(picoquic_bbr1_state_t* bbr1_state)
 }
 
 /* TODO: clarity on bytes vs packets  */
-void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, 
+void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x,
     uint64_t bytes_in_transit, uint64_t bytes_lost, uint64_t bytes_delivered)
 {
+#if 0
+    /* Not reachable: bytes_lost is hardcoded to 0 at the sole call site (see BBR1UpdateOnACK's
+     * caller), and packet_conservation is never set to 1 now that BBR1OnEnterFastRecovery is
+     * unreachable -- both conditions below are always false. */
     if (bytes_lost > 0) {
         if (path_x->cwin > bytes_lost) {
             path_x->cwin -= bytes_lost;
@@ -1010,6 +1024,13 @@ void BBR1ModulateCwndForRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_pat
             path_x->cwin = bytes_in_transit + bytes_delivered;
         }
     }
+#else
+    (void)bbr1_state;
+    (void)path_x;
+    (void)bytes_in_transit;
+    (void)bytes_lost;
+    (void)bytes_delivered;
+#endif
 }
 
 void BBR1ModulateCwndForProbeRTT(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x)
@@ -1054,6 +1075,8 @@ void BBR1UpdateControlParameters(picoquic_bbr1_state_t* bbr1_state, picoquic_pat
     BBR1SetCwnd(bbr1_state, path_x, bytes_in_transit, packets_lost, bytes_delivered);
 }
 
+#if 0
+/* Not called: only referenced by the also-unused BBR1OnTransmit below. */
 void BBR1HandleRestartFromIdle(picoquic_bbr1_state_t* bbr1_state, uint64_t bytes_in_transit, int is_app_limited)
 {
     if (bytes_in_transit == 0 && is_app_limited)
@@ -1064,6 +1087,7 @@ void BBR1HandleRestartFromIdle(picoquic_bbr1_state_t* bbr1_state, uint64_t bytes
         }
     }
 }
+#endif
 
 /* This is the per ACK processing, activated upon receiving an ACK.
  * At that point, we expect the following:
@@ -1080,6 +1104,8 @@ void  BBR1UpdateOnACK(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x
     BBR1UpdateControlParameters(bbr1_state, path_x, bytes_in_transit, packets_lost, bytes_delivered);
 }
 
+#if 0
+/* Not called: BBR1 deliberately ignores packet loss here; see picoquic_bbr1_notify_congestion instead. */
 void BBR1OnTransmit(picoquic_bbr1_state_t* bbr1_state, uint64_t bytes_in_transit, int is_app_limited)
 {
     BBR1HandleRestartFromIdle(bbr1_state, bytes_in_transit, is_app_limited);
@@ -1114,6 +1140,7 @@ void BBR1ExitFastRecovery(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* pa
     bbr1_state->packet_conservation = 0;
     BBR1RestoreCwnd(bbr1_state, path_x);
 }
+#endif
 
 /* Reaction to ECN or sustained losses
  */

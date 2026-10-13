@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.52.0"
+#define PICOQUIC_VERSION "1.1.53.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -402,7 +402,7 @@ typedef enum {
     picoquic_callback_stateless_reset, /* Stateless reset received from peer. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_close, /* Connection close. Stream=0, bytes=NULL, len=0 */
     picoquic_callback_application_close, /* Application closed by peer. Stream=0, bytes=NULL, len=0 */
-    picoquic_callback_stream_gap,  /* bytes=NULL, len = length-of-gap or 0 (if unknown) */
+    picoquic_callback_stream_gap,  /* Deprecated: picoquic never emits this callback, kept only so old code that switches on it still compiles */
     picoquic_callback_prepare_to_send, /* Ask application to send data in frame, see picoquic_provide_stream_data_buffer for details */
     picoquic_callback_almost_ready, /* Data can be sent, but the connection is not fully established */
     picoquic_callback_ready, /* Data can be sent and received, connection migration can be initiated */
@@ -802,6 +802,13 @@ int picoquic_set_tls_root_certificates(picoquic_quic_t* quic, ptls_iovec_t* cert
 /* Tell the TLS stack to not attempt verifying certificates */
 void picoquic_set_null_verifier(picoquic_quic_t* quic);
 
+/* Set the policy applied when a client connection has no root certificate store to verify
+ * against (no cert_root_file_name given to picoquic_create, or it failed to load). By
+ * default (is_strict = 0) verification is silently disabled (fail open), preserved for
+ * applications -- e.g. test setups -- that rely on it. With is_strict != 0,
+ * picoquic_start_client_cnx refuses the connection instead of proceeding unverified. */
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict);
+
 /* Set the TLS private key(DER format) for the QUIC context. The caller is responsible for cleaning up the pointer. */
 int picoquic_set_tls_key(picoquic_quic_t* quic, const uint8_t* data, size_t len);
 
@@ -817,6 +824,12 @@ void picoquic_set_use_exporter(picoquic_quic_t* quic, int use_exporter);
 
 /* Export keying material from the TLS connection using the given exporter label */
 int picoquic_export_secret(picoquic_cnx_t *cnx, const char *label, uint8_t *out, size_t outlen);
+
+/* By default, picoquic servers configured to support session resume in TLS 
+* also support 0RTT. This API allows application to disallow 0RTT by setting
+* accept_0rtt = 0. Applications may want to do that if they want isolation
+* from replay attacks possible with 0RTT. */
+void picoquic_set_accept_0rtt(picoquic_quic_t* quic, int accept_0rtt);
 
 /* By default, a quic context authorizes incoming connections if the certificate and
  * private key are provided, but if client authentication is required the client context
@@ -1794,6 +1807,10 @@ uint64_t picoquic_get_data_sent(picoquic_cnx_t * cnx);
 
 uint64_t picoquic_get_data_received(picoquic_cnx_t * cnx);
 
+/* Memory used by out of order stream fragments waiting for in order delivery.
+ * With picoquic_set_max_data_control(max_data), it stays below about 6 * max_data. */
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx);
+
 int picoquic_cnx_is_still_logging(picoquic_cnx_t* cnx);
 
 /* Congestion algorithm definition */
@@ -1866,7 +1883,10 @@ picoquic_congestion_algorithm_t const* picoquic_get_congestion_algorithm(char co
 void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_default_congestion_algorithm_ex(picoquic_quic_t* quic, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
 
-void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
+/* CC algorithm names are resolved in the registered list (see picoquic_register_congestion_control_algorithms
+ * and picoquic_register_congestion_control_algorithms.
+ * Retruns 0 iif success, -1 if the name is unknown, in which case the default algorithm unchanged. */
+int picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const* alg_name);
 
 void picoquic_set_congestion_algorithm(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* algo);
 void picoquic_set_congestion_algorithm_ex(picoquic_cnx_t* cnx, picoquic_congestion_algorithm_t const* alg, char const* alg_option_string);
