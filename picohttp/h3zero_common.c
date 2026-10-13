@@ -371,20 +371,6 @@ const uint8_t* h3zero_load_frame_content(const uint8_t* bytes, const uint8_t* by
 	return bytes;
 }
 
-const uint8_t* h3zero_skip_frame_content(const uint8_t* bytes, const uint8_t* bytes_max,
-	h3zero_data_stream_state_t* stream_state)
-{
-	size_t available = bytes_max - bytes;
-
-	if (stream_state->current_frame_read + available > stream_state->current_frame_length) {
-		available = (size_t)(stream_state->current_frame_length - stream_state->current_frame_read);
-	}
-	stream_state->current_frame_read += available;
-	bytes += available;
-
-	return bytes;
-}
-
 /* Parsing a control stream.
 * 
 * This requires:
@@ -1020,7 +1006,17 @@ int h3zero_process_remote_stream(picoquic_cnx_t* cnx,
 			bytes = h3zero_parse_remote_unidir_stream(bytes, bytes_max, stream_ctx, ctx, &error_found, cnx);
 		}
 
-		if (bytes == NULL) {
+		if (bytes == NULL && stream_ctx->ps.stream_state.control_stream_id != UINT64_MAX &&
+			h3zero_find_stream_prefix(ctx, stream_ctx->ps.stream_state.control_stream_id) == NULL) {
+			/* WT stream for a closed or unknown session: reject the stream, not the connection. */
+			picoquic_log_app_message(cnx, "Stream %" PRIu64 " refers to closed WT session %" PRIu64 ", rejected",
+				stream_id, stream_ctx->ps.stream_state.control_stream_id);
+			(void)picoquic_stop_sending(cnx, stream_id, H3ZERO_WEBTRANSPORT_SESSION_GONE);
+			if (IS_BIDIR_STREAM_ID(stream_id)) {
+				(void)picoquic_reset_stream(cnx, stream_id, H3ZERO_WEBTRANSPORT_SESSION_GONE);
+			}
+		}
+		else if (bytes == NULL) {
 			picoquic_log_app_message(cnx, "Cannot parse incoming stream: %" PRIu64", error: %" PRIu64,
 				stream_id, error_found);
 			ret = picoquic_close(cnx, error_found);
@@ -1041,7 +1037,12 @@ void h3zero_forget_stream(picoquic_cnx_t* cnx,
 	if (stream_ctx != NULL){
 		if (!stream_ctx->ps.stream_state.is_fin_sent) {
 			stream_ctx->ps.stream_state.is_fin_sent = 1;
-			picoquic_reset_stream(cnx, stream_ctx->stream_id, 0);
+			picoquic_reset_stream(cnx, stream_ctx->stream_id, H3ZERO_WEBTRANSPORT_SESSION_GONE);
+		}
+		/* Stop receiving too, otherwise late data would be parsed as a new stream. */
+		if (!stream_ctx->ps.stream_state.is_fin_received &&
+			(IS_BIDIR_STREAM_ID(stream_ctx->stream_id) || !IS_LOCAL_STREAM_ID(stream_ctx->stream_id, picoquic_is_client(cnx)))) {
+			(void)picoquic_stop_sending(cnx, stream_ctx->stream_id, H3ZERO_WEBTRANSPORT_SESSION_GONE);
 		}
 		picoquic_unlink_app_stream_ctx(cnx, stream_ctx->stream_id);
 	}
@@ -1154,17 +1155,28 @@ int h3zero_check_connect_protocol(const picohttp_server_path_item_t* item, h3zer
 			stream_ctx->ps.stream_state.header.protocol_length != item->connect_protocol_length ||
 			memcmp(stream_ctx->ps.stream_state.header.protocol,
 				item->connect_protocol, item->connect_protocol_length) != 0)) {
-		size_t old_length = strlen(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD);
-		if (stream_ctx->ps.stream_state.header.protocol_length < old_length ||
-			item->connect_protocol_length < old_length ||
-			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
-				item->connect_protocol, old_length) != 0 ||
-			memcmp(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD,
-				stream_ctx->ps.stream_state.header.protocol, old_length) != 0) {
+		if (!h3zero_is_wt_protocol((const uint8_t*)item->connect_protocol, item->connect_protocol_length) ||
+			!h3zero_is_wt_protocol(stream_ctx->ps.stream_state.header.protocol, stream_ctx->ps.stream_state.header.protocol_length)) {
 			ret = -1;
 		}
 	}
 	return ret;
+}
+
+/* Return 1 if the CONNECT protocol is web transport, 0 otherwise */
+int h3zero_is_wt_protocol(const uint8_t* protocol, size_t protocol_length)
+{
+	return protocol != NULL &&
+		((protocol_length == strlen(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) &&
+			memcmp(protocol, H3ZERO_WEBTRANSPORT_H3_PROTOCOL, protocol_length) == 0) ||
+		(protocol_length == strlen(H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD) &&
+			memcmp(protocol, H3ZERO_WEBTRANSPORT_H3_PROTOCOL_OLD, protocol_length) == 0));
+}
+
+/* Return 1 if the path's connect protocol is web transport, 0 otherwise */
+static int h3zero_is_wt_connect_protocol(const picohttp_server_path_item_t* item)
+{
+	return h3zero_is_wt_protocol((const uint8_t*)item->connect_protocol, item->connect_protocol_length);
 }
 
 /* Processing of the request frame.
@@ -1216,6 +1228,7 @@ int h3zero_process_request_frame(
 			if (path_item >= 0) {
 				/* TODO-POST: move this code to post-fin callback.*/
 				stream_ctx->path_callback = app_ctx->path_table[path_item].path_callback;
+				stream_ctx->path_callback_ctx = app_ctx->path_table[path_item].path_app_ctx;
 				stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_post,
 					stream_ctx, stream_ctx->path_callback_ctx);
 			}
@@ -1249,8 +1262,9 @@ int h3zero_process_request_frame(
 				if (item->connect_error_status >= 100 && item->connect_error_status <= 999) {
 					(void)snprintf(error_code, sizeof(error_code), "%03d", item->connect_error_status);
 				}
-				if (item->connect_protocol != NULL &&
-					h3zero_check_connect_protocol(item, stream_ctx) != 0) {
+				/* Routes without connect protocol only accept classic CONNECT */
+				if ((item->connect_protocol == NULL && stream_ctx->ps.stream_state.header.protocol != NULL) ||
+					(item->connect_protocol != NULL && h3zero_check_connect_protocol(item, stream_ctx) != 0)) {
 					picoquic_log_app_message(cnx, "Unsupported CONNECT protocol on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
 					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, error_code, H3ZERO_USER_AGENT_STRING);
 				}
@@ -1266,8 +1280,11 @@ int h3zero_process_request_frame(
 					o_bytes = h3zero_create_error_frame(o_bytes, o_bytes_max, error_code, H3ZERO_USER_AGENT_STRING);
 				}
 				else {
+					int is_wt = h3zero_is_wt_connect_protocol(item);
 					stream_ctx->path_callback = item->path_callback;
-					if (stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
+					stream_ctx->path_callback_ctx = item->path_app_ctx;
+					if ((is_wt && app_ctx->nb_wt_connections > 0) ||
+						stream_ctx->path_callback(cnx, (uint8_t*)stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, picohttp_callback_connect,
 						stream_ctx, item->path_app_ctx) != 0) {
 						/* This callback is not supported */
 						picoquic_log_app_message(cnx, "Unsupported callback on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
@@ -1277,6 +1294,10 @@ int h3zero_process_request_frame(
 					else {
 						/* Create a connect accept frame */
 						picoquic_log_app_message(cnx, "Connect accepted on stream: %"PRIu64 ", path:%s", stream_ctx->stream_id, item->path);
+						if (is_wt) {
+							app_ctx->nb_wt_connections++;
+							stream_ctx->is_wt_counted = 1;
+						}
 						/* TODO: path callback, fill additional HTTP headers */
 						o_bytes = h3zero_create_response_header_frame_ex(o_bytes, o_bytes_max, h3zero_content_type_none, H3ZERO_USER_AGENT_STRING, stream_ctx->ps.stream_state.wt_protocol);
 						stream_ctx->is_upgraded = 1;
@@ -1292,9 +1313,12 @@ int h3zero_process_request_frame(
 			}
 		}
 		else {
-			/* Duplicate request? Bytes after connect? Should they just be sent to the app? */
+			/* Duplicate CONNECT on an already-upgraded stream: not survivable
+			 * the way a bad GET/POST/CONNECT target is, so force the reset-
+			 * stream path below instead of sending a (near-empty) response. */
 			picoquic_log_app_message(cnx, "Duplicate request on stream: %"PRIu64, stream_ctx->stream_id);
 			ret = -1;
+			o_bytes = NULL;
 		}
 	}
 	else
@@ -1457,8 +1481,10 @@ int h3zero_process_h3_server_data(picoquic_cnx_t* cnx,
 					}
 				}
 			}
-			/* If received a post command, verify that it can be accepted */
-			else if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0) {
+			/* If received a post command, verify that it can be accepted. 
+			 * Data after a rejected CONNECT is dropped. */
+			else if (stream_ctx->ps.stream_state.header_found && stream_ctx->post_received == 0 &&
+				stream_ctx->ps.stream_state.header.method == h3zero_method_post) {
 				int path_item = h3zero_find_path_item(stream_ctx->ps.stream_state.header.path, stream_ctx->ps.stream_state.header.path_length, ctx->path_table, ctx->path_table_nb);
 				if (path_item >= 0) {
 					stream_ctx->path_callback = ctx->path_table[path_item].path_callback;
@@ -1855,23 +1881,6 @@ int h3zero_callback_datagram(picoquic_cnx_t* cnx, uint8_t* bytes, size_t length,
 	return ret;
 }
 
-/* Arrival of a datagram capsule */
-void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx)
-{
-	if (stream_ctx == NULL) {
-		/* Application is not yet ready -- just ignore the datagram */
-	}
-	else {
-		h3zero_stream_prefix_t* prefix_ctx = h3zero_find_stream_prefix(h3_ctx, stream_ctx->stream_id);
-		if ( prefix_ctx == NULL || prefix_ctx->function_call == NULL) {
-			/* Should signal the error HTTP_DATAGRAM_ERROR */
-		}
-		else {
-			prefix_ctx->function_call(cnx, capsule->capsule_buffer, capsule->capsule_length, picohttp_callback_post_datagram, stream_ctx, prefix_ctx->function_ctx);
-		}
-	}
-}
-
 typedef struct st_h3zero_prepare_datagram_ctx_t {
 	void* picoquic_context;
 	size_t picoquic_space;
@@ -2086,10 +2095,6 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 				fprintf(stdout, "\n");
 			}
 			break;
-		case picoquic_callback_stream_gap:
-			/* Gap indication, when unreliable streams are supported */
-			ret = -1;
-			break;
 		case picoquic_callback_prepare_to_send:
 			ret = h3zero_callback_prepare_to_send(cnx, stream_id, stream_ctx, (void*)bytes, length, ctx);
 			break;
@@ -2277,6 +2282,11 @@ const uint8_t* h3zero_accumulate_capsule(const uint8_t* bytes, const uint8_t* by
 		capsule->capsule_length = 0;
 		capsule->is_stored = 0;
 		capsule->is_length_known = 0;
+		/* value_read must also be reset: capsule_buffer/capsule_buffer_size are kept
+		 * across capsules to avoid a realloc, but if a shorter capsule follows one
+		 * that left value_read at its (larger) final count, "capsule_length -
+		 * value_read" below would underflow (both are size_t) into a huge memcpy. */
+		capsule->value_read = 0;
 	}
 	if (!capsule->is_length_known) {
 		size_t length_of_type = 0;

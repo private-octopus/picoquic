@@ -81,8 +81,6 @@ typedef struct st_qlog_fns_context_t {
 
 #define QLOG_DECLARE_CONTEXT(ctx, cnx) qlog_fns_context_t * ctx = (qlog_fns_context_t*)cnx->qlog_ctx
 
-const char* picoquic_packet_type_name(uint64_t ptype);
-
 /* Helper: write a binary string parameter */
 const uint8_t* qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l);
 /* Log the frames of a packet */
@@ -188,17 +186,13 @@ static void qlog_fns_log_addr(FILE* f, const struct sockaddr* addr_peer)
     }
 }
 
-/* Helper: write a character string defined by pointer and length.
-* Process the string for compatibility with JSON. */
-
-void qlog_fns_chars(FILE* f, const char * s, uint64_t l)
+/* Shared by qlog_fns.c and the older qlog.c: write bytes as JSON-escaped content, unquoted, from unsigned input so no byte renders as more than \u00XX. */
+void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l)
 {
     uint64_t x;
 
-    fprintf(f, "\"");
-
     for (x = 0; x < l; x++) {
-        int c = s[x];
+        uint8_t c = s[x];
         if (c == '"' || c == '\\') {
             fprintf(f, "\\%c", c);
         }
@@ -206,10 +200,16 @@ void qlog_fns_chars(FILE* f, const char * s, uint64_t l)
             fprintf(f, "%c", c);
         }
         else {
-            fprintf(f, "\\%02x", c);
+            fprintf(f, "\\u%04x", c);
         }
     }
+}
 
+/* Helper: write a character string defined by pointer and length, processed for compatibility with JSON. */
+void qlog_fns_chars(FILE* f, const uint8_t * s, uint64_t l)
+{
+    fprintf(f, "\"");
+    qlog_fns_char_content(f, s, l);
     fprintf(f, "\"");
 }
 
@@ -262,14 +262,8 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
         message_len = written;
     }
 #endif
-    for (size_t i = 0; i < message_len; i++) {
-        int c = message_text[i];
-        if (c < 0x20 || c > 0x7e) {
-            message_text[i] = '?';
-        }
-    }
     fprintf(f, " \"message\": \"");
-    fwrite(message_text, message_len, 1, f);
+    qlog_fns_char_content(f, (uint8_t*)message_text, message_len);
     fprintf(f, "\"}]");
     ctx->event_count++;
 }
@@ -564,7 +558,7 @@ void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
     if (sni_len > 0) {
         fprintf(f, ",\n    \"sni\": ");
-        qlog_fns_chars(f, (const char *)sni, sni_len);
+        qlog_fns_chars(f, sni, sni_len);
     }
 
     if (alpn_count > 0) {
@@ -574,14 +568,14 @@ void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
             if (i != 0) {
                 fprintf(f, ", ");
             }
-            qlog_fns_chars(f, (const char *)alpn_list[i].base, alpn_list[i].len);
+            qlog_fns_chars(f, alpn_list[i].base, alpn_list[i].len);
         }
         fprintf(f, "]");
     }
 
     if (alpn_len > 0) {
         fprintf(f, ",\n    \"alpn\": ");
-        qlog_fns_chars(f, (const char *)alpn, alpn_len);
+        qlog_fns_chars(f, alpn, alpn_len);
     }
 
     fprintf(f, "}]");
@@ -624,7 +618,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
     if (len < 4) {
         bytes = NULL;
     } else {
-        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[4]);
+        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\"", bytes[0], bytes[1], bytes[2], bytes[3]);
         bytes += 4;
     }
     if (bytes != NULL) {
@@ -659,7 +653,7 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, 16);
     }
     if (bytes != NULL && bytes < end_bytes) {
-        fprintf(f, "\", \"extra_bytes\": ");
+        fprintf(f, ", \"extra_bytes\": ");
         bytes = qlog_frame_hex_string(f, bytes, end_bytes, end_bytes - bytes);
     }
     fprintf(f, "}");
@@ -668,8 +662,9 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
 void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len)
 {
     const uint8_t* end_bytes = bytes + len;
+    fprintf(f, "{");
     if ((len & 3) != 0 || len == 0) {
-        fprintf(f, "\"bad_length\": \"%" PRIu64, len);
+        fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
     }
     else {
         fprintf(f, "\"chosen\": ");

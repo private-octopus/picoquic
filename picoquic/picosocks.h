@@ -169,6 +169,10 @@ typedef struct st_picoquic_server_sockets_t {
 } picoquic_server_sockets_t;
 
 int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port);
+/* Bind to a specific local address and port. If local_addr is NULL or its family
+ * is unspecified, this is equivalent to picoquic_bind_to_port. The port inside
+ * local_addr is ignored; the port argument is used. */
+int picoquic_bind_to_address(SOCKET_TYPE fd, int af, int port, const struct sockaddr* local_addr);
 
 int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr);
 

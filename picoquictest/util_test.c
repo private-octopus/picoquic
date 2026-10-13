@@ -113,6 +113,52 @@ int util_sprintf_test(void)
     return ret;
 }
 
+int util_addr_text_test(void)
+{
+    int ret = 0;
+    char text[64];
+    char const* addr_text;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+    struct sockaddr_storage addr0 = { 0 };
+
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    addr4.sin_port = htons(4433);
+    memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_family = AF_INET6;
+    addr6.sin6_port = htons(4433);
+
+    if (inet_pton(AF_INET, "10.0.0.1", &addr4.sin_addr) != 1 ||
+        inet_pton(AF_INET6, "::1", &addr6.sin6_addr) != 1) {
+        DBG_PRINTF("%s", "Cannot set the test addresses.");
+        ret = -1;
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr4, text, sizeof(text));
+        if (strcmp(addr_text, "10.0.0.1:4433") != 0) {
+            DBG_PRINTF("IPv4 address text: %s, expected 10.0.0.1:4433", addr_text);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr6, text, sizeof(text));
+        if (strcmp(addr_text, "[::1]:4433") != 0) {
+            DBG_PRINTF("IPv6 address text: %s, expected [::1]:4433", addr_text);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        addr_text = picoquic_addr_text((struct sockaddr*)&addr0, text, sizeof(text));
+        if (strcmp(addr_text, "?:?") != 0) {
+            DBG_PRINTF("Zeroed address text: %s, expected ?:?", addr_text);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 uint8_t util_uint8_to_str_input[] = {
     'a', 'z', 'A', 'Z', '0', '9', '.', 0xff, 
 };
@@ -355,6 +401,21 @@ int util_debug_print_test(void)
     return ret;
 }
 
+/* Make sure that debug_set_stream and debug_printf_pop_stream are tested at least once.  */
+int util_debug_pop_stream_test(void)
+{
+    int ret = 0;
+    FILE* old_debug_file = get_debug_out();
+
+    debug_set_stream(stderr);
+    debug_printf_pop_stream();
+    if (get_debug_out() != NULL) {
+        ret = -1;
+    }
+    debug_set_stream(old_debug_file);
+    return ret;
+}
+
 /* Testing the minimal thread support.
  *
  * We create one mutex and one event to synchronize two threads: one as a mutex demo,
@@ -450,6 +511,103 @@ int util_threading_test(void)
     if (ret == 0 && ctx.data != 30) {
         DBG_PRINTF("Could not count to %d, got %d", 30, ctx.data);
         ret = -1;
+    }
+
+    return ret;
+}
+
+static picoquic_thread_return_t wait_thread_test_function(void* vctx)
+{
+    int* p_done = (int*)vctx;
+    *p_done = 1;
+    picoquic_thread_do_return;
+}
+
+/* Exercise util_wait_thread_test, which is not used in the current
+* test suite. */
+int util_wait_thread_test(void)
+{
+    int ret = 0;
+    int done = 0;
+    picoquic_thread_t thread;
+
+    ret = picoquic_create_thread(&thread, wait_thread_test_function, &done);
+    if (ret != 0) {
+        DBG_PRINTF("Create thread returns %d (0x%x)", ret, ret);
+    }
+    else {
+        ret = picoquic_wait_thread(thread);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot wait for thread, ret = %d (0x%x)", ret, ret);
+        }
+        else if (!done) {
+            ret = -1;
+        }
+#ifdef _WINDOWS
+        CloseHandle(thread);
+#endif
+    }
+
+    return ret;
+}
+
+/* picoquic_is_path_sane rejects traversal and other unsafe path components;
+ * a leading '/' is accepted but not required, so both URL paths (h3zero) and 
+ * bare relative file names (the sample server) validate correctly. */
+int util_is_path_sane_test(void)
+{
+    int ret = 0;
+    char const* good[] = {
+        "/index.html", "/example.com.txt", "/5000000", "/123_45.png", "/a-b-C-Z", "/dir/index.html",
+        "index.html", "example.com.txt", "dir/index.html"
+    };
+    size_t nb_good = sizeof(good) / sizeof(char const*);
+    char const* bad[] = {
+        "/../index.html", "../index.html", "/dir/../secret.txt", "dir/../secret.txt",
+        "/5000000/", "/.123_45.png", ".123_45.png",
+        "/a-b-C-Z\\..\\password.txt", "//remote-server/example", ""
+    };
+    size_t nb_bad = sizeof(bad) / sizeof(char const*);
+
+    for (size_t i = 0; ret == 0 && i < nb_good; i++) {
+        if (picoquic_is_path_sane((uint8_t*)good[i], strlen(good[i])) != 0) {
+            DBG_PRINTF("Found good path not good: %s\n", good[i]);
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_bad; i++) {
+        if (picoquic_is_path_sane((uint8_t*)bad[i], strlen(bad[i])) == 0) {
+            DBG_PRINTF("Found bad path not bad: %s\n", bad[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* picoquic_set_addr_port is a public utility with no callers anywhere in the codebase --
+ * exercised here directly, for both the IPv4 and IPv6 sockaddr layouts it branches on. */
+int util_set_addr_port_test(void)
+{
+    int ret = 0;
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    picoquic_set_addr_port((struct sockaddr*)&addr4, 1234);
+    if (addr4.sin_port != 1234) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        memset(&addr6, 0, sizeof(addr6));
+        addr6.sin6_family = AF_INET6;
+        picoquic_set_addr_port((struct sockaddr*)&addr6, 5678);
+        if (addr6.sin6_port != 5678) {
+            ret = -1;
+        }
     }
 
     return ret;

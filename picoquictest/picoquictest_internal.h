@@ -262,6 +262,18 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquic_datagram_ack_fn datagram_ack_fn;
 } picoquic_test_tls_api_ctx_t;
 
+/* Options required to decode a test frame, set by parse_test_packet_cnx_fix and cleared one at a time */
+typedef enum {
+    parse_option_none = 0,
+    parse_option_time_stamp,
+    parse_option_datagram,
+    parse_option_ack_frequency,
+    parse_option_bdp,
+    parse_option_address_discovery,
+    parse_option_reset_stream_at,
+    parse_option_max
+} parse_option_enum;
+
 typedef struct st_test_skip_frames_t {
     char const* name;
     uint8_t* val;
@@ -273,11 +285,16 @@ typedef struct st_test_skip_frames_t {
     int skip_fails;
     int mpath;
     int nb_varints;
+    parse_option_enum option;
 } test_skip_frames_t;
 
 extern test_skip_frames_t test_skip_list[];
 
 extern size_t nb_test_skip_list;
+
+extern test_skip_frames_t test_frame_error_list[];
+
+extern size_t nb_test_frame_error_list;
 
 typedef struct st_test_vary_link_spec_t {
     uint64_t duration;
@@ -386,6 +403,7 @@ int test_one_pn_enc_pair(uint8_t * seqnum, size_t seqnum_len, void * pn_enc, voi
 int picoquic_compare_lines(char const* b1, char const* b2);
 int picoquic_test_compare_text_files(char const* fname1, char const* fname2);
 int picoquic_test_compare_binary_files(char const* fname1, char const* fname2);
+int picoquic_check_json_well_formed(char const* fname);
 
 uint64_t picoquic_sum_text_file(char const* fname);
 
@@ -415,6 +433,7 @@ typedef struct st_zero_rtt_test_t {
     int propose_ech;
     int change_params;
     int cipher_suite_id;
+    int refuse_0rtt;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);

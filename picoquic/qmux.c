@@ -455,7 +455,7 @@ uint8_t* picoquic_format_qx_ping_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint
 
 uint8_t* picoquic_format_qmux_tp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max)
 {
-    if (bytes + 0x4000 >= bytes_max) {
+    if ((size_t)(bytes_max - bytes) > 0x4000) {
         bytes_max = bytes + 0x3FFF;
     }
 
@@ -558,7 +558,7 @@ void picoqmux_auto_ack(picoquic_cnx_t* cnx, uint8_t * packet, size_t length, uin
             break;
         case picoquic_frame_type_observed_address_v4:
         case picoquic_frame_type_observed_address_v6:
-            ret = picoquic_process_ack_of_observed_address_frame(cnx->path[0], &packet[byte_index], length - byte_index, ftype, &frame_length);
+            ret = picoquic_process_ack_of_observed_address_frame(cnx->path[0], &packet[byte_index], length - byte_index, ftype, l_ftype, &frame_length);
             byte_index += frame_length;
             break;
         default:

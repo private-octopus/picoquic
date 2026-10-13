@@ -417,9 +417,13 @@ void dualq_params_init(dualq_state_t* dualq, uint64_t l4s_max, picoquictest_sim_
     uint64_t RTT_max = 100000;  /* Worst case RTT expected, microseconds */
     /* PI2 constants derived from above PI2 parameters */
     dualq->p_Cmax = 1.0 / (dualq->k * dualq->k);
+#if 0
+    /* Not reachable: k is hardcoded to 2.0 just above, and never set anywhere else, so
+     * p_Cmax = 1/(k*k) = 0.25 always -- this clamp only matters if k ever becomes configurable. */
     if (dualq->p_Cmax > 1.0) {
         dualq->p_Cmax = 1;
     }
+#endif
     /* PI sampling interval */
     dualq->Tupdate = RTT_max / 3;
     if (dualq->Tupdate > dualq->target) {

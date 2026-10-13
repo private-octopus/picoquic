@@ -76,6 +76,8 @@ extern "C" {
         size_t path_length;
         picohttp_post_data_cb_fn path_callback;
         void* path_app_ctx;
+        /* Expected ":protocol" of extended CONNECT requests, e.g., H3ZERO_WEBTRANSPORT_H3_PROTOCOL.
+         * If NULL, only classic CONNECT requests (without ":protocol") are accepted. */
         char const* connect_protocol;
         size_t connect_protocol_length;
         picohttp_origin_validator_fn origin_validator;
@@ -87,6 +89,9 @@ extern "C" {
         const uint8_t* origin, size_t origin_length,
         const uint8_t* authority, size_t authority_length,
         void* origin_validator_ctx);
+
+    /* Return 1 if the CONNECT protocol is web transport, 0 otherwise */
+    int h3zero_is_wt_protocol(const uint8_t* protocol, size_t protocol_length);
 
     /* Define stream context common to http 3 and http 09 callbacks
     */
@@ -131,6 +136,7 @@ extern "C" {
         /* Client state management */
         unsigned int is_open : 1; /* The client has initiated this stream */
         unsigned int flow_opened : 1; /* Flow control parameters updated to allow receiving expected data */
+        unsigned int is_wt_counted : 1; /* This WT session is counted in nb_wt_connections */
         uint64_t received_length;
         uint64_t post_size;
         uint64_t post_sent;
@@ -231,6 +237,8 @@ extern "C" {
         uint64_t last_datagram_prefix;
         /* control stream ID remembered for uniqueness checks. */
         uint64_t remote_control_stream_id;
+        /* Number of concurrent WT connections for the connection */
+        int nb_wt_connections;
         /* Flag  and variables used by clients*/
         unsigned int no_disk : 1;
         unsigned int no_print : 1;
@@ -288,7 +296,6 @@ extern "C" {
     h3zero_content_type_enum h3zero_get_content_type_by_path(const char *path);
 
     int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id);
-    void h3zero_receive_datagram_capsule(picoquic_cnx_t* cnx, h3zero_stream_ctx_t* stream_ctx, h3zero_capsule_t* capsule, h3zero_callback_ctx_t* h3_ctx);
     uint8_t* h3zero_provide_datagram_buffer(void* context, size_t length, int ready_to_send);
 
     int h3zero_callback(picoquic_cnx_t* cnx,

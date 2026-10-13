@@ -205,6 +205,34 @@ void picoquic_tls_api_init(void);
 void picoquic_tls_api_unload(void);
 void picoquic_tls_api_reset(uint64_t init_flags);
 
+/* picoquic_sort_key_exchange_algorithms:
+* Set the order of key exchange algorithms to the value prefered for the
+* application. The order determines which algorithm is used for the initial
+* client message (the first in list), and then which among many is
+* negotiated by the peer.
+* The argument is a list of 16 bit "Group Identifiers", from the table of
+* TLS Group mainitained by IANA, see
+* https://www.iana.org/assignments/tls-parameters#tls-parameters-8.
+* The default order is:
+*    PTLS_GROUP_X25519MLKEM768, Preferred hybrid PQC + classic group.
+*    PTLS_GROUP_X25519, Preferred classic group
+*    PTLS_GROUP_MLKEM1024, for CNSA 2.0 compliance
+*    PTLS_GROUP_SECP256R1MLKEM768, legacy hybrid PQC + classic group.
+*    PTLS_GROUP_SECP256R1, default classic group.
+* 
+* The list of available key exchanges is determined by what is
+* available in the selected back-ends (e.g., minicrypto, openssl
+* or mbedtls.) 
+* 
+* After the sort, the list will start with those algorithms
+* that are present in both the discovered list and the ordered list,
+* in the order specified in the order list. The algorithms
+* present in the discovered list but not in the ordered least
+* will follow.
+*/
+
+void picoquic_sort_key_exchange_algorithms(uint16_t* ordered_key_exchange, size_t nb_ordered_key_exchange);
+
 void picoquic_tls_api_log_versions(picoquic_cnx_t* cnx);
 
 #ifdef __cplusplus

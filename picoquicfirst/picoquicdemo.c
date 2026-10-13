@@ -318,6 +318,10 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
         ret = picoquic_server_set_context(&qserver, config, current_time, NULL, &picoquic_file_param,
             picoquic_demo_server_callback_select_alpn);
 
+        if (ret == 0 && config->qlog_dir != NULL) {
+            picoquic_set_qlog(qserver, config->qlog_dir);
+        }
+
         if (ret == 0) {
             /* Wait for packets */
             picoquic_packet_loop_param_t param = { 0 };

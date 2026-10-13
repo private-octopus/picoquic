@@ -1142,10 +1142,9 @@ const uint8_t * h3zero_varint_from_stream(const uint8_t* bytes, const uint8_t* b
     }
 
     if (bp >= be) {
+        /* The accumulation loop above is bounded by bp < be, so bp == be here: never past be. */
         (void)h3zero_varint_decode(buffer, bp - buffer, result);
-        if ((*buffer_length = bp - be) > 0) {
-            memmove(buffer, be, *buffer_length);
-        }
+        *buffer_length = 0;
     }
     return bytes;
 }

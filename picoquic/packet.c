@@ -1460,7 +1460,7 @@ int picoquic_incoming_client_initial(
                 uint64_t highest_ack_before = (*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged;
                 ret = picoquic_decode_frames(*pcnx, (*pcnx)->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                ph->epoch, addr_from, addr_to, ph->pn64, 0, current_time);
+                ph->epoch, addr_from, addr_to, ph->pn64, 0, NULL, current_time);
                 if ((*pcnx)->pkt_ctx[picoquic_packet_context_initial].highest_acknowledged > highest_ack_before &&
                     (*pcnx)->quic->random_initial > 1) {
                     /* Randomized sequence number was acknowledged. Consider the
@@ -1692,7 +1692,7 @@ int picoquic_incoming_server_initial(
                 if (ret == 0) {
                     ret = picoquic_decode_frames(cnx, cnx->path[0],
                         bytes + ph->offset, ph->payload_length, received_data,
-                        ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
+                        ph->epoch, NULL, addr_to, ph->pn64, 0, NULL, current_time);
                 }
             }
             /* processing of initial packet */
@@ -1746,7 +1746,7 @@ int picoquic_incoming_server_handshake(
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length,received_data,
-                    ph->epoch, NULL, addr_to, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, addr_to, ph->pn64, 0, NULL, current_time);
             }
 
             /* processing of initial packet */
@@ -1790,7 +1790,7 @@ int picoquic_incoming_client_handshake(
             else {
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                    ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, NULL, ph->pn64, 0, NULL, current_time);
             }
             /* processing of client clear text packet */
             if (ret == 0) {
@@ -1873,7 +1873,7 @@ int picoquic_incoming_0rtt(
                 cnx->nb_zero_rtt_received++;
                 ret = picoquic_decode_frames(cnx, cnx->path[0],
                     bytes + ph->offset, ph->payload_length, received_data,
-                    ph->epoch, NULL, NULL, ph->pn64, 0, current_time);
+                    ph->epoch, NULL, NULL, ph->pn64, 0, NULL, current_time);
             }
 
             if (ret == 0) {
@@ -1993,7 +1993,7 @@ int picoquic_incoming_1rtt(
             ret = picoquic_decode_frames(cnx, cnx->path[path_id],
                 bytes + ph->offset, ph->payload_length, received_data,
                 ph->epoch, addr_from, addr_to, ph->pn64,
-                path_is_not_allocated, current_time);
+                path_is_not_allocated, ph->l_cid, current_time);
 
             if (ret == 0) {
                 /* Compute receive bandwidth */

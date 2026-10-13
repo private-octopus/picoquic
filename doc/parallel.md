@@ -80,6 +80,7 @@ typedef struct st_picoquic_packet_loop_param_t {
     int simulate_eio;
     size_t send_length_max;
     size_t send_batch_max;
+    struct sockaddr_storage local_addr[PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX]; /* Optional bind addresses, one per family */
 } picoquic_packet_loop_param_t;
 ```
 

@@ -25,11 +25,15 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include "picoquic.h"
     /* Set the qlog directory and start streaming qlog traces for
     * each connection.
     */
     int picoquic_fns_set_qlog(picoquic_quic_t* quic, char const* qlog_dir);
+
+    /* Write bytes as JSON-escaped content, unquoted. */
+    void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
 
 #ifdef __cplusplus
 }

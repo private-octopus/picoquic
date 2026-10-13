@@ -127,6 +127,7 @@
 #include "picoquic_qlog.h"
 #include "performance_log.h"
 #include "picoquic_packet_loop.h"
+#include "picoquic_af_xdp.h"
 #include "picoquic_unified_log.h"
 #include "picoqmux.h"
 
@@ -371,14 +372,87 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 #endif
 }
 
+/* Optional bind addresses: at most one per address family. */
+static int picoquic_packet_loop_has_local_addr(const picoquic_packet_loop_param_t* param)
+{
+    for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+        if (param->local_addr[i].ss_family != AF_UNSPEC) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+const struct sockaddr* picoquic_packet_loop_local_addr_for_af(const picoquic_packet_loop_param_t* param, int af)
+{
+    for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+        if (param->local_addr[i].ss_family == af) {
+            return (const struct sockaddr*)&param->local_addr[i];
+        }
+    }
+    return NULL;
+}
+
+static int picoquic_packet_loop_addr_is_wildcard(const struct sockaddr_storage* addr)
+{
+    if (addr->ss_family == AF_INET) {
+        return ((const struct sockaddr_in*)addr)->sin_addr.s_addr == INADDR_ANY;
+    }
+    else if (addr->ss_family == AF_INET6) {
+        return memcmp(&((const struct sockaddr_in6*)addr)->sin6_addr, &in6addr_any, sizeof(struct in6_addr)) == 0;
+    }
+    return 1;
+}
+
+void picoquic_packet_loop_set_send_source(const picoquic_socket_ctx_t* s_ctx, struct sockaddr_storage* local_addr)
+{
+    if (s_ctx == NULL || picoquic_packet_loop_addr_is_wildcard(&s_ctx->bound_addr) ||
+        (local_addr->ss_family != AF_UNSPEC && local_addr->ss_family != s_ctx->bound_addr.ss_family)) {
+        return;
+    }
+    if (s_ctx->bound_addr.ss_family == AF_INET) {
+        struct sockaddr_in* s4 = (struct sockaddr_in*)local_addr;
+#ifndef IP_PKTINFO
+        /* Without IP_PKTINFO (BSD), the source is set with IP_SENDSRCADDR, and
+         * the kernel refuses that option with EINVAL on a socket bound to a
+         * specific address. Leave the source unspecified so that no control
+         * message is added: the kernel then sends from the bound address. */
+        memset(s4, 0, sizeof(struct sockaddr_in));
+#else
+        uint16_t port = (local_addr->ss_family == AF_INET) ? s4->sin_port : s_ctx->n_port;
+        memset(s4, 0, sizeof(struct sockaddr_in));
+        s4->sin_family = AF_INET;
+        s4->sin_port = port;
+        s4->sin_addr = ((const struct sockaddr_in*)&s_ctx->bound_addr)->sin_addr;
+#endif
+    }
+    else {
+        struct sockaddr_in6* s6 = (struct sockaddr_in6*)local_addr;
+        uint16_t port = (local_addr->ss_family == AF_INET6) ? s6->sin6_port : s_ctx->n_port;
+        memset(s6, 0, sizeof(struct sockaddr_in6));
+        s6->sin6_family = AF_INET6;
+        s6->sin6_port = port;
+        s6->sin6_addr = ((const struct sockaddr_in6*)&s_ctx->bound_addr)->sin6_addr;
+        s6->sin6_scope_id = ((const struct sockaddr_in6*)&s_ctx->bound_addr)->sin6_scope_id;
+    }
+}
+
 int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
     picoquic_socket_ctx_t* s_ctx, uint8_t ecn_value)
 {
     int ret = 0;
     struct sockaddr_storage local_address;
+    const struct sockaddr* bind_addr = picoquic_packet_loop_local_addr_for_af(param, s_ctx->af);
     int recv_set = 0;
     int send_set = 0;
     int opt_val = 1;
+    if (bind_addr == NULL && picoquic_packet_loop_has_local_addr(param)) {
+        /* Bind addresses are configured, but none for this family: the loop
+         * must not open a socket that could send from an unrestricted address. */
+        DBG_PRINTF("No local address configured for af=%d\n", s_ctx->af);
+        return -1;
+    }
+
 #ifdef _WINDOWS
     int recv_coalesced = 0;
     int send_coalesced = 0;
@@ -410,7 +484,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         (s_ctx->is_port_shared && (setsockopt(s_ctx->fd, SOL_SOCKET, SO_REUSEPORT,
                                   (const char*)&opt_val, sizeof(opt_val)) != 0)) ||
 #endif
-        picoquic_bind_to_port(s_ctx->fd,s_ctx->af, s_ctx->port) != 0 ||
+        picoquic_bind_to_address(s_ctx->fd, s_ctx->af, s_ctx->port, bind_addr) != 0 ||
         picoquic_get_local_address(s_ctx->fd, &local_address) != 0 ||
         picoquic_socket_set_pmtud_options(s_ctx->fd, s_ctx->af) != 0)
     {
@@ -424,6 +498,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
         ret = -1;
     }
     else {
+        picoquic_store_addr(&s_ctx->bound_addr, (struct sockaddr*)&local_address);
         if (local_address.ss_family == AF_INET6) {
             s_ctx->port = ntohs(((struct sockaddr_in6*)&local_address)->sin6_port);
         }
@@ -461,7 +536,7 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
                 DBG_PRINTF("Cannot set %s to %d, err=%d, so_sndbuf=%d (%d)",
                     last_op_name, param->socket_buffer_size, sock_error, so_errbuf, opt_ret);
 #ifdef __FreeBSD__
-                DBG_PRINTF("- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
+                DBG_PRINTF("%s", "- If increasing buffer size, verify requested size fits within kern.ipc.maxsockbuf");
 #endif
                 ret = -1;
             }
@@ -514,7 +589,30 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
     uint16_t current_port = param->local_port;
     int sock_ret = 0;
 
-    if (param->local_af == 0) {
+    if (picoquic_packet_loop_has_local_addr(param)) {
+        /* Binding to specific addresses: one socket per configured address */
+        nb_af = 0;
+        for (int i = 0; i < PICOQUIC_PACKET_LOOP_LOCAL_ADDR_MAX; i++) {
+            int addr_af = param->local_addr[i].ss_family;
+            if (addr_af == AF_UNSPEC) {
+                continue;
+            }
+            if (addr_af != AF_INET && addr_af != AF_INET6) {
+                DBG_PRINTF("Unsupported local address family af=%d\n", addr_af);
+                return 0;
+            }
+            if (param->local_af != 0 && param->local_af != addr_af) {
+                DBG_PRINTF("Cannot bind af=%d socket to address of af=%d\n", param->local_af, addr_af);
+                return 0;
+            }
+            if (picoquic_packet_loop_local_addr_for_af(param, addr_af) != (const struct sockaddr*)&param->local_addr[i]) {
+                DBG_PRINTF("Duplicate local address for af=%d\n", addr_af);
+                return 0;
+            }
+            af[nb_af++] = addr_af;
+        }
+    }
+    else if (param->local_af == 0) {
 #ifdef ESP_PLATFORM
         nb_af = 1;
         af[0] = AF_INET;
@@ -1163,15 +1261,14 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
             if (*nb_qmux_sockets < max_qmux_socket) {
                 struct sockaddr* dest =
                     (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr;
-                if ((sqmux_ctx[*nb_qmux_sockets] = 
+                if ((sqmux_ctx[*nb_qmux_sockets] =
                     picoquic_packet_loop_open_qmux_client_socket(dest, cnx)) == NULL) {
                     ret = -1;
                     break;
                 }
-
-                cnx = cnx->next_in_table;
                 (*nb_qmux_sockets) += 1;
             }
+            cnx = cnx->next_in_table;
         }
     }
     return ret;
@@ -2065,7 +2162,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
     }
     else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
-        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL ||
+        (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, (struct sockaddr*)&addr_from)) == NULL ||
         (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
     }
@@ -2361,9 +2458,10 @@ int picoquic_packet_loop_do_udp_send(
     struct sockaddr_storage* local_addr,
     int if_index,
     size_t send_msg_size,
-    size_t* send_msg_ptr,
+    size_t** send_msg_ptr,
     picoquic_connection_id_t* log_cid,
-    uint64_t current_time)
+    uint64_t current_time,
+    picoquic_network_thread_ctx_t* thread_ctx)
 {
     int ret = 0;
     int sock_ret = 0;
@@ -2383,9 +2481,23 @@ int picoquic_packet_loop_do_udp_send(
             DBG_PRINTF("Simulating EIO, send length = %zu", send_length);
         }
         else {
-            sock_ret = picoquic_sendmsg(send_socket,
-                (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
-                (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            sock_ret = -1;
+            sock_err = 0;
+            /* AF_XDP is opened once, when the network thread starts. If that
+             * failed, af_xdp is NULL and every datagram uses sendmsg. If it
+             * succeeded, try AF_XDP for this datagram and use sendmsg only
+             * when this datagram cannot be queued (loopback, missing neighbor,
+             * full TX ring). The next datagram tries AF_XDP again. */
+            if (thread_ctx != NULL && thread_ctx->af_xdp != NULL) {
+                sock_ret = picoquic_af_xdp_send(thread_ctx->af_xdp,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
+                    (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            }
+            if (sock_ret <= 0) {
+                sock_ret = picoquic_sendmsg(send_socket,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
+                    (const char*)send_buffer, (int)send_length, (int)send_msg_size, &sock_err);
+            }
         }
     }
     if (sock_ret <= 0) {
@@ -2400,7 +2512,7 @@ int picoquic_packet_loop_do_udp_send(
 
             if (picoquic_socket_error_implies_unreachable(sock_err)) {
                 picoquic_notify_destination_unreachable(last_cnx, current_time,
-                    (struct sockaddr*)&peer_addr, (struct sockaddr*)&local_addr, if_index,
+                    (struct sockaddr*)peer_addr, (struct sockaddr*)local_addr, if_index,
                     sock_err);
             }
             else if (sock_err == EIO) {
@@ -2435,9 +2547,12 @@ int picoquic_packet_loop_do_udp_send(
                     picoquic_log_app_message(last_cnx, "Retry of %zu bytes by chunks of %zu bytes succeeds.",
                         send_length, send_msg_size);
                 }
-                if (send_msg_ptr != NULL) {
-                    /* Make sure that we do not use GSO anymore in this run */
-                    send_msg_ptr = NULL;
+                if (send_msg_ptr != NULL && *send_msg_ptr != NULL) {
+                    /* Make sure that we do not use GSO anymore in this run: clear the
+                     * caller's segment size, and the pointer through which
+                     * picoquic_prepare_next_packet_ex would set it again. */
+                    **send_msg_ptr = 0;
+                    *send_msg_ptr = NULL;
                     picoquic_log_app_message(last_cnx, "%s", "UDP GSO was disabled");
                 }
             }
@@ -2537,6 +2652,13 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 ret = picoquic_packet_loop_open_qmux_cnx_sockets(qmux, sqmux_ctx, &nb_qmux_sockets, max_qmux_sockets);
             }
         }
+    }
+    if (ret == 0) {
+        thread_ctx->tx_method = picoquic_tx_method_sendmsg;
+        thread_ctx->tx_method_reason[0] = 0;
+        thread_ctx->af_xdp = picoquic_af_xdp_create(param->use_af_xdp, param->dest_if,
+            s_ctx[0].fd, &thread_ctx->tx_method, thread_ctx->tx_method_reason,
+            sizeof(thread_ctx->tx_method_reason));
     }
     if (ret == 0 && loop_callback != NULL) {
         struct sockaddr_storage l_addr;
@@ -2707,7 +2829,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     &qmux_socket_was_closed, current_time, qmux_buffer, qmux_buffer_size);
                 break;
             case picoquic_packet_loop_action_wake_up:
-                ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
+                if (loop_callback != NULL) {
+                    ret = loop_callback(quic, picoquic_packet_loop_wake_up, loop_callback_ctx, NULL);
+                }
                 break;
             case picoquic_packet_loop_action_udp_received:
                 ret = picoquic_packet_loop_udp_received(quic, &last_cnx,
@@ -2802,6 +2926,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     * - either the source port is not specified, or it matches the local port.
                     */
                     SOCKET_TYPE send_socket = INVALID_SOCKET;
+                    picoquic_socket_ctx_t* send_ctx = NULL;
                     uint16_t send_port = (peer_addr.ss_family == AF_INET) ?
                         ((struct sockaddr_in*)&local_addr)->sin_port :
                         ((struct sockaddr_in6*)&local_addr)->sin6_port;
@@ -2812,6 +2937,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                     for (int i = 0; i < nb_sockets_available; i++) {
                         if (s_ctx[i].af == peer_addr.ss_family) {
                             send_socket = s_ctx[i].fd;
+                            send_ctx = &s_ctx[i];
                             if (send_port == 0 && !param->prefer_extra_socket) {
                                 break;
                             }
@@ -2835,6 +2961,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             new_ctx->n_port = htons(new_ctx->port);
                             if (picoquic_packet_loop_open_socket(param, new_ctx, ecn_value) == 0) {
                                 send_socket = new_ctx->fd;
+                                send_ctx = new_ctx;
                                 send_port = new_ctx->n_port;
                                 nb_sockets_available++;
                                 if (nb_sockets < nb_sockets_available) {
@@ -2851,10 +2978,14 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                             }
                         }
                     }
+                    /* A socket bound to a specific address must send from that address:
+                     * on a weak host model the kernel would otherwise honor a different
+                     * source from the path, whose replies this socket cannot receive. */
+                    picoquic_packet_loop_set_send_source(send_ctx, &local_addr);
                     ret = picoquic_packet_loop_do_udp_send(
                         quic, last_cnx, send_socket, param,
                         send_buffer, send_length, &peer_addr, &local_addr, if_index,
-                        send_msg_size, send_msg_ptr, &log_cid, current_time);
+                        send_msg_size, &send_msg_ptr, &log_cid, current_time, thread_ctx);
                 }
                 else {
                     break;
@@ -2886,6 +3017,11 @@ void* picoquic_packet_loop_v3(void* v_ctx)
     if (ret == PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP) {
         /* Normal termination requested by the application, returns no error */
         ret = 0;
+    }
+
+    if (thread_ctx->af_xdp != NULL) {
+        picoquic_af_xdp_delete(thread_ctx->af_xdp);
+        thread_ctx->af_xdp = NULL;
     }
 
     /* Close the sockets */
@@ -3089,42 +3225,50 @@ picoquic_network_thread_ctx_t* picoquic_start_custom_network_thread_qmux(picoqui
     picoquic_custom_thread_setname_fn thread_setname_fn, char const* thread_name,
     picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
 {
-    picoquic_network_thread_ctx_t* thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
+    picoquic_network_thread_ctx_t* thread_ctx = NULL;
     *ret = 0;
 
-    if (thread_ctx == NULL) {
-        /* Error, no memory */
+    if (loop_callback == NULL) {
+        /* The wake up action calls loop_callback unconditionally; refuse to start a thread without one. */
+        *ret = -1;
     }
     else {
-        memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
-        /* Set the thread context in the quic context */
-        quic->v_thread_ctx = thread_ctx;
-        /* Fill the arguments in the context */
-        thread_ctx->quic = quic;
-        thread_ctx->qmux = qmux;
-        thread_ctx->param = param;
-        thread_ctx->loop_callback = loop_callback;
-        thread_ctx->loop_callback_ctx = loop_callback_ctx;
-        /* Open the wake up pipe or event */
-        picoquic_open_network_wake_up(thread_ctx, ret);
-        /* Start thread at specified entry point */
-        if (thread_ctx->wake_up_defined){
-            thread_ctx->is_threaded = 1;
-            if (thread_create_fn == NULL) {
-                thread_create_fn = picoquic_internal_thread_create;
-            }
-            if ((thread_ctx->thread_setname_fn = thread_setname_fn) == NULL) {
-                thread_ctx->thread_setname_fn = picoquic_internal_thread_setname;
-            }
-            if ((thread_ctx->thread_delete_fn = thread_delete_fn) == NULL) {
-                thread_ctx->thread_delete_fn = picoquic_internal_thread_delete;
-            }
-            thread_ctx->thread_name = thread_name;
-            if ((*ret = thread_create_fn((void **)&thread_ctx->pthread, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
-                /* Free the context and return error condition if something went wrong */
-                thread_ctx->is_threaded = 0;
-                picoquic_delete_network_thread(thread_ctx);
-                thread_ctx = NULL;
+        thread_ctx = (picoquic_network_thread_ctx_t*)malloc(sizeof(picoquic_network_thread_ctx_t));
+
+        if (thread_ctx == NULL) {
+            /* Error, no memory */
+        }
+        else {
+            memset(thread_ctx, 0, sizeof(picoquic_network_thread_ctx_t));
+            /* Set the thread context in the quic context */
+            quic->v_thread_ctx = thread_ctx;
+            /* Fill the arguments in the context */
+            thread_ctx->quic = quic;
+            thread_ctx->qmux = qmux;
+            thread_ctx->param = param;
+            thread_ctx->loop_callback = loop_callback;
+            thread_ctx->loop_callback_ctx = loop_callback_ctx;
+            /* Open the wake up pipe or event */
+            picoquic_open_network_wake_up(thread_ctx, ret);
+            /* Start thread at specified entry point */
+            if (thread_ctx->wake_up_defined){
+                thread_ctx->is_threaded = 1;
+                if (thread_create_fn == NULL) {
+                    thread_create_fn = picoquic_internal_thread_create;
+                }
+                if ((thread_ctx->thread_setname_fn = thread_setname_fn) == NULL) {
+                    thread_ctx->thread_setname_fn = picoquic_internal_thread_setname;
+                }
+                if ((thread_ctx->thread_delete_fn = thread_delete_fn) == NULL) {
+                    thread_ctx->thread_delete_fn = picoquic_internal_thread_delete;
+                }
+                thread_ctx->thread_name = thread_name;
+                if ((*ret = thread_create_fn((void **)&thread_ctx->pthread, picoquic_packet_loop_v3, (void*)thread_ctx)) != 0) {
+                    /* Free the context and return error condition if something went wrong */
+                    thread_ctx->is_threaded = 0;
+                    picoquic_delete_network_thread(thread_ctx);
+                    thread_ctx = NULL;
+                }
             }
         }
     }
@@ -3142,6 +3286,13 @@ picoquic_network_thread_ctx_t* picoquic_start_network_thread(picoquic_quic_t* qu
     picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback, void* loop_callback_ctx, int* ret)
 {
     return picoquic_start_custom_network_thread(quic, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
+}
+
+picoquic_network_thread_ctx_t* picoquic_start_network_thread_qmux(picoquic_quic_t* quic,
+    picoquic_quic_t* qmux, picoquic_packet_loop_param_t* param, picoquic_packet_loop_cb_fn loop_callback,
+    void* loop_callback_ctx, int* ret)
+{
+    return picoquic_start_custom_network_thread_qmux(quic, qmux, param, NULL, NULL, NULL, NULL, loop_callback, loop_callback_ctx, ret);
 }
 
 int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
@@ -3179,20 +3330,19 @@ void picoquic_delete_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
 {
     /* set the should_close flag, so the thread knows the loop should stop */
     thread_ctx->thread_should_close = 1;
-    /* Delete the wake up event. This ought to create a fault 
-     * in the wait for event call, causing the thread to wake up,
-     * notice the flag, and exit.
-     */
-    picoquic_close_network_wake_up(thread_ctx);
-    /* Clear the thread context in the quic context, to avoid any risk of
-     * use after free. */
+    /* Wake the packet loop through its normal wait mechanism. Closing a file
+     * descriptor from another thread does not reliably interrupt select() on
+     * all platforms, and closing the wake-up handle before the worker exits
+     * would let it use an invalid handle. */
+    if (thread_ctx->is_threaded) {
+        (void)picoquic_wake_up_network_thread(thread_ctx);
+        thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
+    }
+    /* The worker no longer uses the QUIC context or wake-up handle. */
     if (thread_ctx->quic != NULL) {
         thread_ctx->quic->v_thread_ctx = NULL;
     }
-    /* delete the thread */
-    if (thread_ctx->is_threaded) {
-        thread_ctx->thread_delete_fn((void**)&thread_ctx->pthread);
-    }
+    picoquic_close_network_wake_up(thread_ctx);
     /* If the param component was allocated as part of frame context, free it */
     if (thread_ctx->is_param_allocated) {
         free(thread_ctx->param);
@@ -3228,10 +3378,6 @@ int picoquic_server_set_context(picoquic_quic_t** qserver,
 
             picoquic_use_unique_log_names(*qserver, 1);
 
-            if (config->qlog_dir != NULL)
-            {
-                picoquic_set_qlog(*qserver, config->qlog_dir);
-            }
             if (config->performance_log != NULL)
             {
                 ret = picoquic_perflog_setup(*qserver, config->performance_log);
@@ -3363,7 +3509,7 @@ int picoquic_start_server_threads(
         }
         else {
             memset(param, 0, sizeof(picoquic_packet_loop_param_t));
-            if (param->local_port != 0) {
+            if (config->local_port != 0) {
                 param->local_port = (uint16_t)(config->local_port + i);
             }
             param->public_port = config->server_port;
