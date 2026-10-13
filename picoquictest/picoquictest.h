@@ -245,6 +245,7 @@ int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report);
 int cnx_ddos_unit_test(void);
 int cnx_ddos_test_loop(int nb_connections, uint64_t ddos_interval, const char* qlogdir);
 int sockloop_basic_test(void);
+int af_xdp_l3_test(void);
 int sockloop_eio_test(void);
 int sockloop_errsock_test(void);
 int sockloop_ipv4_test(void);
