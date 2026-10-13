@@ -4885,6 +4885,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picowt_one_session_baton_route) {
+            int ret = picowt_one_session_baton_route_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_overflow) {
             int ret = picowt_baton_overflow_test();
 

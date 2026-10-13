@@ -845,6 +845,7 @@ int picowt_baton_fin_before_baton_test(void);
 int picowt_baton_wrong_stream_test(void);
 int picowt_baton_wildcard_test(void);
 int picowt_one_session_test(void);
+int picowt_one_session_baton_route_test(void);
 int picowt_baton_overflow_test(void);
 int picowt_drain_test(void);
 int picowt_reset_stream_remote_unidir_test(void);

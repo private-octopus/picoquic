@@ -264,6 +264,13 @@ int picowt_set_wt_protocol(h3zero_stream_ctx_t* stream_ctx, const char* selected
     return ret;
 }
 
+/* Check that the incoming CONNECT request carries a web transport ":protocol" */
+int picowt_is_webtransport_connect(h3zero_stream_ctx_t* stream_ctx)
+{
+    return h3zero_is_wt_protocol(stream_ctx->ps.stream_state.header.protocol,
+        stream_ctx->ps.stream_state.header.protocol_length);
+}
+
 /*
 * Set selected web transport protocol
 * - Compare the incoming 'wt_available_protocol" to the server list.

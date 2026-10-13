@@ -206,6 +206,7 @@ static const picoquic_test_def_t test_table[] = {
     { "picowt_baton_wrong_stream", picowt_baton_wrong_stream_test },
     { "picowt_baton_wildcard", picowt_baton_wildcard_test },
     { "picowt_one_session", picowt_one_session_test },
+    { "picowt_one_session_baton_route", picowt_one_session_baton_route_test },
     { "picowt_baton_overflow", picowt_baton_overflow_test },
     { "picowt_drain", picowt_drain_test },
     { "picowt_reset_stream_remote_unidir", picowt_reset_stream_remote_unidir_test },

@@ -131,6 +131,12 @@ extern "C" {
      */
     int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
 
+    /* Return 1 if the incoming CONNECT request on this stream carries a web transport
+     * ":protocol", 0 otherwise. Web transport servers should call this when processing
+     * picohttp_callback_connect, and refuse the session if it returns 0.
+     */
+    int picowt_is_webtransport_connect(h3zero_stream_ctx_t* stream_ctx);
+
     /* Get the authority from a WebTransport request.
      * Returns a pointer to the null-terminated authority string, or NULL if not present.
      * The pointer is valid for the lifetime of the stream context.
