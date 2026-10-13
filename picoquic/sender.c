@@ -698,6 +698,11 @@ void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t * path_x
         /* Account for bytes in transit, for congestion control */
         path_x->bytes_in_transit += length;
         path_x->is_cc_data_updated = 1;
+        if (path_x->bytes_in_transit >= path_x->cwin) {
+            /* This packet filled the congestion window: the path is CWIN limited,
+             * even if no further send attempt is made on it. */
+            path_x->last_cwin_blocked_time = current_time;
+        }
         /* Update the pacing data */
         picoquic_update_pacing_after_send(path_x, length, current_time);
     }
@@ -1440,32 +1445,6 @@ int picoquic_prepare_packet_0rtt(picoquic_cnx_t* cnx, picoquic_path_t * path_x, 
     /* the reinsertion by wake up time will happen in the calling function */
 
     return ret;
-}
-
-/* Get packet type from epoch */
-picoquic_packet_type_enum picoquic_packet_type_from_epoch(int epoch)
-{
-    picoquic_packet_type_enum ptype;
-
-    switch (epoch) {
-    case 0:
-        ptype = picoquic_packet_initial;
-        break;
-    case 1:
-        ptype = picoquic_packet_0rtt_protected;
-        break;
-    case 2:
-        ptype = picoquic_packet_handshake;
-        break;
-    case 3:
-        ptype = picoquic_packet_1rtt_protected;
-        break;
-    default:
-        ptype = picoquic_packet_error;
-        break;
-    }
-
-    return ptype;
 }
 
 /* Prepare a required repetition or ack in a previous context */
@@ -2331,7 +2310,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         /* Push new CID if needed */
         while (
             local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
-            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_PATH_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
+            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
             uint8_t* bytes0 = bytes;
             picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
 
@@ -2368,7 +2347,7 @@ void picoquic_false_start_transition(picoquic_cnx_t* cnx, uint64_t current_time)
 
     /* On a server that does address validation, send a NEW TOKEN frame */
     if (!cnx->client_mode && (cnx->quic->check_token || cnx->quic->provide_token)) {
-        uint8_t token_buffer[256];
+        uint8_t token_buffer[PICOQUIC_NEW_TOKEN_MAX_LENGTH];
         size_t token_size;
         picoquic_connection_id_t n_cid = picoquic_null_connection_id;
 
@@ -3064,7 +3043,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                 max_data_increase);
                         }
                     }
-                    else if (2 * cnx->offset_received > cnx->maxdata_local) {
+                    else if (2 * cnx->data_received > cnx->maxdata_local) {
+                        /* Use delivered data, not highest offsets, so out of order fragments cannot inflate the window */
                         bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
                             picoquic_cc_increased_window(cnx, cnx->maxdata_local));
                     }
@@ -3438,15 +3418,10 @@ int picoquic_prepare_segment(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoq
         ret = picoquic_prepare_packet_almost_ready(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time, is_initial_sent);
         break;
     case picoquic_state_ready:
-        /* The lean fast path is only valid for continuation packets of a batch already
-         * started by a full picoquic_prepare_packet_ready call (see the long comment on
-         * picoquic_prepare_packet_ready_fast for why that is safe), and only when there is
-         * nothing this specific packet still needs to do outside of pacing and stream
-         * data: no path validation pending, no multipath probe pending, no PTO probe
-         * pending. PTO handling in particular is excluded here rather than inside the fast
-         * path itself: a PTO probe is explicitly exempt from congestion control (RFC 9002
-         * 6.2.4) and can carry new data even while cwin-blocked, which is exactly the kind
-         * of exception the fast path is not meant to reason about. */
+        /* The fast path is only valid for the second to last packets of
+        * a batch. The various optional frames are handled in the first packet
+        * of the batch, allowing for streamlined processing of the next
+        * packets */
         if (!is_first_in_batch && path_x->first_tuple->challenge_verified != 0 &&
             !path_x->is_multipath_probe_needed && !path_x->is_pto_required) {
             ret = picoquic_prepare_packet_ready_fast(cnx, path_x, packet, current_time, send_buffer, send_buffer_max, send_length, next_wake_time);

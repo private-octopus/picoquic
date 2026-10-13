@@ -342,7 +342,12 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
      * The control stream should only carry capsule data, and these are
      * processed directly at the web transport layer.
      */
-    if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
+    if (baton_ctx == NULL) {
+        /* No session context, e.g., data on a stream whose CONNECT was not accepted. */
+        picoquic_log_app_message(cnx, "Baton data without session context on stream %" PRIu64, stream_ctx->stream_id);
+        ret = -1;
+    }
+    else if (stream_ctx->stream_id == baton_ctx->control_stream_id) {
             ret = picowt_receive_capsule(cnx, bytes, (bytes == NULL)?NULL:(bytes + length), &baton_ctx->capsule);
             if (ret == 0 &&
                 baton_ctx->capsule.h3_capsule.is_stored &&
@@ -403,8 +408,11 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
                 }
             }
 
-            /* Process to receive the stream */
-            if (ret == 0) {
+            /* Process to receive the stream. receive_id stays SIZE_MAX when
+             * the "wrong stream" branch above ran: wt_baton_close_session
+             * commonly returns 0 (a graceful close was successfully queued),
+             * so ret == 0 alone does not mean a lane was assigned. */
+            if (ret == 0 && receive_id != SIZE_MAX) {
                 wt_baton_incoming_t* incoming_ctx = &baton_ctx->incoming[receive_id];
 
                 if (length > 0) {
@@ -592,8 +600,14 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
     {
         int ret = 0;
         h3zero_callback_ctx_t* h3_ctx = (h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx);
-        wt_baton_ctx_t* baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t));
-        if (baton_ctx == NULL) {
+        wt_baton_ctx_t* baton_ctx = NULL;
+
+        if (!picowt_is_webtransport_connect(stream_ctx)) {
+            /* Classic CONNECT, or other protocol: not a web transport session */
+            picoquic_log_app_message(cnx, "Baton refuses non web transport CONNECT on stream %" PRIu64, stream_ctx->stream_id);
+            ret = -1;
+        }
+        else if ((baton_ctx = (wt_baton_ctx_t*)malloc(sizeof(wt_baton_ctx_t))) == NULL) {
             ret = -1;
         }
         else {
@@ -801,6 +815,12 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
             picoquic_log_app_message(cnx, "WT Connection refused on stream %" PRIu64 ", status= %d",
                 stream_ctx->stream_id,
                 stream_ctx->ps.stream_state.header.status);
+
+            /* Wt_connect limits the number of connections to 1 per context.
+            * Since the connection was refused, we need to 
+            * reduce the count of concurrent wt_connections 
+            * by calling picowt_uncount_session */
+            picowt_uncount_session((h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx), stream_ctx);
             break;
         case picohttp_callback_connect_accepted: /* Connection request was accepted by peer */
             /* The response from the server has arrived and it is positive.
@@ -916,37 +936,6 @@ int wt_baton_stream_data(picoquic_cnx_t* cnx,
         return ret;
 }
 
-int wt_baton_process_remote_stream(picoquic_cnx_t* cnx,
-    uint64_t stream_id, const uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event,
-    h3zero_stream_ctx_t* stream_ctx,
-    wt_baton_ctx_t* baton_ctx)
-{
-    int ret = 0;
-
-    if (stream_ctx == NULL) {
-        stream_ctx = h3zero_find_or_create_stream(cnx, stream_id, baton_ctx->h3_ctx, 1, 1);
-        picoquic_set_app_stream_ctx(cnx, stream_id, stream_ctx);
-    }
-    if (stream_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        const uint8_t* bytes_max = bytes + length;
-
-        bytes = h3zero_parse_incoming_remote_stream(bytes, bytes_max, stream_ctx, baton_ctx->h3_ctx, cnx);
-
-        if (bytes == NULL) {
-            picoquic_log_app_message(cnx, "Cannot parse incoming stream: %"PRIu64, stream_id);
-            ret = -1;
-        }
-        else if (bytes < bytes_max) {
-            ret = h3zero_post_data_or_fin(cnx, bytes, bytes_max - bytes, fin_or_event, stream_ctx);
-        }
-    }
-    return ret;
-}
-
 /*
 * wt_baton_prepare_context:
 * Prepare the application context (baton_ctx), documenting the h3 context,
@@ -980,4 +969,15 @@ int wt_baton_prepare_context(picoquic_cnx_t* cnx, wt_baton_ctx_t* baton_ctx,
     }
 
     return ret;
+}
+
+void wt_baton_set_path_item(picohttp_server_path_item_t* item, char const* path, void* path_app_ctx)
+{
+    memset(item, 0, sizeof(picohttp_server_path_item_t));
+    item->path = path;
+    item->path_length = strlen(path);
+    item->path_callback = wt_baton_callback;
+    item->path_app_ctx = path_app_ctx;
+    item->connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
+    item->connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1;
 }

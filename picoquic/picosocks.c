@@ -22,15 +22,23 @@
 #include "picosocks.h"
 #include "picoquic_utils.h"
 
-int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
+int picoquic_bind_to_address(SOCKET_TYPE fd, int af, int port, const struct sockaddr* local_addr)
 {
     struct sockaddr_storage sa;
     int addr_length = 0;
 
     memset(&sa, 0, sizeof(sa));
 
+    if (local_addr != NULL && local_addr->sa_family != AF_UNSPEC && local_addr->sa_family != af) {
+        /* Cannot bind a socket of one family to an address of another family */
+        return -1;
+    }
+
     if (af == AF_INET) {
         struct sockaddr_in* s4 = (struct sockaddr_in*)&sa;
+        if (local_addr != NULL && local_addr->sa_family == AF_INET) {
+            s4->sin_addr = ((const struct sockaddr_in*)local_addr)->sin_addr;
+        }
 #ifdef _WINDOWS
         s4->sin_family = (ADDRESS_FAMILY)af;
 #else
@@ -40,13 +48,21 @@ int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
         addr_length = sizeof(struct sockaddr_in);
     } else {
         struct sockaddr_in6* s6 = (struct sockaddr_in6*)&sa;
-
+        if (local_addr != NULL && local_addr->sa_family == AF_INET6) {
+            s6->sin6_addr = ((const struct sockaddr_in6*)local_addr)->sin6_addr;
+            s6->sin6_scope_id = ((const struct sockaddr_in6*)local_addr)->sin6_scope_id;
+        }
         s6->sin6_family = AF_INET6;
         s6->sin6_port = htons((unsigned short)port);
         addr_length = sizeof(struct sockaddr_in6);
     }
 
     return bind(fd, (struct sockaddr*)&sa, addr_length);
+}
+
+int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port)
+{
+    return picoquic_bind_to_address(fd, af, port, NULL);
 }
 
 int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr)

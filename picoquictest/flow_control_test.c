@@ -210,10 +210,6 @@ int fctest_callback(picoquic_cnx_t* cnx,
 			/* Not expected in this test */
 			ret = -1;
 			break;
-		case picoquic_callback_stream_gap:
-			/* Gap indication, when unreliable streams are supported */
-			ret = -1;
-			break;
 		case picoquic_callback_prepare_to_send:
 			/* On the client, prepare the expected amount of data. Mark
 			* active until the expected amount is received. */
@@ -664,6 +660,199 @@ int stream_uni_blocked_test(void)
 				ret = -1;
 			}
 		}
+	}
+
+	return ret;
+}
+
+/*
+ * Ensure RESET_STREAM will block under stream limit in the same way STREAM data will.
+ */
+
+typedef struct st_uniblock_reset_ctx_t {
+	uint64_t first_stream_id;
+	uint64_t blocked_stream_id;
+	int is_bidir;
+	int first_stream_prepared;
+	int blocked_stream_prepared;
+	int reset_received;
+} uniblock_reset_ctx_t;
+
+static int uniblock_reset_callback(picoquic_cnx_t* cnx,
+	uint64_t stream_id, uint8_t* bytes, size_t length,
+	picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx)
+{
+	uniblock_reset_ctx_t* ctx = callback_ctx;
+	int ret = 0;
+	(void)bytes;
+	(void)length;
+	(void)v_stream_ctx;
+
+	if (ctx == NULL) {
+		return -1;
+	}
+
+	switch (fin_or_event) {
+	case picoquic_callback_stream_fin:
+		if (!cnx->client_mode && ctx->is_bidir && stream_id == ctx->first_stream_id) {
+			ret = picoquic_add_to_stream(cnx, stream_id, NULL, 0, 1);
+		}
+		break;
+	case picoquic_callback_prepare_to_send:
+		if (cnx->client_mode && stream_id == ctx->first_stream_id) {
+			uint8_t* buffer = picoquic_provide_stream_data_buffer(bytes, 8, 0, 0);
+			if (buffer == NULL) {
+				ret = -1;
+			}
+			else {
+				memset(buffer, 'a', 8);
+				ctx->first_stream_prepared = 1;
+			}
+		}
+		else if (cnx->client_mode && stream_id == ctx->blocked_stream_id) {
+			ctx->blocked_stream_prepared = 1;
+			ret = -1;
+		}
+		break;
+	case picoquic_callback_stream_reset:
+		if (!cnx->client_mode && stream_id == ctx->blocked_stream_id) {
+			ctx->reset_received = 1;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static int stream_blocked_reset_one(int is_bidir)
+{
+	int ret = 0;
+	uint64_t simulated_time = 0;
+	uint64_t loss_mask = 0;
+	int nb_trials = 0;
+	int was_active = 0;
+	picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+	uniblock_reset_ctx_t ctx;
+	picoquic_tp_t server_parameters;
+	picoquic_connection_id_t initial_cid = { { 0xb1, 0x0e, 0, 0, 0, 0, 0, 0 }, 8 };
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.is_bidir = is_bidir;
+
+	ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+		PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+	if (ret == 0 && test_ctx == NULL) {
+		ret = -1;
+	}
+
+	if (ret == 0) {
+		memset(&server_parameters, 0, sizeof(picoquic_tp_t));
+		picoquic_init_transport_parameters(&server_parameters);
+		if (is_bidir) {
+			server_parameters.initial_max_stream_id_bidir = 1;
+		}
+		else {
+			server_parameters.initial_max_stream_id_unidir = 1;
+		}
+		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+
+		picoquic_set_default_callback(test_ctx->qserver, uniblock_reset_callback, &ctx);
+		picoquic_set_callback(test_ctx->cnx_client, uniblock_reset_callback, &ctx);
+
+		ret = picoquic_start_client_cnx(test_ctx->cnx_client);
+	}
+
+	if (ret == 0) {
+		ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+	}
+
+	if (ret == 0) {
+		ctx.first_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, !is_bidir);
+		ret = picoquic_mark_active_stream(test_ctx->cnx_client, ctx.first_stream_id, 1, NULL);
+	}
+
+	if (ret == 0) {
+		ctx.blocked_stream_id = picoquic_get_next_local_stream_id(test_ctx->cnx_client, !is_bidir);
+		ret = picoquic_mark_active_stream(test_ctx->cnx_client, ctx.blocked_stream_id, 1, NULL);
+	}
+
+	if (ret == 0) {
+		ret = picoquic_reset_stream(test_ctx->cnx_client, ctx.blocked_stream_id, 0);
+	}
+
+	if (ret == 0) {
+		ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 500000);
+	}
+
+	if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+		DBG_PRINTF("Reset of blocked stream closed the connection: client local=0x%" PRIx64
+			", remote=0x%" PRIx64 "; server local=0x%" PRIx64 ", remote=0x%" PRIx64,
+			test_ctx->cnx_client->local_error, test_ctx->cnx_client->remote_error,
+			test_ctx->cnx_server->local_error, test_ctx->cnx_server->remote_error);
+		ret = -1;
+	}
+
+	if (ret == 0 && !ctx.first_stream_prepared) {
+		DBG_PRINTF("Stream within the initial limit was not prepared: stream=%" PRIu64, ctx.first_stream_id);
+		ret = -1;
+	}
+
+	if (ret == 0 && (ctx.blocked_stream_prepared || ctx.reset_received)) {
+		DBG_PRINTF("Blocked stream became visible before additional credit: stream=%" PRIu64,
+			ctx.blocked_stream_id);
+		ret = -1;
+	}
+
+	if (ret == 0) {
+		ret = picoquic_add_to_stream(test_ctx->cnx_client, ctx.first_stream_id, NULL, 0, 1);
+	}
+
+	while (ret == 0 && !ctx.reset_received && TEST_CLIENT_READY && TEST_SERVER_READY) {
+		ret = tls_api_one_sim_round(test_ctx, &simulated_time, simulated_time + 1000000, &was_active);
+		if (was_active) {
+			nb_trials = 0;
+		}
+		else if (++nb_trials > 256) {
+			break;
+		}
+	}
+
+	if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+		DBG_PRINTF("Deferred reset closed the connection: client local=0x%" PRIx64
+			", remote=0x%" PRIx64 "; server local=0x%" PRIx64 ", remote=0x%" PRIx64,
+			test_ctx->cnx_client->local_error, test_ctx->cnx_client->remote_error,
+			test_ctx->cnx_server->local_error, test_ctx->cnx_server->remote_error);
+		ret = -1;
+	}
+
+	if (ret == 0 && !ctx.reset_received) {
+		DBG_PRINTF("Deferred reset was not delivered after stream credit increased: stream=%" PRIu64,
+			ctx.blocked_stream_id);
+		ret = -1;
+	}
+
+	if (ret == 0 && ctx.blocked_stream_prepared) {
+		DBG_PRINTF("Application data callback fired for reset stream: stream=%" PRIu64,
+			ctx.blocked_stream_id);
+		ret = -1;
+	}
+
+	if (test_ctx != NULL) {
+		tls_api_delete_ctx(test_ctx);
+	}
+
+	return ret;
+}
+
+int stream_blocked_reset_test(void)
+{
+	int ret = stream_blocked_reset_one(0);
+
+	if (ret == 0) {
+		ret = stream_blocked_reset_one(1);
 	}
 
 	return ret;

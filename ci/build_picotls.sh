@@ -2,7 +2,7 @@
 # build last picotls master (for Travis)
 
 # Build at a known-good commit
-COMMIT_ID=bfa67875982afc4c24f21e146cef4747fa189c2f
+COMMIT_ID=f06553b877ada93c860dd1db9002eabf7365292d
 
 cd .. || exit
 # git clone --branch master --single-branch --shallow-submodules --recurse-submodules \

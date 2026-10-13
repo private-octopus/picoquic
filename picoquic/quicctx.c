@@ -516,6 +516,7 @@ int picoquic_remember_issued_ticket(picoquic_quic_t* quic,
                 ticket->next_ticket->previous_ticket = ticket;
             }
             picohash_insert(quic->table_issued_tickets, ticket);
+            quic->table_issued_tickets_nb++;
         }
         else {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -587,8 +588,15 @@ int picoquic_registered_token_check_reuse(picoquic_quic_t * quic,
                 DBG_PRINTF("Token reuse detected, count=%d", rt->count);
             }
             else {
-                (void)picosplay_insert(&quic->token_reuse_tree, rt);
-                ret = 0;
+                /* Set an arbitrary limit to size of token tree to avoid infinite growth. */
+                if ((size_t)quic->token_reuse_tree.size < quic->max_number_connections*32) {
+                    (void)picosplay_insert(&quic->token_reuse_tree, rt);
+                    ret = 0;
+                }
+                else {
+                    /* If the reuse store is full, consider the token as invalid. */
+                    free(rt);
+                }
             }
         }
     }
@@ -694,18 +702,21 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
 
         if (ret == 0) {
             size_t max_cnx4 = 0;
+            size_t max_cnx_by_id = 0;
             if (max_nb_connections == 0) {
                 max_nb_connections = 1;
             }
 
             quic->tentative_max_number_connections = max_nb_connections;
             quic->max_number_connections = max_nb_connections;
+            /* use a factor 4 to reduce risk of hash collisions. */
             max_cnx4 = 4 * (size_t)max_nb_connections;
-
-
+            /* Each connection can hold up to PICOQUIC_NB_TUPLE_TARGET local CIDs */
+            max_cnx_by_id = max_cnx4 * PICOQUIC_NB_TUPLE_TARGET;
 
             if (max_cnx4 < (size_t)max_nb_connections ||
-                (quic->table_cnx_by_id = picohash_create_ex((size_t)max_nb_connections * 4,
+                max_cnx_by_id < max_cnx4 ||
+                (quic->table_cnx_by_id = picohash_create_ex(max_cnx_by_id,
                 picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
                     picoquic_net_id_hash, picoquic_net_id_compare, picoquic_local_netid_to_item, quic->hash_seed)) == NULL ||
@@ -1177,6 +1188,11 @@ void picoquic_set_null_verifier(picoquic_quic_t* quic) {
     picoquic_dispose_verify_certificate_callback(quic);
 }
 
+void picoquic_set_client_cert_verification_policy(picoquic_quic_t* quic, int is_strict) {
+    PICOQUIC_THREAD_CHECK(quic);
+    quic->is_cert_verification_strict = (is_strict != 0);
+}
+
 void picoquic_set_cookie_mode(picoquic_quic_t* quic, int cookie_mode)
 {
     PICOQUIC_THREAD_CHECK(quic);
@@ -1407,7 +1423,7 @@ void picoquic_init_transport_parameters(picoquic_tp_t* tp)
     tp->max_packet_size = PICOQUIC_PRACTICAL_MAX_MTU;
     tp->max_datagram_frame_size = 0;
     tp->ack_delay_exponent = 3;
-    tp->active_connection_id_limit = PICOQUIC_NB_PATH_TARGET;
+    tp->active_connection_id_limit = PICOQUIC_NB_TUPLE_TARGET;
     tp->max_ack_delay = PICOQUIC_ACK_DELAY_MAX;
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = PICOQUIC_ACK_DELAY_MIN;
@@ -1948,6 +1964,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
                 /* Set the challenge used for this path */
                 picoquic_set_path_challenge(cnx, cnx->nb_paths - 1, start_time);
             }
+            else {
+                /* Tuple creation failed: path_x was never recorded in cnx->path, so it must be freed here. */
+                free(path_x);
+            }
         }
     }
 
@@ -2136,54 +2156,67 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
     }
 }
 
-/* 
+/*
  * Demote path, compute the effective time for demotion.
+ *
+ * If multipath is enabled and path_index is 0, first look for another path
+ * that still holds a valid remote CID and swap it into slot 0, so path[0]
+ * stays usable. If no such path exists, path 0 cannot be demoted without
+ * leaving the connection with no usable path while it still believes
+ * itself ready to send: close the connection instead of marking it
+ * demoted with a CID that would later be found valid, but stuck behind a
+ * demoted-and-CID-less path that has yet to be physically deleted.
  */
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason)
 {
     if (!cnx->path[path_index]->path_is_demoted) {
-        uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
+        int can_demote = 1;
 
-        if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER &&
-            !cnx->is_multipath_enabled) {
-            demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
+        if (cnx->is_multipath_enabled && path_index == 0) {
+            int alt_path0 = 0;
+            for (int i = 1; i < cnx->nb_paths; i++) {
+                if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
+                    alt_path0 = i;
+                    break;
+                }
+            }
+            if (alt_path0 != 0) {
+                picoquic_path_t* path_x = cnx->path[0];
+                cnx->path[0] = cnx->path[alt_path0];
+                cnx->path[alt_path0] = path_x;
+                path_index = alt_path0;
+            }
+            else {
+                can_demote = 0;
+            }
         }
 
-        cnx->path[path_index]->path_is_demoted = 1;
-        cnx->path[path_index]->demotion_time = current_time + 3* demote_timer;
-        cnx->path_demotion_needed = 1;
+        if (!can_demote) {
+            picoquic_log_app_message(cnx, "Cannot demote path index 0, unique_id %" PRIu64", was reason % " PRIu64,
+                cnx->path[0]->unique_path_id, reason);
+            picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_APPLICATION_ABANDON,
+                picoquic_frame_type_path_abandon, "no path left to replace demoted path 0");
+        }
+        else {
+            uint64_t demote_timer = cnx->path[path_index]->retransmit_timer;
 
-        /* TODO: add suspended callback */
-        if (cnx->is_multipath_enabled) {
-             /* Special case for path 0: we want to reorder the paths so the path[0]
-             * is always a valid path.
-             */
-            if (path_index == 0) {
-                int alt_path0 = 0;
-                for (int i = 1; i < cnx->nb_paths; i++) {
-                    if (cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
-                        alt_path0 = i;
-                        break;
-                    }
-                }
-                if (alt_path0 != 0) {
-                    picoquic_path_t* path_x = cnx->path[0];
-                    cnx->path[0] = cnx->path[alt_path0];
-                    cnx->path[alt_path0] = path_x;
-                    path_index = alt_path0;
-                }
+            if (demote_timer < PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER &&
+                !cnx->is_multipath_enabled) {
+                demote_timer = PICOQUIC_INITIAL_MAX_RETRANSMIT_TIMER;
             }
-            if (path_index == 0) {
-                picoquic_log_app_message(cnx, "Cannot demote path index 0, unique_id %" PRIu64", was reason % " PRIu64,
-                    cnx->path[path_index]->unique_path_id, reason);
-            }
-            else if (!cnx->path[path_index]->path_abandon_sent) {
+
+            cnx->path[path_index]->path_is_demoted = 1;
+            cnx->path[path_index]->demotion_time = current_time + 3 * demote_timer;
+            cnx->path_demotion_needed = 1;
+
+            /* TODO: add suspended callback */
+            if (cnx->is_multipath_enabled && !cnx->path[path_index]->path_abandon_sent) {
                 uint64_t path_id = cnx->path[path_index]->unique_path_id;
                 if (picoquic_queue_path_abandon_frame(cnx, path_id, reason) == 0){
-                    picoquic_remote_cnxid_stash_t* remote_cnxid_stash = 
-                        picoquic_find_or_create_remote_cnxid_stash(cnx, 
+                    picoquic_remote_cnxid_stash_t* remote_cnxid_stash =
+                        picoquic_find_or_create_remote_cnxid_stash(cnx,
                             cnx->path[path_index]->unique_path_id, 0);
-                    if (remote_cnxid_stash != NULL && path_index != 0) {
+                    if (remote_cnxid_stash != NULL) {
                         cnx->path[path_index]->first_tuple->p_remote_cnxid = NULL;
                         picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
                     }
@@ -2531,7 +2564,9 @@ int picoquic_probe_new_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struc
     /* TODO: check whether that tuple already exists */
 
     /* Verify that a CID is available */
-    ret = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id);
+    if (ret == 0) {
+        ret = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id);
+    }
 
     if (ret == 0) {
         picoquic_tuple_t * tuple = picoquic_create_tuple(path_x, addr_local, addr_peer, if_index);
@@ -3908,13 +3943,6 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             }
 
             cnx->cnx_state = picoquic_state_client_init;
-
-            if (!quic->is_cert_store_not_empty) {
-                /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
-                picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
-
-                picoquic_set_null_verifier(quic);
-            }
         } else {
             cnx->is_half_open = 1;
             cnx->quic->current_number_half_open += 1;
@@ -4098,6 +4126,18 @@ int picoquic_start_client_cnx(picoquic_cnx_t * cnx)
         cnx->tls_stream[0].send_queue != NULL) {
         DBG_PRINTF("%s", "picoquic_start_client_cnx called twice.");
         return -1;
+    }
+
+    if (!cnx->quic->is_cert_store_not_empty) {
+        if (cnx->quic->is_cert_verification_strict) {
+            picoquic_log_app_message(cnx, "No root crt list specified, and strict verification was requested -- refusing connection.\n");
+            return -1;
+        }
+        else {
+            /* The open SSL certifier always fails if no certificate is stored, so we just use a NULL verifier */
+            picoquic_log_app_message(cnx, "No root crt list specified -- certificate will not be verified.\n");
+            picoquic_set_null_verifier(cnx->quic);
+        }
     }
 
     picoquic_log_new_connection(cnx);
@@ -5056,9 +5096,23 @@ void picoquic_set_default_congestion_algorithm(picoquic_quic_t* quic, picoquic_c
     picoquic_set_default_congestion_algorithm_ex(quic, alg, NULL);
 }
 
-void picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const * alg_name)
+int picoquic_set_default_congestion_algorithm_by_name(picoquic_quic_t* quic, char const * alg_name)
 {
-    picoquic_set_default_congestion_algorithm_ex(quic, picoquic_get_congestion_algorithm(alg_name), NULL);
+    int ret = 0;
+    picoquic_congestion_algorithm_t const* alg = picoquic_get_congestion_algorithm(alg_name);
+
+    if (alg == NULL) {
+        /* Unknown name, or no algorithm registered: a NULL default would run new
+         * connections without any congestion control. Keep the current default. */
+        DBG_PRINTF("Congestion algorithm %s not registered, default unchanged\n",
+            (alg_name == NULL) ? "(null)" : alg_name);
+        ret = -1;
+    }
+    else {
+        picoquic_set_default_congestion_algorithm_ex(quic, alg, NULL);
+    }
+
+    return ret;
 }
 
 /*
@@ -5252,6 +5306,12 @@ uint64_t picoquic_get_data_received(picoquic_cnx_t* cnx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
     return cnx->data_received;
+}
+
+size_t picoquic_get_reorder_queue_memory(picoquic_cnx_t* cnx)
+{
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    return (size_t)cnx->nb_stream_data_nodes * sizeof(picoquic_stream_data_node_t);
 }
 
 void picoquic_set_client_authentication(picoquic_quic_t* quic, int client_authentication) {

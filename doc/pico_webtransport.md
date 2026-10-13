@@ -138,6 +138,7 @@ The web transport connection is set in five phases:
   - `path`: the path parameter for the connect request
   - `wt_callback`: the path callback used for the application
   - `wt_ctx`: the web transport application context associated with the path callback
+  - `wt_available_protocols`: the list of supported application protocols, encoded as a structured list of strings.
 
     The call may happen before peer SETTINGS arrive; the implementation defers
     the CONNECT bytes internally until peer SETTINGS and WebTransport transport
@@ -149,7 +150,7 @@ The web transport connection is set in five phases:
  5- Make sure that the application is ready to process incoming streams.
 
 The function `wt_baton_connect` in `wt_baton.c` provides an example
-of setting the web transport session on the client._
+of setting the web transport session on the client.
 
 ### Web transport callback
 
@@ -198,9 +199,10 @@ to "picowt_connect":
     char const* wt_available_protocols);
 ```
 
-The API argument is a comma-separated list of protocol identifiers, for example
-`"protocol1, protocol2, protocol3"`. H3zero encodes this as a
-`WT-Available-Protocols` Structured Fields list of strings on the wire.
+The API argument is a comma-separated list of protocol identifiers
+each represented as a quoted string, for example
+`"protocol1", "protocol2", "protocol3"`. H3zero copies this list in the
+`WT-Available-Protocols` parameter, which expects a Structured Fields list of strings on the wire.
 
 The server selects the protocol by calling the `picowt_select_wt_protocol` API:
 
@@ -210,7 +212,7 @@ int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* suppo
 
 The argument `supported` is the list of protocols supported by the server, encoded
 using the same format as the list of protocols proposed by the client, for
-example: "protocol0, protocol2, protocol3".
+example: `"protocol0", "protocol2", "protocol3"`.
 The code will select the first protocol in the client list that is also supported
 by the server, "protocol2" in our example. The selected value
 is copied in the stream context of the web transport session (look for

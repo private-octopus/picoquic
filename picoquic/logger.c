@@ -859,7 +859,7 @@ size_t textlog_max_data_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 
     size_t l1 = picoquic_varint_decode(bytes + 1, bytes_max - 1, &max_data);
 
-    if (1 + l1 > bytes_max) {
+    if (l1 == 0 || 1 + l1 > bytes_max) {
         fprintf(F, "    Malformed MAX DATA, requires %d bytes out of %d\n", (int)(1 + l1), (int)bytes_max);
         return bytes_max;
     } else {
@@ -941,24 +941,26 @@ size_t textlog_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 
 size_t textlog_stream_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max)
 {
-    size_t byte_index = 1;
-    const size_t min_size = 1 + picoquic_varint_skip(bytes + 1);
     uint64_t blocked_stream_id;
+    uint64_t blocked_offset;
 
-    if (min_size > bytes_max) {
-        fprintf(F, "    Malformed STREAM BLOCKED, requires %d bytes out of %d\n", (int)min_size, (int)bytes_max);
+    /* STREAM_DATA_BLOCKED carries two varints (stream ID, max stream data); the
+     * second one must also be bounds-checked before being skipped, or a frame
+     * truncated right after the stream ID reads past bytes_max. */
+    size_t l1 = picoquic_varint_decode(bytes + 1, bytes_max - 1, &blocked_stream_id);
+    size_t l2 = picoquic_varint_decode(bytes + 1 + l1, bytes_max - 1 - l1, &blocked_offset);
+
+    if (l1 == 0 || l2 == 0) {
+        fprintf(F, "    Malformed STREAM BLOCKED, requires %d bytes out of %d\n",
+            (int)(1 + l1 + l2), (int)bytes_max);
         return bytes_max;
     }
-
-    /* Now that the size is good, parse and print it */
-    byte_index += picoquic_varint_decode(bytes + byte_index, bytes_max - byte_index, &blocked_stream_id);
-    byte_index += picoquic_varint_skip(&bytes[byte_index]);
 
     fprintf(F, "    %s: %" PRIu64 ".\n",
         textlog_frame_names(picoquic_frame_type_stream_data_blocked),
         blocked_stream_id);
 
-    return byte_index;
+    return 1 + l1 + l2;
 }
 
 size_t textlog_streams_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, uint64_t frame_id)
@@ -983,7 +985,7 @@ size_t textlog_streams_blocked_frame(FILE* F, const uint8_t* bytes, size_t bytes
 size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t bytes_max, int is_mpath)
 {
     size_t byte_index;
-    size_t min_size = 2u + 16u;
+    size_t min_size;
     uint64_t sequence;
     uint64_t retire_before = 0;
     uint64_t path_id = 0;
@@ -994,6 +996,8 @@ size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t byt
     size_t l_path_id = 0;
 
     byte_index = picoquic_varint_skip(bytes);
+    /* type field (1 byte, or 2 for the mpath variant) + cid_len byte + 16-byte reset token */
+    min_size = byte_index + 1u + 16u;
 
     if (is_mpath) {
         l_path_id = picoquic_varint_decode(&bytes[byte_index], bytes_max, &path_id);
@@ -1024,13 +1028,13 @@ size_t textlog_new_connection_id_frame(FILE* F, const uint8_t* bytes, size_t byt
         byte_index += picoquic_parse_connection_id(bytes + byte_index, l_cid, &new_cnx_id);
 
         if (is_mpath) {
-        fprintf(F, "    %s[%"PRIu64", %"PRIu64"]: 0x",
-            textlog_frame_names(picoquic_frame_type_path_retire_connection_id),
-            path_id, sequence);
-    }
+            fprintf(F, "    %s[%"PRIu64", %"PRIu64"]: 0x",
+                textlog_frame_names(picoquic_frame_type_path_new_connection_id),
+                path_id, sequence);
+        }
         else {
             fprintf(F, "    %s[%"PRIu64"]: 0x",
-                textlog_frame_names(picoquic_frame_type_retire_connection_id), sequence);
+                textlog_frame_names(picoquic_frame_type_new_connection_id), sequence);
         }
         for (int x = 0; x < new_cnx_id.id_len; x++) {
             fprintf(F, "%02x", new_cnx_id.id[x]);
