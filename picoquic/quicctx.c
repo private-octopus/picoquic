@@ -4071,7 +4071,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         }
     }
 
-    if (quic->use_unique_log_names) {
+    if (cnx != NULL && quic->use_unique_log_names) {
         picoquic_crypto_random(quic, &cnx->log_unique, sizeof(cnx->log_unique));
     }
 
