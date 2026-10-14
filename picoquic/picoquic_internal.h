@@ -107,7 +107,7 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
-#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID retired by the peer and kept registered for late packets */
+#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID per path retired by the peer and kept registered for late packets */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
@@ -921,6 +921,7 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t retired_until; /* If retired by the peer, still accepted on incoming packets until that time */
     picoquic_connection_id_t cnx_id;
     unsigned int is_acked;
+    unsigned int is_retired; /* Retired by the peer, never used again, deleted by the sender after retired_until */
 } picoquic_local_cnxid_t;
 
 typedef struct st_picoquic_local_cnxid_list_t {
@@ -931,6 +932,7 @@ typedef struct st_picoquic_local_cnxid_list_t {
     uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
     int nb_local_cnxid_expired;
+    int nb_local_cnxid_retired; /* Not counted in nb_local_cnxid */
     unsigned int is_demoted : 1;
     uint64_t demotion_time;
     picoquic_local_cnxid_t* local_cnxid_first;
@@ -1543,9 +1545,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t next_path_id_in_lists;
     uint64_t max_path_id_in_cnxid_lists;
     picoquic_local_cnxid_list_t * first_local_cnxid_list;
-    picoquic_local_cnxid_t* first_retired_local_cnxid; /* Retired by the peer, kept registered for late packets, oldest first */
-    picoquic_local_cnxid_t* last_retired_local_cnxid;
-    int nb_retired_local_cnxid;
+    uint64_t retired_local_cnxid_check_time; /* Next time the sender deletes retired local CID, UINT64_MAX if none */
 
     /* Management of ACK frequency */
     uint64_t ack_frequency_sequence_local;

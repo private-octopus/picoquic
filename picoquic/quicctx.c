@@ -3624,10 +3624,20 @@ static void picoquic_clear_local_cnxid_references(picoquic_cnx_t* cnx, picoquic_
     }
 }
 
-/* Remove the local CID from its list, but keep its tuple references and hash table registration. */
-static void picoquic_unlink_local_cnxid_listed(picoquic_local_cnxid_list_t* local_cnxid_list, picoquic_local_cnxid_t* l_cid)
+void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
+    picoquic_local_cnxid_list_t* local_cnxid_list, picoquic_local_cnxid_t* l_cid)
 {
     picoquic_local_cnxid_t* previous = NULL;
+
+    picoquic_clear_local_cnxid_references(cnx, l_cid);
+    if (l_cid->cnx_id.id_len > 0) {
+        /* Remove the registration in hash tables */
+        if (l_cid->registered_cnx != NULL) {
+            picohash_item* item = &l_cid->hash_item;
+            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
+        }
+        l_cid->registered_cnx = NULL;
+    }
 
     if (local_cnxid_list != NULL) {
         picoquic_local_cnxid_t* next = local_cnxid_list->local_cnxid_first;
@@ -3641,7 +3651,12 @@ static void picoquic_unlink_local_cnxid_listed(picoquic_local_cnxid_list_t* loca
                 else {
                     previous->next = next->next;
                 }
-                local_cnxid_list->nb_local_cnxid--;
+                if (l_cid->is_retired) {
+                    local_cnxid_list->nb_local_cnxid_retired--;
+                }
+                else {
+                    local_cnxid_list->nb_local_cnxid--;
+                }
                 break;
             }
             else {
@@ -3651,33 +3666,14 @@ static void picoquic_unlink_local_cnxid_listed(picoquic_local_cnxid_list_t* loca
         }
 
         /* Update the expired count if necessary */
-        if (l_cid->sequence < local_cnxid_list->local_cnxid_retire_before &&
+        if (!l_cid->is_retired && l_cid->sequence < local_cnxid_list->local_cnxid_retire_before &&
             local_cnxid_list->nb_local_cnxid_expired > 0) {
             local_cnxid_list->nb_local_cnxid_expired--;
         }
     }
-}
 
-/* Remove the tuple references and hash table registration of the local CID, and free it. */
-static void picoquic_free_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid)
-{
-    picoquic_clear_local_cnxid_references(cnx, l_cid);
-    if (l_cid->cnx_id.id_len > 0) {
-        /* Remove the registration in hash tables */
-        if (l_cid->registered_cnx != NULL) {
-            picohash_item* item = &l_cid->hash_item;
-            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
-        }
-        l_cid->registered_cnx = NULL;
-    }
+    /* Delete and done */
     free(l_cid);
-}
-
-void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
-    picoquic_local_cnxid_list_t* local_cnxid_list, picoquic_local_cnxid_t* l_cid)
-{
-    picoquic_unlink_local_cnxid_listed(local_cnxid_list, l_cid);
-    picoquic_free_local_cnxid(cnx, l_cid);
 }
 
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx,  picoquic_local_cnxid_t* l_cid)
@@ -3718,19 +3714,6 @@ void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx)
     }
 }
 
-/* Remove the oldest local CID from the retired list, and free it. */
-static void picoquic_delete_first_retired_local_cnxid(picoquic_cnx_t* cnx)
-{
-    picoquic_local_cnxid_t* l_cid = cnx->first_retired_local_cnxid;
-
-    cnx->first_retired_local_cnxid = l_cid->next;
-    if (cnx->first_retired_local_cnxid == NULL) {
-        cnx->last_retired_local_cnxid = NULL;
-    }
-    cnx->nb_retired_local_cnxid--;
-    picoquic_free_local_cnxid(cnx, l_cid);
-}
-
 /* Keep a CID retired by the peer registered for 3 retransmit timers, so late packets do not trigger stateless resets. */
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence, uint64_t current_time)
 {
@@ -3740,7 +3723,7 @@ void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, u
         picoquic_local_cnxid_t* local_cnxid = local_cnxid_list->local_cnxid_first;
 
         while (local_cnxid != NULL) {
-            if (local_cnxid->sequence == sequence) {
+            if (local_cnxid->sequence == sequence && !local_cnxid->is_retired) {
                 break;
             }
             else {
@@ -3756,35 +3739,56 @@ void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, u
                     max_retransmit_timer = cnx->path[i]->retransmit_timer;
                 }
             }
-            picoquic_unlink_local_cnxid_listed(local_cnxid_list, local_cnxid);
+            /* A retired CID is only kept to accept late packets: tuples stop referencing it at once. */
+            picoquic_clear_local_cnxid_references(cnx, local_cnxid);
+            if (local_cnxid->sequence < local_cnxid_list->local_cnxid_retire_before &&
+                local_cnxid_list->nb_local_cnxid_expired > 0) {
+                local_cnxid_list->nb_local_cnxid_expired--;
+            }
+            local_cnxid->is_retired = 1;
             local_cnxid->retired_until = current_time + 3 * max_retransmit_timer;
-            /* Append at the tail, so the list stays ordered by retirement time */
-            local_cnxid->next = NULL;
-            if (cnx->last_retired_local_cnxid == NULL) {
-                cnx->first_retired_local_cnxid = local_cnxid;
+            local_cnxid_list->nb_local_cnxid--;
+            local_cnxid_list->nb_local_cnxid_retired++;
+            /* Too many retired CID: the sender deletes the oldest at its next pass. */
+            if (local_cnxid_list->nb_local_cnxid_retired > PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
+                cnx->retired_local_cnxid_check_time = current_time;
             }
-            else {
-                cnx->last_retired_local_cnxid->next = local_cnxid;
-            }
-            cnx->last_retired_local_cnxid = local_cnxid;
-            cnx->nb_retired_local_cnxid++;
-            /* Bound the list, so a peer retiring many CID cannot make it grow: the oldest are deleted first. */
-            while (cnx->nb_retired_local_cnxid > PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
-                picoquic_delete_first_retired_local_cnxid(cnx);
+            else if (local_cnxid->retired_until < cnx->retired_local_cnxid_check_time) {
+                cnx->retired_local_cnxid_check_time = local_cnxid->retired_until;
             }
         }
     }
 }
 
-/* Delete the retired local CID whose grace period expired (all if current_time is UINT64_MAX), checking only the oldest. */
+/* Delete the retired local CID whose grace period expired, and the oldest of a path if there are too many. */
 void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
 {
-    while (cnx->first_retired_local_cnxid != NULL && current_time >= cnx->first_retired_local_cnxid->retired_until) {
-        picoquic_delete_first_retired_local_cnxid(cnx);
+    if (current_time >= cnx->retired_local_cnxid_check_time) {
+        picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
+
+        cnx->retired_local_cnxid_check_time = UINT64_MAX;
+        while (local_cnxid_list != NULL) {
+            picoquic_local_cnxid_t* l_cid = local_cnxid_list->local_cnxid_first;
+            int nb_excess = local_cnxid_list->nb_local_cnxid_retired - PICOQUIC_MAX_RETIRED_LOCAL_CNXID;
+
+            while (l_cid != NULL) {
+                picoquic_local_cnxid_t* next = l_cid->next;
+                if (l_cid->is_retired) {
+                    if (nb_excess > 0 || current_time >= l_cid->retired_until) {
+                        nb_excess--;
+                        picoquic_delete_local_cnxid_listed(cnx, local_cnxid_list, l_cid);
+                    }
+                    else if (l_cid->retired_until < cnx->retired_local_cnxid_check_time) {
+                        cnx->retired_local_cnxid_check_time = l_cid->retired_until;
+                    }
+                }
+                l_cid = next;
+            }
+            local_cnxid_list = local_cnxid_list->next_list;
+        }
     }
-    if (cnx->first_retired_local_cnxid != NULL && next_wake_time != NULL &&
-        cnx->first_retired_local_cnxid->retired_until < *next_wake_time) {
-        *next_wake_time = cnx->first_retired_local_cnxid->retired_until;
+    if (cnx->retired_local_cnxid_check_time < *next_wake_time) {
+        *next_wake_time = cnx->retired_local_cnxid_check_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
     }
 }
@@ -3797,7 +3801,10 @@ void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_li
 
         local_cnxid_list->nb_local_cnxid_expired = 0;
         while (l_cid != NULL) {
-            if ((current_time - l_cid->create_time) >= cnx->quic->local_cnxid_ttl) {
+            if (l_cid->is_retired) {
+                /* Retired CID are counted separately, and deleted by picoquic_delete_retired_local_cnxid */
+            }
+            else if ((current_time - l_cid->create_time) >= cnx->quic->local_cnxid_ttl) {
                 local_cnxid_list->nb_local_cnxid_expired++;
                 if (l_cid->sequence >= local_cnxid_list->local_cnxid_retire_before) {
                     local_cnxid_list->local_cnxid_retire_before = l_cid->sequence + 1;
@@ -3826,7 +3833,8 @@ picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t 
     
     if (local_cnxid_list != NULL && (local_cnxid = local_cnxid_list->local_cnxid_first) != NULL) {
         while (local_cnxid != NULL) {
-            if (picoquic_compare_connection_id(&local_cnxid->cnx_id, cnxid) == 0) {
+            /* CID retired by the peer are never used again */
+            if (!local_cnxid->is_retired && picoquic_compare_connection_id(&local_cnxid->cnx_id, cnxid) == 0) {
                 break;
             }
             else {
@@ -3856,6 +3864,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         memset(cnx, 0, sizeof(picoquic_cnx_t));
         cnx->start_time = start_time;
         cnx->phase_delay = INT64_MAX;
+        cnx->retired_local_cnxid_check_time = UINT64_MAX;
         cnx->client_mode = client_mode;
         if (client_mode) {
             if (picoquic_is_connection_id_null(&initial_cnx_id)) {
@@ -4979,7 +4988,6 @@ void picoquic_delete_cnx(picoquic_cnx_t* cnx)
             cnx->path = NULL;
         }
 
-        picoquic_delete_retired_local_cnxid(cnx, UINT64_MAX, NULL);
         picoquic_delete_local_cnxid_lists(cnx);
         picoquic_delete_remote_cnxid_stashes(cnx);
 

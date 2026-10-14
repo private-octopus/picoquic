@@ -779,7 +779,7 @@ int picoquic_check_new_cid_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* byte
 
             while (local_cnxid != NULL) {
                 if (local_cnxid->sequence == sequence) {
-                    *no_need_to_repeat = local_cnxid->is_acked;
+                    *no_need_to_repeat = local_cnxid->is_acked || local_cnxid->is_retired;
                     break;
                 }
                 else {

@@ -2198,6 +2198,55 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(retired_cnxid_arrival_kept)
+        {
+            int ret = retired_cnxid_arrival_kept_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_not_reused)
+        {
+            int ret = retired_cnxid_not_reused_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_path_deleted)
+        {
+            int ret = retired_cnxid_path_deleted_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_nat_rebinding)
+        {
+            int ret = retired_cnxid_nat_rebinding_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_no_renew)
+        {
+            int ret = retired_cnxid_no_renew_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_new_cid_no_repeat)
+        {
+            int ret = retired_cnxid_new_cid_no_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_expired_count)
+        {
+            int ret = retired_cnxid_expired_count_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_retire_cnxid)
         {
             int ret = retire_cnxid_test();
