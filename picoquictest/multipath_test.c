@@ -2674,7 +2674,134 @@ int multipath_cid_retire_test(void)
     return(ret);
 }
 
-/* 
+/* CID rotation after idle periods, with two paths. After each idle period, the client
+ * rotates its CIDs, and the server renews its own CID for each path, retiring the old one.
+ * Path 0 becomes much slower just after the idle period, as a radio waking up would, so the
+ * server's RTT estimate is stale: it declares path 0 packets lost too early and repeats
+ * their frames on path 1. The retirement can then reach the client before packets sent
+ * with the old CID on path 0. The client must not answer them with stateless resets. */
+#define MULTIPATH_IDLE_ROTATION_CYCLES 6
+
+static int multipath_idle_rotation_wait_stream(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, size_t stream_index)
+{
+    int ret = 0;
+    int was_active = 0;
+    int nb_trials = 0;
+    uint64_t time_out = *simulated_time + 10000000;
+
+    while (ret == 0 && test_ctx->test_stream[stream_index].r_received == 0 &&
+        test_ctx->cnx_client->cnx_state == picoquic_state_ready && test_ctx->cnx_server->cnx_state == picoquic_state_ready) {
+        if (++nb_trials > 100000 || *simulated_time > time_out) {
+            DBG_PRINTF("Stream %zu not completed at time %" PRIu64, stream_index, *simulated_time);
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_sim_round(test_ctx, simulated_time, time_out, &was_active);
+        }
+    }
+    return ret;
+}
+
+#define MULTIPATH_IDLE_ROTATION_LATENCY 10000
+
+static void multipath_idle_rotation_set_latency_0(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t latency)
+{
+    test_ctx->c_to_s_link->microsec_latency = latency;
+    test_ctx->s_to_c_link->microsec_latency = latency;
+}
+
+static int multipath_idle_rotation_test_one(uint8_t test_id, uint64_t wake_latency_0, size_t q_len, size_t r_len)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1b, 0x11, 0x1d, 0x1e, test_id, 6, 7, 8}, 8 };
+    picoquic_tp_t server_parameters;
+    test_api_stream_desc_t test_scenario_multipath_idle_rotation[MULTIPATH_IDLE_ROTATION_CYCLES];
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid,
+        8, 0, 0, 0);
+
+    /* One stream per cycle; streams after the first are only started by the test, after an idle period. */
+    for (size_t i = 0; i < MULTIPATH_IDLE_ROTATION_CYCLES; i++) {
+        test_scenario_multipath_idle_rotation[i].stream_id = 4 * (i + 1);
+        test_scenario_multipath_idle_rotation[i].previous_stream_id = (i == 0) ? 0 : 10000 + i;
+        test_scenario_multipath_idle_rotation[i].q_len = q_len;
+        test_scenario_multipath_idle_rotation[i].r_len = r_len;
+    }
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Path 1 (created later) keeps the default 10 ms latency. */
+        multipath_idle_rotation_set_latency_0(test_ctx, MULTIPATH_IDLE_ROTATION_LATENCY);
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        multipath_init_params(&server_parameters, 0);
+        picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
+        test_ctx->cnx_client->local_parameters.initial_max_path_id = 3;
+        picoquic_start_client_cnx(test_ctx->cnx_client);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
+    }
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
+        DBG_PRINTF("%s", "Multipath not negotiated");
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = wait_client_connection_ready(test_ctx, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_multipath_idle_rotation, sizeof(test_scenario_multipath_idle_rotation));
+    }
+    if (ret == 0 && (ret = multipath_test_add_links(test_ctx, 0)) == 0) {
+        ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*)&test_ctx->server_addr,
+            (struct sockaddr*)&test_ctx->client_addr_2, simulated_time);
+    }
+    if (ret == 0) {
+        ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+
+    /* Each cycle: complete the exchange, stay idle long enough to trigger the CID rotation, start the next one. */
+    for (size_t i = 0; ret == 0 && i < MULTIPATH_IDLE_ROTATION_CYCLES; i++) {
+        if (i > 0) {
+            /* Path 0 is slow just after the idle period. */
+            multipath_idle_rotation_set_latency_0(test_ctx, wake_latency_0);
+            ret = test_api_queue_initial_queries(test_ctx, 10000 + i);
+        }
+        if (ret == 0) {
+            ret = multipath_idle_rotation_wait_stream(test_ctx, &simulated_time, i);
+        }
+        multipath_idle_rotation_set_latency_0(test_ctx, MULTIPATH_IDLE_ROTATION_LATENCY);
+        if (ret == 0 && i + 1 < MULTIPATH_IDLE_ROTATION_CYCLES) {
+            ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 11000000);
+        }
+        if (ret == 0 && (test_ctx->reset_received || test_ctx->cnx_server->cnx_state != picoquic_state_ready ||
+            test_ctx->cnx_client->cnx_state != picoquic_state_ready)) {
+            DBG_PRINTF("Cycle %zu: reset received %d, client state %d, server state %d", i, test_ctx->reset_received,
+                test_ctx->cnx_client->cnx_state, test_ctx->cnx_server->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int multipath_idle_rotation_test(void)
+{
+    /* Path 0 goes from 10 ms to 160 ms after each idle period: server sends the data, then client sends the data. */
+    int ret = multipath_idle_rotation_test_one(0, 160000, 257, 100000);
+
+    if (ret == 0) {
+        ret = multipath_idle_rotation_test_one(1, 160000, 100000, 257);
+    }
+    return ret;
+}
+
+/*
  * TODO: Unit test of path selection.
  * The input to path selections include the state of the path,
  * the status set by the peer, the presence of losses, etc.

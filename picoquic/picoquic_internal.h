@@ -107,6 +107,7 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
+#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID per path retired by the peer and kept registered for late packets */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
@@ -917,8 +918,10 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t path_id;
     uint64_t sequence;
     uint64_t create_time;
+    uint64_t retired_until; /* If retired by the peer, still accepted on incoming packets until that time */
     picoquic_connection_id_t cnx_id;
     unsigned int is_acked;
+    unsigned int is_retired; /* Retired by the peer, never used again, deleted by the sender after retired_until */
 } picoquic_local_cnxid_t;
 
 typedef struct st_picoquic_local_cnxid_list_t {
@@ -929,6 +932,7 @@ typedef struct st_picoquic_local_cnxid_list_t {
     uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
     int nb_local_cnxid_expired;
+    int nb_local_cnxid_retired; /* Not counted in nb_local_cnxid */
     unsigned int is_demoted : 1;
     uint64_t demotion_time;
     picoquic_local_cnxid_t* local_cnxid_first;
@@ -1541,6 +1545,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t next_path_id_in_lists;
     uint64_t max_path_id_in_cnxid_lists;
     picoquic_local_cnxid_list_t * first_local_cnxid_list;
+    uint64_t retired_local_cnxid_check_time; /* Next time the sender deletes retired local CID, UINT64_MAX if none */
 
     /* Management of ACK frequency */
     uint64_t ack_frequency_sequence_local;
@@ -2070,7 +2075,7 @@ const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const u
 const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint8_t frame_id);
 const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp);
+    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp, uint64_t current_time);
 const uint8_t* picoquic_decode_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
@@ -2124,7 +2129,8 @@ int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_i
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
-void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence);
+void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence, uint64_t current_time);
+void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
 void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_connection_id_t* cnxid);
 uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);
