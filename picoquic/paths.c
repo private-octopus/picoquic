@@ -540,7 +540,7 @@ void picoquic_sort_available_paths(picoquic_cnx_t* cnx, uint64_t current_time, u
 *         - if a challenge or a response is required after the current time:
 *               - the next time is update.
 * If there is not an immediate selection:
-*    for each path in available mode. in round robin order:
+*    for each path in available mode. in least recently used order:
 *       - if there is data or ACK to send:
 *           the path is selected, with first tuple.
 * If no path selected:
