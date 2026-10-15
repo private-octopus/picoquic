@@ -1751,23 +1751,27 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     simulate_loss = 1;
                 }
                 else if (target_link == test_ctx->s_to_c_link) {
-                    if (!test_ctx->client_use_multiple_addresses) {
-                        if (test_ctx->client_use_nat) {
-                            if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
-                                (struct sockaddr*) & addr_to) == 0) {
-                                /* Rewrite the address */
-                                picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
-                            }
-                            else {
-                                /* Using wrong address: simulate loss */
-                                simulate_loss = 1;
-                            }
+                    if (test_ctx->client_use_multiple_addresses &&
+                        picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_relayed,
+                            (struct sockaddr*)&addr_to) == 0) {
+                        /* An attacker relays the packets sent to this address to the client */
+                        picoquic_store_addr(&addr_to, (struct sockaddr*)&test_ctx->client_addr);
+                    }
+                    else if (test_ctx->client_use_nat) {
+                        if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
+                            (struct sockaddr*) & addr_to) == 0) {
+                            /* Rewrite the address */
+                            picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
                         }
-                        else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
-                            (struct sockaddr*) & addr_to) != 0) {
+                        else {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
+                    }
+                    else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
+                        (struct sockaddr*) & addr_to) != 0) {
+                        /* Using wrong address: simulate loss */
+                        simulate_loss = 1;
                     }
                 }
                 else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
@@ -7647,7 +7651,7 @@ int migration_fail_test(void)
  * The goal of the attack is to verify that the connection resists.
  */
 
-int rebinding_stress_test(void)
+static int rebinding_stress_test_one(uint64_t random_seed)
 {
     int nb_trials = 0;
     const int max_trials = 10000;
@@ -7658,8 +7662,7 @@ int rebinding_stress_test(void)
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
-    uint64_t random_context = 0xBABAC001CAFEull;
-    picoquictest_sim_packet_t* last_client_packet_processed = NULL;
+    uint64_t random_context = random_seed;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -7682,8 +7685,10 @@ int rebinding_stress_test(void)
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
     }
 
-    /* Rewrite the sending loop, so we can add injection of packet copies */
+    /* Rewrite the sending loop, so we can add injection of packet copies.
+     * The simulator relays the packets sent to the hack address to the client. */
     if (ret == 0) {
+        test_ctx->client_addr_relayed = hack_address;
         test_ctx->client_use_multiple_addresses = 1;
     }
 
@@ -7744,29 +7749,6 @@ int rebinding_stress_test(void)
             test_ctx->client_use_multiple_addresses = 0;
         }
 
-        if (test_ctx->client_use_multiple_addresses && test_ctx->s_to_c_link->last_packet != NULL &&
-            test_ctx->s_to_c_link->last_packet != last_client_packet_processed){
-            last_client_packet_processed = test_ctx->s_to_c_link->last_packet;
-            /* Packet reinjection at the client if using the special address */
-            if (picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
-            {
-                picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
-            }
-            else if (test_ctx->client_use_nat) {
-                if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) == 0) {
-                    picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
-                }
-                else {
-                    /* This packet should be dropped on arrival */
-                    test_ctx->s_to_c_link->last_packet->length = 1;
-                }
-            }
-            else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) != 0) {
-                /* This packet should be dropped on arrival */
-                test_ctx->s_to_c_link->last_packet->length = 1;
-            }
-        }
-
         /* At some point, the client does migrate to a new address */
         if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
             test_ctx->client_addr_natted = test_ctx->client_addr;
@@ -7812,6 +7794,23 @@ int rebinding_stress_test(void)
     }
 
     return ret;
+}
+
+int rebinding_stress_test(void)
+{
+    return rebinding_stress_test_one(0xBABAC001CAFEull);
+}
+
+/* Seed where the relayed tuple dies and must yield to the verified NAT tuple, not stay first. */
+int rebinding_stress_dead_tuple_test(void)
+{
+    return rebinding_stress_test_one(0x30be1ef43ab4ea6aull);
+}
+
+/* Seed where spoofed addresses exhaust the peer CIDs just before the client NAT rebinding. */
+int rebinding_stress_cid_exhaustion_test(void)
+{
+    return rebinding_stress_test_one(0xe7d2149f5223e552ull);
 }
 
 
