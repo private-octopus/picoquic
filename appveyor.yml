@@ -1,6 +1,9 @@
 version: build{build}
 image: Visual Studio 2017
 
+# Build a branch with an open PR only once, as the PR build
+skip_branch_with_pr: true
+
 environment:
   matrix:
     - platform: x86
@@ -42,6 +45,8 @@ test_script:
  # - ps: vstest.console /logger:Appveyor "/testcasefilter:(Name!=config_quic)&(Name!=config_option)&(Name!=qlog_trace)&(Name!=qlog_trace_auto)&(Name!=qlog_trace_ecn)&(Name!=qlog_trace_only)&(Name!=simple_multipath_qlog)&(Name!=multipath_qlog)&(Name!=threading)" UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t.exe -x fuzz_initial
+ # Run the suite on x86 Release only to limit cost, skipping the flaky app_limited_rpr
+ - ps: if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") { .\picoquic_t.exe -n -S .. -x app_limited_rpr; if ($LASTEXITCODE -ne 0) { throw "picoquic_t failed" } }
 
 deploy: off
 
