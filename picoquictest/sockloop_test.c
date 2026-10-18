@@ -840,9 +840,18 @@ int sockloop_send_err_test(void)
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x5e, 0xe7, 0xe4, 4, 5, 6, 7, 8}, 8 };
-    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+    int ret = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
 
+    /* The sub-tests open sockets directly, without the packet loop that would initialize Winsock. */
+    ret = WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+    }
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
