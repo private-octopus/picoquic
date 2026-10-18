@@ -37,6 +37,7 @@ extern size_t picoquic_stress_nb_clients; /* number of stress clients, defaults 
 /* List of test functions */
 int util_connection_id_print_test(void);
 int util_connection_id_parse_test(void);
+int util_connection_id_decode_test(void);
 int util_sprintf_test(void);
 int util_debug_print_test(void);
 int util_debug_pop_stream_test(void);
@@ -226,6 +227,7 @@ int zero_rtt_refused_test(void);
 int parse_frame_test(void);
 int frames_repeat_test(void);
 int frames_ackack_error_test(void);
+int crypto_hs_is_last_test(void);
 int observed_address_ack_after_path_deleted_test(void);
 int frames_ackof_error_test(void);
 int reset_stream_at_needs_repeat_test(void);

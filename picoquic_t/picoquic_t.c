@@ -115,6 +115,7 @@ typedef enum {
 static const picoquic_test_def_t test_table[] = {
     { "connection_id_print", util_connection_id_print_test },
     { "connection_id_parse", util_connection_id_parse_test },
+    { "connection_id_decode", util_connection_id_decode_test },
     { "error_name", error_name_test },
     { "util_sprintf", util_sprintf_test },
     { "util_debug_print", util_debug_print_test },
@@ -174,6 +175,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_parse", parse_frame_test },
     { "frames_repeat", frames_repeat_test },
     { "frames_ackack_error", frames_ackack_error_test },
+    { "crypto_hs_is_last", crypto_hs_is_last_test },
     { "observed_address_ack_after_path_deleted", observed_address_ack_after_path_deleted_test },
     { "frames_ackof_error", frames_ackof_error_test },
     { "reset_stream_at_needs_repeat", reset_stream_at_needs_repeat_test },

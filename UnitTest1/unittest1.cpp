@@ -118,6 +118,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(connection_id_decode)
+        {
+            int ret = util_connection_id_decode_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_name)
         {
             int ret = error_name_test();
@@ -475,6 +482,13 @@ namespace UnitTest1
         TEST_METHOD(reset_stream_at_needs_repeat)
         {
             int ret = reset_stream_at_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(crypto_hs_is_last)
+        {
+            int ret = crypto_hs_is_last_test();
 
             Assert::AreEqual(ret, 0);
         }
