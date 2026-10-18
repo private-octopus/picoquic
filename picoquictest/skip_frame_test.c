@@ -554,6 +554,13 @@ static uint8_t test_frame_type_bad_new_token[] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 };
 
+/* Length 2^32+3 is truncated to 3 if cast to size_t on 32-bit builds */
+static uint8_t test_frame_type_bad_new_token_32[] = {
+    picoquic_frame_type_new_token,
+    0xC0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03,
+    1, 2, 3
+};
+
 static uint8_t test_frame_type_bad_ack_range[] = {
     picoquic_frame_type_ack,
     0xC0, 0, 0, 1, 2, 3, 4, 5,
@@ -598,6 +605,13 @@ static uint8_t test_frame_type_bad_datagram[] = {
     0x8F, 0xFF, 0xFF, 0xFF, 
     0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
     0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF
+};
+
+/* Length 2^32-9 wraps the skip pointer back to the frame start on 32-bit builds */
+static uint8_t test_frame_type_bad_datagram_wrap[] = {
+    picoquic_frame_type_datagram_l,
+    0xC0, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xF7,
+    0xA0, 0xA1, 0xA2, 0xA3
 };
 
 static uint8_t test_frame_stream_hang[] = {
@@ -676,12 +690,14 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_stop_sending", test_frame_type_bad_stop_sending, 0, 0, 3, ERR_ST, 0),
     TEST_SKIP_ITEM_OLD("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_new_token_32", test_frame_type_bad_new_token_32, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_first_range", test_frame_type_bad_ack_first_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_gaps", test_frame_type_bad_ack_gaps, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_blocks", test_frame_type_bad_ack_blocks, 1, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_crypto_hs", test_frame_type_bad_crypto_hs, 0, 0, 2, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_datagram", test_frame_type_bad_datagram, 1, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("bad_datagram_wrap", test_frame_type_bad_datagram_wrap, 1, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("stream_hang", test_frame_stream_hang, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_0", test_frame_type_path_abandon_bad_0, 0, 1, 3, ERR_F, 1, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_abandon_1", test_frame_type_path_abandon_bad_1, 0, 0, 3, ERR_F, 1, 1),
@@ -731,7 +747,13 @@ static int skip_test_packet(uint8_t * bytes, size_t bytes_max)
         size_t consumed;
         ret = picoquic_skip_frame(bytes + byte_index, bytes_max - byte_index, &consumed, &pure_ack);
         if (ret == 0) {
-            byte_index += consumed;
+            if (consumed == 0 || consumed > bytes_max - byte_index) {
+                /* Position wrapped to or below the frame start, would loop forever */
+                ret = -1;
+            }
+            else {
+                byte_index += consumed;
+            }
         }
     }
 
@@ -870,6 +892,11 @@ int skip_frame_test(void)
 
             if (t_ret == 0 && test_frame_error_list[i].skip_fails) {
                 DBG_PRINTF("Skip error frame <%s> does not fails, ret = %d\n", test_frame_error_list[i].name, t_ret);
+                ret = -1;
+            }
+            else if (t_ret == 0 && (consumed == 0 || consumed > byte_max)) {
+                /* A wrapped skip pointer lands at or before the frame start */
+                DBG_PRINTF("Skip error frame <%s> does not advance, consumed = %zu\n", test_frame_error_list[i].name, consumed);
                 ret = -1;
             }
         }
@@ -1932,7 +1959,87 @@ int stop_sending_needs_repeat_test(void)
     return ret;
 }
 
-/* A late ack of an OBSERVED_ADDRESS frame referencing a delete path must 
+/* A CRYPTO frame may only take ownership of the packet buffer if nothing but padding follows it */
+typedef struct st_crypto_is_last_case_t {
+    const char* name;
+    uint8_t trailer[4];
+    size_t trailer_length;
+    unsigned int expect_taken;
+} crypto_is_last_case_t;
+
+static const crypto_is_last_case_t crypto_is_last_cases[] = {
+    { "last_in_packet", { 0 }, 0, 1 },
+    { "followed_by_padding", { 0, 0, 0 }, 3, 1 },
+    { "followed_by_ping", { picoquic_frame_type_ping }, 1, 0 },
+    { "followed_by_padding_ping", { 0, 0, picoquic_frame_type_ping }, 3, 0 }
+};
+
+static const size_t nb_crypto_is_last_cases = sizeof(crypto_is_last_cases) / sizeof(crypto_is_last_case_t);
+
+int crypto_hs_is_last_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr = { 0 };
+    const uint8_t crypto_frame[] = { picoquic_frame_type_crypto_hs, 0, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (qclient == NULL) {
+        ret = -1;
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_crypto_is_last_cases; i++) {
+        const crypto_is_last_case_t* c = &crypto_is_last_cases[i];
+        picoquic_cnx_t* cnx = picoquic_create_cnx(qclient,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+        picoquic_stream_data_node_t* received_data = picoquic_stream_data_node_alloc(qclient);
+
+        if (cnx == NULL || received_data == NULL) {
+            ret = -1;
+        }
+        else {
+            /* The frames sit in the node's own buffer, as on the receive path */
+            size_t length = sizeof(crypto_frame) + c->trailer_length;
+            const uint8_t* bytes_next;
+
+            memcpy(received_data->data, crypto_frame, sizeof(crypto_frame));
+            memcpy(received_data->data + sizeof(crypto_frame), c->trailer, c->trailer_length);
+            received_data->bytes = NULL;
+            qclient->input_segment_node_taken = 0;
+
+            bytes_next = picoquic_decode_crypto_hs_frame(cnx, received_data->data, received_data->data + length,
+                received_data, picoquic_epoch_initial);
+
+            if (bytes_next != received_data->data + sizeof(crypto_frame)) {
+                DBG_PRINTF("crypto is_last <%s>: decode failed", c->name);
+                ret = -1;
+            }
+            else if (qclient->input_segment_node_taken != c->expect_taken) {
+                DBG_PRINTF("crypto is_last <%s>: node taken = %d, expected %d", c->name,
+                    (int)qclient->input_segment_node_taken, (int)c->expect_taken);
+                ret = -1;
+            }
+        }
+        if (received_data != NULL && qclient->input_segment_node_taken == 0) {
+            picoquic_stream_data_node_recycle(received_data);
+        }
+        qclient->input_segment_node_taken = 0;
+        if (cnx != NULL) {
+            picoquic_delete_cnx(cnx);
+        }
+    }
+
+    if (qclient != NULL) {
+        picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+/* A late ack of an OBSERVED_ADDRESS frame referencing a delete path must
 * be consumed safely instead of dereferencing the now-absent path. */
 int observed_address_ack_after_path_deleted_test(void)
 {
