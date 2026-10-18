@@ -45,18 +45,19 @@ test_script:
  # - ps: vstest.console /logger:Appveyor "/testcasefilter:(Name!=config_quic)&(Name!=config_option)&(Name!=qlog_trace)&(Name!=qlog_trace_auto)&(Name!=qlog_trace_ecn)&(Name!=qlog_trace_only)&(Name!=simple_multipath_qlog)&(Name!=multipath_qlog)&(Name!=threading)" UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t.exe -x fuzz_initial
- # Run the suite on x86 Release only to limit cost, skipping the flaky app_limited_rpr
- # and the long-delay simulations, which take about half the run time
+ # Run the suite on x86 Release only to limit cost, skipping the long-delay simulations,
+ # which take about half the run time. picoquic_t needs libcrypto-1_1.dll from the OpenSSL bin folder.
  - ps: |
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
-       $skip = @("app_limited_rpr", "dtn_data", "high_latency_bbr", "high_latency_probeRTT",
+       $Env:Path = "$Env:OPENSSLDIR\bin;$Env:Path"
+       $skip = @("dtn_data", "high_latency_bbr", "high_latency_probeRTT",
          "satellite_basic", "satellite_seeded", "satellite_seeded_bbr1", "satellite_loss",
          "satellite_loss_fc", "satellite_jitter", "satellite_medium", "satellite_preemptive",
          "satellite_preemptive_fc", "satellite_small", "satellite_small_up", "satellite_bbr1",
          "satellite_cubic", "satellite_cubic_seeded", "satellite_cubic_loss",
          "satellite_dcubic_seeded", "satellite_prague_seeded")
        .\picoquic_t.exe -n -S .. -x $skip
-       if ($LASTEXITCODE -ne 0) { throw "picoquic_t failed" }
+       if ($LASTEXITCODE -ne 0) { throw ("picoquic_t failed, exit code 0x{0:X8}" -f $LASTEXITCODE) }
      }
 
 deploy: off
