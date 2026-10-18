@@ -200,6 +200,7 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_retransmit_copy", test_copy_for_retransmit },
     { "dataqueue_copy", dataqueue_copy_test },
     { "dataqueue_packet", dataqueue_packet_test },
+    { "dataqueue_order", dataqueue_order_test },
     { "stateless_blowback", test_stateless_blowback },
     { "ack_send", sendacktest },
     { "ack_loop", sendack_loop_test },

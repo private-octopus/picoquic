@@ -526,6 +526,7 @@ int retry_protection_v2_test(void);
 int test_copy_for_retransmit(void);
 int dataqueue_copy_test(void);
 int dataqueue_packet_test(void);
+int dataqueue_order_test(void);
 int bad_coalesce_test(void);
 int bad_cnxid_test(void);
 int stream_splay_test(void);
