@@ -3138,18 +3138,32 @@ int picoquic_internal_thread_create(void** thread_id, picoquic_thread_fn thread_
     return ret;
 }
 
+#ifdef _WINDOWS
+typedef HRESULT(WINAPI* picoquic_set_thread_description_fn)(HANDLE thread, PCWSTR description);
+#endif
+
 void picoquic_internal_thread_setname(char const * thread_name)
 {
 #ifdef _WINDOWS
     wchar_t wname[257];
+    /* Resolved at run time, because older kernel32 versions (e.g., Server 2016) do not export it */
+    picoquic_set_thread_description_fn set_thread_description = NULL;
+    HMODULE kernel_base = GetModuleHandleW(L"kernelbase.dll");
     wname[0] = 0;
 
-    if (swprintf(wname, 256, L"%S", thread_name) < 0) {
+    if (kernel_base != NULL) {
+        set_thread_description = (picoquic_set_thread_description_fn)GetProcAddress(kernel_base, "SetThreadDescription");
+    }
+
+    if (set_thread_description == NULL) {
+        DBG_PRINTF("SetThreadDescription not available, thread name <%s> not set", thread_name);
+    }
+    else if (swprintf(wname, 256, L"%S", thread_name) < 0) {
         DBG_PRINTF("Cannot convert thread name <%s> to wchar[256], err: 0x%x",
             thread_name, GetLastError());
     }
     else {
-        HRESULT r = SetThreadDescription(GetCurrentThread(), wname);
+        HRESULT r = set_thread_description(GetCurrentThread(), wname);
         if (r != 0) {
             DBG_PRINTF("Set thread name <%S> returns: 0x%x", wname, r);
         }
