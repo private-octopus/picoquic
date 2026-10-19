@@ -283,7 +283,8 @@ void picoquic_signal_stream_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
     picoquic_update_max_stream_ID_local(cnx, stream);
 
     if (cnx->callback_fn != NULL && !stream->reset_signalled) {
-        if (!stream->is_discarded) {
+        /* Once the FIN was delivered, the stream is in the terminal "Data Read" state (RFC 9000 3.2): do not signal the reset. */
+        if (!stream->is_discarded && !stream->fin_signalled) {
             /* Update the flow control data to reflect that buffers are now discarded */
             if (stream->consumed_offset < stream->fin_offset) {
                 uint64_t delta = stream->fin_offset - stream->consumed_offset;
