@@ -8048,11 +8048,15 @@ int retired_cnxid_cap_test(void)
             DBG_PRINTF("%d retired CID, expected %d", local_cnxid_list->nb_local_cnxid_retired, RETIRED_CNXID_CAP_NB);
             ret = -1;
         }
-        /* The sender deletes the oldest retired CID, the most recent are still registered. */
-        if (ret == 0) {
+        /* The sender deletes one retired CID per pass, and asks for a new pass at once while there are too many. */
+        for (int i = 0; ret == 0 && i < RETIRED_CNXID_CAP_NB - PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+            int is_last = (i == RETIRED_CNXID_CAP_NB - PICOQUIC_MAX_RETIRED_LOCAL_CNXID - 1);
+
+            next_wake_time = UINT64_MAX;
             picoquic_delete_retired_local_cnxid(cnx, simulated_time, &next_wake_time);
-            if (local_cnxid_list->nb_local_cnxid_retired != PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
-                DBG_PRINTF("%d retired CID kept, expected %d", local_cnxid_list->nb_local_cnxid_retired, PICOQUIC_MAX_RETIRED_LOCAL_CNXID);
+            if (local_cnxid_list->nb_local_cnxid_retired != RETIRED_CNXID_CAP_NB - 1 - i ||
+                (next_wake_time == simulated_time) == is_last) {
+                DBG_PRINTF("Pass %d, %d retired CID kept, wake time %" PRIu64, i, local_cnxid_list->nb_local_cnxid_retired, next_wake_time);
                 ret = -1;
             }
         }
@@ -8080,6 +8084,51 @@ int retired_cnxid_cap_test(void)
                 cnx->retired_local_cnxid_check_time != UINT64_MAX ||
                 picoquic_cnx_by_id(quic, cid[RETIRED_CNXID_CAP_NB - 1], NULL) != NULL) {
                 DBG_PRINTF("%s", "Retired CID not deleted after the grace period");
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* The peer may retire CID out of sequence. When there are too many retired CID, the sender keeps
+ * the most recently retired ones, not the most recently created ones. */
+int retired_cnxid_cap_order_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t cid[RETIRED_CNXID_CAP_NB];
+    uint64_t sequence[RETIRED_CNXID_CAP_NB];
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    for (int i = 0; ret == 0 && i < RETIRED_CNXID_CAP_NB; i++) {
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+        if (l_cid == NULL) {
+            ret = -1;
+        }
+        else {
+            cid[i] = l_cid->cnx_id;
+            sequence[i] = l_cid->sequence;
+        }
+    }
+    if (ret == 0) {
+        uint64_t next_wake_time = UINT64_MAX;
+
+        /* Retire the most recently created CID first, 1 ms apart */
+        for (int i = RETIRED_CNXID_CAP_NB - 1; i >= 0; i--) {
+            picoquic_retire_local_cnxid(cnx, 0, sequence[i], simulated_time);
+            simulated_time += 1000;
+        }
+        for (int i = 0; i < RETIRED_CNXID_CAP_NB - PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+            picoquic_delete_retired_local_cnxid(cnx, simulated_time, &next_wake_time);
+        }
+        for (int i = 0; ret == 0 && i < RETIRED_CNXID_CAP_NB; i++) {
+            int is_kept = (i < PICOQUIC_MAX_RETIRED_LOCAL_CNXID);
+            if ((picoquic_cnx_by_id(quic, cid[i], NULL) == cnx) != is_kept) {
+                DBG_PRINTF("Retired CID %d is %s registered", i, (is_kept) ? "not" : "still");
                 ret = -1;
             }
         }

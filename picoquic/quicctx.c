@@ -3760,7 +3760,7 @@ void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, u
     }
 }
 
-/* Delete the retired local CID whose grace period expired, and the oldest of a path if there are too many. */
+/* Delete the retired local CID whose grace period expired, and if a path has too many, the one ending first. */
 void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time)
 {
     if (current_time >= cnx->retired_local_cnxid_check_time) {
@@ -3769,20 +3769,32 @@ void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_t
         cnx->retired_local_cnxid_check_time = UINT64_MAX;
         while (local_cnxid_list != NULL) {
             picoquic_local_cnxid_t* l_cid = local_cnxid_list->local_cnxid_first;
-            int nb_excess = local_cnxid_list->nb_local_cnxid_retired - PICOQUIC_MAX_RETIRED_LOCAL_CNXID;
+            picoquic_local_cnxid_t* first_ending = NULL;
 
             while (l_cid != NULL) {
                 picoquic_local_cnxid_t* next = l_cid->next;
                 if (l_cid->is_retired) {
-                    if (nb_excess > 0 || current_time >= l_cid->retired_until) {
-                        nb_excess--;
+                    if (current_time >= l_cid->retired_until) {
                         picoquic_delete_local_cnxid_listed(cnx, local_cnxid_list, l_cid);
                     }
-                    else if (l_cid->retired_until < cnx->retired_local_cnxid_check_time) {
-                        cnx->retired_local_cnxid_check_time = l_cid->retired_until;
+                    else {
+                        /* The peer may retire CID in any order: track the end of grace period, not the list order */
+                        if (first_ending == NULL || l_cid->retired_until < first_ending->retired_until) {
+                            first_ending = l_cid;
+                        }
+                        if (l_cid->retired_until < cnx->retired_local_cnxid_check_time) {
+                            cnx->retired_local_cnxid_check_time = l_cid->retired_until;
+                        }
                     }
                 }
                 l_cid = next;
+            }
+            if (local_cnxid_list->nb_local_cnxid_retired > PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
+                picoquic_delete_local_cnxid_listed(cnx, local_cnxid_list, first_ending);
+                if (local_cnxid_list->nb_local_cnxid_retired > PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
+                    /* One deletion per pass: the next pass deletes the next one */
+                    cnx->retired_local_cnxid_check_time = current_time;
+                }
             }
             local_cnxid_list = local_cnxid_list->next_list;
         }

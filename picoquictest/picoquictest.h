@@ -293,6 +293,7 @@ int migration_fail_test(void);
 int cnxid_renewal_test(void);
 int retired_cnxid_late_packet_test(void);
 int retired_cnxid_cap_test(void);
+int retired_cnxid_cap_order_test(void);
 int retired_cnxid_arrival_kept_test(void);
 int retired_cnxid_not_reused_test(void);
 int retired_cnxid_path_deleted_test(void);
