@@ -46,10 +46,12 @@ test_script:
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t.exe -x fuzz_initial
  # Run the suite on x86 Release only to limit cost, skipping the long-delay simulations,
- # which take about half the run time. picoquic_t needs libcrypto-1_1.dll from the OpenSSL bin folder.
+ # which take about half the run time. picoquic_t needs libcrypto-1_1.dll next to it, and
+ # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
  - ps: |
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
-       $Env:Path = "$Env:OPENSSLDIR\bin;$Env:Path"
+       Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
+       ..\ci\check_imports.ps1 .\picoquic_t.exe
        $skip = @("dtn_data", "high_latency_bbr", "high_latency_probeRTT",
          "satellite_basic", "satellite_seeded", "satellite_seeded_bbr1", "satellite_loss",
          "satellite_loss_fc", "satellite_jitter", "satellite_medium", "satellite_preemptive",
