@@ -48,21 +48,29 @@ test_script:
  # Run the suite on x86 Release only to limit cost, skipping the long-delay simulations,
  # which take about half the run time. picoquic_t needs libcrypto-1_1.dll next to it, and
  # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
- # The QMUX over TCP socket tests hang on the CI image: run sockloop_qmux alone with debug
- # output and a time limit, and skip the TCP socket tests in the main run.
+ # The QMUX over TCP socket tests hang on the CI image: run sockloop_qmux alone with a time
+ # limit, rerun it with debug output if it hangs, and skip the TCP socket tests in the main run.
+ # Native stderr lines become error records that fail the step, so pipe them as plain text.
  - ps: |
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
        Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
        ..\ci\check_imports.ps1 .\picoquic_t.exe
-       $p = Start-Process .\picoquic_t.exe -ArgumentList "-S .. sockloop_qmux" -NoNewWindow -PassThru `
-         -RedirectStandardOutput qmux_out.txt -RedirectStandardError qmux_err.txt
-       if (-not $p.WaitForExit(60000)) {
-         $p.Kill()
-         $p.WaitForExit()
-         Write-Host "sockloop_qmux did not complete in 60 seconds"
+       function Invoke-TimedTest([string]$arguments) {
+         $p = Start-Process .\picoquic_t.exe -ArgumentList $arguments -NoNewWindow -PassThru `
+           -RedirectStandardOutput qmux_out.txt -RedirectStandardError qmux_err.txt
+         $completed = $p.WaitForExit(60000)
+         if (-not $completed) {
+           $p.Kill()
+           $p.WaitForExit()
+           Write-Host "picoquic_t $arguments did not complete in 60 seconds"
+         }
+         Get-Content qmux_out.txt | Write-Host
+         Get-Content qmux_err.txt -Tail 200 | Write-Host
+         return $completed
        }
-       Get-Content qmux_out.txt
-       Get-Content qmux_err.txt -Tail 200
+       if (-not (Invoke-TimedTest "-n -S .. sockloop_qmux")) {
+         Invoke-TimedTest "-S .. sockloop_qmux" | Out-Null
+       }
        $skip = @("sockloop_qmux", "sockloop_qmux_badp", "sockloop_qmux_close",
          "dtn_data", "high_latency_bbr", "high_latency_probeRTT",
          "satellite_basic", "satellite_seeded", "satellite_seeded_bbr1", "satellite_loss",
@@ -70,7 +78,8 @@ test_script:
          "satellite_preemptive_fc", "satellite_small", "satellite_small_up", "satellite_bbr1",
          "satellite_cubic", "satellite_cubic_seeded", "satellite_cubic_loss",
          "satellite_dcubic_seeded", "satellite_prague_seeded")
-       .\picoquic_t.exe -n -S .. -x $skip
+       $ErrorActionPreference = "Continue"
+       .\picoquic_t.exe -n -S .. -x $skip 2>&1 | ForEach-Object { "$_" }
        if ($LASTEXITCODE -ne 0) { throw ("picoquic_t failed, exit code 0x{0:X8}" -f $LASTEXITCODE) }
      }
 
