@@ -49,7 +49,8 @@ test_script:
  # simulations, which take about half the picoquic_t run time. picoquic_t needs libcrypto-1_1.dll next to it, and
  # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
  # The AppVeyor host fails the step on native stderr lines, and only reads stderr at exit,
- # so output goes through files, with a time limit.
+ # so output goes through files, with a time limit. As in the Linux CI, -r reruns failed
+ # tests with debug output on.
  - ps: |
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
        Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
@@ -68,7 +69,7 @@ test_script:
            Write-Host "$exe $arguments did not complete in $timeoutSeconds seconds"
          }
          Get-Content test_out.txt | Write-Host
-         Get-Content test_err.txt -Tail 200 | Write-Host
+         Get-Content test_err.txt -Tail 2000 | Write-Host
          return $exitCode
        }
        $skip = @("dtn_data", "high_latency_bbr", "high_latency_probeRTT",
@@ -78,7 +79,7 @@ test_script:
          "satellite_cubic", "satellite_cubic_seeded", "satellite_cubic_loss",
          "satellite_dcubic_seeded", "satellite_prague_seeded")
        $failures = @()
-       foreach ($run in @(@("picoquic_t.exe", "-n -S .. -x $($skip -join ' ')"), @("picohttp_t.exe", "-n -S .."))) {
+       foreach ($run in @(@("picoquic_t.exe", "-n -r -S .. -x $($skip -join ' ')"), @("picohttp_t.exe", "-n -r -S .."))) {
          $exitCode = Invoke-PicoquicTest $run[0] $run[1] 900
          if ($exitCode -eq $null) {
            $failures += "$($run[0]) timed out"
