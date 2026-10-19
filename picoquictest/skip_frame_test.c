@@ -4715,6 +4715,104 @@ int dataqueue_packet_test(void)
     return ret;
 }
 
+/* Check that the data repeat queue is ordered by priority, stream id, offset, and longest length first */
+typedef struct st_dataqueue_order_spec_t {
+    uint64_t stream_id;
+    uint64_t offset;
+    size_t length;
+} dataqueue_order_spec_t;
+
+int dataqueue_order_test(void)
+{
+    picoquic_quic_t* qtest = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+    /* Stream 4 is more urgent than stream 0 */
+    const dataqueue_order_spec_t inserted[] = {
+        { 0, 1000, 100 }, { 4, 500, 100 }, { 0, 0, 50 }, { 0, 0, 200 }, { 4, 0, 100 } };
+    const dataqueue_order_spec_t expected[] = {
+        { 4, 0, 100 }, { 4, 500, 100 }, { 0, 0, 200 }, { 0, 0, 50 }, { 0, 1000, 100 } };
+    const size_t nb_specs = sizeof(inserted) / sizeof(dataqueue_order_spec_t);
+
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+
+    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+    if (qtest == NULL) {
+        DBG_PRINTF("%s", "Cannot create QUIC context");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_cnx(qtest,
+            picoquic_null_connection_id, picoquic_null_connection_id, (struct sockaddr*)&saddr,
+            simulated_time, 0, "test-sni", "test-alpn", 1);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else {
+            uint8_t new_bytes[256];
+            memset(new_bytes, 0, sizeof(new_bytes));
+            if (picoquic_add_to_stream(cnx, 0, new_bytes, sizeof(new_bytes), 0) != 0 ||
+                picoquic_add_to_stream(cnx, 4, new_bytes, sizeof(new_bytes), 0) != 0 ||
+                picoquic_set_stream_priority(cnx, 4, 2) != 0) {
+                DBG_PRINTF("%s", "Cannot initialize streams 0 and 4");
+                ret = -1;
+            }
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_specs; i++) {
+        picoquic_packet_t* packet = picoquic_create_packet(qtest);
+        if (packet == NULL) {
+            ret = -1;
+        }
+        else {
+            (void)dataqueue_prepare_packet(packet, 1, 0, inserted[i].stream_id, inserted[i].offset, inserted[i].length);
+            picoquic_queue_data_repeat_packet(cnx, packet);
+            if (!packet->is_queued_for_data_repeat) {
+                DBG_PRINTF("Packet %zu not queued", i);
+                ret = -1;
+            }
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_specs; i++) {
+        picoquic_packet_t* packet = picoquic_first_data_repeat_packet(cnx);
+        if (packet == NULL) {
+            DBG_PRINTF("Queue empty at rank %zu", i);
+            ret = -1;
+        }
+        else if (packet->data_repeat_stream_id != expected[i].stream_id ||
+            packet->data_repeat_stream_offset != expected[i].offset ||
+            packet->data_repeat_stream_data_length != expected[i].length) {
+            DBG_PRINTF("Rank %zu: got stream %" PRIu64 ", offset %" PRIu64 ", length %zu",
+                i, packet->data_repeat_stream_id, packet->data_repeat_stream_offset,
+                packet->data_repeat_stream_data_length);
+            ret = -1;
+        }
+        else {
+            picoquic_dequeue_data_repeat_packet(cnx, packet);
+        }
+    }
+
+    if (ret == 0 && picoquic_first_data_repeat_packet(cnx) != NULL) {
+        DBG_PRINTF("%s", "Queue not empty after dequeuing all packets");
+        ret = -1;
+    }
+
+    if (cnx != NULL) {
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (qtest != NULL) {
+        picoquic_free(qtest);
+    }
+    return ret;
+}
+
 /* Testing the sending of blocked frames */
 struct st_stream_blocked_test_t {
     uint64_t stream_id;

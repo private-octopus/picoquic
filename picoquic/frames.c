@@ -2032,8 +2032,9 @@ void* picoquic_queue_data_repeat_node_value(picosplay_node_t* node)
 
 int64_t picoquic_queue_data_repeat_compare(void* l, void* r)
 {
-    picoquic_packet_t* lp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(l);
-    picoquic_packet_t* rp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(r);
+    /* picosplay passes node values */
+    picoquic_packet_t* lp = (picoquic_packet_t*)l;
+    picoquic_packet_t* rp = (picoquic_packet_t*)r;
     int64_t ret = 0;
     /* TODO: comparison function is wrong, because the "data_repeat_frame" value
      * varies over time. Also, the result may not be unique.
@@ -2051,8 +2052,13 @@ int64_t picoquic_queue_data_repeat_compare(void* l, void* r)
         if (ret == 0) {
             ret = lp->data_repeat_stream_offset - rp->data_repeat_stream_offset;
             if (ret == 0) {
-                /* largest length goes in front */
-                ret = rp->data_repeat_stream_data_length - lp->data_repeat_stream_data_length;
+                /* largest length goes in front -- split test to avoid int overflow */
+                if (lp->data_repeat_stream_data_length > rp->data_repeat_stream_data_length) {
+                    ret = -1;
+                }
+                else if (lp->data_repeat_stream_data_length < rp->data_repeat_stream_data_length) {
+                    ret = 1;
+                }
             }
         }
     }
