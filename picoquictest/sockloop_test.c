@@ -2108,12 +2108,16 @@ int sockloop_qmux_close_test(void)
                 /* Wait for the real QMUX connection to complete its data
                  * exchange; it stays open afterwards because of test_idle. */
                 int nb_waits = 0;
+                uint64_t wait_start = picoquic_current_time();
                 while (nb_waits < 2000 &&
                     !(spec.received_stream_0 && spec.stream_0_fin_received)) {
                     SLEEP(1);
                     nb_waits++;
                 }
                 if (!spec.received_stream_0 || !spec.stream_0_fin_received || !spec.stream_0_data_matches) {
+                    DBG_PRINTF("QMUX exchange incomplete after %d waits, %" PRIu64 " us: received %d, fin %d, match %d, cnx state %d",
+                        nb_waits, picoquic_current_time() - wait_start, spec.received_stream_0, spec.stream_0_fin_received,
+                        spec.stream_0_data_matches, (int)picoquic_get_cnx_state(cnx_qmux));
                     ret = -1;
                 }
                 else {
