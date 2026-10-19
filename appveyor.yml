@@ -45,8 +45,8 @@ test_script:
  # - ps: vstest.console /logger:Appveyor "/testcasefilter:(Name!=config_quic)&(Name!=config_option)&(Name!=qlog_trace)&(Name!=qlog_trace_auto)&(Name!=qlog_trace_ecn)&(Name!=qlog_trace_only)&(Name!=simple_multipath_qlog)&(Name!=multipath_qlog)&(Name!=threading)" UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t.exe -x fuzz_initial
- # Run the suite on x86 Release only to limit cost, skipping the long-delay simulations,
- # which take about half the run time. picoquic_t needs libcrypto-1_1.dll next to it, and
+ # Run picoquic_t and picohttp_t on x86 Release only to limit cost, skipping the long-delay
+ # simulations, which take about half the picoquic_t run time. picoquic_t needs libcrypto-1_1.dll next to it, and
  # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
  # The AppVeyor host fails the step on native stderr lines, and only reads stderr at exit,
  # so output goes through files, with a time limit.
@@ -54,8 +54,8 @@ test_script:
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
        Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
        ..\ci\check_imports.ps1 .\picoquic_t.exe
-       function Invoke-PicoquicTest([string]$arguments, [int]$timeoutSeconds) {
-         $p = Start-Process .\picoquic_t.exe -ArgumentList $arguments -NoNewWindow -PassThru `
+       function Invoke-PicoquicTest([string]$exe, [string]$arguments, [int]$timeoutSeconds) {
+         $p = Start-Process ".\$exe" -ArgumentList $arguments -NoNewWindow -PassThru `
            -RedirectStandardOutput test_out.txt -RedirectStandardError test_err.txt
          $handle = $p.Handle
          $exitCode = $null
@@ -65,7 +65,7 @@ test_script:
          else {
            $p.Kill()
            $p.WaitForExit()
-           Write-Host "picoquic_t $arguments did not complete in $timeoutSeconds seconds"
+           Write-Host "$exe $arguments did not complete in $timeoutSeconds seconds"
          }
          Get-Content test_out.txt | Write-Host
          Get-Content test_err.txt -Tail 200 | Write-Host
@@ -77,9 +77,17 @@ test_script:
          "satellite_preemptive_fc", "satellite_small", "satellite_small_up", "satellite_bbr1",
          "satellite_cubic", "satellite_cubic_seeded", "satellite_cubic_loss",
          "satellite_dcubic_seeded", "satellite_prague_seeded")
-       $exitCode = Invoke-PicoquicTest "-n -S .. -x $($skip -join ' ')" 900
-       if ($exitCode -eq $null) { throw "picoquic_t timed out" }
-       if ($exitCode -ne 0) { throw ("picoquic_t failed, exit code 0x{0:X8}" -f $exitCode) }
+       $failures = @()
+       foreach ($run in @(@("picoquic_t.exe", "-n -S .. -x $($skip -join ' ')"), @("picohttp_t.exe", "-n -S .."))) {
+         $exitCode = Invoke-PicoquicTest $run[0] $run[1] 900
+         if ($exitCode -eq $null) {
+           $failures += "$($run[0]) timed out"
+         }
+         elseif ($exitCode -ne 0) {
+           $failures += ("{0} failed, exit code 0x{1:X8}" -f $run[0], $exitCode)
+         }
+       }
+       if ($failures.Count -gt 0) { throw ($failures -join "; ") }
      }
 
 deploy: off
