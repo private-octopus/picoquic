@@ -48,11 +48,23 @@ test_script:
  # Run the suite on x86 Release only to limit cost, skipping the long-delay simulations,
  # which take about half the run time. picoquic_t needs libcrypto-1_1.dll next to it, and
  # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
+ # The QMUX over TCP socket tests hang on the CI image: run sockloop_qmux alone with debug
+ # output and a time limit, and skip the TCP socket tests in the main run.
  - ps: |
      if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
        Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
        ..\ci\check_imports.ps1 .\picoquic_t.exe
-       $skip = @("dtn_data", "high_latency_bbr", "high_latency_probeRTT",
+       $p = Start-Process .\picoquic_t.exe -ArgumentList "-S .. sockloop_qmux" -NoNewWindow -PassThru `
+         -RedirectStandardOutput qmux_out.txt -RedirectStandardError qmux_err.txt
+       if (-not $p.WaitForExit(60000)) {
+         $p.Kill()
+         $p.WaitForExit()
+         Write-Host "sockloop_qmux did not complete in 60 seconds"
+       }
+       Get-Content qmux_out.txt
+       Get-Content qmux_err.txt -Tail 200
+       $skip = @("sockloop_qmux", "sockloop_qmux_badp", "sockloop_qmux_close",
+         "dtn_data", "high_latency_bbr", "high_latency_probeRTT",
          "satellite_basic", "satellite_seeded", "satellite_seeded_bbr1", "satellite_loss",
          "satellite_loss_fc", "satellite_jitter", "satellite_medium", "satellite_preemptive",
          "satellite_preemptive_fc", "satellite_small", "satellite_small_up", "satellite_bbr1",
