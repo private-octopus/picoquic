@@ -267,6 +267,8 @@ int sockloop_qmux_test(void);
 int sockloop_qmux_badp_test(void);
 int sockloop_qmux_cnx_sockets_limit_test(void);
 int sockloop_qmux_close_test(void);
+int sockloop_qmux_send_reset_test(void);
+int sockloop_eintr_test(void);
 int splay_test(void);
 int TlsStreamFrameTest(void);
 int draft17_vector_test(void);
