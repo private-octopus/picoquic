@@ -360,6 +360,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_qmux_send_reset)
+        {
+            int ret = sockloop_qmux_send_reset_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_eintr)
+        {
+            int ret = sockloop_eintr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();

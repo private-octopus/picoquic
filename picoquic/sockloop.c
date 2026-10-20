@@ -656,10 +656,23 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
 * set large enough to contain the planned number of connections.
 *
 */
+#ifdef MSG_NOSIGNAL
+#define PICOQUIC_QMUX_SEND_FLAGS MSG_NOSIGNAL
+#else
+#define PICOQUIC_QMUX_SEND_FLAGS 0
+#endif
+
 #ifndef _WINDOWS
-static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
+static int picoquic_packet_loop_set_qmux_posix_socket(SOCKET_TYPE fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
+#ifdef SO_NOSIGPIPE
+    /* Platforms without MSG_NOSIGNAL (Apple) must not raise SIGPIPE on send to a reset socket. */
+    int opt_val = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (const char*)&opt_val, sizeof(opt_val)) != 0) {
+        flags = -1;
+    }
+#endif
     return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
 }
 #endif
@@ -754,7 +767,7 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
 #ifdef _WINDOWS
         picoquic_packet_loop_set_qmux_windows_socket(sqmux_sock_ctx) != 0 ||
 #else
-        picoquic_packet_loop_set_qmux_nonblocking(sqmux_sock_ctx->fd) != 0 ||
+        picoquic_packet_loop_set_qmux_posix_socket(sqmux_sock_ctx->fd) != 0 ||
         (af == AF_INET6 && setsockopt(sqmux_sock_ctx->fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
 #endif
         (is_port_shared && setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
@@ -1837,8 +1850,14 @@ int picoquic_packet_loop_poll(
     *action = picoquic_packet_loop_action_none;
 
     if (ret_poll < 0) {
-        bytes_recv = -1;
-        DBG_PRINTF("Error: poll returns %d\n", ret_poll);
+        if (errno == EINTR) {
+            /* Interrupted by a signal: not an error, the loop will check timers and close requests. */
+            DBG_PRINTF("%s", "Poll interrupted by a signal\n");
+        }
+        else {
+            bytes_recv = -1;
+            DBG_PRINTF("Error: poll returns %d, errno %d\n", ret_poll, errno);
+        }
     }
     else if (ret_poll == 0) {
         *action = picoquic_packet_loop_action_timeout;
@@ -1892,7 +1911,8 @@ int picoquic_packet_loop_poll(
             if (bytes_recv == 0 && *action == picoquic_packet_loop_action_none) {
                 /* Try to find the first TCP event */
                 for (int i = 0; i < nb_qmux_sockets; i++) {
-                    if ((poll_list[i + i_qmux_poll].revents & POLLIN) != 0) {
+                    /* POLLERR or POLLHUP without POLLIN: let recv() consume the error and close the socket. */
+                    if ((poll_list[i + i_qmux_poll].revents & (POLLIN | POLLERR | POLLHUP)) != 0) {
                         *socket_rank = i;
                         *action = (sqmux_ctx[i]->is_listening) ?
                             picoquic_packet_loop_action_tcp_accept_ready:
@@ -1984,8 +2004,14 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     ret_select = select(sockmax + 1, &readfds, &writefds, NULL, &tv);
 
     if (ret_select < 0) {
-        bytes_recv = -1;
-        DBG_PRINTF("Error: select returns %d\n", ret_select);
+        if (errno == EINTR) {
+            /* Interrupted by a signal: not an error, the loop will check timers and close requests. */
+            DBG_PRINTF("%s", "Select interrupted by a signal\n");
+        }
+        else {
+            bytes_recv = -1;
+            DBG_PRINTF("Error: select returns %d, errno %d\n", ret_select, errno);
+        }
     }
     else if (ret_select == 0) {
         *action = picoquic_packet_loop_action_timeout;
@@ -2115,7 +2141,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
     else if ((new_socket = accept(sqmux_ctx[socket_rank]->fd, (struct sockaddr*)&addr_from, &addr_from_len)) == INVALID_SOCKET) {
         ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
     }
-    else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
+    else if (picoquic_packet_loop_set_qmux_posix_socket(new_socket) != 0 ||
         (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, (struct sockaddr*)&addr_from)) == NULL ||
         (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
@@ -2258,7 +2284,7 @@ int picoquic_packet_loop_do_tcp_send(
         int send_length = (available > (size_t)INT_MAX) ? INT_MAX : (int)available;
         int sent_length = send(sqmux_sock_ctx->fd,
             (const char*)sqmux_sock_ctx->send_buffer + sqmux_sock_ctx->send_buffer_offset,
-            send_length, 0);
+            send_length, PICOQUIC_QMUX_SEND_FLAGS);
 
         if (sent_length < 0) {
 #ifdef _WINDOWS
