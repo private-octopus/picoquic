@@ -139,6 +139,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bytestream", bytestream_test },
     { "sockloop_basic", sockloop_basic_test },
     { "af_xdp_l3", af_xdp_l3_test },
+    { "sockloop_time_check_stop", sockloop_time_check_stop_test },
     { "sockloop_eio", sockloop_eio_test },
     { "sockloop_errsock", sockloop_errsock_test },
     { "sockloop_ipv4", sockloop_ipv4_test },
