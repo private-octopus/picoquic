@@ -799,33 +799,22 @@ int picoquic_packet_loop_start_windows_recv(
     picoqmux_socket_ctx_t* sqmux_sock_ctx)
 {
     int ret = 0;
-    DWORD dwBytes;
+    DWORD flags = 0;
 
     sqmux_sock_ctx->winbuf_r.wsaBuf.buf = (char*)sqmux_sock_ctx->winbuf_r.buf;
     sqmux_sock_ctx->winbuf_r.wsaBuf.len = (ULONG)sqmux_sock_ctx->winbuf_r.buf_size;
     sqmux_sock_ctx->winbuf_r.buf_len = 0;
 
-    do {
-        dwBytes = 0;
-        if (WSARecv(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_r.wsaBuf, 1,
-            NULL, &dwBytes, &sqmux_sock_ctx->winbuf_r.overlap, NULL) == SOCKET_ERROR) {
-            int last_error = WSAGetLastError();
-            if (last_error != WSA_IO_PENDING) {
-                DBG_PRINTF("WSARecv failed with error: %u\n", last_error);
-                ret = -1;
-            }
-            else {
-                /* This is the expected behavior, waiting for arrival of a new message */
-                sqmux_sock_ctx->is_receiving = 1;
-            }
-            break;
-        }
-        else if (dwBytes > 0) {
-            /* We got a message immediately. Process it. */
-            sqmux_sock_ctx->winbuf_r.buf_len = dwBytes;
-        }
-    } while (dwBytes == 0);
-
+    if (WSARecv(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_r.wsaBuf, 1,
+        NULL, &flags, &sqmux_sock_ctx->winbuf_r.overlap, NULL) == SOCKET_ERROR &&
+        WSAGetLastError() != WSA_IO_PENDING) {
+        DBG_PRINTF("WSARecv failed with error: %u\n", WSAGetLastError());
+        ret = -1;
+    }
+    else {
+        /* An immediate completion also signals the event, so finish_windows_recv collects data or end of stream. */
+        sqmux_sock_ctx->is_receiving = 1;
+    }
     return ret;
 }
 

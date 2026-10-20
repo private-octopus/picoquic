@@ -1964,6 +1964,74 @@ int sockloop_qmux_badp_test(void)
     return(sockloop_qmux_one(&spec));
 }
 
+/* A QMUX WSARecv that completes immediately must deliver the queued bytes, then the end of stream. */
+int sockloop_qmux_win_recv_test(void)
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+    picoqmux_socket_ctx_t* listen_ctx = NULL;
+    picoqmux_socket_ctx_t* sqmux_ctx = NULL;
+    SOCKET_TYPE accepted = INVALID_SOCKET;
+    struct sockaddr_in server_addr;
+    uint8_t data[64];
+
+    memset(data, 0x5a, sizeof(data));
+    if (WSA_START(MAKEWORD(2, 2), &wsaData) != 0 ||
+        (listen_ctx = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 1, 1)) == NULL ||
+        (sqmux_ctx = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 0, 0)) == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(&server_addr, 0, sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_addr.s_addr = htonl(0x7f000001);
+        server_addr.sin_port = htons(listen_ctx->port);
+        if (connect(sqmux_ctx->fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0 ||
+            (accepted = accept(listen_ctx->fd, NULL, NULL)) == INVALID_SOCKET) {
+            DBG_PRINTF("Cannot open the test connection, error %d", WSAGetLastError());
+            ret = -1;
+        }
+    }
+    /* Round 0 queues data, round 1 queues the FIN, both before the receive is posted. */
+    for (int round = 0; ret == 0 && round < 2; round++) {
+        DWORD expected = (round == 0) ? (DWORD)sizeof(data) : 0;
+
+        if ((round == 0) ? (send(accepted, (const char*)data, (int)sizeof(data), 0) != (int)sizeof(data)) :
+            (shutdown(accepted, SD_SEND) != 0)) {
+            ret = -1;
+        }
+        else {
+            SLEEP(20);
+            if (picoquic_packet_loop_start_windows_recv(sqmux_ctx) != 0 || !sqmux_ctx->is_receiving) {
+                DBG_PRINTF("Round %d, cannot post the receive", round);
+                ret = -1;
+            }
+            else if (WSAWaitForMultipleEvents(1, &sqmux_ctx->winbuf_r.overlap.hEvent, FALSE, 1000, FALSE) != WSA_WAIT_EVENT_0) {
+                DBG_PRINTF("Round %d, receive did not complete", round);
+                ret = -1;
+            }
+            else {
+                ResetEvent(sqmux_ctx->winbuf_r.overlap.hEvent);
+                if (picoquic_sockloop_finish_windows_recv(sqmux_ctx) != 0 ||
+                    sqmux_ctx->winbuf_r.buf_len != expected ||
+                    memcmp(sqmux_ctx->winbuf_r.buf, data, expected) != 0) {
+                    DBG_PRINTF("Round %d, received %u bytes instead of %u", round,
+                        (unsigned int)sqmux_ctx->winbuf_r.buf_len, (unsigned int)expected);
+                    ret = -1;
+                }
+            }
+        }
+    }
+    if (accepted != INVALID_SOCKET) {
+        SOCKET_CLOSE(accepted);
+    }
+    picoquic_packet_loop_free_qmux_socket(sqmux_ctx);
+    picoquic_packet_loop_free_qmux_socket(listen_ctx);
+#endif
+    return ret;
+}
+
 int picoquic_packet_loop_open_qmux_cnx_sockets(picoquic_quic_t* qmux, picoqmux_socket_ctx_t** sqmux_ctx,
     int* nb_qmux_sockets, int max_qmux_socket);
 

@@ -348,6 +348,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_qmux_win_recv)
+        {
+            int ret = sockloop_qmux_win_recv_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_qmux_cnx_sockets_limit)
         {
             int ret = sockloop_qmux_cnx_sockets_limit_test();

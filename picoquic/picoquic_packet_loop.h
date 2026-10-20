@@ -559,6 +559,10 @@ void picoquic_packet_loop_abandon_socket(
     picoqmux_socket_ctx_t** sqmux_ctx,
     int* qmux_socket_was_closed,
     int socket_rank);
+#ifdef _WINDOWS
+int picoquic_packet_loop_start_windows_recv(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_sockloop_finish_windows_recv(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+#endif
 #ifdef __cplusplus
 }
 #endif

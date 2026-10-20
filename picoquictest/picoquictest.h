@@ -265,6 +265,7 @@ int sockloop_thread_name_test(void);
 int sockloop_thread_null_callback_test(void);
 int sockloop_qmux_test(void);
 int sockloop_qmux_badp_test(void);
+int sockloop_qmux_win_recv_test(void);
 int sockloop_qmux_cnx_sockets_limit_test(void);
 int sockloop_qmux_close_test(void);
 int splay_test(void);
