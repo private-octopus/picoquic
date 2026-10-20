@@ -30,10 +30,22 @@
 
 uint64_t  picoquic_tuple_challenge_time(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 
+static int picoquic_count_tuples(picoquic_path_t* path_x)
+{
+    int nb_tuples = 0;
+    picoquic_tuple_t* tuple = path_x->first_tuple;
+
+    while (tuple != NULL) {
+        nb_tuples++;
+        tuple = tuple->next_tuple;
+    }
+    return nb_tuples;
+}
+
 /* The challenge of this tuple failed.
  * Update its status, and move it to the end of the list.
  */
-static void picoquic_set_tuple_challenge_failed(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time)
+void picoquic_set_tuple_challenge_failed(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time)
 {
     picoquic_tuple_t* next_tuple = path_x->first_tuple;
     picoquic_tuple_t* previous_tuple = NULL;
@@ -782,9 +794,17 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             *   else, treat it as a NAT rebinding.
             */
 
-            if (picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0 &&
+            /* Last resort (RFC 9000 9.5): no spare peer CID but same DCID, share the current one so spoofed addresses cannot exhaust CIDs. */
+            /* The number of tuples is capped, so that changing addresses cannot create unlimited tuples. */
+            int is_cid_shared = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) != 0 &&
+                path_x->first_tuple->p_remote_cnxid != NULL && path_x->first_tuple->p_local_cnxid != NULL &&
+                picoquic_count_tuples(path_x) < PICOQUIC_MAX_SHARED_CID_TUPLES &&
+                picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) == 0;
+
+            if ((is_cid_shared || picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id) == 0) &&
                 (tuple = picoquic_create_tuple(path_x, addr_to, addr_from, if_index_to)) != NULL &&
-                picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple) == 0) {
+                (is_cid_shared ? picoquic_share_peer_cnxid_with_tuple(path_x, tuple) :
+                    picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple)) == 0) {
                 picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
                 if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
                     cnx->is_multipath_enabled) {
