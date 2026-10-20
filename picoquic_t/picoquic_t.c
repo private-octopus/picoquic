@@ -319,6 +319,7 @@ static const picoquic_test_def_t test_table[] = {
     { "two_connections", tls_api_two_connections_test },
     { "multiple_versions", tls_api_multiple_versions_test },
     { "keep_alive", keep_alive_test },
+    { "keep_alive_idle", keep_alive_idle_test },
     { "integrity_limit", integrity_limit_test },
     { "excess_repeat", excess_repeat_test },
     { "netperf_basic", netperf_basic_test },

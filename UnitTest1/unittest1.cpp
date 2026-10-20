@@ -1402,6 +1402,13 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(keep_alive_idle)
+        {
+            int ret = keep_alive_idle_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(integrity_limit)
         {
             int ret = integrity_limit_test();

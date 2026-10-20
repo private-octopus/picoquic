@@ -4365,6 +4365,65 @@ int keep_alive_test_impl(int keep_alive)
     return ret;
 }
 
+/* Keep alive enabled on an idle connection, whose next wake time is already set far
+ * away (the idle timeout): it must still keep the connection up. */
+int keep_alive_idle_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t end_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Let the connection go idle: nothing left to send, next wake far away */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 1, 1);
+    }
+    for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->next_wake_time < simulated_time + 1000000; i++) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->next_wake_time < simulated_time + 1000000) {
+            DBG_PRINTF("%s", "Client connection not idle, cannot test\n");
+            ret = -1;
+        }
+        else {
+            picoquic_enable_keep_alive(test_ctx->cnx_client, 0);
+            end_time = simulated_time + 2 * PICOQUIC_MICROSEC_SILENCE_MAX;
+        }
+    }
+
+    while (ret == 0 && simulated_time < end_time && TEST_CLIENT_READY) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, end_time, &was_active);
+    }
+
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+        DBG_PRINTF("Connection dropped at %llu despite keep alive\n", (unsigned long long)simulated_time);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int keep_alive_test(void)
 {
     int ret = keep_alive_test_impl(1);
