@@ -2679,6 +2679,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(nat_rebinding_stress_dead_tuple)
+        {
+            int ret = rebinding_stress_dead_tuple_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_stress_cid_exhaustion)
+        {
+            int ret = rebinding_stress_cid_exhaustion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(random_padding)
         {
             int ret = random_padding_test();

@@ -508,6 +508,8 @@ static const picoquic_test_def_t test_table[] = {
     { "quicctx_check_new_path_allowed_limit", quicctx_check_new_path_allowed_limit_test },
     { "perflog", perflog_test },
     { "nat_rebinding_stress", rebinding_stress_test },
+    { "nat_rebinding_stress_dead_tuple", rebinding_stress_dead_tuple_test },
+    { "nat_rebinding_stress_cid_exhaustion", rebinding_stress_cid_exhaustion_test },
     { "random_padding", random_padding_test },
     { "ec00_zero", ec00_zero_test },
     { "ec2f_second_flight", ec2f_second_flight_nack_test },
