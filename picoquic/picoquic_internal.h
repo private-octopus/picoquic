@@ -107,7 +107,7 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
-#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID per path retired by the peer and kept registered for late packets */
+#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID per path retired by the peer and still registered; no new CID issued while reached */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
@@ -2131,6 +2131,8 @@ void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
 void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence, uint64_t current_time);
 void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
+uint8_t* picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    uint64_t current_time, uint64_t* next_wake_time, int* more_data, int* is_pure_ack);
 void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_connection_id_t* cnxid);
 uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);

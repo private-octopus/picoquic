@@ -2198,13 +2198,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(retired_cnxid_cap_order)
-        {
-            int ret = retired_cnxid_cap_order_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
         TEST_METHOD(retired_cnxid_arrival_kept)
         {
             int ret = retired_cnxid_arrival_kept_test();

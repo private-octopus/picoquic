@@ -431,7 +431,6 @@ static const picoquic_test_def_t test_table[] = {
     { "cnxid_renewal",  cnxid_renewal_test },
     { "retired_cnxid_late_packet", retired_cnxid_late_packet_test },
     { "retired_cnxid_cap", retired_cnxid_cap_test },
-    { "retired_cnxid_cap_order", retired_cnxid_cap_order_test },
     { "retired_cnxid_arrival_kept", retired_cnxid_arrival_kept_test },
     { "retired_cnxid_not_reused", retired_cnxid_not_reused_test },
     { "retired_cnxid_path_deleted", retired_cnxid_path_deleted_test },
