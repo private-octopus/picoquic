@@ -3024,6 +3024,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+	    TEST_METHOD(cc_compete_cubic2_hystart_pp)
+        {
+            int ret = cc_compete_cubic2_hystart_pp_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(cc_compete_prague2)
         {
             int ret = cc_compete_prague2_test();
@@ -5214,6 +5221,24 @@ namespace UnitTest1
 
         TEST_METHOD(port_blocked) {
             int ret = port_blocked_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(hystart_pp_state) {
+            int ret = hystart_pp_state_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(hystart_cc) {
+            int ret = hystart_cc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(hystart_ss_exit) {
+            int ret = hystart_ss_exit_test();
 
             Assert::AreEqual(ret, 0);
         }

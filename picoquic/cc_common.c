@@ -219,6 +219,16 @@ uint64_t picoquic_cc_slow_start_increase(picoquic_path_t * path_x, uint64_t nb_d
     return nb_delivered;
 }
 
+/** For each arriving ACK in slow start, where N is the number of previously unacknowledged bytes acknowledged in
+ * the arriving ACK:
+ * Update the cwnd:
+ *      cwnd = cwnd + min(N, L * SMSS)
+ */
+/** For each arriving ACK in CSS, where N is the number of previously unacknowledged bytes acknowledged in the arriving
+ * ACK:
+ * Update the cwnd:
+ *      cwnd = cwnd + (min(N, L * SMSS) / CSS_GROWTH_DIVISOR)
+ */
 uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t * path_x, uint64_t nb_delivered, int in_css)
 {
     if (in_css) {
@@ -228,6 +238,180 @@ uint64_t picoquic_cc_slow_start_increase_ex(picoquic_path_t * path_x, uint64_t n
 
     /* Fallback to traditional Slow Start. */
     return picoquic_cc_slow_start_increase(path_x, nb_delivered); /* nb_delivered; */
+}
+
+uint64_t picoquic_cc_slow_start_increase_ex2(picoquic_path_t* path_x, uint64_t nb_delivered, int in_css, uint64_t prague_alpha) {
+    if (prague_alpha != 0) { /* monitoring of ECN */
+        uint64_t delta = nb_delivered;
+
+        /* Calculate delta based on prague_ahpha. */
+        if (path_x->smoothed_rtt <= PICOQUIC_TARGET_RENO_RTT) {
+            /* smoothed_rtt <= 100ms */
+            delta *= (1024 - prague_alpha);
+            delta /= 1024;
+        } else {
+            delta *= path_x->smoothed_rtt;
+            delta *= (1024 - prague_alpha);
+            delta /= PICOQUIC_TARGET_RENO_RTT;
+            delta /= 1024;
+        }
+
+        return picoquic_cc_slow_start_increase_ex(path_x, delta, in_css);
+    }
+
+    /* Fallback to HyStart++ Consecutive Slow Start. */
+    return picoquic_cc_slow_start_increase_ex(path_x, nb_delivered, in_css);
+}
+
+const char* picoquic_cc_parse_hystart_option(const char* x, picoquic_hystart_alg_t* hystart_alg)
+{
+    uint64_t v = 0;
+    int has_digits = 0;
+
+    while (*x >= '0' && *x <= '9') {
+        if (v <= picoquic_hystart_alg_disabled_t) {
+            v = 10 * v + (uint64_t)(*x - '0');
+        }
+        has_digits = 1;
+        x++;
+    }
+
+    if (has_digits && v <= picoquic_hystart_alg_disabled_t) {
+        *hystart_alg = (picoquic_hystart_alg_t)v;
+    }
+
+    return x;
+}
+
+/*
+ * HyStart++
+ */
+/** lastRoundMinRTT and currentRoundMinRTT are initialized to infinity at the initialization time. currRTT is
+ * the RTT sampled from the latest incoming ACK and initialized to infinity.
+ * - lastRoundMinRTT = infinity
+ * - currentRoundMinRTT = infinity
+ * - currRTT = infinity
+ */
+void picoquic_hystart_pp_reset(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x) {
+    /* init round */
+    hystart_pp_state->current_round.last_round_min_rtt = UINT64_MAX;
+    hystart_pp_state->current_round.current_round_min_rtt = UINT64_MAX;
+    //hystart_pp_state.curr_rtt = UINT64_MAX;
+    hystart_pp_state->current_round.rtt_sample_count = 0;
+    hystart_pp_state->current_round.window_end = 0;
+
+    /* init state */
+    //hystart_pp_state->rtt_thresh = UINT64_MAX;
+    hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
+    hystart_pp_state->css_round_count = 0;
+
+    picoquic_hystart_pp_start_new_round(hystart_pp_state, cnx, path_x);
+}
+
+/** At the start of each round during standard slow start [RFC5681] and CSS, initialize the variables used to
+ *  compute the last round's and current round's minimum RTT:
+ *  - lastRoundMinRTT = currentRoundMinRTT
+ *  - currentRoundMinRTT = infinity
+ *  - rttSampleCount = 0
+ */
+/** HyStart++ measures rounds using sequence numbers, as follows:
+ *  - Define windowEnd as a sequence number initialized to SND.NXT.
+ */
+void picoquic_hystart_pp_start_new_round(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x) {
+    hystart_pp_state->current_round.last_round_min_rtt = hystart_pp_state->current_round.current_round_min_rtt;
+    hystart_pp_state->current_round.current_round_min_rtt = UINT64_MAX;
+    hystart_pp_state->current_round.rtt_sample_count = 0;
+
+    /* Set window end to next sent sequence number. */
+    hystart_pp_state->current_round.window_end = picoquic_cc_get_sequence_number(cnx, path_x);
+}
+
+/** For each arriving ACK in slow start, where N is the number of previously unacknowledged bytes acknowledged in
+ * the arriving ACK:
+ * Keep track of the minimum observed RTT:
+ *      currentRoundMinRTT = min(currentRoundMinRTT, currRTT)
+ *      rttSampleCount += 1
+ */
+/** For each arriving ACK in CSS, where N is the number of previously unacknowledged bytes acknowledged in the arriving
+ * ACK:
+ * Keep track of the minimum observed RTT:
+ *      currentRoundMinRTT = min(currentRoundMinRTT, currRTT)
+ *      rttSampleCount += 1
+ */
+void picoquic_hystart_pp_keep_track(picoquic_hystart_pp_state_t *hystart_pp_state, uint64_t rtt_measurement) {
+    hystart_pp_state->current_round.current_round_min_rtt = MIN(hystart_pp_state->current_round.current_round_min_rtt, rtt_measurement);
+    hystart_pp_state->current_round.rtt_sample_count++;
+}
+
+/** For rounds where at least N_RTT_SAMPLE RTT samples have been obtained and currentRoundMinRTT and lastRoundMinRTT
+ * are valid, check to see if delay increase triggers slow start exit:
+ *      if ((rttSampleCount >= N_RTT_SAMPLE) AND (currentRoundMinRTT != infinity) AND (lastRoundMinRTT != infinity))
+ *          RttThresh = max(MIN_RTT_THRESH, min(lastRoundMinRTT / MIN_RTT_DIVISOR, MAX_RTT_THRESH))
+ *          if (currentRoundMinRTT >= (lastRoundMinRTT + RttThresh))
+ *              cssBaselineMinRtt = currentRoundMinRTT
+ *              exit slow start and enter CSS
+ */
+/** For CSS rounds where at least N_RTT_SAMPLE RTT samples have been obtained, check to see if the current round's
+ * minRTT drops below baseline (cssBaselineMinRtt) indicating that slow start exit was spurious:
+ *      if (currentRoundMinRTT < cssBaselineMinRtt)
+ *          cssBaselineMinRtt = infinity
+ *          resume slow start including HyStart++
+ */
+void picoquic_hystart_pp_test(picoquic_hystart_pp_state_t *hystart_pp_state) {
+    if (hystart_pp_state->css_baseline_min_rtt == UINT64_MAX) {
+        /* In slow start (SS) */
+        if (hystart_pp_state->current_round.rtt_sample_count >= PICOQUIC_HYSTART_PP_N_RTT_SAMPLE &&
+            hystart_pp_state->current_round.current_round_min_rtt != UINT64_MAX &&
+            hystart_pp_state->current_round.last_round_min_rtt != UINT64_MAX) {
+            uint64_t rtt_thresh = MAX(PICOQUIC_HYSTART_PP_MIN_RTT_THRESH, MIN(hystart_pp_state->current_round.last_round_min_rtt / PICOQUIC_HYSTART_PP_MIN_RTT_DIVISOR, PICOQUIC_HYSTART_PP_MAX_RTT_THRESH));
+
+            if (hystart_pp_state->current_round.current_round_min_rtt >= (hystart_pp_state->current_round.last_round_min_rtt + rtt_thresh)) {
+                /* Exit slow start and enter CSS. */
+                hystart_pp_state->css_baseline_min_rtt = hystart_pp_state->current_round.current_round_min_rtt;
+            }
+        }
+    } else {
+        /* In conservative slow start (CSS) */
+        if (hystart_pp_state->current_round.rtt_sample_count >= PICOQUIC_HYSTART_PP_N_RTT_SAMPLE) {
+            if (hystart_pp_state->current_round.current_round_min_rtt < hystart_pp_state->css_baseline_min_rtt) {
+                /* Resume slow start including hystart++. CSS_ROUNDS applies per CSS phase. */
+                hystart_pp_state->css_baseline_min_rtt = UINT64_MAX;
+                hystart_pp_state->css_round_count = 0;
+            }
+        }
+    }
+}
+
+int picoquic_cc_hystart_pp_test(picoquic_hystart_pp_state_t* hystart_pp_state, picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t rtt_measurement) {
+    int ret = 0;
+
+    /* Keep track of the minimum RTT seen so far. */
+    picoquic_hystart_pp_keep_track(hystart_pp_state, rtt_measurement);
+
+    /* Switch between SS and CSS. */
+    picoquic_hystart_pp_test(hystart_pp_state);
+
+    /* Check if we reached the end of the round. */
+    /* HyStart++ measures rounds using sequence numbers, as follows:
+     * - When windowEnd is ACKed, the current round ends and windowEnd is set to SND.NXT.
+     */
+    if (picoquic_cc_get_ack_number(cnx, path_x) != UINT64_MAX && picoquic_cc_get_ack_number(cnx, path_x) >= hystart_pp_state->current_round.window_end) {
+        /* Round has ended. */
+        if (IS_IN_CSS((*hystart_pp_state))) {
+            /* In CSS increase CSS round counter. */
+            hystart_pp_state->css_round_count++;
+
+            /* Enter CA if css round counter > max css rounds. */
+            if (hystart_pp_state->css_round_count >= PICOQUIC_HYSTART_PP_CSS_ROUNDS) {
+                ret = 1;
+            }
+        }
+
+        /* Start new round. */
+        picoquic_hystart_pp_start_new_round(hystart_pp_state, cnx, path_x);
+    }
+
+    return ret;
 }
 
 uint64_t picoquic_cc_update_target_cwin_estimation(picoquic_path_t* path_x) {
