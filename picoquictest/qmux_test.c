@@ -1430,6 +1430,48 @@ int qmux_tls_client_alpn_required_test(void)
     return ret;
 }
 
+/* A client whose TLS handshake gets no answer must be disconnected by the idle timer. */
+int qmux_tls_handshake_idle_timeout_test(void)
+{
+    qmux_sim_ctx_t sim_ctx;
+    qmux_sim_spec_t spec = { 0 };
+    uint8_t buffer[4096];
+    size_t send_length = 0;
+    int ret;
+
+    spec.is_cleartext = 0;
+    spec.idle_timeout = 15000;
+    ret = qmux_test_init(&sim_ctx, &spec);
+
+    if (ret == 0 &&
+        (sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1, 0, PICOQUIC_TEST_SNI, "qmux_test", NULL)) == NULL) {
+        ret = -1;
+    }
+    /* The first call sends the ClientHello, which is never answered. */
+    if (ret == 0 &&
+        (picoqmux_prepare_packets(sim_ctx.cnx[0], sim_ctx.simulated_time, buffer, sizeof(buffer), &send_length) != 0 ||
+            send_length == 0)) {
+        DBG_PRINTF("%s", "Cannot send the ClientHello");
+        ret = -1;
+    }
+    if (ret == 0) {
+        int prepare_ret = 0;
+
+        sim_ctx.simulated_time += (uint64_t)spec.idle_timeout * 1000 + 1;
+        for (int i = 0; i < 4 && prepare_ret == 0; i++) {
+            prepare_ret = picoqmux_prepare_packets(sim_ctx.cnx[0], sim_ctx.simulated_time, buffer, sizeof(buffer), &send_length);
+        }
+        if (prepare_ret == 0 || sim_ctx.cnx[0]->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("After idle timeout, prepare returns 0x%x, state %d", prepare_ret, (int)sim_ctx.cnx[0]->cnx_state);
+            ret = -1;
+        }
+    }
+
+    qmux_test_release(&sim_ctx);
+    return ret;
+}
+
 int qmux_loop_tls_test(void)
 {
     qmux_sim_spec_t spec = { 0 };
