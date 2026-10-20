@@ -1040,7 +1040,7 @@ const uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, const uint8_
 
     if ((bytes = picoquic_frames_varint_decode(bytes + 1, bytes_max, &length)) != NULL) {
         token = bytes;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, (size_t)length);
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, length);
     }
 
     if (bytes == NULL) {
@@ -2032,8 +2032,9 @@ void* picoquic_queue_data_repeat_node_value(picosplay_node_t* node)
 
 int64_t picoquic_queue_data_repeat_compare(void* l, void* r)
 {
-    picoquic_packet_t* lp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(l);
-    picoquic_packet_t* rp = (picoquic_packet_t*)picoquic_queue_data_repeat_node_value(r);
+    /* picosplay passes node values */
+    picoquic_packet_t* lp = (picoquic_packet_t*)l;
+    picoquic_packet_t* rp = (picoquic_packet_t*)r;
     int64_t ret = 0;
     /* TODO: comparison function is wrong, because the "data_repeat_frame" value
      * varies over time. Also, the result may not be unique.
@@ -2051,8 +2052,13 @@ int64_t picoquic_queue_data_repeat_compare(void* l, void* r)
         if (ret == 0) {
             ret = lp->data_repeat_stream_offset - rp->data_repeat_stream_offset;
             if (ret == 0) {
-                /* largest length goes in front */
-                ret = rp->data_repeat_stream_data_length - lp->data_repeat_stream_data_length;
+                /* largest length goes in front -- split test to avoid int overflow */
+                if (lp->data_repeat_stream_data_length > rp->data_repeat_stream_data_length) {
+                    ret = -1;
+                }
+                else if (lp->data_repeat_stream_data_length < rp->data_repeat_stream_data_length) {
+                    ret = 1;
+                }
             }
         }
     }
@@ -2447,7 +2453,7 @@ const uint8_t* picoquic_decode_crypto_hs_frame(picoquic_cnx_t* cnx, const uint8_
         else {
             int new_data_available;
             int ret = picoquic_queue_network_input(cnx->quic, &stream->stream_data_tree, stream->consumed_offset,
-                offset, data_bytes, (size_t)data_length, picoquic_is_last_stream_frame(bytes + data_length, bytes_max),
+                offset, data_bytes, (size_t)data_length, picoquic_is_last_stream_frame(bytes, bytes_max),
                 received_data, &new_data_available);
 
             if (ret != 0) {
@@ -5155,22 +5161,15 @@ const uint8_t* picoquic_skip_datagram_frame(const uint8_t* bytes, const uint8_t*
 {
     uint8_t frame_id = *bytes++;
     unsigned int has_length = frame_id & 1;
-    uint64_t length = 0;
 
-    if (bytes != NULL) {
-        if (has_length) {
-            bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length);
+    if (has_length) {
+        uint64_t length = 0;
+        if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL) {
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, length);
         }
-        else {
-            length = bytes_max - bytes ;
-        }
-
-        if (bytes != NULL) {
-            bytes += length;
-            if (bytes > bytes_max) {
-                bytes = NULL;
-            }
-        }
+    }
+    else {
+        bytes = bytes_max;
     }
 
     return bytes;
@@ -5183,7 +5182,7 @@ uint8_t* picoquic_decode_datagram_frame_header(uint8_t* bytes, const uint8_t* by
         *frame_id = *bytes++;
         if ((*frame_id) & 1) {
             if ((bytes = (uint8_t *)picoquic_frames_varint_decode(bytes, bytes_max, length)) != NULL &&
-                (bytes + *length) > bytes_max) {
+                picoquic_frames_fixed_skip(bytes, bytes_max, *length) == NULL) {
                 bytes = NULL;
             }
         }
@@ -5200,23 +5199,21 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
     unsigned int has_length = frame_id & 1;
     uint64_t length = 0;
 
-    if (bytes != NULL) {
-        if (has_length) {
-            if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
-                length > (uint64_t)(bytes_max - bytes) ||
-                length > cnx->local_parameters.max_datagram_frame_size) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                    frame_id);
-                bytes = NULL;
-            }
+    if (has_length) {
+        if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) == NULL ||
+            length > (uint64_t)(bytes_max - bytes) ||
+            length > cnx->local_parameters.max_datagram_frame_size) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                frame_id);
+            bytes = NULL;
         }
-        else {
-            length = bytes_max - bytes;
-            if (length > cnx->local_parameters.max_datagram_frame_size) {
-                picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
-                    frame_id);
-                bytes = NULL;
-            }
+    }
+    else {
+        length = bytes_max - bytes;
+        if (length > cnx->local_parameters.max_datagram_frame_size) {
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                frame_id);
+            bytes = NULL;
         }
     }
 

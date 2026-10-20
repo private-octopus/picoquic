@@ -301,18 +301,20 @@ void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uin
         picoquic_store_addr(&ctx->addr_local, addr_local);
     }
 
-    if (receiving) {
-        log_ecn = (ecn != ctx->ecn_received);
-        ctx->ecn_received = ecn;
-    }
-    else {
-        log_ecn = (ecn != ctx->ecn_sent);
-        ctx->ecn_sent = ecn;
-    }
-    if (log_ecn) {
-        char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
-        char const* ecn_s = ecn_strings[ecn & 3];
-        fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+    if (ecn != 0xff) {
+        if (receiving) {
+            log_ecn = (ecn != ctx->ecn_received);
+            ctx->ecn_received = ecn;
+        }
+        else {
+            log_ecn = (ecn != ctx->ecn_sent);
+            ctx->ecn_sent = ecn;
+        }
+        if (log_ecn) {
+            char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
+            char const* ecn_s = ecn_strings[ecn & 3];
+            fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+        }
     }
 
     fprintf(f, "}]");

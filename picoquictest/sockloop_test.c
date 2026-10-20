@@ -840,9 +840,18 @@ int sockloop_send_err_test(void)
     uint64_t loss_mask = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     picoquic_connection_id_t initial_cid = { {0x5e, 0xe7, 0xe4, 4, 5, 6, 7, 8}, 8 };
-    int ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
-        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+    int ret = 0;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
 
+    /* The sub-tests open sockets directly, without the packet loop that would initialize Winsock. */
+    ret = WSA_START(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    if (ret == 0) {
+        ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+    }
     if (ret == 0 && test_ctx == NULL) {
         ret = -1;
     }
@@ -2099,12 +2108,16 @@ int sockloop_qmux_close_test(void)
                 /* Wait for the real QMUX connection to complete its data
                  * exchange; it stays open afterwards because of test_idle. */
                 int nb_waits = 0;
+                uint64_t wait_start = picoquic_current_time();
                 while (nb_waits < 2000 &&
                     !(spec.received_stream_0 && spec.stream_0_fin_received)) {
                     SLEEP(1);
                     nb_waits++;
                 }
                 if (!spec.received_stream_0 || !spec.stream_0_fin_received || !spec.stream_0_data_matches) {
+                    DBG_PRINTF("QMUX exchange incomplete after %d waits, %" PRIu64 " us: received %d, fin %d, match %d, cnx state %d",
+                        nb_waits, picoquic_current_time() - wait_start, spec.received_stream_0, spec.stream_0_fin_received,
+                        spec.stream_0_data_matches, (int)picoquic_get_cnx_state(cnx_qmux));
                     ret = -1;
                 }
                 else {

@@ -118,6 +118,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(connection_id_decode)
+        {
+            int ret = util_connection_id_decode_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_name)
         {
             int ret = error_name_test();
@@ -479,6 +486,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(crypto_hs_is_last)
+        {
+            int ret = crypto_hs_is_last_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(observed_address_ack_after_path_deleted)
         {
             int ret = observed_address_ack_after_path_deleted_test();
@@ -647,6 +661,13 @@ namespace UnitTest1
         TEST_METHOD(dataqueue_packet)
         {
             int ret = dataqueue_packet_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dataqueue_order)
+        {
+            int ret = dataqueue_order_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2334,6 +2355,13 @@ namespace UnitTest1
         TEST_METHOD(qlog_fns_trim_path_contexts)
         {
             int ret = qlog_fns_trim_path_contexts_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_quic_fallback)
+        {
+            int ret = qlog_quic_fallback_test();
 
             Assert::AreEqual(ret, 0);
         }
