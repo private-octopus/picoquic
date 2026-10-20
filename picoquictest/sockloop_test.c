@@ -2058,6 +2058,7 @@ int picoquic_packet_loop_poll(picoquic_socket_ctx_t* s_ctx, int nb_sockets,
     unsigned char* received_ecn, uint8_t* buffer, int buffer_max, int64_t delta_t,
     picoquic_network_thread_ctx_t* thread_ctx, picoquic_packet_loop_action_enum* action, int* socket_rank);
 #endif
+#include <pthread.h>
 #include <signal.h>
 
 typedef struct st_sockloop_eintr_ctx_t {
