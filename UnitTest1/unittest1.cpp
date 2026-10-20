@@ -1451,6 +1451,13 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(test_sockets_cloexec)
+        {
+            int ret = socket_cloexec_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         
         TEST_METHOD(ticket_store)
         {
