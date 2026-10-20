@@ -2718,7 +2718,7 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &time_check_arg);
                 if (ret != 0) {
                     /* The application ends the loop: do not wait, the outcome of the
-                     * wait would overwrite the return code and the loop would go on. */
+                     */
                     break;
                 }
                 if (time_check_arg.delta_t < delta_t) {
