@@ -106,6 +106,7 @@ typedef struct st_c4_state_t {
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
     uint64_t recent_maximum_rate;
+    uint64_t previous_maximum_rate;
     int recent_congestions;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
@@ -727,6 +728,7 @@ static void c4_exit_recovery(
             c4_state->probe_level++;
         }
         c4_state->recent_congestions = 0;
+        c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
     }
     else {
         /* TODO: this is obsolete, we should remove the cascade code. */
@@ -745,15 +747,21 @@ static void c4_exit_recovery(
                 c4_state->nominal_rate = c4_state->recent_maximum_rate;
                 c4_state->recent_congestions = 0;
             }
+            c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
         }
         else {
             c4_state->recent_congestions = 0;
-            if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
-                c4_state->push_was_not_limited &&
-                path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
-                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate) / 2;
+            if (c4_state->push_was_not_limited) {
+                uint64_t max_of_2_rates = (c4_state->recent_maximum_rate > c4_state->previous_maximum_rate) ?
+                    c4_state->recent_maximum_rate : c4_state->previous_maximum_rate;
+                if (c4_state->nominal_rate > max_of_2_rates &&
+                    path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
+                    c4_state->nominal_rate = max_of_2_rates;
+                }
+                c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
             }
         }
+
     }
     c4_state->nb_era_resuming = 0;
     c4_state->recent_maximum_rate = 0;
