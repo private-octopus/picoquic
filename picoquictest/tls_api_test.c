@@ -9660,6 +9660,95 @@ int packet_trace_test(void)
     return ret;
 }
 
+/*
+ * Verify that only the first PICOQUIC_LOG_PACKET_MAX_SEQUENCE packets sent on
+ * a connection are logged, unless the log level is set to log all packets.
+ */
+#define LOG_PACKET_LIMIT_TXT "log_packet_limit.txt"
+
+static int log_packet_limit_test_one(int log_level)
+{
+    uint64_t simulated_time = 0;
+    uint64_t nb_packets_sent = 0;
+    uint64_t nb_sent_logged = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_set_log_level(test_ctx->qserver, log_level);
+        ret = picoquic_set_textlog(test_ctx->qserver, LOG_PACKET_LIMIT_TXT);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
+    }
+
+    if (ret == 0) {
+        nb_packets_sent = test_ctx->cnx_server->nb_packets_sent;
+        if (nb_packets_sent <= 2 * PICOQUIC_LOG_PACKET_MAX_SEQUENCE) {
+            DBG_PRINTF("Only %" PRIu64 " packets sent", nb_packets_sent);
+            ret = -1;
+        }
+    }
+
+    /* Free the resource, which will close the log file. */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (ret == 0) {
+        FILE* F = picoquic_file_open(LOG_PACKET_LIMIT_TXT, "r");
+
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open %s", LOG_PACKET_LIMIT_TXT);
+            ret = -1;
+        }
+        else {
+            char line[1024];
+
+            while (fgets(line, sizeof(line), F) != NULL) {
+                if (strstr(line, ": Sending ") != NULL && strstr(line, " bytes to ") != NULL) {
+                    nb_sent_logged++;
+                }
+            }
+            (void)picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t nb_expected = (log_level > 0) ? nb_packets_sent : PICOQUIC_LOG_PACKET_MAX_SEQUENCE;
+
+        if (nb_sent_logged != nb_expected) {
+            DBG_PRINTF("Log level %d, %" PRIu64 " packets sent, %" PRIu64 " logged, expected %" PRIu64,
+                log_level, nb_packets_sent, nb_sent_logged, nb_expected);
+            ret = -1;
+        }
+    }
+
+    (void)picoquic_file_delete(LOG_PACKET_LIMIT_TXT, NULL);
+
+    return ret;
+}
+
+int log_packet_limit_test(void)
+{
+    int ret = log_packet_limit_test_one(0);
+
+    if (ret == 0) {
+        ret = log_packet_limit_test_one(1);
+    }
+
+    return ret;
+}
+
+
+
 
 /*
  * Test whether packet tracing works correctly by setting up a basic connection

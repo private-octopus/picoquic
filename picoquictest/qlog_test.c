@@ -871,3 +871,73 @@ int qlog_quic_fallback_test(void)
 
     return ret;
 }
+
+
+/* qlog_fns_new_connection checks current_number_of_open_logs against
+ * max_simultaneous_logs. With the limit set to 1, only the first of two
+ * simultaneous connections is logged, and a new connection can be logged
+ * after the first one is closed. */
+int qlog_max_simultaneous_logs_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx[3] = { NULL, NULL, NULL };
+    char const* qlog_name[3] = { "0a0a0a0a.client.qlog", "0b0b0b0b.client.qlog", "0c0c0c0c.client.qlog" };
+    int expect_qlog[3] = { 1, 0, 1 };
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    for (int i = 0; i < 3; i++) {
+        (void)picoquic_file_delete(qlog_name[i], NULL);
+    }
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL || picoquic_set_qlog(quic, ".") != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_max_simultaneous_logs(quic, 1);
+
+        for (int i = 0; ret == 0 && i < 3; i++) {
+            uint8_t id = (uint8_t)(0x0a + i);
+            picoquic_connection_id_t initial_cid = { { id, id, id, id }, 4 };
+
+            if (i == 2) {
+                /* Closing the first connection frees its log slot. */
+                picoquic_delete_cnx(cnx[0]);
+                cnx[0] = NULL;
+            }
+            if ((cnx[i] = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+                (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL ||
+                picoquic_start_client_cnx(cnx[i]) != 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    for (int i = 0; i < 3; i++) {
+        FILE* F = picoquic_file_open(qlog_name[i], "r");
+        int is_present = (F != NULL);
+
+        if (F != NULL) {
+            (void)picoquic_file_close(F);
+            (void)picoquic_file_delete(qlog_name[i], NULL);
+        }
+        if (ret == 0 && is_present != expect_qlog[i]) {
+            DBG_PRINTF("QLOG file %s is %s", qlog_name[i], (is_present) ? "present" : "missing");
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
