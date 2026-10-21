@@ -765,3 +765,179 @@ int qlog_fns_trim_path_contexts_test(void)
 
     return ret;
 }
+
+#define QLOG_QUIC_FALLBACK_FILE "0a0b0c0d.client.qlog"
+
+static int qlog_quic_fallback_check_file(char const* fname, char const** expected, size_t nb_expected)
+{
+    int ret = 0;
+    FILE* F = picoquic_file_open(fname, "rb");
+    char* buffer = NULL;
+    size_t nb_read = 0;
+
+    if (F == NULL || (buffer = (char*)malloc(0x10000)) == NULL) {
+        DBG_PRINTF("Cannot read %s", fname);
+        ret = -1;
+    }
+    else {
+        nb_read = fread(buffer, 1, 0x10000 - 1, F);
+        buffer[nb_read] = 0;
+        for (size_t i = 0; ret == 0 && i < nb_expected; i++) {
+            if (strstr(buffer, expected[i]) == NULL) {
+                DBG_PRINTF("Missing <%s> in %s", expected[i], fname);
+                ret = -1;
+            }
+        }
+    }
+    if (buffer != NULL) {
+        free(buffer);
+    }
+    (void)picoquic_file_close(F);
+    return ret;
+}
+
+/* The qlog backend provides neither log_quic_pdu nor log_quic_app_message. Verify that
+ * picoquic_log_quic_pdu and picoquic_log_context_free_app_message are written instead in
+ * the qlog of the first connection, and are safely skipped if there is no connection or
+ * if that connection has no qlog context. */
+int qlog_quic_fallback_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_storage addr_peer;
+    struct sockaddr_storage addr_local;
+    const picoquic_connection_id_t initial_cid = { { 10, 11, 12, 13 }, 4 };
+    char const* expected[] = {
+        "\"datagram_received\"",
+        "\"byte_length\": 1234",
+        "\"message\": \"Stateless reset test 17\""
+    };
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL ||
+        picoquic_store_text_addr(&addr_peer, "10.0.0.1", 4433) != 0 ||
+        picoquic_store_text_addr(&addr_local, "10.0.0.2", 1234) != 0 ||
+        picoquic_set_qlog(quic, ".") != 0) {
+        ret = -1;
+    }
+    else {
+        /* No connection yet: nothing can be logged, but nothing should break. */
+        picoquic_log_quic_pdu(quic, 1, simulated_time, 0, (struct sockaddr*)&addr_peer,
+            (struct sockaddr*)&addr_local, 1000);
+        picoquic_log_context_free_app_message(quic, &initial_cid, "No connection test %d", 1);
+
+        if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+            (struct sockaddr*)&addr_peer, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Client connection not started yet, thus without qlog context. */
+            picoquic_log_quic_pdu(quic, 1, simulated_time, 0, (struct sockaddr*)&addr_peer,
+                (struct sockaddr*)&addr_local, 1100);
+            picoquic_log_context_free_app_message(quic, &initial_cid, "No context test %d", 2);
+
+            picoquic_log_new_connection(cnx);
+            if (cnx->log_ctx[0] == NULL) {
+                DBG_PRINTF("%s", "Expected a qlog context after picoquic_log_new_connection.");
+                ret = -1;
+            }
+            else {
+                simulated_time += 1000;
+                picoquic_log_quic_pdu(quic, 1, simulated_time, 0, (struct sockaddr*)&addr_peer,
+                    (struct sockaddr*)&addr_local, 1234);
+                picoquic_log_context_free_app_message(quic, &initial_cid, "Stateless reset test %d", 17);
+            }
+            picoquic_log_close_connection(cnx);
+            picoquic_delete_cnx(cnx);
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    if (ret == 0 && (ret = picoquic_check_json_well_formed(QLOG_QUIC_FALLBACK_FILE)) != 0) {
+        DBG_PRINTF("%s", "Quic fallback QLOG output is not well-formed JSON.");
+    }
+
+    if (ret == 0) {
+        ret = qlog_quic_fallback_check_file(QLOG_QUIC_FALLBACK_FILE, expected, sizeof(expected) / sizeof(char const*));
+    }
+
+    return ret;
+}
+
+
+/* qlog_fns_new_connection checks current_number_of_open_logs against
+ * max_simultaneous_logs. With the limit set to 1, only the first of two
+ * simultaneous connections is logged, and a new connection can be logged
+ * after the first one is closed. */
+int qlog_max_simultaneous_logs_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx[3] = { NULL, NULL, NULL };
+    char const* qlog_name[3] = { "0a0a0a0a.client.qlog", "0b0b0b0b.client.qlog", "0c0c0c0c.client.qlog" };
+    int expect_qlog[3] = { 1, 0, 1 };
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr;
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    for (int i = 0; i < 3; i++) {
+        (void)picoquic_file_delete(qlog_name[i], NULL);
+    }
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL || picoquic_set_qlog(quic, ".") != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_set_max_simultaneous_logs(quic, 1);
+
+        for (int i = 0; ret == 0 && i < 3; i++) {
+            uint8_t id = (uint8_t)(0x0a + i);
+            picoquic_connection_id_t initial_cid = { { id, id, id, id }, 4 };
+
+            if (i == 2) {
+                /* Closing the first connection frees its log slot. */
+                picoquic_delete_cnx(cnx[0]);
+                cnx[0] = NULL;
+            }
+            if ((cnx[i] = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+                (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL ||
+                picoquic_start_client_cnx(cnx[i]) != 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    for (int i = 0; i < 3; i++) {
+        FILE* F = picoquic_file_open(qlog_name[i], "r");
+        int is_present = (F != NULL);
+
+        if (F != NULL) {
+            (void)picoquic_file_close(F);
+            (void)picoquic_file_delete(qlog_name[i], NULL);
+        }
+        if (ret == 0 && is_present != expect_qlog[i]) {
+            DBG_PRINTF("QLOG file %s is %s", qlog_name[i], (is_present) ? "present" : "missing");
+            ret = -1;
+        }
+    }
+
+    return ret;
+}

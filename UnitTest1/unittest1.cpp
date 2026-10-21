@@ -118,6 +118,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(connection_id_decode)
+        {
+            int ret = util_connection_id_decode_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(error_name)
         {
             int ret = error_name_test();
@@ -219,6 +226,13 @@ namespace UnitTest1
         TEST_METHOD(sockloop_basic)
         {
             int ret = sockloop_basic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_time_check_stop)
+        {
+            int ret = sockloop_time_check_stop_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -353,6 +367,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_qmux_send_reset)
+        {
+            int ret = sockloop_qmux_send_reset_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_eintr)
+        {
+            int ret = sockloop_eintr_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(splay)
         {
             int ret = splay_test();
@@ -475,6 +501,13 @@ namespace UnitTest1
         TEST_METHOD(reset_stream_at_needs_repeat)
         {
             int ret = reset_stream_at_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(crypto_hs_is_last)
+        {
+            int ret = crypto_hs_is_last_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -647,6 +680,13 @@ namespace UnitTest1
         TEST_METHOD(dataqueue_packet)
         {
             int ret = dataqueue_packet_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(dataqueue_order)
+        {
+            int ret = dataqueue_order_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1369,6 +1409,13 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(keep_alive_idle)
+        {
+            int ret = keep_alive_idle_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(integrity_limit)
         {
             int ret = integrity_limit_test();
@@ -1415,6 +1462,13 @@ namespace UnitTest1
         TEST_METHOD(test_sockets_ecn)
         {
             int ret = socket_ecn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_sockets_cloexec)
+        {
+            int ret = socket_cloexec_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2387,6 +2441,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(log_packet_limit)
+        {
+            int ret = log_packet_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qlog_auto)
         {
             int ret = qlog_auto_test();
@@ -2404,6 +2465,20 @@ namespace UnitTest1
         TEST_METHOD(qlog_fns_trim_path_contexts)
         {
             int ret = qlog_fns_trim_path_contexts_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_quic_fallback)
+        {
+            int ret = qlog_quic_fallback_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qlog_max_simultaneous_logs)
+        {
+            int ret = qlog_max_simultaneous_logs_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -2724,6 +2799,20 @@ namespace UnitTest1
         TEST_METHOD(nat_rebinding_stress)
         {
             int ret = rebinding_stress_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_stress_dead_tuple)
+        {
+            int ret = rebinding_stress_dead_tuple_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_stress_cid_exhaustion)
+        {
+            int ret = rebinding_stress_cid_exhaustion_test();
 
             Assert::AreEqual(ret, 0);
         }
