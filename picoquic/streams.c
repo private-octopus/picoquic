@@ -456,7 +456,8 @@ int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
         ret = PICOQUIC_ERROR_ILLEGAL_TRANSPORT_EXTENSION;
     }
     else if ((stream = picoquic_find_stream(cnx, stream_id)) == NULL) {
-        ret = PICOQUIC_ERROR_INVALID_STREAM_ID;
+        ret = (stream_id < cnx->next_stream_id[STREAM_TYPE_FROM_ID(stream_id)])?
+            PICOQUIC_ERROR_STREAM_ALREADY_CLOSED:PICOQUIC_ERROR_INVALID_STREAM_ID;
     }
     else {
         stream->app_stream_ctx = NULL;

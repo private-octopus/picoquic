@@ -1469,39 +1469,39 @@ int reset_deleted_test(void)
     }
     else {
         picoquic_stream_head_t* stream = NULL;
-        /* Ensure server mode for local unidirectional stream IDs */
-        cnx->client_mode = 0;
+        /* Ensure client mode for local unidirectional stream IDs */
+        cnx->client_mode = 1;
         cnx->cnx_state = picoquic_state_ready;
 
-        /* simulate receive a unidir stream with FIN mark */
+        /* simulate sending a unidir stream with FIN mark */
         simulated_time = 1000;
-        if ((stream = picoquic_find_or_create_stream(cnx, 2, 1)) == NULL) {
-            ret = -1;
+        ret = picoquic_add_to_stream(cnx, 2, NULL, 0, 1);
+        if (ret != 0 || ((stream = picoquic_find_stream(cnx, 2)) == NULL)) {
+            DBG_PRINTF("Add to stream returns %d", ret);
+        }
+        else if (ret = picoquic_reset_stream(cnx, 2, 0) != 0) {
+            /* Immediate reset should succeed */
+            DBG_PRINTF("First reset stream returns %d", ret);
         }
         else {
-            const uint8_t* bytes;
-
-            stream->fin_received = 1;
+            /* simulate receiving the acknowledgement */
+            stream->fin_sent = 1;
+            stream->reset_sent = 1; 
+            stream->reset_acked = 1;
             cnx->latest_receive_time = simulated_time;
             picoquic_update_max_stream_ID_local(cnx, stream);
             picoquic_delete_stream(cnx, stream);
-
-            /* simulate receiving a reset stream */
-            simulated_time = 2000;
-            bytes = picoquic_apply_reset_stream_frame(cnx, reset_frame + sizeof(reset_frame),
-                31, 2, 0, 0);
-            /* Check for unexpected error */
-            if (bytes != reset_frame + sizeof(reset_frame)) {
-                DBG_PRINTF("%s", "Spurious decode error");
+            /* check that the stream has been deleted */
+            if (picoquic_find_stream(cnx, 2) != NULL) {
+                DBG_PRINTF("Stream %d was not deleted.\n", 2);
                 ret = -1;
             }
-            else if (picoquic_find_stream(cnx, 2) != NULL) {
-                DBG_PRINTF("%s", "Spurious recreation of stream");
-                ret = -1;
-            }
-            else if (cnx->cnx_state != picoquic_state_ready) {
-                DBG_PRINTF("Unexpected connection state: %d", cnx->cnx_state);
-                ret = -1;
+            else {
+                int reset_ret = picoquic_reset_stream(cnx, 2, 0);
+                if (reset_ret != PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                    DBG_PRINTF("Second reset returns %x.\n", reset_ret);
+                    ret = -1;
+                }
             }
         }
     }

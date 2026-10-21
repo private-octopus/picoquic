@@ -1652,7 +1652,12 @@ void picoquic_reset_stream_ctx(picoquic_cnx_t* cnx, uint64_t stream_id);
 int picoquic_add_to_stream_with_ctx(picoquic_cnx_t * cnx, uint64_t stream_id, const uint8_t * data, size_t length, int set_fin, void * app_stream_ctx);
 
 /* Reset a stream, indicating that no more data will be sent on 
- * that stream and that any data currently queued can be abandoned. */
+ * that stream and that any data currently queued can be abandoned.
+ * The "reset" API will return an error "PICOQUIC_ERROR_STREAM_ALREADY_CLOSED"
+ * if the stream was already deleted, and "PICOQUIC_ERROR_INVALID_STREAM" if
+ * the stream is invalid, e.g., if attempting to reset a stream that was not
+ * yet created.
+ */
 int picoquic_reset_stream(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint64_t local_stream_error);
 int picoquic_reset_stream_at(picoquic_cnx_t* cnx,
