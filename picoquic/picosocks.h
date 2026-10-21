@@ -154,6 +154,9 @@ typedef struct st_picoquic_recvmsg_async_ctx_t {
 #ifndef UDP_COALESCED_INFO
 #define UDP_COALESCED_INFO          3
 #endif
+#ifndef WSA_FLAG_NO_HANDLE_INHERIT
+#define WSA_FLAG_NO_HANDLE_INHERIT  0x80
+#endif
 
 picoquic_recvmsg_async_ctx_t * picoquic_create_async_socket(int af, int recv_coalesced, int send_coalesced);
 void picoquic_delete_async_socket(picoquic_recvmsg_async_ctx_t * ctx);
@@ -175,6 +178,9 @@ int picoquic_bind_to_port(SOCKET_TYPE fd, int af, int port);
 int picoquic_bind_to_address(SOCKET_TYPE fd, int af, int port, const struct sockaddr* local_addr);
 
 int picoquic_get_local_address(SOCKET_TYPE sd, struct sockaddr_storage * addr);
+
+/* Open a socket that child processes do not inherit (close on exec) */
+SOCKET_TYPE picoquic_socket_open(int af, int type, int protocol);
 
 SOCKET_TYPE picoquic_open_client_socket(int af);
 

@@ -2401,6 +2401,20 @@ int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t * p
     return ret;
 }
 
+/* Let the tuple share the peer CID of the first tuple of the path, keeping a reference count */
+int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+{
+    int ret = -1;
+
+    if (path_x->first_tuple != NULL && path_x->first_tuple != tuple && path_x->first_tuple->p_remote_cnxid != NULL) {
+        tuple->p_remote_cnxid = path_x->first_tuple->p_remote_cnxid;
+        tuple->p_remote_cnxid->nb_path_references++;
+        ret = 0;
+    }
+
+    return ret;
+}
+
 int picoquic_check_cid_for_new_tuple(picoquic_cnx_t* cnx, uint64_t unique_path_id)
 {
     int ret = 0;
@@ -5243,6 +5257,9 @@ void picoquic_enable_keep_alive(picoquic_cnx_t* cnx, uint64_t interval)
     } else {
         cnx->keep_alive_interval = interval;
     }
+    /* An idle connection may not wake up before its idle timeout: wake it now,
+     * so that its next wake time accounts for the keep alive interval. */
+    picoquic_reinsert_by_wake_time(cnx->quic, cnx, picoquic_get_quic_time(cnx->quic));
 }
 
 void picoquic_disable_keep_alive(picoquic_cnx_t* cnx)

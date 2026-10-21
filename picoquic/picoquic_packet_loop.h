@@ -555,6 +555,9 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
 int picoquic_packet_loop_do_tcp_read(picoqmux_socket_ctx_t** sqmux_ctx,
     int* qmux_socket_was_closed, int socket_rank,
     uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
+int picoquic_packet_loop_do_tcp_send(picoqmux_socket_ctx_t** sqmux_ctx,
+    int* qmux_socket_was_closed, int socket_rank,
+    uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
 void picoquic_packet_loop_abandon_socket(
     picoqmux_socket_ctx_t** sqmux_ctx,
     int* qmux_socket_was_closed,
