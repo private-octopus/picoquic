@@ -2311,7 +2311,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         /* Check whether time has comed to obsolete local CID */
         picoquic_check_local_cnxid_ttl(cnx, local_cnxid_list, current_time, next_wake_time);
 
-        /* Push new CID if needed, but not while too many retired CID wait for the end of their grace period */
+        /* Push new CID if needed, but not while too many retired CID wait: see PICOQUIC_MAX_RETIRED_LOCAL_CNXID for the bound */
         while (
             local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
             local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired) &&

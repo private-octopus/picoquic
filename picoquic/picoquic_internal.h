@@ -107,7 +107,7 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
-#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* Max local CID per path retired by the peer and still registered; no new CID issued while reached */
+#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* No new local CID while a path has this many retired; it keeps at most this + PICOQUIC_NB_TUPLE_TARGET (plus TTL-expired) */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 

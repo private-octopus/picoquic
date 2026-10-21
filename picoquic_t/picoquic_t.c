@@ -436,6 +436,8 @@ static const picoquic_test_def_t test_table[] = {
     { "retired_cnxid_path_deleted", retired_cnxid_path_deleted_test },
     { "retired_cnxid_nat_rebinding", retired_cnxid_nat_rebinding_test },
     { "retired_cnxid_no_renew", retired_cnxid_no_renew_test },
+    { "retired_cnxid_scone", retired_cnxid_scone_test },
+    { "retired_cnxid_bound", retired_cnxid_bound_test },
     { "retired_cnxid_new_cid_no_repeat", retired_cnxid_new_cid_no_repeat_test },
     { "retired_cnxid_expired_count", retired_cnxid_expired_count_test },
     { "retire_cnxid", retire_cnxid_test },

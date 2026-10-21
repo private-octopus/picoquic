@@ -298,6 +298,8 @@ int retired_cnxid_not_reused_test(void);
 int retired_cnxid_path_deleted_test(void);
 int retired_cnxid_nat_rebinding_test(void);
 int retired_cnxid_no_renew_test(void);
+int retired_cnxid_scone_test(void);
+int retired_cnxid_bound_test(void);
 int retired_cnxid_new_cid_no_repeat_test(void);
 int retired_cnxid_expired_count_test(void);
 int retire_cnxid_test(void);

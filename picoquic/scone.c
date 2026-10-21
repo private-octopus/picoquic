@@ -251,9 +251,11 @@ uint8_t* picoquic_scone_format_packet(uint8_t* bytes, const uint8_t* bytes_max, 
 
 int picoquic_scone_ready_to_send(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
+    /* The local CID is NULL after the peer retires it, until a packet arrives on a live CID */
     return (cnx->local_parameters.is_scone_supported &&
         cnx->remote_parameters.is_scone_supported &&
         cnx->cnx_state == picoquic_state_ready &&
+        path_x->first_tuple->p_local_cnxid != NULL &&
         current_time >= path_x->scone_next_send_time);
 }
 

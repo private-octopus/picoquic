@@ -2233,6 +2233,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(retired_cnxid_scone)
+        {
+            int ret = retired_cnxid_scone_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retired_cnxid_bound)
+        {
+            int ret = retired_cnxid_bound_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(retired_cnxid_new_cid_no_repeat)
         {
             int ret = retired_cnxid_new_cid_no_repeat_test();
