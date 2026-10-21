@@ -1446,6 +1446,70 @@ int reset_at_end_test(void)
     return ret;
 }
 
+
+/* Reset stream that was already closed. */
+picoquic_stream_head_t* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote);
+const uint8_t* picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    uint64_t error_code_64, uint64_t stream_id, uint64_t final_offset, uint64_t reliable_size);
+
+int reset_deleted_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    static const uint8_t reset_frame[] = {
+        picoquic_frame_type_reset_stream,
+        31,
+        0
+    };
+    int ret = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_stream_head_t* stream = NULL;
+        /* Ensure server mode for local unidirectional stream IDs */
+        cnx->client_mode = 0;
+        cnx->cnx_state = picoquic_state_ready;
+
+        /* simulate receive a unidir stream with FIN mark */
+        simulated_time = 1000;
+        if ((stream = picoquic_find_or_create_stream(cnx, 2, 1)) == NULL) {
+            ret = -1;
+        }
+        else {
+            const uint8_t* bytes;
+
+            stream->fin_received = 1;
+            cnx->latest_receive_time = simulated_time;
+            picoquic_update_max_stream_ID_local(cnx, stream);
+            picoquic_delete_stream(cnx, stream);
+
+            /* simulate receiving a reset stream */
+            simulated_time = 2000;
+            bytes = picoquic_apply_reset_stream_frame(cnx, reset_frame + sizeof(reset_frame),
+                31, 2, 0, 0);
+            /* Check for unexpected error */
+            if (bytes != reset_frame + sizeof(reset_frame)) {
+                DBG_PRINTF("%s", "Spurious decode error");
+                ret = -1;
+            }
+            else if (picoquic_find_stream(cnx, 2) != NULL) {
+                DBG_PRINTF("%s", "Spurious recreation of stream");
+                ret = -1;
+            }
+            else if (cnx->cnx_state != picoquic_state_ready) {
+                DBG_PRINTF("Unexpected connection state: %d", cnx->cnx_state);
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 /*
 * Initial PTO test:
 * Test the scenario in which:
