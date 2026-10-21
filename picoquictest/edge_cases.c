@@ -1457,11 +1457,6 @@ int reset_deleted_test(void)
     picoquic_quic_t* quic = NULL;
     picoquic_cnx_t* cnx = NULL;
     uint64_t simulated_time = 0;
-    static const uint8_t reset_frame[] = {
-        picoquic_frame_type_reset_stream,
-        31,
-        0
-    };
     int ret = 0;
 
     if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
@@ -1479,7 +1474,7 @@ int reset_deleted_test(void)
         if (ret != 0 || ((stream = picoquic_find_stream(cnx, 2)) == NULL)) {
             DBG_PRINTF("Add to stream returns %d", ret);
         }
-        else if (ret = picoquic_reset_stream(cnx, 2, 0) != 0) {
+        else if ((ret = picoquic_reset_stream(cnx, 2, 0)) != 0) {
             /* Immediate reset should succeed */
             DBG_PRINTF("First reset stream returns %d", ret);
         }
