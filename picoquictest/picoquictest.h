@@ -597,6 +597,7 @@ int limited_bbr_test(void);
 int limited_batch_test(void);
 int limited_safe_test(void);
 int fast_nat_rebinding_test(void);
+int path_challenge_ack_test(void);
 int datagram_test(void);
 int datagram_rt_test(void);
 int datagram_rt_skip_test(void);

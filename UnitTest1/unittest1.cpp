@@ -1998,6 +1998,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(path_challenge_ack)
+        {
+            int ret = path_challenge_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(spinbit)
         {
             int ret = spinbit_test();

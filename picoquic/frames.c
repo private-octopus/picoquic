@@ -6694,6 +6694,12 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
                 is_path_probing_frame = 1;
                 bytes = picoquic_decode_path_challenge_frame(cnx, bytes, bytes_max, 
                     (path_is_not_allocated)?NULL:path_x, addr_from, addr_to);
+                if (!cnx->is_multipath_enabled && !path_is_not_allocated && addr_from != NULL &&
+                    picoquic_compare_addr(addr_from, (struct sockaddr*)&path_x->first_tuple->peer_addr) == 0) {
+                    /* A challenge on the active path asks for a non-probing packet in return
+                     * (RFC 9000, section 9.3.3): the acknowledgement is one. */
+                    ack_needed = 1;
+                }
                 break;
             case picoquic_frame_type_path_response:
                 is_path_probing_frame = 1;

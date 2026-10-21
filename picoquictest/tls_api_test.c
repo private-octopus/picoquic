@@ -6991,6 +6991,62 @@ int fast_nat_rebinding_test(void)
     return ret;
 }
 
+/* The server checks the client's current address again, as it does after an apparent
+ * migration (RFC 9000, section 9.3.3). The packet carrying the PATH_CHALLENGE is
+ * ack-eliciting: the client must acknowledge it, which also gives the server the
+ * non-probing packet from that address that section 9.3.3 asks for.
+ */
+int path_challenge_ack_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t last_non_probing_pn = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 1000000;
+
+        last_non_probing_pn = test_ctx->cnx_server->path[0]->last_non_path_probing_pn;
+        picoquic_set_path_challenge(test_ctx->cnx_server, 0, simulated_time);
+        picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
+        while (ret == 0 && simulated_time < time_out) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+    }
+
+    if (ret == 0 && !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified) {
+        DBG_PRINTF("%s", "The challenge was not verified");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server->path[0]->last_non_path_probing_pn <= last_non_probing_pn) {
+        DBG_PRINTF("%s", "The client answered the challenge with probing packets only");
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /*
  * Test whether the loss bit reporting can be enabled without breaking the connection
  */
