@@ -727,6 +727,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_initial_max_path_id:
             case picoquic_tp_address_discovery:
             case picoquic_tp_reset_stream_at:
+            case picoquic_tp_reset_stream_at_v11:
                 qlog_fns_vint_transport_extension(f, picoquic_tp_name(extension_type), bytes, extension_length);
                 break;
             case picoquic_tp_stateless_reset_token:
