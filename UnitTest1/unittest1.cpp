@@ -2005,6 +2005,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(nat_rebinding_follow)
+        {
+            int ret = nat_rebinding_follow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(nat_rebinding_follow_copy)
+        {
+            int ret = nat_rebinding_follow_copy_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(spinbit)
         {
             int ret = spinbit_test();

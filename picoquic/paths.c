@@ -843,6 +843,12 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                 }
             }
         }
+        if (tuple != NULL) {
+            /* What this address sent: the anti-amplification budget, if packets go there
+             * before it is validated (picoquic_tuple_is_sending_allowed). */
+            tuple->bytes_received += (uint64_t)ph->offset + ph->payload_length +
+                picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
+        }
     }
     *p_path_id = path_id;
     if (path_id >= 0 && ret == 0) {
