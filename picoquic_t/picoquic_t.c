@@ -500,6 +500,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qmux_loop_tls", qmux_loop_tls_test },
     { "qmux_tls_client_alpn_required", qmux_tls_client_alpn_required_test },
     { "qmux_tls_handshake_idle_timeout", qmux_tls_handshake_idle_timeout_test },
+    { "qmux_tls_handshake_idle_timeout_loop", qmux_tls_handshake_idle_timeout_loop_test },
     { "qmux_loop_tls_close", qmux_loop_tls_close_test },
     { "qmux_skip_qx_ping_frame", qmux_skip_qx_ping_frame_test },
     { "qmux_parse_qx_ping_frame", qmux_parse_qx_ping_frame_test },

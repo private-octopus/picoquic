@@ -359,6 +359,7 @@ int qmux_socket_close_on_receive_test(void);
 int qmux_loop_tls_test(void);
 int qmux_tls_client_alpn_required_test(void);
 int qmux_tls_handshake_idle_timeout_test(void);
+int qmux_tls_handshake_idle_timeout_loop_test(void);
 int qmux_loop_tls_close_test(void);
 int qmux_skip_qx_ping_frame_test(void);
 int qmux_parse_qx_ping_frame_test(void);

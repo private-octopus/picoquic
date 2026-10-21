@@ -733,18 +733,29 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
             sqmux_sock_ctx->send_buffer = NULL;
         }
 #ifdef _WINDOWS
-        /* Closing the socket cancels pending overlapped I/O; wait for it to complete before freeing the buffers. */
+        /* Closing the socket cancels pending overlapped I/O, which may still use the buffers and OVERLAPPED until it completes. */
+        int is_io_complete = 1;
         if (!sqmux_sock_ctx->is_listening && sqmux_sock_ctx->winbuf_r.overlap.hEvent != WSA_INVALID_EVENT &&
-            (sqmux_sock_ctx->is_receiving || sqmux_sock_ctx->is_connecting || sqmux_sock_ctx->is_accepting)) {
-            (void)WaitForSingleObject(sqmux_sock_ctx->winbuf_r.overlap.hEvent, 1000);
+            (sqmux_sock_ctx->is_receiving || sqmux_sock_ctx->is_connecting || sqmux_sock_ctx->is_accepting) &&
+            WaitForSingleObject(sqmux_sock_ctx->winbuf_r.overlap.hEvent, 1000) != WAIT_OBJECT_0) {
+            is_io_complete = 0;
         }
-        if (sqmux_sock_ctx->is_sending && sqmux_sock_ctx->winbuf_w.overlap.hEvent != WSA_INVALID_EVENT) {
-            (void)WaitForSingleObject(sqmux_sock_ctx->winbuf_w.overlap.hEvent, 1000);
+        if (sqmux_sock_ctx->is_sending && sqmux_sock_ctx->winbuf_w.overlap.hEvent != WSA_INVALID_EVENT &&
+            WaitForSingleObject(sqmux_sock_ctx->winbuf_w.overlap.hEvent, 1000) != WAIT_OBJECT_0) {
+            is_io_complete = 0;
         }
-        picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
-        picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
-#endif
+        if (is_io_complete) {
+            picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
+            picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
+            free(sqmux_sock_ctx);
+        }
+        else {
+            /* Cancellation not confirmed: keep the context, the OVERLAPPED and buffers it contains, rather than risk a use after free. */
+            DBG_PRINTF("Overlapped I/O on QMUX socket context %p not completed, context not freed", (void*)sqmux_sock_ctx);
+        }
+#else
         free(sqmux_sock_ctx);
+#endif
     }
 }
 
@@ -2312,8 +2323,9 @@ int picoquic_packet_loop_do_tcp_send(
         }
     }
     if (ret != 0) {
-        /* Socket error, could not send data, maybe closed. */
+        /* Socket error or disconnect: close this socket, but keep the loop serving the others, as on read. */
         picoquic_packet_loop_tcp_close(sqmux_ctx, qmux_socket_was_closed, socket_rank, current_time);
+        ret = 0;
     }
     return ret;
 }

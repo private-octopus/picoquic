@@ -2634,6 +2634,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(qmux_tls_handshake_idle_timeout_loop)
+        {
+            int ret = qmux_tls_handshake_idle_timeout_loop_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(qmux_loop_tls_close)
         {
             int ret = qmux_loop_tls_close_test();
