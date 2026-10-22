@@ -33,6 +33,10 @@
  * TODO: support the QuicDoq scenario, manage extra socket.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <limits.h>
 
 #ifdef _WINDOWS
@@ -69,6 +73,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K
@@ -362,7 +367,224 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
         s_ctx->recv_buffer = NULL;
     }
 #endif
+    if (s_ctx->recv_batch != NULL) {
+        free(s_ctx->recv_batch);
+        s_ctx->recv_batch = NULL;
+    }
 }
+
+
+#ifndef _WINDOWS
+/* Wake-up pipe and QMUX TCP sockets only. UDP sockets stay blocking so
+ * sendmsg is unchanged. The packet loop passes MSG_DONTWAIT to
+ * picoquic_recvmsg_ex instead. Windows does not use that function for
+ * the receive loop; it waits on overlapped WSARecv completion, so
+ * WSARecvMsg stays blocking. */
+static int picoquic_packet_loop_set_nonblocking(SOCKET_TYPE fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+}
+
+#ifdef MSG_DONTWAIT
+#define PICOQUIC_LOOP_RECV_FLAGS MSG_DONTWAIT
+#else
+#define PICOQUIC_LOOP_RECV_FLAGS 0
+#endif
+
+static int picoquic_packet_loop_would_block(void)
+{
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+}
+
+#if defined(__linux__)
+#ifndef PICOQUIC_RECV_BATCH
+#define PICOQUIC_RECV_BATCH 32
+#endif
+#ifndef PICOQUIC_RECV_PKT_MAX
+#define PICOQUIC_RECV_PKT_MAX 1536
+#endif
+#ifndef PICOQUIC_RECV_CMSG
+#define PICOQUIC_RECV_CMSG 256
+#endif
+
+typedef struct st_picoquic_recv_batch {
+    int count;
+    int next;
+    int primed;
+    int disabled;
+    struct mmsghdr msgs[PICOQUIC_RECV_BATCH];
+    struct iovec iov[PICOQUIC_RECV_BATCH];
+    struct sockaddr_storage names[PICOQUIC_RECV_BATCH];
+    char cmsg[PICOQUIC_RECV_BATCH][PICOQUIC_RECV_CMSG];
+    uint8_t buf[PICOQUIC_RECV_BATCH][PICOQUIC_RECV_PKT_MAX];
+} picoquic_recv_batch_t;
+
+static void
+picoquic_recv_batch_prime(picoquic_recv_batch_t* b)
+{
+    int i;
+    if (b->primed) {
+        return;
+    }
+    for (i = 0; i < PICOQUIC_RECV_BATCH; i++) {
+        memset(&b->msgs[i], 0, sizeof(b->msgs[i]));
+        b->iov[i].iov_base = b->buf[i];
+        b->iov[i].iov_len = PICOQUIC_RECV_PKT_MAX;
+        b->msgs[i].msg_hdr.msg_name = &b->names[i];
+        b->msgs[i].msg_hdr.msg_namelen = sizeof(b->names[i]);
+        b->msgs[i].msg_hdr.msg_iov = &b->iov[i];
+        b->msgs[i].msg_hdr.msg_iovlen = 1;
+        b->msgs[i].msg_hdr.msg_control = b->cmsg[i];
+        b->msgs[i].msg_hdr.msg_controllen = sizeof(b->cmsg[i]);
+    }
+    b->primed = 1;
+}
+
+static int
+picoquic_recv_batch_pending(picoquic_socket_ctx_t* s_ctx)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    return b != NULL && !b->disabled && b->next < b->count;
+}
+
+static int
+picoquic_recv_batch_take(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    int i;
+    int bytes;
+    if (b == NULL || b->next >= b->count) {
+        return 0;
+    }
+    i = b->next++;
+    bytes = (int)b->msgs[i].msg_len;
+    if (bytes <= 0) {
+        return 0;
+    }
+    if (bytes > buffer_max) {
+        bytes = buffer_max;
+    }
+    memcpy(buffer, b->buf[i], (size_t)bytes);
+    if (addr_from != NULL) {
+        memcpy(addr_from, &b->names[i], sizeof(*addr_from));
+    }
+    if (dest_if != NULL) {
+        *dest_if = 0;
+    }
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+    picoquic_socks_cmsg_parse(&b->msgs[i].msg_hdr, addr_dest, dest_if, received_ecn, NULL);
+    return bytes;
+}
+
+static int
+picoquic_recv_batch_fill(picoquic_socket_ctx_t* s_ctx)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    int i;
+    int n;
+    if (b == NULL || b->disabled) {
+        return -1;
+    }
+    picoquic_recv_batch_prime(b);
+    for (i = 0; i < PICOQUIC_RECV_BATCH; i++) {
+        b->msgs[i].msg_hdr.msg_namelen = sizeof(b->names[i]);
+        b->msgs[i].msg_hdr.msg_controllen = sizeof(b->cmsg[i]);
+        b->msgs[i].msg_hdr.msg_flags = 0;
+        b->iov[i].iov_len = PICOQUIC_RECV_PKT_MAX;
+    }
+    n = recvmmsg(s_ctx->fd, b->msgs, PICOQUIC_RECV_BATCH, MSG_DONTWAIT, NULL);
+    if (n <= 0) {
+        if (n < 0 && (errno == ENOSYS || errno == EOPNOTSUPP)) {
+            /* This kernel has no recvmmsg. The caller falls back to recvmsg,
+             * and later receives skip the batch because disabled stays set. */
+            b->disabled = 1;
+        }
+        if (n == 0) {
+            errno = EAGAIN;
+        }
+        b->count = 0;
+        b->next = 0;
+        return -1;
+    }
+    b->count = n;
+    b->next = 0;
+    return n;
+}
+
+static int
+picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
+    int bytes_recv = -1;
+    int use_recvmsg = (b == NULL || b->disabled);
+
+    if (!use_recvmsg) {
+        if (b->next < b->count) {
+            bytes_recv = picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+                received_ecn, buffer, buffer_max);
+        }
+        else if (picoquic_recv_batch_fill(s_ctx) > 0) {
+            bytes_recv = picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+                received_ecn, buffer, buffer_max);
+        }
+        else if (b->disabled) {
+            use_recvmsg = 1;
+        }
+    }
+    if (use_recvmsg) {
+        bytes_recv = picoquic_recvmsg_ex(s_ctx->fd, addr_from, addr_dest, dest_if,
+            received_ecn, buffer, buffer_max, PICOQUIC_LOOP_RECV_FLAGS);
+    }
+    return bytes_recv;
+}
+
+static void
+picoquic_recv_batch_alloc(picoquic_socket_ctx_t* s_ctx)
+{
+    if (s_ctx->recv_batch == NULL) {
+        s_ctx->recv_batch = calloc(1, sizeof(picoquic_recv_batch_t));
+    }
+}
+#else
+static int
+picoquic_recv_batch_pending(picoquic_socket_ctx_t* s_ctx)
+{
+    (void)s_ctx;
+    return 0;
+}
+
+static int
+picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    return picoquic_recvmsg_ex(s_ctx->fd, addr_from, addr_dest, dest_if,
+        received_ecn, buffer, buffer_max, PICOQUIC_LOOP_RECV_FLAGS);
+}
+
+static void
+picoquic_recv_batch_alloc(picoquic_socket_ctx_t* s_ctx)
+{
+    (void)s_ctx;
+}
+#endif
+#endif
 
 /* Optional bind addresses: at most one per address family. */
 static int picoquic_packet_loop_has_local_addr(const picoquic_packet_loop_param_t* param)
@@ -458,10 +680,8 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
 #endif
     }
     s_ctx->overlap.hEvent = WSA_INVALID_EVENT;
-    s_ctx->fd = WSASocket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
-#else
-    s_ctx->fd = socket(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
+    s_ctx->fd = picoquic_socket_open(s_ctx->af, SOCK_DGRAM, IPPROTO_UDP);
 
 
     if (s_ctx->fd == INVALID_SOCKET ||
@@ -562,6 +782,11 @@ int picoquic_packet_loop_open_socket(picoquic_packet_loop_param_t* param,
             ret = picoquic_packet_set_windows_socket(send_coalesced, recv_coalesced, s_ctx);
         }
 #endif
+#ifndef _WINDOWS
+        if (ret == 0) {
+            picoquic_recv_batch_alloc(s_ctx);
+        }
+#endif
     }
 
     return ret;
@@ -656,11 +881,26 @@ int picoquic_packet_loop_open_sockets(picoquic_packet_loop_param_t* param, picoq
 * set large enough to contain the planned number of connections.
 *
 */
+#ifdef MSG_NOSIGNAL
+#define PICOQUIC_QMUX_SEND_FLAGS MSG_NOSIGNAL
+#else
+#define PICOQUIC_QMUX_SEND_FLAGS 0
+#endif
+
 #ifndef _WINDOWS
-static int picoquic_packet_loop_set_qmux_nonblocking(SOCKET_TYPE fd)
+static int picoquic_packet_loop_set_qmux_posix_socket(SOCKET_TYPE fd)
 {
-    int flags = fcntl(fd, F_GETFL, 0);
-    return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
+    int ret = picoquic_packet_loop_set_nonblocking(fd);
+#ifdef SO_NOSIGPIPE
+    /* Platforms without MSG_NOSIGNAL (Apple) must not raise SIGPIPE on send to a reset socket. */
+    if (ret == 0) {
+        int opt_val = 1;
+        if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (const char*)&opt_val, sizeof(opt_val)) != 0) {
+            ret = -1;
+        }
+    }
+#endif
+    return ret;
 }
 #endif
 
@@ -722,10 +962,29 @@ void picoquic_packet_loop_free_qmux_socket(picoqmux_socket_ctx_t* sqmux_sock_ctx
             sqmux_sock_ctx->send_buffer = NULL;
         }
 #ifdef _WINDOWS
-        picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
-        picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
-#endif
+        /* Closing the socket cancels pending overlapped I/O, which may still use the buffers and OVERLAPPED until it completes. */
+        int is_io_complete = 1;
+        if (!sqmux_sock_ctx->is_listening && sqmux_sock_ctx->winbuf_r.overlap.hEvent != WSA_INVALID_EVENT &&
+            (sqmux_sock_ctx->is_receiving || sqmux_sock_ctx->is_connecting || sqmux_sock_ctx->is_accepting) &&
+            WaitForSingleObject(sqmux_sock_ctx->winbuf_r.overlap.hEvent, 1000) != WAIT_OBJECT_0) {
+            is_io_complete = 0;
+        }
+        if (sqmux_sock_ctx->is_sending && sqmux_sock_ctx->winbuf_w.overlap.hEvent != WSA_INVALID_EVENT &&
+            WaitForSingleObject(sqmux_sock_ctx->winbuf_w.overlap.hEvent, 1000) != WAIT_OBJECT_0) {
+            is_io_complete = 0;
+        }
+        if (is_io_complete) {
+            picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_r);
+            picoquic_sockloop_free_win_buf(&sqmux_sock_ctx->winbuf_w);
+            free(sqmux_sock_ctx);
+        }
+        else {
+            /* Cancellation not confirmed: keep the context, the OVERLAPPED and buffers it contains, rather than risk a use after free. */
+            DBG_PRINTF("Overlapped I/O on QMUX socket context %p not completed, context not freed", (void*)sqmux_sock_ctx);
+        }
+#else
         free(sqmux_sock_ctx);
+#endif
     }
 }
 
@@ -744,17 +1003,13 @@ picoqmux_socket_ctx_t* picoquic_packet_loop_open_qmux_socket(
     sqmux_sock_ctx->af = af;
     sqmux_sock_ctx->port = public_port;
     sqmux_sock_ctx->fd = INVALID_SOCKET;
-#ifdef _WINDOWS
-    sqmux_sock_ctx->fd = WSASocket(af, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
-#else
-    sqmux_sock_ctx->fd = socket(af, SOCK_STREAM, IPPROTO_TCP);
-#endif
+    sqmux_sock_ctx->fd = picoquic_socket_open(af, SOCK_STREAM, IPPROTO_TCP);
 
     if (sqmux_sock_ctx->fd == INVALID_SOCKET ||
 #ifdef _WINDOWS
         picoquic_packet_loop_set_qmux_windows_socket(sqmux_sock_ctx) != 0 ||
 #else
-        picoquic_packet_loop_set_qmux_nonblocking(sqmux_sock_ctx->fd) != 0 ||
+        picoquic_packet_loop_set_qmux_posix_socket(sqmux_sock_ctx->fd) != 0 ||
         (af == AF_INET6 && setsockopt(sqmux_sock_ctx->fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
 #endif
         (is_port_shared && setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt_val, sizeof(opt_val)) != 0) ||
@@ -799,33 +1054,22 @@ int picoquic_packet_loop_start_windows_recv(
     picoqmux_socket_ctx_t* sqmux_sock_ctx)
 {
     int ret = 0;
-    DWORD dwBytes;
+    DWORD flags = 0;
 
     sqmux_sock_ctx->winbuf_r.wsaBuf.buf = (char*)sqmux_sock_ctx->winbuf_r.buf;
     sqmux_sock_ctx->winbuf_r.wsaBuf.len = (ULONG)sqmux_sock_ctx->winbuf_r.buf_size;
     sqmux_sock_ctx->winbuf_r.buf_len = 0;
 
-    do {
-        dwBytes = 0;
-        if (WSARecv(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_r.wsaBuf, 1,
-            NULL, &dwBytes, &sqmux_sock_ctx->winbuf_r.overlap, NULL) == SOCKET_ERROR) {
-            int last_error = WSAGetLastError();
-            if (last_error != WSA_IO_PENDING) {
-                DBG_PRINTF("WSARecv failed with error: %u\n", last_error);
-                ret = -1;
-            }
-            else {
-                /* This is the expected behavior, waiting for arrival of a new message */
-                sqmux_sock_ctx->is_receiving = 1;
-            }
-            break;
-        }
-        else if (dwBytes > 0) {
-            /* We got a message immediately. Process it. */
-            sqmux_sock_ctx->winbuf_r.buf_len = dwBytes;
-        }
-    } while (dwBytes == 0);
-
+    if (WSARecv(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_r.wsaBuf, 1,
+        NULL, &flags, &sqmux_sock_ctx->winbuf_r.overlap, NULL) == SOCKET_ERROR &&
+        WSAGetLastError() != WSA_IO_PENDING) {
+        DBG_PRINTF("WSARecv failed with error: %u\n", WSAGetLastError());
+        ret = -1;
+    }
+    else {
+        /* An immediate completion also signals the event, so finish_windows_recv collects data or end of stream. */
+        sqmux_sock_ctx->is_receiving = 1;
+    }
     return ret;
 }
 
@@ -839,6 +1083,8 @@ int picoquic_sockloop_finish_windows_recv(
         int last_error = WSAGetLastError();
         DBG_PRINTF("Could not complete async call (WSARecv) on QMUX socket %d = %d!\n",
             (int)sqmux_sock_ctx->fd, last_error);
+        sqmux_sock_ctx->winbuf_r.buf_len = 0;
+        sqmux_sock_ctx->is_receiving = 0;
         ret = -1;
     }
     else {
@@ -866,18 +1112,15 @@ int picoquic_sockloop_start_windows_send(
                 sqmux_sock_ctx->winbuf_w.buf_offset;
             sqmux_sock_ctx->winbuf_w.wsaBuf.len = (ULONG)(sqmux_sock_ctx->winbuf_w.buf_len -
                 sqmux_sock_ctx->winbuf_w.buf_offset);
-            sqmux_sock_ctx->is_sending = 1;
             if (WSASend(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_w.wsaBuf, 1,
-                NULL, 0, &sqmux_sock_ctx->winbuf_w.overlap, NULL) == SOCKET_ERROR) {
-                int last_error = WSAGetLastError();
-                if (last_error != WSA_IO_PENDING) {
-                    DBG_PRINTF("WSASend failed with error: %u\n", last_error);
-                    ret = -1;
-                }
-                else {
-                    /* This is the expected behavior, waiting for completion of the send */
-                    ret = 0;
-                }
+                NULL, 0, &sqmux_sock_ctx->winbuf_w.overlap, NULL) == SOCKET_ERROR &&
+                WSAGetLastError() != WSA_IO_PENDING) {
+                DBG_PRINTF("WSASend failed with error: %u\n", WSAGetLastError());
+                ret = -1;
+            }
+            else {
+                /* Immediate or pending, the completion is signaled on the event. */
+                sqmux_sock_ctx->is_sending = 1;
             }
         }
     }
@@ -894,6 +1137,7 @@ int picoquic_sockloop_finish_windows_send(
         int last_error = WSAGetLastError();
         DBG_PRINTF("Could not complete async call (WSASend) on QMUX socket %d = %d!\n",
             (int)sqmux_sock_ctx->fd, last_error);
+        sqmux_sock_ctx->is_sending = 0;
         ret = -1;
     }
     else {
@@ -958,7 +1202,7 @@ static int picoquic_packet_loop_do_windows_accept(
         }
     }
 
-    if (*nb_qmux_sockets < max_qmux_socket) {
+    if (ret == 0 && *nb_qmux_sockets < max_qmux_socket) {
         /* create a socket for the incoming connection */
         DWORD dwBytes = 0;
         int accept_socket_rank = *nb_qmux_sockets;
@@ -993,9 +1237,8 @@ static int picoquic_packet_loop_do_windows_accept(
             }
         }
     }
-    else {
+    else if (ret == 0) {
         DBG_PRINTF("Too many QMUX sockets, cannot accept more (max=%d)\n", max_qmux_socket);
-        /* TODO: keep track of accept calls. */
     }
     return ret;
 }
@@ -1011,6 +1254,8 @@ static int picoquic_packet_loop_complete_windows_accept(
     int local_sockaddr_len = 0;
     int remote_sockaddr_len = 0;
     int sock_addr_len = sizeof(struct sockaddr_storage);
+    DWORD cbTransferred = 0;
+    DWORD flags = 0;
     int ret = 0;
 
     for (int i = 0; i < accept_socket_rank; i++) {
@@ -1020,10 +1265,16 @@ static int picoquic_packet_loop_complete_windows_accept(
             break;
         }
     }
+    sqmux_ctx[accept_socket_rank]->is_accepting = 0;
 
+    if (!WSAGetOverlappedResult(sqmux_ctx[accept_socket_rank]->accepting_socket,
+        &sqmux_ctx[accept_socket_rank]->winbuf_r.overlap, &cbTransferred, FALSE, &flags)) {
+        DBG_PRINTF("AcceptEx completed with error: %u\n", WSAGetLastError());
+        ret = -1;
+    }
     /* Call setsockopt() with SO_UPDATE_ACCEPT_CONTEXT on
      * the accepted socket using the listening socket as the data */
-    if (setsockopt(sqmux_ctx[accept_socket_rank]->fd, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
+    else if (setsockopt(sqmux_ctx[accept_socket_rank]->fd, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
         (char*)&sqmux_ctx[accept_socket_rank]->accepting_socket, sizeof(SOCKET_TYPE)) != 0) {
         DBG_PRINTF("setsockopt SO_UPDATE_ACCEPT_CONTEXT failed with error: %u\n", WSAGetLastError());
         ret = -1;
@@ -1068,13 +1319,11 @@ int picoquic_packet_loop_start_windows_accept_sockets(
     int max_qmux_socket)
 {
     int ret = 0;
-    for (int i = 0; i < *nb_qmux_sockets; i++) {
+    /* Post an AcceptEx on each idle listener, as long as the socket table has room. */
+    for (int i = 0; ret == 0 && i < *nb_qmux_sockets && *nb_qmux_sockets < max_qmux_socket; i++) {
         if (sqmux_ctx[i]->is_listening &&
             !sqmux_ctx[i]->is_accepting) {
-            if (picoquic_packet_loop_do_windows_accept(sqmux_ctx, nb_qmux_sockets, max_qmux_socket, i) != 0) {
-                ret = -1;
-                break;
-            }
+            ret = picoquic_packet_loop_do_windows_accept(sqmux_ctx, nb_qmux_sockets, max_qmux_socket, i);
         }
     }
     return ret;
@@ -1124,12 +1373,18 @@ int picoquic_packet_loop_complete_windows_connect(
     picoqmux_socket_ctx_t* sqmux_sock_ctx)
 {
     int ret = 0;
+    DWORD cbTransferred = 0;
+    DWORD flags = 0;
 
     sqmux_sock_ctx->is_connecting = 0;
 
+    if (!WSAGetOverlappedResult(sqmux_sock_ctx->fd, &sqmux_sock_ctx->winbuf_r.overlap, &cbTransferred, FALSE, &flags)) {
+        DBG_PRINTF("ConnectEx completed with error: %d\n", WSAGetLastError());
+        ret = -1;
+    }
     /* Make the socket more well-behaved. */
-    if (setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0) != 0) {
-        printf("SO_UPDATE_CONNECT_CONTEXT failed: %d\n", WSAGetLastError());
+    else if (setsockopt(sqmux_sock_ctx->fd, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0) != 0) {
+        DBG_PRINTF("SO_UPDATE_CONNECT_CONTEXT failed: %d\n", WSAGetLastError());
         ret = -1;
     }
     return ret;
@@ -1264,6 +1519,16 @@ int picoquic_packet_loop_open_qmux_cnx_sockets(
 
 
 #if defined(_WINDOWS)
+/* Report a failed TCP operation as an empty read, so the loop closes only that socket. */
+static int picoquic_packet_loop_win_socket_error(picoqmux_socket_ctx_t** sqmux_ctx, int rank,
+    picoquic_packet_loop_action_enum* action, int* socket_rank)
+{
+    sqmux_ctx[rank]->winbuf_r.buf_len = 0;
+    *action = picoquic_packet_loop_action_tcp_recv_ready;
+    *socket_rank = rank;
+    return 0;
+}
+
 /*
 * Windows: use asynchronous receive. Asynchronous receive requires
 * declaring an overlap context and event per socket, as well as a
@@ -1304,16 +1569,14 @@ int picoquic_packet_loop_wait(
 {
     int bytes_recv = 0;
     HANDLE events[WSA_MAXIMUM_WAIT_EVENTS];
-    int w_event_ptr[128];
+    int w_event_ptr[WSA_MAXIMUM_WAIT_EVENTS];
     DWORD ret_event;
     DWORD nb_events = 0;
     DWORD qmux_recv_events = 0;
     DWORD qmux_send_events = 0;
     DWORD wake_up_event_rank = 0;
     DWORD dwDeltaT = (DWORD)((delta_t <= 0) ? 0 : (delta_t / 1000));
-    int socket_was_ready = 0;
-    int socket_ready_rank = 0;
-    int socket_error = 0;
+    int error_rank = -1;
 
     for (int i = 0; i < 4 && i < nb_sockets; i++) {
         events[i] = s_ctx[i].overlap.hEvent;
@@ -1327,154 +1590,131 @@ int picoquic_packet_loop_wait(
     }
     /* TODO: set limit to number of TCP sockets. */
     qmux_recv_events = nb_events;
-    for (int i = 0; i < nb_qmux_sockets && qmux_recv_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
+    for (int i = 0; error_rank < 0 && i < nb_qmux_sockets && qmux_recv_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
         if (sqmux_ctx[i]->cnx != NULL &&
             !sqmux_ctx[i]->is_receiving &&
             !sqmux_ctx[i]->is_listening &&
             !sqmux_ctx[i]->is_accepting &&
-            !sqmux_ctx[i]->is_connecting) {
-            socket_error = picoquic_packet_loop_start_windows_recv(sqmux_ctx[i]);
-            if (!sqmux_ctx[i]->is_receiving) {
-                /* No receive is pending, so we won't wait for it. */
-                socket_was_ready = 1;
-                socket_ready_rank = i;
-                break;
-            }
+            !sqmux_ctx[i]->is_connecting &&
+            picoquic_packet_loop_start_windows_recv(sqmux_ctx[i]) != 0) {
+            error_rank = i;
         }
         events[qmux_recv_events] = sqmux_ctx[i]->winbuf_r.overlap.hEvent;
         qmux_recv_events++;
     }
     qmux_send_events = qmux_recv_events;
-    if (socket_was_ready) {
-        /* The call to wsarecv returned immadiately, no need to wait for more data */
-        *action = picoquic_packet_loop_action_tcp_recv_ready;
-        *socket_rank = socket_ready_rank;
-        if (socket_error) {
-            bytes_recv = -1;
+    /* Start the sends that are due, and wait for all pending sends. */
+    for (int i = 0; error_rank < 0 && i < nb_qmux_sockets && qmux_send_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
+        if (sqmux_ctx[i]->cnx != NULL && sqmux_ctx[i]->cnx->next_wake_time <= current_time &&
+            !sqmux_ctx[i]->is_sending &&
+            !sqmux_ctx[i]->is_accepting &&
+            !sqmux_ctx[i]->is_connecting &&
+            picoquic_sockloop_start_windows_send(sqmux_ctx[i], current_time) != 0) {
+            DBG_PRINTF("Cannot start send on socket %d\n", (int)sqmux_ctx[i]->fd);
+            error_rank = i;
         }
-        else {
-            bytes_recv = (int)sqmux_ctx[socket_ready_rank]->winbuf_r.buf_len;
+        else if (sqmux_ctx[i]->is_sending) {
+            events[qmux_send_events] = sqmux_ctx[i]->winbuf_w.overlap.hEvent;
+            w_event_ptr[qmux_send_events - qmux_recv_events] = i;
+            qmux_send_events++;
         }
     }
+
+    if (error_rank >= 0) {
+        bytes_recv = picoquic_packet_loop_win_socket_error(sqmux_ctx, error_rank, action, socket_rank);
+    }
     else {
-        /* wait for the next send event. */
-        for (int i = 0; i < nb_qmux_sockets && qmux_send_events < WSA_MAXIMUM_WAIT_EVENTS; i++) {
-            if (sqmux_ctx[i]->cnx != NULL && sqmux_ctx[i]->cnx->next_wake_time <= current_time) {
-                if (!sqmux_ctx[i]->is_sending &&
-                    !sqmux_ctx[i]->is_accepting &&
-                    !sqmux_ctx[i]->is_connecting) {
-                    if (picoquic_sockloop_start_windows_send(sqmux_ctx[i], current_time) != 0) {
-                        DBG_PRINTF("Cannot start send on socket %d, error 0x%x\n",
-                            (int)sqmux_ctx[i]->fd, WSAGetLastError());
-                    }
-                }
-                if (sqmux_ctx[i]->is_sending) {
-                    events[qmux_send_events] = sqmux_ctx[i]->winbuf_w.overlap.hEvent;
-                    w_event_ptr[qmux_send_events - qmux_recv_events] = i;
-                    qmux_send_events++;
-                }
-            }
+        ret_event = WSAWaitForMultipleEvents(qmux_send_events, events, FALSE, dwDeltaT, FALSE);
+
+        if (ret_event == WSA_WAIT_FAILED) {
+            DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", WSAGetLastError());
+            bytes_recv = -1;
         }
+        else if (ret_event == WSA_WAIT_TIMEOUT) {
+            *action = picoquic_packet_loop_action_timeout;
+            bytes_recv = 0;
+        }
+        else if (ret_event - WSA_WAIT_EVENT_0 < qmux_send_events) {
+            DWORD event_rank = ret_event - WSA_WAIT_EVENT_0;
 
-            ret_event = WSAWaitForMultipleEvents(qmux_send_events, events, FALSE, dwDeltaT, TRUE);
+            if ((int)event_rank < nb_sockets) {
+                *action = picoquic_packet_loop_action_udp_received;
+                *socket_rank = (int)event_rank;
+                /* if received data on a socket, process it. */
+                int ret = picoquic_win_recvmsg_async_finish(&s_ctx[*socket_rank]);
+                ResetEvent(s_ctx[*socket_rank].overlap.hEvent);
 
-            if (ret_event == WSA_WAIT_FAILED) {
-                DBG_PRINTF("WSAWaitForMultipleEvents fails, error 0x%x", WSAGetLastError());
-                bytes_recv = -1;
-            }
-            else if (ret_event == STATUS_TIMEOUT) {
-                *action = picoquic_packet_loop_action_timeout;
-                bytes_recv = 0;
-            }
-            else if (ret_event >= WSA_WAIT_EVENT_0) {
-                DWORD event_rank = ret_event - WSA_WAIT_EVENT_0;
-
-                if ((int)event_rank < nb_sockets) {
-                    *action = picoquic_packet_loop_action_udp_received;
-                    *socket_rank = (int)event_rank;
-                    /* if received data on a socket, process it. */
-                    int ret = picoquic_win_recvmsg_async_finish(&s_ctx[*socket_rank]);
-                    ResetEvent(s_ctx[*socket_rank].overlap.hEvent);
-
-                    if (ret != 0) {
-                        DBG_PRINTF("%s", "Cannot finish async recv");
-                        bytes_recv = -1;
-                    }
-                    else {
-                        bytes_recv = s_ctx[*socket_rank].bytes_recv;
-                        *received_ecn = s_ctx[*socket_rank].received_ecn;
-                        *received_buffer = s_ctx[*socket_rank].recv_buffer;
-                        picoquic_store_addr(addr_dest, (struct sockaddr*)&s_ctx[*socket_rank].addr_dest);
-                        picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[*socket_rank].addr_from);
-                        /* Document incoming port */
-                        if (addr_dest->ss_family == AF_INET6) {
-                            ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[*socket_rank].n_port;
-                        }
-                        else if (addr_dest->ss_family == AF_INET) {
-                            ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[*socket_rank].n_port;
-                        }
-                    }
-                }
-                else if (thread_ctx->wake_up_defined && event_rank == wake_up_event_rank) {
-                    *action = picoquic_packet_loop_action_wake_up;
-                    if (ResetEvent(thread_ctx->wake_up_event) == 0) {
-                        DBG_PRINTF("Cannot reset network event, error 0x%x", GetLastError());
-                        bytes_recv = -1;
-                    }
-                }
-                else if (event_rank < qmux_recv_events) {
-                    *socket_rank = event_rank - nb_events;
-                    ResetEvent(sqmux_ctx[*socket_rank]->winbuf_r.overlap.hEvent);
-
-                    if (sqmux_ctx[*socket_rank]->is_listening) {
-                        /* Should not happen! */
-                    }
-                    else if (sqmux_ctx[*socket_rank]->is_accepting) {
-                        if (picoquic_packet_loop_complete_windows_accept(
-                            sqmux_ctx, *socket_rank) != 0) {
-                            DBG_PRINTF("Cannot complete accept on socket %d, error 0x%x\n",
-                                (int)sqmux_ctx[*socket_rank]->fd, WSAGetLastError());
-                            bytes_recv = -1;
-                        }
-                        else {
-                            /* New connection accepted. */
-                            *action = picoquic_packet_loop_action_tcp_accept_ready;
-                        }
-                    }
-                    else if (sqmux_ctx[*socket_rank]->is_connecting) {
-                        if (picoquic_packet_loop_complete_windows_connect(sqmux_ctx[*socket_rank]) != 0) {
-                            bytes_recv = -1;
-                        }
-                        *action = picoquic_packet_loop_action_none;
-                    }
-                    else {
-                        /* Receive Qmux data on a TCP socket. */
-                        *action = picoquic_packet_loop_action_tcp_recv_ready;
-                        int ret = picoquic_sockloop_finish_windows_recv(sqmux_ctx[*socket_rank]);
-                        if (ret != 0) {
-                            DBG_PRINTF("Cannot finish recv on socket %d, error 0x%x\n",
-                                (int)sqmux_ctx[*socket_rank]->fd, WSAGetLastError());
-                            bytes_recv = -1;
-                        }
-                        else {
-                            bytes_recv = (int)sqmux_ctx[*socket_rank]->winbuf_r.buf_len;
-                        }
-                    }
+                if (ret != 0) {
+                    DBG_PRINTF("%s", "Cannot finish async recv");
+                    bytes_recv = -1;
                 }
                 else {
-                    *socket_rank = w_event_ptr[event_rank - qmux_recv_events];
-                    ResetEvent(sqmux_ctx[*socket_rank]->winbuf_w.overlap.hEvent);
-                    /* Setting the action to None, because completion is immediate */
-                    *action = picoquic_packet_loop_action_none;
-                    int ret = picoquic_sockloop_finish_windows_send(sqmux_ctx[*socket_rank]);
-                    if (ret != 0) {
-                        DBG_PRINTF("Cannot finish recv on socket %d, error 0x%x\n",
-                            (int)sqmux_ctx[*socket_rank]->fd, WSAGetLastError());
-                        bytes_recv = -1;
+                    bytes_recv = s_ctx[*socket_rank].bytes_recv;
+                    *received_ecn = s_ctx[*socket_rank].received_ecn;
+                    *received_buffer = s_ctx[*socket_rank].recv_buffer;
+                    picoquic_store_addr(addr_dest, (struct sockaddr*)&s_ctx[*socket_rank].addr_dest);
+                    picoquic_store_addr(addr_from, (struct sockaddr*)&s_ctx[*socket_rank].addr_from);
+                    /* Document incoming port */
+                    if (addr_dest->ss_family == AF_INET6) {
+                        ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[*socket_rank].n_port;
+                    }
+                    else if (addr_dest->ss_family == AF_INET) {
+                        ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[*socket_rank].n_port;
                     }
                 }
             }
+            else if (thread_ctx->wake_up_defined && event_rank == wake_up_event_rank) {
+                *action = picoquic_packet_loop_action_wake_up;
+                if (ResetEvent(thread_ctx->wake_up_event) == 0) {
+                    DBG_PRINTF("Cannot reset network event, error 0x%x", GetLastError());
+                    bytes_recv = -1;
+                }
+            }
+            else if (event_rank < qmux_recv_events) {
+                int rank = (int)(event_rank - nb_events);
+                ResetEvent(sqmux_ctx[rank]->winbuf_r.overlap.hEvent);
+
+                if (sqmux_ctx[rank]->is_listening) {
+                    /* Should not happen! */
+                }
+                else if (sqmux_ctx[rank]->is_accepting) {
+                    if (picoquic_packet_loop_complete_windows_accept(sqmux_ctx, rank) != 0) {
+                        DBG_PRINTF("Cannot complete accept on socket %d\n", (int)sqmux_ctx[rank]->fd);
+                        bytes_recv = picoquic_packet_loop_win_socket_error(sqmux_ctx, rank, action, socket_rank);
+                    }
+                    else {
+                        /* New connection accepted. */
+                        *action = picoquic_packet_loop_action_tcp_accept_ready;
+                        *socket_rank = rank;
+                    }
+                }
+                else if (sqmux_ctx[rank]->is_connecting) {
+                    if (picoquic_packet_loop_complete_windows_connect(sqmux_ctx[rank]) != 0) {
+                        bytes_recv = picoquic_packet_loop_win_socket_error(sqmux_ctx, rank, action, socket_rank);
+                    }
+                }
+                else if (picoquic_sockloop_finish_windows_recv(sqmux_ctx[rank]) != 0) {
+                    DBG_PRINTF("Cannot finish recv on socket %d\n", (int)sqmux_ctx[rank]->fd);
+                    bytes_recv = picoquic_packet_loop_win_socket_error(sqmux_ctx, rank, action, socket_rank);
+                }
+                else {
+                    /* Receive Qmux data on a TCP socket. */
+                    *action = picoquic_packet_loop_action_tcp_recv_ready;
+                    *socket_rank = rank;
+                    bytes_recv = (int)sqmux_ctx[rank]->winbuf_r.buf_len;
+                }
+            }
+            else {
+                int rank = w_event_ptr[event_rank - qmux_recv_events];
+                ResetEvent(sqmux_ctx[rank]->winbuf_w.overlap.hEvent);
+                /* Setting the action to None, because completion is immediate */
+                if (picoquic_sockloop_finish_windows_send(sqmux_ctx[rank]) != 0) {
+                    DBG_PRINTF("Cannot finish send on socket %d\n", (int)sqmux_ctx[rank]->fd);
+                    bytes_recv = picoquic_packet_loop_win_socket_error(sqmux_ctx, rank, action, socket_rank);
+                }
+            }
         }
+    }
     return bytes_recv;
 }
 
@@ -1787,6 +2027,93 @@ void picoquic_packet_loop_set_fds(
     }
 }
 
+
+#ifndef _WINDOWS
+static void picoquic_packet_loop_set_dest_port(struct sockaddr_storage* addr_dest, uint16_t n_port)
+{
+    if (addr_dest->ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)addr_dest)->sin6_port = n_port;
+    }
+    else if (addr_dest->ss_family == AF_INET) {
+        ((struct sockaddr_in*)addr_dest)->sin_port = n_port;
+    }
+}
+
+/*
+ * When the next wake delay is below poll's 1ms resolution, skip poll() and
+ * try a nonblocking recv instead. Streams marked active already updated
+ * picoquic wake time, so the loop should send without waiting.
+ */
+static int picoquic_packet_loop_try_recv(
+    picoquic_socket_ctx_t* s_ctx,
+    int nb_sockets,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max,
+    picoquic_network_thread_ctx_t* thread_ctx,
+    picoquic_packet_loop_action_enum* action,
+    int* socket_rank)
+{
+    int bytes_recv = 0;
+    int have_pending = 0;
+    int ret = 0;
+
+    if (received_ecn != NULL) {
+        *received_ecn = 0;
+    }
+    *action = picoquic_packet_loop_action_timeout;
+
+    for (int i = 0; i < nb_sockets && ret == 0 && *action == picoquic_packet_loop_action_timeout; i++) {
+        if (picoquic_recv_batch_pending(&s_ctx[i])) {
+            have_pending = 1;
+            bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+                addr_dest, dest_if, received_ecn,
+                buffer, buffer_max);
+            if (bytes_recv > 0) {
+                picoquic_packet_loop_set_dest_port(addr_dest, s_ctx[i].n_port);
+                *socket_rank = i;
+                *action = picoquic_packet_loop_action_udp_received;
+                ret = bytes_recv;
+            }
+        }
+    }
+
+    if (ret == 0 && *action == picoquic_packet_loop_action_timeout &&
+        thread_ctx->wake_up_defined && !have_pending) {
+        uint8_t eventbuf[8];
+        int pipe_recv = (int)read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf));
+        if (pipe_recv > 0) {
+            *action = picoquic_packet_loop_action_wake_up;
+        }
+        else if (pipe_recv < 0 && !picoquic_packet_loop_would_block()) {
+            DBG_PRINTF("Error: read pipe returns %d\n", errno);
+            ret = -1;
+        }
+    }
+
+    for (int i = 0; i < nb_sockets && ret == 0 && *action == picoquic_packet_loop_action_timeout; i++) {
+        bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+            addr_dest, dest_if, received_ecn,
+            buffer, buffer_max);
+        if (bytes_recv > 0) {
+            picoquic_packet_loop_set_dest_port(addr_dest, s_ctx[i].n_port);
+            *socket_rank = i;
+            *action = picoquic_packet_loop_action_udp_received;
+            ret = bytes_recv;
+        }
+        else if (bytes_recv < 0 && !picoquic_packet_loop_would_block()) {
+            DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
+                i, (int)s_ctx[i].fd);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+#endif
+
 int picoquic_packet_loop_poll(
     picoquic_socket_ctx_t* s_ctx,
     int nb_sockets,
@@ -1817,6 +2144,25 @@ int picoquic_packet_loop_poll(
     int delta_t_ms = (int)((delta_t + 500) / 1000);
     int bytes_recv = 0;
     int i_poll = (thread_ctx->wake_up_defined) ? 1 : 0;
+
+    for (int i = 0; i < nb_sockets; i++) {
+        if (picoquic_recv_batch_pending(&s_ctx[i])) {
+            bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
+                addr_dest, dest_if, received_ecn,
+                buffer, buffer_max);
+            if (bytes_recv > 0) {
+                if (addr_dest->ss_family == AF_INET6) {
+                    ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
+                }
+                else if (addr_dest->ss_family == AF_INET) {
+                    ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
+                }
+                *socket_rank = i;
+                *action = picoquic_packet_loop_action_udp_received;
+                return bytes_recv;
+            }
+        }
+    }
     int i_qmux_poll = i_poll + nb_sockets;
     int poll_max = i_qmux_poll + nb_qmux_sockets;
     int ret_poll;
@@ -1837,8 +2183,14 @@ int picoquic_packet_loop_poll(
     *action = picoquic_packet_loop_action_none;
 
     if (ret_poll < 0) {
-        bytes_recv = -1;
-        DBG_PRINTF("Error: poll returns %d\n", ret_poll);
+        if (errno == EINTR) {
+            /* Interrupted by a signal: not an error, the loop will check timers and close requests. */
+            DBG_PRINTF("%s", "Poll interrupted by a signal\n");
+        }
+        else {
+            bytes_recv = -1;
+            DBG_PRINTF("Error: poll returns %d, errno %d\n", ret_poll, errno);
+        }
     }
     else if (ret_poll == 0) {
         *action = picoquic_packet_loop_action_timeout;
@@ -1854,24 +2206,35 @@ int picoquic_packet_loop_poll(
             DBG_PRINTF("Waking up -- defined: %d, nb_sockets: %d",
                 (thread_ctx->wake_up_defined) ? 1 : 0, nb_sockets);
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
-                bytes_recv = -1;
-                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                if (picoquic_packet_loop_would_block()) {
+                    /* Pipe already drained; fall through to UDP sockets. */
+                }
+                else {
+                    bytes_recv = -1;
+                    DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                }
             }
             else {
-                DBG_PRINTF("Waking up -- received: %d", pipe_recv); 
+                DBG_PRINTF("Waking up -- received: %d", pipe_recv);
                 *action = picoquic_packet_loop_action_wake_up;
             }
         }
-        else
+        if (bytes_recv >= 0 && *action != picoquic_packet_loop_action_wake_up)
         {
             /* Find the first UDP event */
             for (int i = 0; i < nb_sockets; i++) {
                 if (poll_list[i+i_poll].revents != 0) {
                     *socket_rank = i;
-                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                    bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
                         addr_dest, dest_if, received_ecn,
                         buffer, buffer_max);
                     if (bytes_recv <= 0) {
+#ifndef _WINDOWS
+                        if (picoquic_packet_loop_would_block()) {
+                            bytes_recv = 0;
+                            continue;
+                        }
+#endif
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
                         break;
@@ -1892,7 +2255,8 @@ int picoquic_packet_loop_poll(
             if (bytes_recv == 0 && *action == picoquic_packet_loop_action_none) {
                 /* Try to find the first TCP event */
                 for (int i = 0; i < nb_qmux_sockets; i++) {
-                    if ((poll_list[i + i_qmux_poll].revents & POLLIN) != 0) {
+                    /* POLLERR or POLLHUP without POLLIN: let recv() consume the error and close the socket. */
+                    if ((poll_list[i + i_qmux_poll].revents & (POLLIN | POLLERR | POLLHUP)) != 0) {
                         *socket_rank = i;
                         *action = (sqmux_ctx[i]->is_listening) ?
                             picoquic_packet_loop_action_tcp_accept_ready:
@@ -1984,8 +2348,14 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
     ret_select = select(sockmax + 1, &readfds, &writefds, NULL, &tv);
 
     if (ret_select < 0) {
-        bytes_recv = -1;
-        DBG_PRINTF("Error: select returns %d\n", ret_select);
+        if (errno == EINTR) {
+            /* Interrupted by a signal: not an error, the loop will check timers and close requests. */
+            DBG_PRINTF("%s", "Select interrupted by a signal\n");
+        }
+        else {
+            bytes_recv = -1;
+            DBG_PRINTF("Error: select returns %d, errno %d\n", ret_select, errno);
+        }
     }
     else if (ret_select == 0) {
         *action = picoquic_packet_loop_action_timeout;
@@ -1998,24 +2368,35 @@ int picoquic_packet_loop_select(picoquic_socket_ctx_t* s_ctx,
             uint8_t eventbuf[8];
             int pipe_recv;
             if ((pipe_recv = read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf))) <= 0) {
-                bytes_recv = -1;
-                DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                if (picoquic_packet_loop_would_block()) {
+                    /* Pipe already drained; fall through to UDP sockets. */
+                }
+                else {
+                    bytes_recv = -1;
+                    DBG_PRINTF("Error: read pipe returns %d\n", (pipe_recv == 0) ? EPIPE : errno);
+                }
             }
             else {
                 *action = picoquic_packet_loop_action_wake_up;
             }
         }
-        else
+        if (bytes_recv >= 0 && *action != picoquic_packet_loop_action_wake_up)
         {
             /* return the first UDP socket that is ready to receive */
             for (int i = 0; i < nb_sockets; i++) {
                 if (FD_ISSET(s_ctx[i].fd, &readfds)) {
                     *socket_rank = i;
-                    bytes_recv = picoquic_recvmsg(s_ctx[i].fd, addr_from,
+                    bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
                         addr_dest, dest_if, received_ecn,
                         buffer, buffer_max);
 
                     if (bytes_recv <= 0) {
+#ifndef _WINDOWS
+                        if (picoquic_packet_loop_would_block()) {
+                            bytes_recv = 0;
+                            continue;
+                        }
+#endif
                         DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                             i, (int)s_ctx[i].fd);
                         break;
@@ -2096,11 +2477,16 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
     picoquic_cnx_t* cnx = NULL;
 
 #ifdef _WINDOWS
-    if ((cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, NULL)) == NULL) {
+    /* The peer address keeps the ICID table entries of successive connections distinct, as on POSIX. */
+    if ((cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL,
+        (sqmux_ctx[socket_rank]->remote_addr.ss_family == 0) ? NULL :
+        (struct sockaddr*)&sqmux_ctx[socket_rank]->remote_addr)) == NULL) {
         ret = -1;
     }
     else {
         sqmux_ctx[socket_rank]->cnx = cnx;
+        /* Each AcceptEx accepts a single connection, so post the next one. */
+        ret = picoquic_packet_loop_start_windows_accept_sockets(sqmux_ctx, nb_qmux_sockets, max_qmux_sockets);
     }
 #else
     SOCKET_TYPE new_socket = INVALID_SOCKET;
@@ -2115,7 +2501,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
     else if ((new_socket = accept(sqmux_ctx[socket_rank]->fd, (struct sockaddr*)&addr_from, &addr_from_len)) == INVALID_SOCKET) {
         ret = (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) ? 0 : -1;
     }
-    else if (picoquic_packet_loop_set_qmux_nonblocking(new_socket) != 0 ||
+    else if (picoquic_packet_loop_set_qmux_posix_socket(new_socket) != 0 ||
         (cnx = picoqmux_create_qmux_cnx(qmux, current_time, 0, 0, NULL, NULL, (struct sockaddr*)&addr_from)) == NULL ||
         (new_ctx = (picoqmux_socket_ctx_t*)malloc(sizeof(picoqmux_socket_ctx_t))) == NULL) {
         ret = -1;
@@ -2124,6 +2510,7 @@ int picoquic_packet_loop_do_tcp_accept(picoquic_quic_t* qmux,
         memset(new_ctx, 0, sizeof(picoqmux_socket_ctx_t));
         new_ctx->fd = new_socket;
         new_socket = INVALID_SOCKET;
+        (void)fcntl(new_ctx->fd, F_SETFD, FD_CLOEXEC);
         new_ctx->af = addr_from.ss_family;
         new_ctx->cnx = cnx;
         cnx = NULL;
@@ -2258,7 +2645,7 @@ int picoquic_packet_loop_do_tcp_send(
         int send_length = (available > (size_t)INT_MAX) ? INT_MAX : (int)available;
         int sent_length = send(sqmux_sock_ctx->fd,
             (const char*)sqmux_sock_ctx->send_buffer + sqmux_sock_ctx->send_buffer_offset,
-            send_length, 0);
+            send_length, PICOQUIC_QMUX_SEND_FLAGS);
 
         if (sent_length < 0) {
 #ifdef _WINDOWS
@@ -2293,8 +2680,9 @@ int picoquic_packet_loop_do_tcp_send(
         }
     }
     if (ret != 0) {
-        /* Socket error, could not send data, maybe closed. */
+        /* Socket error or disconnect: close this socket, but keep the loop serving the others, as on read. */
         picoquic_packet_loop_tcp_close(sqmux_ctx, qmux_socket_was_closed, socket_rank, current_time);
+        ret = 0;
     }
     return ret;
 }
@@ -2690,6 +3078,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             }
             nb_qmux_sockets--;
             qmux_socket_was_closed = -1;
+#ifdef _WINDOWS
+            /* A slot was freed, so a listener blocked by a full table can accept again. */
+            ret = picoquic_packet_loop_start_windows_accept_sockets(sqmux_ctx, &nb_qmux_sockets, max_qmux_sockets);
+#endif
         }
         /* The "loop immediate" condition is set when a packet has been
         * received and processed successfully. We call select again with
@@ -2716,6 +3108,10 @@ void* picoquic_packet_loop_v3(void* v_ctx)
                 time_check_arg.current_time = current_time;
                 time_check_arg.delta_t = delta_t;
                 ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &time_check_arg);
+                if (ret != 0) {
+                    /* The application ends the loop: do not wait. */
+                    break;
+                }
                 if (time_check_arg.delta_t < delta_t) {
                     delta_t = time_check_arg.delta_t;
                 }
@@ -2746,12 +3142,25 @@ void* picoquic_packet_loop_v3(void* v_ctx)
             &addr_from, &addr_to, &if_index_to, &received_ecn,
             &received_buffer, &action, &socket_rank);
 #elif defined(PICOQUIC_WITH_POLL)
-        bytes_recv = picoquic_packet_loop_poll(
-            s_ctx, nb_sockets_available,
-            sqmux_ctx, nb_qmux_sockets, current_time,
-            poll_list, poll_list_size, &addr_from, &addr_to, &if_index_to, &received_ecn,
-            buffer, sizeof(buffer), delta_t, thread_ctx,
-            &action, &socket_rank);
+        /* poll() is millisecond resolution. If picoquic already has send-ready
+         * streams (delta_t < 1ms), skip it and try a nonblocking recv so ACKs
+         * still land while we keep sending. select() does not need this shortcut:
+         * its timeout is a timeval in microseconds, so a sub-millisecond delta_t
+         * is already exact. QMux still needs poll for TCP events. */
+        if (delta_t < 1000 && nb_qmux_sockets == 0) {
+            bytes_recv = picoquic_packet_loop_try_recv(
+                s_ctx, nb_sockets_available,
+                &addr_from, &addr_to, &if_index_to, &received_ecn,
+                buffer, sizeof(buffer), thread_ctx,
+                &action, &socket_rank);
+        } else {
+            bytes_recv = picoquic_packet_loop_poll(
+                s_ctx, nb_sockets_available,
+                sqmux_ctx, nb_qmux_sockets, current_time,
+                poll_list, poll_list_size, &addr_from, &addr_to, &if_index_to, &received_ecn,
+                buffer, sizeof(buffer), delta_t, thread_ctx,
+                &action, &socket_rank);
+        }
         received_buffer = buffer;
 #else
         bytes_recv = picoquic_packet_loop_select(s_ctx, nb_sockets_available,
@@ -3125,6 +3534,12 @@ static void picoquic_open_network_wake_up(picoquic_network_thread_ctx_t* thread_
     if (pipe(thread_ctx->wake_up_pipe_fd) != 0) {
         *ret = errno;
     }
+    else if (picoquic_packet_loop_set_nonblocking(thread_ctx->wake_up_pipe_fd[0]) != 0 ||
+        picoquic_packet_loop_set_nonblocking(thread_ctx->wake_up_pipe_fd[1]) != 0) {
+        *ret = errno;
+        (void)close(thread_ctx->wake_up_pipe_fd[0]);
+        (void)close(thread_ctx->wake_up_pipe_fd[1]);
+    }
     else
     {
         thread_ctx->wake_up_defined = 1;
@@ -3138,18 +3553,32 @@ int picoquic_internal_thread_create(void** thread_id, picoquic_thread_fn thread_
     return ret;
 }
 
+#ifdef _WINDOWS
+typedef HRESULT(WINAPI* picoquic_set_thread_description_fn)(HANDLE thread, PCWSTR description);
+#endif
+
 void picoquic_internal_thread_setname(char const * thread_name)
 {
 #ifdef _WINDOWS
     wchar_t wname[257];
+    /* Resolved at run time, because older kernel32 versions (e.g., Server 2016) do not export it */
+    picoquic_set_thread_description_fn set_thread_description = NULL;
+    HMODULE kernel_base = GetModuleHandleW(L"kernelbase.dll");
     wname[0] = 0;
 
-    if (swprintf(wname, 256, L"%S", thread_name) < 0) {
+    if (kernel_base != NULL) {
+        set_thread_description = (picoquic_set_thread_description_fn)GetProcAddress(kernel_base, "SetThreadDescription");
+    }
+
+    if (set_thread_description == NULL) {
+        DBG_PRINTF("SetThreadDescription not available, thread name <%s> not set", thread_name);
+    }
+    else if (swprintf(wname, 256, L"%S", thread_name) < 0) {
         DBG_PRINTF("Cannot convert thread name <%s> to wchar[256], err: 0x%x",
             thread_name, GetLastError());
     }
     else {
-        HRESULT r = SetThreadDescription(GetCurrentThread(), wname);
+        HRESULT r = set_thread_description(GetCurrentThread(), wname);
         if (r != 0) {
             DBG_PRINTF("Set thread name <%S> returns: 0x%x", wname, r);
         }
@@ -3266,6 +3695,10 @@ int picoquic_wake_up_network_thread(picoquic_network_thread_ctx_t* thread_ctx)
         if ((written = write(thread_ctx->wake_up_pipe_fd[1], &ret, 1)) != 1) {
             if (written == 0) {
                 ret = EPIPE;
+            }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                /* Pipe already has a wake byte; the loop will notice. */
+                ret = 0;
             }
             else {
                 ret = errno;

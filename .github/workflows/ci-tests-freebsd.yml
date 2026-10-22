@@ -33,7 +33,8 @@ jobs:
             cmake -S . -B build -DPICOQUIC_FETCH_PTLS:BOOL=ON
             cmake --build build
             cd build
-            ./picoquic_ct -S .. -n -r && QUICRESULT=$?
-            ./picohttp_ct -S .. -n -r -x http_corrupt && HTTPRESULT=$?
+            QUICRESULT=0; ./picoquic_ct -S .. -n -r || QUICRESULT=$?
+            HTTPRESULT=0; ./picohttp_ct -S .. -n -r -x http_corrupt || HTTPRESULT=$?
+            echo "QUICRESULT=${QUICRESULT} HTTPRESULT=${HTTPRESULT}"
             if [ "${QUICRESULT}" = "0" ] && [ "${HTTPRESULT}" = "0" ]; then exit 0; fi
             exit 1

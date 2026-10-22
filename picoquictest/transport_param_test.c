@@ -159,7 +159,54 @@ uint8_t client_param2[] = {
     0x50, 0x57, 0x01, 0x01,
     0x80, 0, 0x71, 0x58, 0x01, 0x03,
     0x40|(uint8_t)(picoquic_tp_grease_quic_bit>>8), (uint8_t)picoquic_tp_grease_quic_bit, 0,
-    0xc0, 0x17, 0xf7, 0x58, 0x6d, 0x2c, 0xb5, 0x71, 0x00 /* reset_stream_at TP, no content */
+    0xc0, 0x17, 0xf7, 0x58, 0x6d, 0x2c, 0xb5, 0x71, 0x00, /* reset_stream_at TP, no content */
+    picoquic_tp_reset_stream_at, 0x00 /* reset_stream_at TP, draft -11 codepoint */
+};
+
+/* Same as client_param2, with only the draft -11 reset_stream_at codepoint */
+uint8_t client_param2_rsa[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x01,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_max_datagram_frame_size, 2,0x45, 0xC8,
+    0x50, 0x57, 0x01, 0x01,
+    0x80, 0, 0x71, 0x58, 0x01, 0x03,
+    0x40|(uint8_t)(picoquic_tp_grease_quic_bit>>8), (uint8_t)picoquic_tp_grease_quic_bit, 0,
+    picoquic_tp_reset_stream_at, 0x00
+};
+
+/* Same as client_param2, with only the draft-07 reset_stream_at codepoint */
+uint8_t client_param2_rsa_old[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x01,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_max_datagram_frame_size, 2,0x45, 0xC8,
+    0x50, 0x57, 0x01, 0x01,
+    0x80, 0, 0x71, 0x58, 0x01, 0x03,
+    0x40|(uint8_t)(picoquic_tp_grease_quic_bit>>8), (uint8_t)picoquic_tp_grease_quic_bit, 0,
+    0xc0, 0x17, 0xf7, 0x58, 0x6d, 0x2c, 0xb5, 0x71, 0x00
+};
+
+/* Same as client_param2, with the two reset_stream_at codepoints in the other order */
+uint8_t client_param2_rsa_swapped[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_data, 4, 0x81, 0, 0, 0,
+    picoquic_tp_initial_max_streams_bidi, 1, 0x01,
+    picoquic_tp_idle_timeout, 2, 0x40, 0xFF,
+    picoquic_tp_max_packet_size, 2, 0x45, 0xC8,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_max_datagram_frame_size, 2,0x45, 0xC8,
+    0x50, 0x57, 0x01, 0x01,
+    0x80, 0, 0x71, 0x58, 0x01, 0x03,
+    0x40|(uint8_t)(picoquic_tp_grease_quic_bit>>8), (uint8_t)picoquic_tp_grease_quic_bit, 0,
+    picoquic_tp_reset_stream_at, 0x00,
+    0xc0, 0x17, 0xf7, 0x58, 0x6d, 0x2c, 0xb5, 0x71, 0x00
 };
 
 uint8_t client_param3[] = {
@@ -424,6 +471,25 @@ uint8_t client_param_err15[] = {
     SCONE_SUPPORTED_TP, 1, 0
 };
 
+/* Error 16, draft -11 reset_stream_at is not 0 bytes. */
+uint8_t client_param_err16[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    picoquic_tp_reset_stream_at, 1, 0
+};
+
+/* Error 17, both reset_stream_at codepoints, the draft -11 one not 0 bytes. */
+uint8_t client_param_err17[] = {
+    picoquic_tp_initial_max_stream_data_bidi_local, 4, 0x80, 0, 0xFF, 0xFF,
+    picoquic_tp_initial_max_data, 4, 0x80, 0x40, 0, 0,
+    picoquic_tp_idle_timeout, 1, 0x1E,
+    picoquic_tp_handshake_connection_id, 8, LOCAL_CONNECTION_ID,
+    0xc0, 0x17, 0xf7, 0x58, 0x6d, 0x2c, 0xb5, 0x71, 0x00,
+    picoquic_tp_reset_stream_at, 1, 0
+};
+
 typedef struct st_transport_param_error_test_t {
     int mode;
     uint8_t * target;
@@ -445,7 +511,9 @@ static transport_param_error_test_t transport_param_error_case[] = {
     { 0, client_param_err12, sizeof(client_param_err12), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err13, sizeof(client_param_err13), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
     { 0, client_param_err14, sizeof(client_param_err14), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
-    { 0, client_param_err15, sizeof(client_param_err15), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
+    { 0, client_param_err15, sizeof(client_param_err15), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err16, sizeof(client_param_err16), PICOQUIC_TRANSPORT_PARAMETER_ERROR},
+    { 0, client_param_err17, sizeof(client_param_err17), PICOQUIC_TRANSPORT_PARAMETER_ERROR}
 };
 
 static size_t nb_transport_param_error_case = sizeof(transport_param_error_case) / sizeof(transport_param_error_test_t);
@@ -884,6 +952,30 @@ int transport_param_test(void)
             &transport_param_test2, client_param2, sizeof(client_param2));
         if (ret != 0) {
             DBG_PRINTF("Param test TP2, CP2 returns %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test2, client_param2_rsa, sizeof(client_param2_rsa));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP2, CP2 reset_stream_at returns %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test2, client_param2_rsa_old, sizeof(client_param2_rsa_old));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP2, CP2 reset_stream_at_old returns %x\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = transport_param_decode_test(0, version_default, 0x0A1A0A1A,
+            &transport_param_test2, client_param2_rsa_swapped, sizeof(client_param2_rsa_swapped));
+        if (ret != 0) {
+            DBG_PRINTF("Decode test TP2, CP2 reset_stream_at swapped returns %x\n", ret);
         }
     }
 
@@ -1329,6 +1421,7 @@ tp_default_set_t tp_default_test_case[] = {
 
     { picoquic_tp_initial_max_path_id, 12345, 0 },
     { picoquic_tp_address_discovery, 1, 0 },
+    { picoquic_tp_reset_stream_at_old, 1, 0 },
     { picoquic_tp_reset_stream_at, 1, 0 }
 };
 
@@ -1437,6 +1530,7 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
             ret = -1;
         }
         break;
+    case picoquic_tp_reset_stream_at_old:
     case picoquic_tp_reset_stream_at:
         if ((uint64_t)quic->default_tp.is_reset_stream_at_enabled != tp_value) {
             ret = -1;

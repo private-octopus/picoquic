@@ -107,6 +107,8 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
+#define PICOQUIC_MAX_RETIRED_LOCAL_CNXID 8 /* No new local CID while a path has this many retired; it keeps at most this + PICOQUIC_NB_TUPLE_TARGET (plus TTL-expired) */
+#define PICOQUIC_MAX_SHARED_CID_TUPLES 16 /* Max tuples on a path for sharing the peer CID as a last resort */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
@@ -917,8 +919,10 @@ typedef struct st_picoquic_local_cnxid_t {
     uint64_t path_id;
     uint64_t sequence;
     uint64_t create_time;
+    uint64_t retired_until; /* If retired by the peer, still accepted on incoming packets until that time */
     picoquic_connection_id_t cnx_id;
     unsigned int is_acked;
+    unsigned int is_retired; /* Retired by the peer, never used again, deleted by the sender after retired_until */
 } picoquic_local_cnxid_t;
 
 typedef struct st_picoquic_local_cnxid_list_t {
@@ -929,6 +933,7 @@ typedef struct st_picoquic_local_cnxid_list_t {
     uint64_t local_cnxid_oldest_created;
     int nb_local_cnxid;
     int nb_local_cnxid_expired;
+    int nb_local_cnxid_retired; /* Not counted in nb_local_cnxid */
     unsigned int is_demoted : 1;
     uint64_t demotion_time;
     picoquic_local_cnxid_t* local_cnxid_first;
@@ -1032,7 +1037,7 @@ typedef struct st_picoquic_tuple_t {
 * - At the beginning of the connection for path[0]
 * - When sending or receiving packets to a or from new addresses and ports.
 * 
-* When a path is created, it is assigned a local connection idand a remote connection ID.
+* When a path is created, it is assigned a local connection id and a remote connection ID.
 * After that, the path has to be validated by a successful challenge/response.
 *
 * If multipath is supported, paths remain in the list until they are abandoned.
@@ -1541,6 +1546,7 @@ typedef struct st_picoquic_cnx_t {
     uint64_t next_path_id_in_lists;
     uint64_t max_path_id_in_cnxid_lists;
     picoquic_local_cnxid_list_t * first_local_cnxid_list;
+    uint64_t retired_local_cnxid_check_time; /* Next time the sender deletes retired local CID, UINT64_MAX if none */
 
     /* Management of ACK frequency */
     uint64_t ack_frequency_sequence_local;
@@ -1610,6 +1616,7 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
 /* Management of address tuples */
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
 void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
+void picoquic_set_tuple_challenge_failed(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple, int is_deleting_path);
 void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 /* Management of path */
@@ -1648,6 +1655,7 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_check_cid_for_new_tuple(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple);
+int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 //int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
@@ -2070,7 +2078,7 @@ const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const u
 const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint8_t frame_id);
 const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_retire_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp);
+    picoquic_path_t* path_x, picoquic_local_cnxid_t* l_cid, int is_mp, uint64_t current_time);
 const uint8_t* picoquic_decode_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_reset_stream_at_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
@@ -2124,7 +2132,10 @@ int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_i
 void picoquic_delete_local_cnxid(picoquic_cnx_t* cnx, picoquic_local_cnxid_t* l_cid);
 void picoquic_delete_local_cnxid_list(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list);
 void picoquic_delete_local_cnxid_lists(picoquic_cnx_t* cnx);
-void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence);
+void picoquic_retire_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, uint64_t sequence, uint64_t current_time);
+void picoquic_delete_retired_local_cnxid(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
+uint8_t* picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max,
+    uint64_t current_time, uint64_t* next_wake_time, int* more_data, int* is_pure_ack);
 void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list, uint64_t current_time, uint64_t* next_wake_time);
 picoquic_local_cnxid_t* picoquic_find_local_cnxid(picoquic_cnx_t* cnx, uint64_t unique_path_id, picoquic_connection_id_t* cnxid);
 uint8_t* picoquic_format_path_challenge_frame(uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack, uint64_t challenge);

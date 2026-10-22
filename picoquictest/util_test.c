@@ -88,6 +88,70 @@ int util_connection_id_parse_test(void)
     return ret;
 }
 
+typedef struct st_cid_decode_case_t {
+    const char* name;
+    uint8_t input[PICOQUIC_CONNECTION_ID_MAX_SIZE + 2];
+    size_t input_length;
+    size_t expected_consumed; /* 0 means decode must fail */
+} cid_decode_case_t;
+
+static const cid_decode_case_t cid_decode_cases[] = {
+    { "empty", { 0 }, 0, 0 },
+    { "length_only", { 4 }, 1, 0 },
+    { "truncated", { 8, 1, 2, 3, 4, 5, 6, 7 }, 8, 0 },
+    { "too_long", { 21, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21 }, 22, 0 },
+    { "zero_length", { 0, 0xaa }, 2, 1 },
+    { "exact_fit", { 4, 1, 2, 3, 4 }, 5, 5 },
+    { "trailing_bytes", { 2, 0xca, 0xfe, 0xaa, 0xbb }, 5, 3 },
+    { "max_length", { 20, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 }, 21, 21 }
+};
+
+static const size_t nb_cid_decode_cases = sizeof(cid_decode_cases) / sizeof(cid_decode_case_t);
+
+int util_connection_id_decode_test(void)
+{
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < nb_cid_decode_cases; i++) {
+        const cid_decode_case_t* c = &cid_decode_cases[i];
+        const uint8_t* bytes_max = c->input + c->input_length;
+        picoquic_connection_id_t cid;
+        const uint8_t* bytes_next;
+
+        /* Stale length from a previous decode must not be used when the length byte is missing */
+        memset(&cid, 0xff, sizeof(cid));
+        cid.id_len = 8;
+        bytes_next = picoquic_frames_cid_decode(c->input, bytes_max, &cid);
+
+        if (c->expected_consumed == 0) {
+            if (bytes_next != NULL) {
+                DBG_PRINTF("cid decode <%s> should fail", c->name);
+                ret = -1;
+            }
+        }
+        else if (bytes_next != c->input + c->expected_consumed) {
+            DBG_PRINTF("cid decode <%s> consumed %d instead of %d", c->name,
+                (bytes_next == NULL) ? -1 : (int)(bytes_next - c->input), (int)c->expected_consumed);
+            ret = -1;
+        }
+        else if (cid.id_len != c->input[0] || memcmp(cid.id, c->input + 1, cid.id_len) != 0) {
+            DBG_PRINTF("cid decode <%s> wrong value", c->name);
+            ret = -1;
+        }
+        else {
+            for (size_t j = cid.id_len; j < sizeof(cid.id); j++) {
+                if (cid.id[j] != 0) {
+                    DBG_PRINTF("cid decode <%s> byte %d not cleared", c->name, (int)j);
+                    ret = -1;
+                    break;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 int util_sprintf_test(void)
 {
     int ret = 0;
