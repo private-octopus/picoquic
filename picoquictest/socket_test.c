@@ -21,6 +21,14 @@
 
 #include "picosocks.h"
 #include "picoquic_utils.h"
+#ifndef _WINDOWS
+#include <signal.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include "picoquic_packet_loop.h"
+
+extern char** environ;
+#endif
 
 static int socket_ping_pong(SOCKET_TYPE fd, struct sockaddr* server_addr,
     picoquic_server_sockets_t* server_sockets)
@@ -241,5 +249,115 @@ int socket_ecn_test(void)
         ret = socket_ecn_test_one(AF_INET6);
     }
 
+    return ret;
+}
+
+/*
+ * Test that child processes do not inherit the sockets opened by picoquic.
+ * Open sockets, start a child process, close the sockets, then check that
+ * their ports can be bound again while the child is still running.
+ */
+#ifndef _WINDOWS
+typedef struct st_socket_cloexec_port_t {
+    char const* name;
+    int af;
+    int sock_type;
+    uint16_t port;
+} socket_cloexec_port_t;
+
+static int socket_cloexec_get_port(socket_cloexec_port_t* p, char const* name, SOCKET_TYPE fd, int sock_type)
+{
+    struct sockaddr_storage addr;
+    int ret = (fd == INVALID_SOCKET) ? -1 : picoquic_get_local_address(fd, &addr);
+
+    if (ret == 0) {
+        p->name = name;
+        p->af = addr.ss_family;
+        p->sock_type = sock_type;
+        p->port = ntohs((addr.ss_family == AF_INET6) ?
+            ((struct sockaddr_in6*)&addr)->sin6_port : ((struct sockaddr_in*)&addr)->sin_port);
+    }
+    return ret;
+}
+
+/* Bind a new socket to the same port, without SO_REUSEADDR or SO_REUSEPORT */
+static int socket_cloexec_bind_again(socket_cloexec_port_t* p)
+{
+    int ret = 0;
+    int val = 1;
+    SOCKET_TYPE fd = socket(p->af, p->sock_type, 0);
+
+    if (fd == INVALID_SOCKET ||
+        (p->af == AF_INET6 && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val)) != 0) ||
+        picoquic_bind_to_port(fd, p->af, p->port) != 0) {
+        DBG_PRINTF("%s socket (af=%d), port %d still in use after close, errno=%d: %s",
+            p->name, p->af, p->port, errno, strerror(errno));
+        ret = -1;
+    }
+    if (fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(fd);
+    }
+    return ret;
+}
+#endif
+
+int socket_cloexec_test(void)
+{
+    int ret = 0;
+#ifndef _WINDOWS
+    picoquic_packet_loop_param_t param = { 0 };
+    picoquic_socket_ctx_t s_ctx[1] = { 0 };
+    picoquic_server_sockets_t server_sockets;
+    SOCKET_TYPE client_fd = INVALID_SOCKET;
+    picoqmux_socket_ctx_t* qmux_ctx = NULL;
+    socket_cloexec_port_t ports[5];
+    int nb_ports = 0;
+    pid_t child = -1;
+    char* child_argv[] = { "sleep", "10", NULL };
+
+    s_ctx[0].fd = INVALID_SOCKET;
+    for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++) {
+        server_sockets.s_socket[i] = INVALID_SOCKET;
+    }
+    /* Open sockets with each picoquic API, on ephemeral ports */
+    param.local_af = AF_INET;
+    if (picoquic_packet_loop_open_sockets(&param, s_ctx, 0) != 1 ||
+        socket_cloexec_get_port(&ports[nb_ports++], "packet loop", s_ctx[0].fd, SOCK_DGRAM) != 0 ||
+        picoquic_open_server_sockets(&server_sockets, 0) != 0 ||
+        socket_cloexec_get_port(&ports[nb_ports++], "server", server_sockets.s_socket[0], SOCK_DGRAM) != 0 ||
+        socket_cloexec_get_port(&ports[nb_ports++], "server", server_sockets.s_socket[1], SOCK_DGRAM) != 0 ||
+        (client_fd = picoquic_open_client_socket(AF_INET)) == INVALID_SOCKET ||
+        picoquic_bind_to_port(client_fd, AF_INET, 0) != 0 ||
+        socket_cloexec_get_port(&ports[nb_ports++], "client", client_fd, SOCK_DGRAM) != 0 ||
+        (qmux_ctx = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 0, 1)) == NULL ||
+        socket_cloexec_get_port(&ports[nb_ports++], "qmux", qmux_ctx->fd, SOCK_STREAM) != 0) {
+        DBG_PRINTF("Cannot open the test sockets, nb_ports=%d", nb_ports);
+        ret = -1;
+    }
+    /* glibc, musl, macOS and FreeBSD return from posix_spawn after the exec in the child */
+    if (ret == 0 && posix_spawnp(&child, child_argv[0], NULL, NULL, child_argv, environ) != 0) {
+        DBG_PRINTF("%s", "Cannot start the child process");
+        child = -1;
+        ret = -1;
+    }
+    picoquic_packet_loop_close_socket(&s_ctx[0]);
+    picoquic_close_server_sockets(&server_sockets);
+    if (client_fd != INVALID_SOCKET) {
+        SOCKET_CLOSE(client_fd);
+    }
+    picoquic_packet_loop_free_qmux_socket(qmux_ctx);
+
+    if (ret == 0) {
+        for (int i = 0; i < nb_ports; i++) {
+            if (socket_cloexec_bind_again(&ports[i]) != 0) {
+                ret = -1;
+            }
+        }
+    }
+    if (child > 0) {
+        (void)kill(child, SIGKILL);
+        (void)waitpid(child, NULL, 0);
+    }
+#endif
     return ret;
 }

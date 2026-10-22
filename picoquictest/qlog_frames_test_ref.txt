@@ -191,6 +191,8 @@
     "frame_type": "stop_sending"}},
 { "test": "bad_new_token", "frame": { 
     "frame_type": "new_token", "new_token": "... coding error!"}},
+{ "test": "bad_new_token_32", "frame": { 
+    "frame_type": "new_token", "new_token": "... coding error!"}},
 { "test": "bad_ack_range", "frame": { 
     "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365][-1, -1]]}, { 
     "frame_type": "stop_sending"}},
@@ -205,6 +207,8 @@
 { "test": "bad_crypto_hs", "frame": { 
     "frame_type": "crypto", "offset": 0, "length": 268435455}},
 { "test": "bad_datagram", "frame": { 
+    "frame_type": "datagram"}},
+{ "test": "bad_datagram_wrap", "frame": { 
     "frame_type": "datagram"}},
 { "test": "stream_hang", "frame": { 
     "frame_type": "ping"}, { 

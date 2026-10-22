@@ -304,6 +304,7 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_enable_bdp_frame:
                 case picoquic_tp_initial_max_path_id:
                 case picoquic_tp_address_discovery:
+                case picoquic_tp_reset_stream_at_old:
                 case picoquic_tp_reset_stream_at:
                     qlog_vint_transport_extension(f, picoquic_tp_name(extension_type), s, extension_length);
                     break;
@@ -640,18 +641,20 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
         picoquic_store_addr(&ctx->addr_local, (struct sockaddr*) & addr_local);
     }
 
-    if (rxtx) {
-        log_ecn = (ecn != ctx->ecn_received);
-        ctx->ecn_received = ecn;
-    }
-    else {
-        log_ecn = (ecn != ctx->ecn_sent);
-        ctx->ecn_sent = ecn;
-    }
-    if (log_ecn) {
-        char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
-        char const* ecn_s = ecn_strings[ecn & 3];
-        fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+    if (ecn != 0xff) {
+        if (rxtx) {
+            log_ecn = (ecn != ctx->ecn_received);
+            ctx->ecn_received = ecn;
+        }
+        else {
+            log_ecn = (ecn != ctx->ecn_sent);
+            ctx->ecn_sent = ecn;
+        }
+        if (log_ecn) {
+            char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
+            char const* ecn_s = ecn_strings[ecn & 3];
+            fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+        }
     }
 
     fprintf(f, "}]");

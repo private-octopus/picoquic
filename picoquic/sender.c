@@ -2278,6 +2278,10 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
 {
     int no_space_left = 0;
     picoquic_local_cnxid_list_t* local_cnxid_list = cnx->first_local_cnxid_list;
+
+    /* Delete the local CID retired by the peer once their grace period expires */
+    picoquic_delete_retired_local_cnxid(cnx, current_time, next_wake_time);
+
     if (cnx->is_multipath_enabled) {
         /* If the number of local list is lower than the max number of paths, 
         * update that number and queue a MAX PATH ID frame.
@@ -2307,10 +2311,11 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
         /* Check whether time has comed to obsolete local CID */
         picoquic_check_local_cnxid_ttl(cnx, local_cnxid_list, current_time, next_wake_time);
 
-        /* Push new CID if needed */
+        /* Push new CID if needed, but not while too many retired CID wait: see PICOQUIC_MAX_RETIRED_LOCAL_CNXID for the bound */
         while (
             local_cnxid_list->nb_local_cnxid < ((int)(cnx->remote_parameters.active_connection_id_limit) + local_cnxid_list->nb_local_cnxid_expired) &&
-            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired)) {
+            local_cnxid_list->nb_local_cnxid <= (PICOQUIC_NB_TUPLE_TARGET + local_cnxid_list->nb_local_cnxid_expired) &&
+            local_cnxid_list->nb_local_cnxid_retired < PICOQUIC_MAX_RETIRED_LOCAL_CNXID) {
             uint8_t* bytes0 = bytes;
             picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, local_cnxid_list->unique_path_id, NULL, current_time);
 

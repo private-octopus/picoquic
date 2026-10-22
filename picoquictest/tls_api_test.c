@@ -1751,23 +1751,27 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                     simulate_loss = 1;
                 }
                 else if (target_link == test_ctx->s_to_c_link) {
-                    if (!test_ctx->client_use_multiple_addresses) {
-                        if (test_ctx->client_use_nat) {
-                            if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
-                                (struct sockaddr*) & addr_to) == 0) {
-                                /* Rewrite the address */
-                                picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
-                            }
-                            else {
-                                /* Using wrong address: simulate loss */
-                                simulate_loss = 1;
-                            }
+                    if (test_ctx->client_use_multiple_addresses &&
+                        picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_relayed,
+                            (struct sockaddr*)&addr_to) == 0) {
+                        /* An attacker relays the packets sent to this address to the client */
+                        picoquic_store_addr(&addr_to, (struct sockaddr*)&test_ctx->client_addr);
+                    }
+                    else if (test_ctx->client_use_nat) {
+                        if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted,
+                            (struct sockaddr*) & addr_to) == 0) {
+                            /* Rewrite the address */
+                            picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
                         }
-                        else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
-                            (struct sockaddr*) & addr_to) != 0) {
+                        else {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
                         }
+                    }
+                    else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr,
+                        (struct sockaddr*) & addr_to) != 0) {
+                        /* Using wrong address: simulate loss */
+                        simulate_loss = 1;
                     }
                 }
                 else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
@@ -4361,6 +4365,65 @@ int keep_alive_test_impl(int keep_alive)
     return ret;
 }
 
+/* Keep alive enabled on an idle connection, whose next wake time is already set far
+ * away (the idle timeout): it must still keep the connection up. */
+int keep_alive_idle_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t end_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Let the connection go idle: nothing left to send, next wake far away */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 1, 1);
+    }
+    for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->next_wake_time < simulated_time + 1000000; i++) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->next_wake_time < simulated_time + 1000000) {
+            DBG_PRINTF("%s", "Client connection not idle, cannot test\n");
+            ret = -1;
+        }
+        else {
+            picoquic_enable_keep_alive(test_ctx->cnx_client, 0);
+            end_time = simulated_time + 2 * PICOQUIC_MICROSEC_SILENCE_MAX;
+        }
+    }
+
+    while (ret == 0 && simulated_time < end_time && TEST_CLIENT_READY) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, end_time, &was_active);
+    }
+
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+        DBG_PRINTF("Connection dropped at %llu despite keep alive\n", (unsigned long long)simulated_time);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int keep_alive_test(void)
 {
     int ret = keep_alive_test_impl(1);
@@ -6928,6 +6991,62 @@ int fast_nat_rebinding_test(void)
     return ret;
 }
 
+/* The server checks the client's current address again, as it does after an apparent
+ * migration (RFC 9000, section 9.3.3). The packet carrying the PATH_CHALLENGE is
+ * ack-eliciting: the client must acknowledge it, which also gives the server the
+ * non-probing packet from that address that section 9.3.3 asks for.
+ */
+int path_challenge_ack_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t last_non_probing_pn = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 1000000;
+
+        last_non_probing_pn = test_ctx->cnx_server->path[0]->last_non_path_probing_pn;
+        picoquic_set_path_challenge(test_ctx->cnx_server, 0, simulated_time);
+        picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
+        while (ret == 0 && simulated_time < time_out) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+    }
+
+    if (ret == 0 && !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified) {
+        DBG_PRINTF("%s", "The challenge was not verified");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server->path[0]->last_non_path_probing_pn <= last_non_probing_pn) {
+        DBG_PRINTF("%s", "The client answered the challenge with probing packets only");
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 /*
  * Test whether the loss bit reporting can be enabled without breaking the connection
  */
@@ -7163,11 +7282,20 @@ int test_cnxid_count_stash(picoquic_cnx_t * cnx) {
     return nb;
 }
 
+/* The local CID retired by the peer stay in the list for a grace period, but are not in the peer's stash */
+static picoquic_local_cnxid_t* transmit_cnxid_skip_retired(picoquic_local_cnxid_t* l_cid)
+{
+    while (l_cid != NULL && l_cid->is_retired) {
+        l_cid = l_cid->next;
+    }
+    return l_cid;
+}
+
 int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char const * cnx_text)
 {
     int ret = 0;
     picoquic_remote_cnxid_t * stash = cnx1->first_remote_cnxid_stash->cnxid_stash_first;
-    picoquic_local_cnxid_t* cid_list = cnx2->first_local_cnxid_list->local_cnxid_first;
+    picoquic_local_cnxid_t* cid_list = transmit_cnxid_skip_retired(cnx2->first_local_cnxid_list->local_cnxid_first);
     int rank = 0;
 
     while (stash != NULL && cid_list != NULL) {
@@ -7178,7 +7306,7 @@ int transmit_cnxid_test_stash(picoquic_cnx_t * cnx1, picoquic_cnx_t * cnx2, char
             break;
         }
         stash = stash->next;
-        cid_list = cid_list->next;
+        cid_list = transmit_cnxid_skip_retired(cid_list->next);
         rank++;
     }
 
@@ -7647,7 +7775,7 @@ int migration_fail_test(void)
  * The goal of the attack is to verify that the connection resists.
  */
 
-int rebinding_stress_test(void)
+static int rebinding_stress_test_one(uint64_t random_seed)
 {
     int nb_trials = 0;
     const int max_trials = 10000;
@@ -7658,8 +7786,7 @@ int rebinding_stress_test(void)
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
     uint64_t last_inject_time = 0;
-    uint64_t random_context = 0xBABAC001CAFEull;
-    picoquictest_sim_packet_t* last_client_packet_processed = NULL;
+    uint64_t random_context = random_seed;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
@@ -7682,8 +7809,10 @@ int rebinding_stress_test(void)
         ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_very_long, sizeof(test_scenario_very_long));
     }
 
-    /* Rewrite the sending loop, so we can add injection of packet copies */
+    /* Rewrite the sending loop, so we can add injection of packet copies.
+     * The simulator relays the packets sent to the hack address to the client. */
     if (ret == 0) {
+        test_ctx->client_addr_relayed = hack_address;
         test_ctx->client_use_multiple_addresses = 1;
     }
 
@@ -7744,29 +7873,6 @@ int rebinding_stress_test(void)
             test_ctx->client_use_multiple_addresses = 0;
         }
 
-        if (test_ctx->client_use_multiple_addresses && test_ctx->s_to_c_link->last_packet != NULL &&
-            test_ctx->s_to_c_link->last_packet != last_client_packet_processed){
-            last_client_packet_processed = test_ctx->s_to_c_link->last_packet;
-            /* Packet reinjection at the client if using the special address */
-            if (picoquic_compare_addr((struct sockaddr *)&hack_address, (struct sockaddr *)&test_ctx->s_to_c_link->last_packet->addr_to) == 0)
-            {
-                picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr *)&test_ctx->client_addr);
-            }
-            else if (test_ctx->client_use_nat) {
-                if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr_natted, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) == 0) {
-                    picoquic_store_addr(&test_ctx->s_to_c_link->last_packet->addr_to, (struct sockaddr*) & test_ctx->client_addr);
-                }
-                else {
-                    /* This packet should be dropped on arrival */
-                    test_ctx->s_to_c_link->last_packet->length = 1;
-                }
-            }
-            else if (picoquic_compare_addr((struct sockaddr*) & test_ctx->client_addr, (struct sockaddr*) & test_ctx->s_to_c_link->last_packet->addr_to) != 0) {
-                /* This packet should be dropped on arrival */
-                test_ctx->s_to_c_link->last_packet->length = 1;
-            }
-        }
-
         /* At some point, the client does migrate to a new address */
         if (!client_rebinding_done && test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].send_sequence > 128) {
             test_ctx->client_addr_natted = test_ctx->client_addr;
@@ -7812,6 +7918,23 @@ int rebinding_stress_test(void)
     }
 
     return ret;
+}
+
+int rebinding_stress_test(void)
+{
+    return rebinding_stress_test_one(0xBABAC001CAFEull);
+}
+
+/* Seed where the relayed tuple dies and must yield to the verified NAT tuple, not stay first. */
+int rebinding_stress_dead_tuple_test(void)
+{
+    return rebinding_stress_test_one(0x30be1ef43ab4ea6aull);
+}
+
+/* Seed where spoofed addresses exhaust the peer CIDs just before the client NAT rebinding. */
+int rebinding_stress_cid_exhaustion_test(void)
+{
+    return rebinding_stress_test_one(0xe7d2149f5223e552ull);
 }
 
 
@@ -7907,6 +8030,693 @@ int cnxid_renewal_test(void)
     return ret;
 }
 
+
+/* A packet sent with a CID just before the peer retires it can arrive after the retirement,
+ * for example on a slower path. The receiver must still accept it, instead of sending a
+ * stateless reset, and must delete the retired CID once the grace period expires. */
+int retired_cnxid_late_packet_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint8_t held_packet[PICOQUIC_MAX_PACKET_SIZE];
+    size_t held_length = 0;
+    picoquic_connection_id_t old_cid = picoquic_null_connection_id;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+    /* The server prepares a packet with the current CID, which is held as if delayed in the network. */
+    if (ret == 0) {
+        uint8_t ping = picoquic_frame_type_ping;
+        struct sockaddr_storage addr_to;
+        struct sockaddr_storage addr_from;
+        int if_index = 0;
+
+        old_cid = test_ctx->cnx_server->path[0]->first_tuple->p_remote_cnxid->cnx_id;
+        if ((ret = picoquic_queue_misc_frame(test_ctx->cnx_server, &ping, 1, 0, picoquic_packet_context_application)) == 0) {
+            ret = picoquic_prepare_packet(test_ctx->cnx_server, simulated_time, held_packet, sizeof(held_packet), &held_length,
+                &addr_to, &addr_from, &if_index);
+        }
+        if (ret == 0 && held_length == 0) {
+            DBG_PRINTF("%s", "No packet prepared by the server");
+            ret = -1;
+        }
+    }
+    /* The server switches to a new CID and retires the old one; wait until the client processes the retirement. */
+    if (ret == 0 && (ret = picoquic_renew_connection_id(test_ctx->cnx_server, 0)) == 0) {
+        uint64_t time_out = simulated_time + 1000000;
+
+        while (ret == 0 && simulated_time < time_out &&
+            picoquic_find_local_cnxid(test_ctx->cnx_client, 0, &old_cid) != NULL) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+        if (ret == 0 && picoquic_find_local_cnxid(test_ctx->cnx_client, 0, &old_cid) != NULL) {
+            DBG_PRINTF("%s", "The client did not retire the old CID");
+            ret = -1;
+        }
+    }
+    /* The delayed packet arrives: it is accepted, and no stateless reset is sent. */
+    if (ret == 0) {
+        uint64_t nb_received = test_ctx->cnx_client->nb_packets_received;
+
+        (void)picoquic_incoming_packet(test_ctx->qclient, held_packet, held_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr, 0, 0, simulated_time);
+        if (test_ctx->qclient->pending_stateless_packet != NULL) {
+            DBG_PRINTF("%s", "Stateless reset sent for a packet with a retired CID");
+            ret = -1;
+        }
+        else if (test_ctx->cnx_client->nb_packets_received != nb_received + 1) {
+            DBG_PRINTF("%s", "Packet with a retired CID was not accepted");
+            ret = -1;
+        }
+    }
+    /* After the grace period, the retired CID is deleted. */
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 2000000;
+
+        while (ret == 0 && simulated_time < time_out && TEST_CLIENT_READY && TEST_SERVER_READY) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+        if (ret == 0 && picoquic_find_or_create_local_cnxid_list(test_ctx->cnx_client, 0, 0)->nb_local_cnxid_retired != 0) {
+            DBG_PRINTF("%s", "The retired CID was not deleted after the grace period");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* The number of local CID retired by the peer is bounded: no new CID is issued to the peer while the
+ * maximum number of retired CID wait for the end of their grace period. Issuance resumes after it. */
+int retired_cnxid_cap_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    uint64_t sequence[PICOQUIC_MAX_RETIRED_LOCAL_CNXID];
+    picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        cnx->remote_parameters.active_connection_id_limit = PICOQUIC_NB_TUPLE_TARGET;
+        if ((local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 0, 0)) == NULL) {
+            ret = -1;
+        }
+    }
+    for (int i = 0; ret == 0 && i < PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+        if (l_cid == NULL) {
+            ret = -1;
+        }
+        else {
+            sequence[i] = l_cid->sequence;
+        }
+    }
+    if (ret == 0) {
+        uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+        uint64_t next_wake_time = UINT64_MAX;
+        uint64_t retired_until;
+        int nb_local_cnxid;
+        int more_data = 0;
+        int is_pure_ack = 1;
+
+        for (int i = 0; i < PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+            picoquic_retire_local_cnxid(cnx, 0, sequence[i], simulated_time);
+        }
+        retired_until = cnx->retired_local_cnxid_check_time;
+        nb_local_cnxid = local_cnxid_list->nb_local_cnxid;
+        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
+            &next_wake_time, &more_data, &is_pure_ack);
+        if (local_cnxid_list->nb_local_cnxid != nb_local_cnxid ||
+            local_cnxid_list->nb_local_cnxid_retired != PICOQUIC_MAX_RETIRED_LOCAL_CNXID || next_wake_time != retired_until) {
+            DBG_PRINTF("New CID issued with %d retired CID, or wake time not set", local_cnxid_list->nb_local_cnxid_retired);
+            ret = -1;
+        }
+        else {
+            next_wake_time = UINT64_MAX;
+            (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), retired_until,
+                &next_wake_time, &more_data, &is_pure_ack);
+            if (local_cnxid_list->nb_local_cnxid_retired != 0 || local_cnxid_list->nb_local_cnxid <= nb_local_cnxid ||
+                cnx->retired_local_cnxid_check_time != UINT64_MAX) {
+                DBG_PRINTF("After the grace period, %d retired CID, %d CID", local_cnxid_list->nb_local_cnxid_retired,
+                    local_cnxid_list->nb_local_cnxid);
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* A packet arriving on a retired CID retires another CID: no CID is deleted while the packet is processed. */
+int retired_cnxid_arrival_kept_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_connection_id_t cid[PICOQUIC_MAX_RETIRED_LOCAL_CNXID + 1];
+    uint64_t sequence[PICOQUIC_MAX_RETIRED_LOCAL_CNXID + 1];
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    for (int i = 0; ret == 0 && i <= PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+        picoquic_local_cnxid_t* l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time);
+        if (l_cid == NULL) {
+            ret = -1;
+        }
+        else {
+            cid[i] = l_cid->cnx_id;
+            sequence[i] = l_cid->sequence;
+        }
+    }
+    if (ret == 0) {
+        uint8_t frame[16];
+        uint8_t* bytes_end;
+        picoquic_local_cnxid_t* arrival_cid = NULL;
+        picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 0, 0);
+
+        for (int i = 0; i < PICOQUIC_MAX_RETIRED_LOCAL_CNXID; i++) {
+            picoquic_retire_local_cnxid(cnx, 0, sequence[i], simulated_time);
+        }
+        (void)picoquic_cnx_by_id(quic, cid[0], &arrival_cid);
+        frame[0] = picoquic_frame_type_retire_connection_id;
+        bytes_end = picoquic_frames_varint_encode(frame + 1, frame + sizeof(frame), sequence[PICOQUIC_MAX_RETIRED_LOCAL_CNXID]);
+        if (arrival_cid == NULL || bytes_end == NULL || picoquic_decode_retire_connection_id_frame(cnx, frame, bytes_end,
+            cnx->path[0], arrival_cid, 0, simulated_time) == NULL) {
+            DBG_PRINTF("%s", "Cannot decode the retire connection ID frame");
+            ret = -1;
+        }
+        else if (local_cnxid_list->nb_local_cnxid_retired != PICOQUIC_MAX_RETIRED_LOCAL_CNXID + 1 ||
+            picoquic_cnx_by_id(quic, cid[0], NULL) != cnx) {
+            DBG_PRINTF("%s", "A CID was deleted while the packet was processed");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Simulate the arrival of a packet with the specified local CID, setting the header as the packet parser would. */
+static int retired_cnxid_incoming_path(picoquic_quic_t* quic, picoquic_cnx_t* cnx, picoquic_connection_id_t* cid,
+    struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time, int* path_id)
+{
+    picoquic_packet_header ph;
+    int ret = -1;
+
+    memset(&ph, 0, sizeof(ph));
+    ph.dest_cnx_id = *cid;
+    *path_id = -1;
+    if (picoquic_cnx_by_id(quic, *cid, &ph.l_cid) == cnx && ph.l_cid != NULL) {
+        ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, 0, current_time, path_id);
+    }
+    return ret;
+}
+
+/* A retired CID is only kept to accept late packets: the tuple stops referencing it as soon as it is retired,
+ * and a late packet on it does not set it back. The next packet on a live CID does. */
+int retired_cnxid_not_reused_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in peer_addr = { 0 };
+    struct sockaddr_in local_addr = { 0 };
+    picoquic_local_cnxid_t* live_cid = NULL;
+    picoquic_connection_id_t retired_cid = picoquic_null_connection_id;
+    int path_id = -1;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0 && (cnx->path[0]->first_tuple->p_local_cnxid == NULL ||
+        (live_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(4433);
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_port = htons(4434);
+        picoquic_store_addr(&cnx->path[0]->first_tuple->peer_addr, (struct sockaddr*)&peer_addr);
+        picoquic_store_addr(&cnx->path[0]->first_tuple->local_addr, (struct sockaddr*)&local_addr);
+        retired_cid = cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
+        picoquic_retire_local_cnxid(cnx, 0, cnx->path[0]->first_tuple->p_local_cnxid->sequence, simulated_time);
+        if (cnx->path[0]->first_tuple->p_local_cnxid != NULL) {
+            DBG_PRINTF("%s", "The tuple still references the retired CID");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        if (retired_cnxid_incoming_path(quic, cnx, &retired_cid, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            cnx->path[0]->first_tuple->p_local_cnxid != NULL) {
+            DBG_PRINTF("%s", "Packet on a retired CID not accepted, or the CID was reused");
+            ret = -1;
+        }
+        else if (retired_cnxid_incoming_path(quic, cnx, &live_cid->cnx_id, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            cnx->path[0]->first_tuple->p_local_cnxid != live_cid) {
+            DBG_PRINTF("%s", "Packet on a live CID did not set the tuple reference");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* A late packet on a retired CID of a path that does not exist must not create a path,
+ * and the retired CID of a path are deleted when the path's CID list is deleted. */
+int retired_cnxid_path_deleted_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in peer_addr = { 0 };
+    struct sockaddr_in local_addr = { 0 };
+    picoquic_local_cnxid_t* l_cid_0 = NULL;
+    picoquic_local_cnxid_t* l_cid_1 = NULL;
+    picoquic_local_cnxid_t* l_cid_2 = NULL;
+    picoquic_connection_id_t cid_0 = picoquic_null_connection_id;
+    picoquic_connection_id_t cid_1 = picoquic_null_connection_id;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0 && ((l_cid_0 = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time)) == NULL ||
+        (l_cid_1 = picoquic_create_local_cnxid(cnx, 1, NULL, simulated_time)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        int path_id = -1;
+
+        /* Paths with a non zero unique path ID can only be created with multipath */
+        cnx->is_multipath_enabled = 1;
+        cid_0 = l_cid_0->cnx_id;
+        cid_1 = l_cid_1->cnx_id;
+        picoquic_retire_local_cnxid(cnx, 0, l_cid_0->sequence, simulated_time);
+        picoquic_retire_local_cnxid(cnx, 1, l_cid_1->sequence, simulated_time);
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(4433);
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_port = htons(4434);
+        if (retired_cnxid_incoming_path(quic, cnx, &cid_1, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != PICOQUIC_ERROR_PATH_ID_INVALID ||
+            cnx->nb_paths != 1) {
+            DBG_PRINTF("%s", "A path was created for a retired CID");
+            ret = -1;
+        }
+        else if ((l_cid_2 = picoquic_create_local_cnxid(cnx, 2, NULL, simulated_time)) == NULL ||
+            retired_cnxid_incoming_path(quic, cnx, &l_cid_2->cnx_id, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || cnx->nb_paths != 2) {
+            DBG_PRINTF("%s", "No path created for a live CID");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 1, 0);
+
+        if (local_cnxid_list == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_delete_local_cnxid_list(cnx, local_cnxid_list);
+            if (picoquic_find_or_create_local_cnxid_list(cnx, 0, 0)->nb_local_cnxid_retired != 1 ||
+                picoquic_cnx_by_id(quic, cid_1, NULL) != NULL || picoquic_cnx_by_id(quic, cid_0, NULL) != cnx) {
+                DBG_PRINTF("%s", "Retired CID of the deleted path not deleted, or of another path deleted");
+                ret = -1;
+            }
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Set a multipath connection with two spare peer CID and a live local CID, then retire the local CID in use. */
+static int retired_cnxid_rotation_setup(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t* simulated_time,
+    struct sockaddr_in* peer_addr, struct sockaddr_in* local_addr, picoquic_connection_id_t* retired_cid,
+    picoquic_connection_id_t* live_cid)
+{
+    picoquic_local_cnxid_t* l_cid = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(quic, cnx, simulated_time);
+
+    if (ret == 0 && ((*cnx)->path[0]->first_tuple->p_local_cnxid == NULL ||
+        (l_cid = picoquic_create_local_cnxid(*cnx, 0, NULL, *simulated_time)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_connection_id_t remote_cid = { { 99, 99, 99, 99 }, 4 };
+        uint8_t reset_secret[PICOQUIC_RESET_SECRET_SIZE] = { 0 };
+
+        *live_cid = l_cid->cnx_id;
+        (*cnx)->path[0]->first_tuple->p_remote_cnxid->cnx_id = remote_cid;
+        for (uint8_t i = 1; ret == 0 && i <= 2; i++) {
+            picoquic_remote_cnxid_t* stashed = NULL;
+            uint8_t cid_bytes[4] = { 99, 99, 99, i };
+
+            reset_secret[0] = i;
+            if (picoquic_stash_remote_cnxid(*cnx, 0, 0, i, 4, cid_bytes, reset_secret, &stashed) != 0 || stashed == NULL) {
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0) {
+        memset(peer_addr, 0, sizeof(struct sockaddr_in));
+        memset(local_addr, 0, sizeof(struct sockaddr_in));
+        peer_addr->sin_family = AF_INET;
+        peer_addr->sin_port = htons(4433);
+        local_addr->sin_family = AF_INET;
+        local_addr->sin_port = htons(4434);
+        picoquic_store_addr(&(*cnx)->path[0]->first_tuple->peer_addr, (struct sockaddr*)peer_addr);
+        picoquic_store_addr(&(*cnx)->path[0]->first_tuple->local_addr, (struct sockaddr*)local_addr);
+        (*cnx)->path[0]->first_tuple->challenge_verified = 1;
+        (*cnx)->is_multipath_enabled = 1;
+        *retired_cid = (*cnx)->path[0]->first_tuple->p_local_cnxid->cnx_id;
+        picoquic_retire_local_cnxid(*cnx, 0, (*cnx)->path[0]->first_tuple->p_local_cnxid->sequence, *simulated_time);
+        if ((*cnx)->path[0]->first_tuple->p_local_cnxid != NULL) {
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+/* A late packet on a retired CID from a new address, while the tuple has no local CID, creates a tuple
+ * to challenge. It is not treated as a NAT rebinding, and the NULL local CID is not dereferenced. */
+int retired_cnxid_nat_rebinding_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in peer_addr;
+    struct sockaddr_in local_addr;
+    picoquic_connection_id_t retired_cid = picoquic_null_connection_id;
+    picoquic_connection_id_t live_cid = picoquic_null_connection_id;
+    int ret = retired_cnxid_rotation_setup(&quic, &cnx, &simulated_time, &peer_addr, &local_addr, &retired_cid, &live_cid);
+
+    if (ret == 0) {
+        picoquic_tuple_t* first_tuple = cnx->path[0]->first_tuple;
+        struct sockaddr_in new_peer_addr = peer_addr;
+        int path_id = -1;
+
+        new_peer_addr.sin_port = htons(4435);
+        if (retired_cnxid_incoming_path(quic, cnx, &retired_cid, (struct sockaddr*)&new_peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0) {
+            DBG_PRINTF("%s", "Packet on a retired CID from a new address not accepted");
+            ret = -1;
+        }
+        else if (cnx->path[0]->first_tuple != first_tuple || first_tuple->next_tuple == NULL ||
+            !first_tuple->next_tuple->challenge_required || first_tuple->p_local_cnxid != NULL) {
+            DBG_PRINTF("%s", "Packet on a retired CID from a new address treated as NAT rebinding");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* On a multipath server, a late packet on a retired CID must not renew the peer CID of the path,
+ * otherwise each late packet would use a new peer CID. A packet on a live CID still does. */
+int retired_cnxid_no_renew_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in peer_addr;
+    struct sockaddr_in local_addr;
+    picoquic_connection_id_t retired_cid = picoquic_null_connection_id;
+    picoquic_connection_id_t live_cid = picoquic_null_connection_id;
+    int ret = retired_cnxid_rotation_setup(&quic, &cnx, &simulated_time, &peer_addr, &local_addr, &retired_cid, &live_cid);
+
+    if (ret == 0) {
+        picoquic_remote_cnxid_t* remote_cnxid = cnx->path[0]->first_tuple->p_remote_cnxid;
+        int path_id = -1;
+
+        /* The renewal is done by servers */
+        cnx->client_mode = 0;
+        if (retired_cnxid_incoming_path(quic, cnx, &retired_cid, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            cnx->path[0]->first_tuple->p_remote_cnxid != remote_cnxid) {
+            DBG_PRINTF("%s", "Packet on a retired CID renewed the peer CID");
+            ret = -1;
+        }
+        else if (retired_cnxid_incoming_path(quic, cnx, &live_cid, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            cnx->path[0]->first_tuple->p_remote_cnxid == remote_cnxid) {
+            DBG_PRINTF("%s", "Packet on a live CID did not renew the peer CID");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* After a late packet on a retired CID, the path has no local CID: SCONE packets, which carry it,
+ * are not sent until a packet arrives on a live CID. */
+int retired_cnxid_scone_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in peer_addr;
+    struct sockaddr_in local_addr;
+    picoquic_connection_id_t retired_cid = picoquic_null_connection_id;
+    picoquic_connection_id_t live_cid = picoquic_null_connection_id;
+    int ret = retired_cnxid_rotation_setup(&quic, &cnx, &simulated_time, &peer_addr, &local_addr, &retired_cid, &live_cid);
+
+    if (ret == 0) {
+        int path_id = -1;
+
+        cnx->local_parameters.is_scone_supported = 1;
+        cnx->remote_parameters.is_scone_supported = 1;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->path[0]->scone_next_send_time = 0;
+        if (retired_cnxid_incoming_path(quic, cnx, &retired_cid, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            picoquic_scone_ready_to_send(cnx, cnx->path[0], simulated_time)) {
+            DBG_PRINTF("%s", "SCONE ready to send without a local CID");
+            ret = -1;
+        }
+        else if (retired_cnxid_incoming_path(quic, cnx, &live_cid, (struct sockaddr*)&peer_addr,
+            (struct sockaddr*)&local_addr, simulated_time, &path_id) != 0 || path_id != 0 ||
+            !picoquic_scone_ready_to_send(cnx, cnx->path[0], simulated_time)) {
+            DBG_PRINTF("%s", "SCONE not ready to send after a packet on a live CID");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Retire up to nb_to_retire of the CID not yet retired in the list, as the peer would. */
+static int retired_cnxid_retire_active(picoquic_cnx_t* cnx, picoquic_local_cnxid_list_t* local_cnxid_list,
+    int nb_to_retire, uint64_t current_time)
+{
+    int nb_retired = 0;
+
+    for (picoquic_local_cnxid_t* l_cid = local_cnxid_list->local_cnxid_first; l_cid != NULL && nb_retired < nb_to_retire;
+        l_cid = l_cid->next) {
+        if (!l_cid->is_retired) {
+            picoquic_retire_local_cnxid(cnx, local_cnxid_list->unique_path_id, l_cid->sequence, current_time);
+            nb_retired++;
+        }
+    }
+    return nb_retired;
+}
+
+/* Worst case for the number of retired CID kept by a path: the peer retires just under the limit,
+ * the sender issues replacements, then the peer retires all of them before the grace period ends.
+ * A path then keeps PICOQUIC_MAX_RETIRED_LOCAL_CNXID + PICOQUIC_NB_TUPLE_TARGET retired CID, and no more. */
+int retired_cnxid_bound_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t next_wake_time = UINT64_MAX;
+    int more_data = 0;
+    int is_pure_ack = 1;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        /* A large peer limit, so the local target sets the number of active CID */
+        cnx->remote_parameters.active_connection_id_limit = 2 * PICOQUIC_NB_TUPLE_TARGET;
+        if ((local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 0, 0)) == NULL) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
+            &next_wake_time, &more_data, &is_pure_ack);
+        if (local_cnxid_list->nb_local_cnxid != PICOQUIC_NB_TUPLE_TARGET + 1 ||
+            retired_cnxid_retire_active(cnx, local_cnxid_list, PICOQUIC_MAX_RETIRED_LOCAL_CNXID - 1, simulated_time) !=
+            PICOQUIC_MAX_RETIRED_LOCAL_CNXID - 1) {
+            DBG_PRINTF("%d active CID, expected %d", local_cnxid_list->nb_local_cnxid, PICOQUIC_NB_TUPLE_TARGET + 1);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* Just under the limit, the sender issues replacements */
+        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
+            &next_wake_time, &more_data, &is_pure_ack);
+        if (local_cnxid_list->nb_local_cnxid != PICOQUIC_NB_TUPLE_TARGET + 1 ||
+            retired_cnxid_retire_active(cnx, local_cnxid_list, PICOQUIC_NB_TUPLE_TARGET + 1, simulated_time) !=
+            PICOQUIC_NB_TUPLE_TARGET + 1) {
+            DBG_PRINTF("%d active CID after replacement, expected %d", local_cnxid_list->nb_local_cnxid, PICOQUIC_NB_TUPLE_TARGET + 1);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* Over the limit, the sender issues nothing: the number of retired CID is at its maximum */
+        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
+            &next_wake_time, &more_data, &is_pure_ack);
+        if (local_cnxid_list->nb_local_cnxid != 0 ||
+            local_cnxid_list->nb_local_cnxid_retired != PICOQUIC_MAX_RETIRED_LOCAL_CNXID + PICOQUIC_NB_TUPLE_TARGET) {
+            DBG_PRINTF("%d active and %d retired CID, expected 0 and %d", local_cnxid_list->nb_local_cnxid,
+                local_cnxid_list->nb_local_cnxid_retired, PICOQUIC_MAX_RETIRED_LOCAL_CNXID + PICOQUIC_NB_TUPLE_TARGET);
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* A NEW_CONNECTION_ID frame for a CID that the peer already retired is not repeated if lost. */
+int retired_cnxid_new_cid_no_repeat_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_local_cnxid_t* l_cid = NULL;
+    uint8_t frame[64];
+    uint8_t* bytes_end = frame;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0 && (l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time)) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        int more_data = 0;
+        int is_pure_ack = 1;
+
+        bytes_end = picoquic_format_new_connection_id_frame(cnx, picoquic_find_or_create_local_cnxid_list(cnx, 0, 0),
+            frame, frame + sizeof(frame), &more_data, &is_pure_ack, l_cid);
+        if (bytes_end == frame) {
+            DBG_PRINTF("%s", "Cannot format the new connection ID frame");
+            ret = -1;
+        }
+    }
+    for (int is_retired = 0; ret == 0 && is_retired <= 1; is_retired++) {
+        int no_need_to_repeat = 0;
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+
+        if (is_retired) {
+            picoquic_retire_local_cnxid(cnx, 0, l_cid->sequence, simulated_time);
+        }
+        if (picoquic_check_frame_needs_repeat(cnx, frame, bytes_end - frame, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            no_need_to_repeat != is_retired) {
+            DBG_PRINTF("New connection ID frame %s repeated when the CID is %s", (is_retired) ? "" : "not",
+                (is_retired) ? "retired" : "live");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Retiring an expired CID moves it from the expired count to the retired count, a duplicate retirement
+ * changes nothing, the TTL check does not count retired CID as expired, and deleting a retired CID
+ * does not change the expired count. */
+int retired_cnxid_expired_count_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    picoquic_local_cnxid_list_t* local_cnxid_list = NULL;
+    picoquic_local_cnxid_t* l_cid = NULL;
+    picoquic_connection_id_t retired_cid = picoquic_null_connection_id;
+    uint64_t next_wake_time = UINT64_MAX;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    /* Four CID created at time 0, all expired at time 2000. */
+    for (int i = 0; ret == 0 && i < 3; i++) {
+        if ((l_cid = picoquic_create_local_cnxid(cnx, 0, NULL, simulated_time)) == NULL) {
+            ret = -1;
+        }
+        else if (i == 0) {
+            retired_cid = l_cid->cnx_id;
+        }
+    }
+    if (ret == 0 && (local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 0, 0)) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        quic->local_cnxid_ttl = 1000;
+        simulated_time = 2000;
+        picoquic_check_local_cnxid_ttl(cnx, local_cnxid_list, simulated_time, &next_wake_time);
+        if (local_cnxid_list->nb_local_cnxid != 4 || local_cnxid_list->nb_local_cnxid_expired != 4) {
+            DBG_PRINTF("%d CID, %d expired, expected 4 and 4", local_cnxid_list->nb_local_cnxid, local_cnxid_list->nb_local_cnxid_expired);
+            ret = -1;
+        }
+    }
+    /* Retire an expired CID, twice. */
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        (void)picoquic_cnx_by_id(quic, retired_cid, &l_cid);
+        picoquic_retire_local_cnxid(cnx, 0, l_cid->sequence, simulated_time);
+        if (local_cnxid_list->nb_local_cnxid != 3 || local_cnxid_list->nb_local_cnxid_expired != 3 ||
+            local_cnxid_list->nb_local_cnxid_retired != 1) {
+            DBG_PRINTF("After retirement %d: %d CID, %d expired, %d retired, expected 3, 3, 1", i,
+                local_cnxid_list->nb_local_cnxid, local_cnxid_list->nb_local_cnxid_expired, local_cnxid_list->nb_local_cnxid_retired);
+            ret = -1;
+        }
+    }
+    /* A new CID, not expired at time 3000, when the TTL check counts the expired CID again. */
+    if (ret == 0 && picoquic_create_local_cnxid(cnx, 0, NULL, 2500) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        simulated_time = 3000;
+        picoquic_check_local_cnxid_ttl(cnx, local_cnxid_list, simulated_time, &next_wake_time);
+        if (local_cnxid_list->nb_local_cnxid_expired != 3) {
+            DBG_PRINTF("TTL check found %d expired CID, expected 3", local_cnxid_list->nb_local_cnxid_expired);
+            ret = -1;
+        }
+    }
+    /* Deleting the retired CID after its grace period does not change the expired count. */
+    if (ret == 0) {
+        picoquic_delete_retired_local_cnxid(cnx, l_cid->retired_until, &next_wake_time);
+        if (local_cnxid_list->nb_local_cnxid_retired != 0 || local_cnxid_list->nb_local_cnxid != 4 ||
+            local_cnxid_list->nb_local_cnxid_expired != 3 || picoquic_cnx_by_id(quic, retired_cid, NULL) != NULL) {
+            DBG_PRINTF("After deletion: %d CID, %d expired, %d retired, expected 4, 3, 0",
+                local_cnxid_list->nb_local_cnxid, local_cnxid_list->nb_local_cnxid_expired, local_cnxid_list->nb_local_cnxid_retired);
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
 
 /*
  * Perform a test of the "retire connection id" function.
@@ -9660,6 +10470,95 @@ int packet_trace_test(void)
 
     return ret;
 }
+
+/*
+ * Verify that only the first PICOQUIC_LOG_PACKET_MAX_SEQUENCE packets sent on
+ * a connection are logged, unless the log level is set to log all packets.
+ */
+#define LOG_PACKET_LIMIT_TXT "log_packet_limit.txt"
+
+static int log_packet_limit_test_one(int log_level)
+{
+    uint64_t simulated_time = 0;
+    uint64_t nb_packets_sent = 0;
+    uint64_t nb_sent_logged = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        picoquic_set_log_level(test_ctx->qserver, log_level);
+        ret = picoquic_set_textlog(test_ctx->qserver, LOG_PACKET_LIMIT_TXT);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_scenario_body(test_ctx, &simulated_time,
+            test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 20000, 1000000);
+    }
+
+    if (ret == 0) {
+        nb_packets_sent = test_ctx->cnx_server->nb_packets_sent;
+        if (nb_packets_sent <= 2 * PICOQUIC_LOG_PACKET_MAX_SEQUENCE) {
+            DBG_PRINTF("Only %" PRIu64 " packets sent", nb_packets_sent);
+            ret = -1;
+        }
+    }
+
+    /* Free the resource, which will close the log file. */
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    if (ret == 0) {
+        FILE* F = picoquic_file_open(LOG_PACKET_LIMIT_TXT, "r");
+
+        if (F == NULL) {
+            DBG_PRINTF("Cannot open %s", LOG_PACKET_LIMIT_TXT);
+            ret = -1;
+        }
+        else {
+            char line[1024];
+
+            while (fgets(line, sizeof(line), F) != NULL) {
+                if (strstr(line, ": Sending ") != NULL && strstr(line, " bytes to ") != NULL) {
+                    nb_sent_logged++;
+                }
+            }
+            (void)picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t nb_expected = (log_level > 0) ? nb_packets_sent : PICOQUIC_LOG_PACKET_MAX_SEQUENCE;
+
+        if (nb_sent_logged != nb_expected) {
+            DBG_PRINTF("Log level %d, %" PRIu64 " packets sent, %" PRIu64 " logged, expected %" PRIu64,
+                log_level, nb_packets_sent, nb_sent_logged, nb_expected);
+            ret = -1;
+        }
+    }
+
+    (void)picoquic_file_delete(LOG_PACKET_LIMIT_TXT, NULL);
+
+    return ret;
+}
+
+int log_packet_limit_test(void)
+{
+    int ret = log_packet_limit_test_one(0);
+
+    if (ret == 0) {
+        ret = log_packet_limit_test_one(1);
+    }
+
+    return ret;
+}
+
+
 
 
 /*

@@ -21,6 +21,9 @@
 
 #include "picosocks.h"
 #include "picoquic_utils.h"
+#ifndef _WINDOWS
+#include <fcntl.h>
+#endif
 
 int picoquic_bind_to_address(SOCKET_TYPE fd, int af, int port, const struct sockaddr* local_addr)
 {
@@ -263,15 +266,29 @@ int picoquic_socket_set_pmtud_options(SOCKET_TYPE UNUSED(sd), int UNUSED(af))
     return ret;
 }
 
+SOCKET_TYPE picoquic_socket_open(int af, int type, int protocol)
+{
+#ifdef _WINDOWS
+    SOCKET_TYPE sd = WSASocket(af, type, protocol, NULL, 0, WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+#elif defined(SOCK_CLOEXEC)
+    SOCKET_TYPE sd = socket(af, type | SOCK_CLOEXEC, protocol);
+#else
+    SOCKET_TYPE sd = socket(af, type, protocol);
+
+    if (sd != INVALID_SOCKET) {
+        (void)fcntl(sd, F_SETFD, FD_CLOEXEC);
+    }
+#endif
+    return sd;
+}
+
 SOCKET_TYPE picoquic_open_client_socket(int af)
 {
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
-    SOCKET_TYPE sd = WSASocket(af, SOCK_DGRAM, IPPROTO_UDP, NULL, 0, WSA_FLAG_OVERLAPPED);
-#else
-    SOCKET_TYPE sd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
 #endif
+    SOCKET_TYPE sd = picoquic_socket_open(af, SOCK_DGRAM, IPPROTO_UDP);
 
     if (sd != INVALID_SOCKET) {
         int send_set = 0;
@@ -313,7 +330,7 @@ int picoquic_open_server_sockets(picoquic_server_sockets_t* sockets, int port)
 
     for (int i = 0; i < PICOQUIC_NB_SERVER_SOCKETS; i++) {
         if (ret == 0) {
-            sockets->s_socket[i] = socket(sock_af[i], SOCK_DGRAM, IPPROTO_UDP);
+            sockets->s_socket[i] = picoquic_socket_open(sock_af[i], SOCK_DGRAM, IPPROTO_UDP);
         } else {
             sockets->s_socket[i] = INVALID_SOCKET;
         }
@@ -970,12 +987,13 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
 
 #endif
 
-int picoquic_recvmsg(SOCKET_TYPE fd,
+int picoquic_recvmsg_ex(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
     unsigned char* received_ecn,
-    uint8_t* buffer, int buffer_max)
+    uint8_t* buffer, int buffer_max,
+    int flags)
 #ifdef _WINDOWS
 {
     GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
@@ -988,6 +1006,10 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     int recv_ret = 0;
     int bytes_recv;
     int last_error;
+
+    /* Overlapped receives in the packet loop are the Windows equivalent of
+     * a nonblocking recv. This synchronous call stays blocking. */
+    (void)flags;
 
     if (dest_if != NULL) {
         *dest_if = 0;
@@ -1056,7 +1078,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     msg.msg_control = (void*)cmsg_buffer;
     msg.msg_controllen = sizeof(cmsg_buffer);
 
-    bytes_recv = recvmsg(fd, &msg, 0);
+    bytes_recv = recvmsg(fd, &msg, flags);
 
     if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
@@ -1067,6 +1089,17 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     return bytes_recv;
 }
 #endif
+
+int picoquic_recvmsg(SOCKET_TYPE fd,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    return picoquic_recvmsg_ex(fd, addr_from, addr_dest, dest_if, received_ecn,
+        buffer, buffer_max, 0);
+}
 
 int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,

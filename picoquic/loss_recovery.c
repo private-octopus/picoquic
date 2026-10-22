@@ -294,6 +294,19 @@ static void picoquic_count_and_notify_loss(
 static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,
     picoquic_packet_context_t* pkt_ctx, uint64_t current_time);
 
+/* Too many retransmits: fail the first tuple and move it last, so another tuple (e.g., after NAT rebinding) can be used. */
+static void picoquic_fail_path_first_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_tuple_t* failed_tuple = path_x->first_tuple;
+
+    picoquic_set_tuple_challenge_failed(path_x, failed_tuple, current_time);
+    if (path_x->first_tuple != failed_tuple) {
+        /* Restart the count, otherwise the next retransmit would also fail the new first tuple. */
+        path_x->nb_retransmit = 0;
+    }
+    cnx->path_demotion_needed = 1;
+}
+
 static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* old_p,
     picoquic_packet_context_enum pc,
@@ -467,13 +480,11 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                                 }
                             }
                             if (!all_paths_dubious) {
-                                old_path->first_tuple->challenge_failed = 1;
-                                cnx->path_demotion_needed = 1;
+                                picoquic_fail_path_first_tuple(cnx, old_path, current_time);
                             }
                         }
                         else {
-                            old_path->first_tuple->challenge_failed = 1;
-                            cnx->path_demotion_needed = 1;
+                            picoquic_fail_path_first_tuple(cnx, old_path, current_time);
                         }
                     }
                 }
