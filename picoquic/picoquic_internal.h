@@ -1912,6 +1912,8 @@ void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_s
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
+void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    int epoch, int pc, uint64_t current_time, picoquic_packet_data_t* packet_data);
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_context_enum pc);
 
