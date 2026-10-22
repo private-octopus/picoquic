@@ -987,12 +987,13 @@ int picoquic_recvmsg_async_start(picoquic_recvmsg_async_ctx_t* ctx)
 
 #endif
 
-int picoquic_recvmsg(SOCKET_TYPE fd,
+int picoquic_recvmsg_ex(SOCKET_TYPE fd,
     struct sockaddr_storage* addr_from,
     struct sockaddr_storage* addr_dest,
     int* dest_if,
     unsigned char* received_ecn,
-    uint8_t* buffer, int buffer_max)
+    uint8_t* buffer, int buffer_max,
+    int flags)
 #ifdef _WINDOWS
 {
     GUID WSARecvMsg_GUID = WSAID_WSARECVMSG;
@@ -1005,6 +1006,10 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     int recv_ret = 0;
     int bytes_recv;
     int last_error;
+
+    /* Overlapped receives in the packet loop are the Windows equivalent of
+     * a nonblocking recv. This synchronous call stays blocking. */
+    (void)flags;
 
     if (dest_if != NULL) {
         *dest_if = 0;
@@ -1073,7 +1078,7 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     msg.msg_control = (void*)cmsg_buffer;
     msg.msg_controllen = sizeof(cmsg_buffer);
 
-    bytes_recv = recvmsg(fd, &msg, 0);
+    bytes_recv = recvmsg(fd, &msg, flags);
 
     if (bytes_recv <= 0) {
         addr_from->ss_family = 0;
@@ -1084,6 +1089,17 @@ int picoquic_recvmsg(SOCKET_TYPE fd,
     return bytes_recv;
 }
 #endif
+
+int picoquic_recvmsg(SOCKET_TYPE fd,
+    struct sockaddr_storage* addr_from,
+    struct sockaddr_storage* addr_dest,
+    int* dest_if,
+    unsigned char* received_ecn,
+    uint8_t* buffer, int buffer_max)
+{
+    return picoquic_recvmsg_ex(fd, addr_from, addr_dest, dest_if, received_ecn,
+        buffer, buffer_max, 0);
+}
 
 int picoquic_sendmsg(SOCKET_TYPE fd,
     struct sockaddr* addr_dest,
