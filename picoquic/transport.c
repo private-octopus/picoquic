@@ -481,7 +481,11 @@ int picoquic_prepare_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
     }
 
     if (cnx->local_parameters.is_reset_stream_at_enabled != 0 && bytes != NULL) {
-        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at);
+        /* Advertise both codepoints until peers that only know draft-07 are gone. */
+        bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at_old);
+        if (bytes != NULL) {
+            bytes = picoquic_transport_param_type_flag_encode(bytes, bytes_max, picoquic_tp_reset_stream_at);
+        }
     }
 
     if (extension_mode > 1 && cnx->qmux_local_max_record_size > PICOQMUX_MAX_RECORD_SIZE_DEFAULT && bytes != NULL) {
@@ -939,8 +943,10 @@ int picoquic_receive_transport_extensions(picoquic_cnx_t* cnx, int extension_mod
                         }
                     }
                     break;
+                case picoquic_tp_reset_stream_at_old:
                 case picoquic_tp_reset_stream_at:
-                    /* This TP is valid for both QUIC and QMUX, just like the Reset frame. */
+                    /* This TP is valid for both QUIC and QMUX, just like the Reset frame.
+                     * Either codepoint enables the feature; a value on either one is an error. */
                     if (extension_length != 0) {
                         ret = picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_PARAMETER_ERROR, 0, "Reset Stream At TP");
                     }

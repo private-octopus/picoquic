@@ -301,18 +301,20 @@ void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uin
         picoquic_store_addr(&ctx->addr_local, addr_local);
     }
 
-    if (receiving) {
-        log_ecn = (ecn != ctx->ecn_received);
-        ctx->ecn_received = ecn;
-    }
-    else {
-        log_ecn = (ecn != ctx->ecn_sent);
-        ctx->ecn_sent = ecn;
-    }
-    if (log_ecn) {
-        char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
-        char const* ecn_s = ecn_strings[ecn & 3];
-        fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+    if (ecn != 0xff) {
+        if (receiving) {
+            log_ecn = (ecn != ctx->ecn_received);
+            ctx->ecn_received = ecn;
+        }
+        else {
+            log_ecn = (ecn != ctx->ecn_sent);
+            ctx->ecn_sent = ecn;
+        }
+        if (log_ecn) {
+            char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
+            char const* ecn_s = ecn_strings[ecn & 3];
+            fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
+        }
     }
 
     fprintf(f, "}]");
@@ -724,6 +726,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_enable_bdp_frame:
             case picoquic_tp_initial_max_path_id:
             case picoquic_tp_address_discovery:
+            case picoquic_tp_reset_stream_at_old:
             case picoquic_tp_reset_stream_at:
                 qlog_fns_vint_transport_extension(f, picoquic_tp_name(extension_type), bytes, extension_length);
                 break;
@@ -974,18 +977,16 @@ void qlog_fns_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ct
     }
     /* Log the connection creation event */
     *log_ctx = ctx;
+    cnx->quic->current_number_of_open_logs++;
     qlog_fns_start_connection_log(cnx, ctx, cid_name);
 }
 
 /* log the end of a connection */
-void qlog_fns_close_connection(picoquic_cnx_t* UNUSED(cnx), void* log_ctx)
+void qlog_fns_close_connection(picoquic_cnx_t* cnx, void* log_ctx)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     qlog_fns_path_context_t* path_ctx = ctx->first_path_ctx;
     FILE* f = ctx->f_txtlog;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
     fprintf(f, "]}]}\n");
     picoquic_file_close(f);
     ctx->f_txtlog = NULL;
@@ -994,6 +995,9 @@ void qlog_fns_close_connection(picoquic_cnx_t* UNUSED(cnx), void* log_ctx)
         qlog_fns_path_context_t* next = path_ctx->next;
         free(path_ctx);
         path_ctx = next;
+    }
+    if (cnx->quic->current_number_of_open_logs > 0) {
+        cnx->quic->current_number_of_open_logs--;
     }
     free(ctx);
 }

@@ -936,16 +936,16 @@ const uint8_t* picoquic_frames_length_data_skip(const uint8_t* bytes, const uint
 
 const uint8_t* picoquic_frames_cid_decode(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_connection_id_t* cid)
 {
-    bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid->id_len);
-
-    if (cid->id_len > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
-        bytes + cid->id_len > bytes_max) {
-        bytes = NULL;
-    }
-    else {
-        memset(cid->id, 0, sizeof(cid->id));
-        memcpy(cid->id, bytes, cid->id_len);
-        bytes += cid->id_len;
+    if ((bytes = picoquic_frames_uint8_decode(bytes, bytes_max, &cid->id_len)) != NULL) {
+        if (cid->id_len > PICOQUIC_CONNECTION_ID_MAX_SIZE ||
+            bytes + cid->id_len > bytes_max) {
+            bytes = NULL;
+        }
+        else {
+            memset(cid->id, 0, sizeof(cid->id));
+            memcpy(cid->id, bytes, cid->id_len);
+            bytes += cid->id_len;
+        }
     }
 
     return bytes;
