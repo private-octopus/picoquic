@@ -1430,6 +1430,120 @@ int qmux_tls_client_alpn_required_test(void)
     return ret;
 }
 
+/* A client whose TLS handshake gets no answer must be disconnected by the idle timer. */
+int qmux_tls_handshake_idle_timeout_test(void)
+{
+    qmux_sim_ctx_t sim_ctx;
+    qmux_sim_spec_t spec = { 0 };
+    uint8_t buffer[4096];
+    size_t send_length = 0;
+    int ret;
+
+    spec.is_cleartext = 0;
+    spec.idle_timeout = 15000;
+    ret = qmux_test_init(&sim_ctx, &spec);
+
+    if (ret == 0 &&
+        (sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1, 0, PICOQUIC_TEST_SNI, "qmux_test", NULL)) == NULL) {
+        ret = -1;
+    }
+    /* The first call sends the ClientHello, which is never answered. */
+    if (ret == 0 &&
+        (picoqmux_prepare_packets(sim_ctx.cnx[0], sim_ctx.simulated_time, buffer, sizeof(buffer), &send_length) != 0 ||
+            send_length == 0)) {
+        DBG_PRINTF("%s", "Cannot send the ClientHello");
+        ret = -1;
+    }
+    if (ret == 0) {
+        int prepare_ret = 0;
+
+        sim_ctx.simulated_time += (uint64_t)spec.idle_timeout * 1000 + 1;
+        for (int i = 0; i < 4 && prepare_ret == 0; i++) {
+            prepare_ret = picoqmux_prepare_packets(sim_ctx.cnx[0], sim_ctx.simulated_time, buffer, sizeof(buffer), &send_length);
+        }
+        if (prepare_ret == 0 || sim_ctx.cnx[0]->cnx_state != picoquic_state_disconnected) {
+            DBG_PRINTF("After idle timeout, prepare returns 0x%x, state %d", prepare_ret, (int)sim_ctx.cnx[0]->cnx_state);
+            ret = -1;
+        }
+    }
+
+    qmux_test_release(&sim_ctx);
+    return ret;
+}
+
+/* When a QMUX connection times out before TLS completes, the packet loop timer check must close
+ * that socket and return 0, so the loop keeps serving the other QMUX sockets. */
+int qmux_tls_handshake_idle_timeout_loop_test(void)
+{
+    qmux_sim_ctx_t sim_ctx;
+    qmux_sim_spec_t spec = { 0 };
+    picoquic_cnx_t* cnx_other = NULL;
+    picoqmux_socket_ctx_t* sqmux_ctx[2] = { NULL, NULL };
+    uint8_t buffer[4096];
+    size_t send_length = 0;
+    int socket_was_closed = -1;
+    int ret;
+#ifdef _WINDOWS
+    WSADATA wsaData = { 0 };
+#endif
+
+    spec.is_cleartext = 0;
+    spec.idle_timeout = 15000;
+    ret = qmux_test_init(&sim_ctx, &spec);
+#ifdef _WINDOWS
+    /* The test opens sockets directly, without the packet loop that would initialize Winsock. */
+    if (ret == 0) {
+        ret = WSA_START(MAKEWORD(2, 2), &wsaData);
+    }
+#endif
+    if (ret == 0 &&
+        ((sim_ctx.cnx[0] = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1, 0, PICOQUIC_TEST_SNI, "qmux_test", NULL)) == NULL ||
+        (sqmux_ctx[0] = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 0, 0)) == NULL ||
+        (sqmux_ctx[1] = picoquic_packet_loop_open_qmux_socket(AF_INET, 0, 0, 0)) == NULL)) {
+        ret = -1;
+    }
+    /* The first connection sends a ClientHello, which is never answered. */
+    if (ret == 0 &&
+        (picoqmux_prepare_packets(sim_ctx.cnx[0], sim_ctx.simulated_time, buffer, sizeof(buffer), &send_length) != 0 ||
+            send_length == 0)) {
+        DBG_PRINTF("%s", "Cannot send the ClientHello");
+        ret = -1;
+    }
+    /* After its idle timeout, a second connection starts; it is not yet due for sending. */
+    if (ret == 0) {
+        sim_ctx.simulated_time += (uint64_t)spec.idle_timeout * 1000 + 1;
+        if ((cnx_other = picoqmux_create_qmux_cnx(sim_ctx.quic[0],
+            sim_ctx.simulated_time, 1, 0, PICOQUIC_TEST_SNI, "qmux_test", NULL)) == NULL) {
+            ret = -1;
+        }
+        else {
+            cnx_other->next_wake_time = sim_ctx.simulated_time + 1000000;
+            sqmux_ctx[0]->cnx = sim_ctx.cnx[0];
+            sqmux_ctx[1]->cnx = cnx_other;
+        }
+    }
+    for (int i = 0; ret == 0 && i < 4 && sqmux_ctx[0]->fd != INVALID_SOCKET; i++) {
+        if (picoquic_packet_loop_check_qmux_timers(sqmux_ctx, 2, &socket_was_closed, sim_ctx.simulated_time,
+            buffer, sizeof(buffer)) != 0) {
+            DBG_PRINTF("Timer check %d returns an error, which would stop the packet loop", i);
+            ret = -1;
+        }
+    }
+    if (ret == 0 && (sqmux_ctx[0]->fd != INVALID_SOCKET || socket_was_closed != 0 ||
+        sqmux_ctx[1]->fd == INVALID_SOCKET || sqmux_ctx[1]->cnx != cnx_other)) {
+        DBG_PRINTF("Socket 0 open: %d, closed rank: %d, socket 1 open: %d", sqmux_ctx[0]->fd != INVALID_SOCKET,
+            socket_was_closed, sqmux_ctx[1]->fd != INVALID_SOCKET);
+        ret = -1;
+    }
+
+    picoquic_packet_loop_free_qmux_socket(sqmux_ctx[0]);
+    picoquic_packet_loop_free_qmux_socket(sqmux_ctx[1]);
+    qmux_test_release(&sim_ctx);
+    return ret;
+}
+
 int qmux_loop_tls_test(void)
 {
     qmux_sim_spec_t spec = { 0 };

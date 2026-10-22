@@ -355,6 +355,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_qmux_win_recv)
+        {
+            int ret = sockloop_qmux_win_recv_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_qmux_win_accept)
+        {
+            int ret = sockloop_qmux_win_accept_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(sockloop_qmux_win_reset)
+        {
+            int ret = sockloop_qmux_win_reset_test();
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_qmux_cnx_sockets_limit)
         {
             int ret = sockloop_qmux_cnx_sockets_limit_test();
@@ -2691,6 +2709,18 @@ namespace UnitTest1
         TEST_METHOD(qmux_tls_client_alpn_required)
         {
             int ret = qmux_tls_client_alpn_required_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_tls_handshake_idle_timeout)
+        {
+            int ret = qmux_tls_handshake_idle_timeout_test();
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(qmux_tls_handshake_idle_timeout_loop)
+        {
+            int ret = qmux_tls_handshake_idle_timeout_loop_test();
             Assert::AreEqual(ret, 0);
         }
 

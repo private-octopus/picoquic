@@ -559,10 +559,27 @@ int picoquic_packet_loop_do_tcp_read(picoqmux_socket_ctx_t** sqmux_ctx,
 int picoquic_packet_loop_do_tcp_send(picoqmux_socket_ctx_t** sqmux_ctx,
     int* qmux_socket_was_closed, int socket_rank,
     uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
+int picoquic_packet_loop_check_qmux_timers(picoqmux_socket_ctx_t** sqmux_ctx,
+    int nb_qmux_sockets, int* qmux_socket_was_closed,
+    uint64_t current_time, uint8_t* qmux_buffer, size_t qmux_buffer_size);
 void picoquic_packet_loop_abandon_socket(
     picoqmux_socket_ctx_t** sqmux_ctx,
     int* qmux_socket_was_closed,
     int socket_rank);
+int picoquic_packet_loop_open_qmux_sockets(picoquic_quic_t* qmux,
+    picoqmux_socket_ctx_t*** sqmux_ctx, int* nb_qmux_sockets,
+    int* max_qmux_socket, int public_port);
+void picoquic_packet_loop_free_qmux_sockets(picoqmux_socket_ctx_t*** sqmux_ctx,
+    int nb_qmux_sockets);
+#ifdef _WINDOWS
+int picoquic_packet_loop_start_windows_recv(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_sockloop_finish_windows_recv(picoqmux_socket_ctx_t* sqmux_sock_ctx);
+int picoquic_packet_loop_wait(picoquic_socket_ctx_t* s_ctx, int nb_sockets,
+    picoqmux_socket_ctx_t** sqmux_ctx, int nb_qmux_sockets, uint64_t current_time,
+    struct sockaddr_storage* addr_from, struct sockaddr_storage* addr_dest, int* dest_if,
+    unsigned char* received_ecn, uint8_t** received_buffer, int64_t delta_t,
+    picoquic_network_thread_ctx_t* thread_ctx, picoquic_packet_loop_action_enum* action, int* socket_rank);
+#endif
 #ifdef __cplusplus
 }
 #endif

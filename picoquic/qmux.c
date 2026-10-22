@@ -242,6 +242,8 @@ void picoqmux_check_idle_timer(picoquic_cnx_t* cnx, uint64_t current_time,
                 cnx->cnx_state <= picoquic_state_ready) {
                 cnx->local_error = PICOQUIC_ERROR_IDLE_TIMEOUT;
                 cnx->cnx_state = picoquic_state_disconnecting;
+                /* Wake up immediately to process the closing state. */
+                *next_wake_time = current_time;
             }
         }
         else {
@@ -1306,6 +1308,14 @@ int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t
         /* TLS is negotiated: prepare and encrypt packets */
         ret = picoqmux_send_data(cnx, current_time, send_buffer,
             send_buffer_max, send_length);
+    }
+    else if (cnx->cnx_state == picoquic_state_disconnecting ||
+        cnx->cnx_state == picoquic_state_handshake_failure ||
+        cnx->cnx_state == picoquic_state_disconnected) {
+        /* Closing before TLS completes: no close frame can be sent, so just disconnect. */
+        picoquic_connection_disconnect(cnx);
+        *send_length = 0;
+        ret = PICOQUIC_ERROR_DISCONNECTED;
     }
     else {
         /* Perform the handshake */
