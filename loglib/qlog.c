@@ -304,6 +304,7 @@ int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
                 case picoquic_tp_enable_bdp_frame:
                 case picoquic_tp_initial_max_path_id:
                 case picoquic_tp_address_discovery:
+                case picoquic_tp_reset_stream_at_old:
                 case picoquic_tp_reset_stream_at:
                     qlog_vint_transport_extension(f, picoquic_tp_name(extension_type), s, extension_length);
                     break;
