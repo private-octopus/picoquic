@@ -3005,6 +3005,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(reset_after_fin_received)
+        {
+            int ret = reset_after_fin_received_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(reset_deleted)
+        {
+            int ret = reset_deleted_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(reset_loop)
         {
             int ret = reset_loop_test();

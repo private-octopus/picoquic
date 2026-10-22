@@ -556,6 +556,8 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_need_reset", reset_need_reset_test },
     { "reset_need_stop", reset_need_stop_test },
     { "reset_at_end", reset_at_end_test },
+    { "reset_after_fin_received", reset_after_fin_received_test },
+    { "reset_deleted", reset_deleted_test },
     { "reset_loop_test", reset_loop_test },
     { "reset_stream_at_basic", reset_stream_at_basic_test },
     { "reset_stream_at_limit_test", reset_stream_at_limit_test },
