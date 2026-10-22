@@ -686,8 +686,10 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
  to wait until validation timers expire.
 
  Local CID are kept in a list, and are associated with paths by a reference.
- If a local CID is retired, the reference is zeroed. When a new packet arrives
- on path with a new CID, the reference is reset.
+ If a local CID is retired, the reference is zeroed. The retired CID stays
+ registered for a grace period so late packets are accepted, but it is never
+ reused for a path. When a new packet arrives on path with a new CID, the
+ reference is reset.
 
  If we cannot associate an existing path with a packet and also
  cannot create a new path, we treat the packet as arriving on the
@@ -711,8 +713,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         /* Either this path has not yet been created, or it was already destroyed.
         * The packet decryption was successful, which means that the CID is valid,
         * but on the server side we might have a "probe".
+         * A CID retired by the peer is never used to create a path.
          */
-        if (cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
+        if (!ph->l_cid->is_retired &&
+            cnx->nb_paths < PICOQUIC_NB_PATH_TARGET &&
             (cnx->quic->is_port_blocking_disabled || !picoquic_check_addr_blocked(addr_from)) &&
             picoquic_create_path(cnx, current_time, addr_to, addr_from, if_index_to, ph->l_cid->path_id) > 0) {
             /* if we do create a new path, it should have the right path_id. We cannot
@@ -746,7 +750,9 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         /* If the local CID is not set, set it */
         if (path_x->first_tuple->p_local_cnxid == NULL) {
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-            if (!cnx->client_mode && cnx->is_multipath_enabled && path_x->first_tuple->challenge_verified) {
+            /* A late packet on a retired CID leaves the reference unset, and does not renew the remote CID. */
+            if (path_x->first_tuple->p_local_cnxid != NULL &&
+                !cnx->client_mode && cnx->is_multipath_enabled && path_x->first_tuple->challenge_verified) {
                 /* If the peer renewed its connection id, the retire connection ID frame may already
                  * have arrived on a separate path. If the server noticed that, it should also renew
                  * its "remote path" ID */
@@ -806,7 +812,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                 (is_cid_shared ? picoquic_share_peer_cnxid_with_tuple(path_x, tuple) :
                     picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple)) == 0) {
                 picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
-                if (picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
+                if (path_x->first_tuple->p_local_cnxid != NULL &&
+                    picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
                     cnx->is_multipath_enabled) {
                     /* Treat this as a NAT rebinding. */
                     picoquic_tuple_t* old_tuple = path_x->first_tuple;
@@ -835,11 +842,15 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
         else {
             /* If the addresses do match, but the CID do not, we have a case of CID migration.
              */
-            if (tuple == path_x->first_tuple &&
+            if (tuple == path_x->first_tuple && path_x->first_tuple->p_local_cnxid != NULL &&
                 picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0) {
-                path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-                if (cnx->client_mode == 0) {
-                    (void)picoquic_renew_connection_id(cnx, path_id);
+                /* A late packet with a CID retired by the peer is not a migration: the lookup skips retired CID. */
+                picoquic_local_cnxid_t* l_cid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
+                if (l_cid != NULL) {
+                    path_x->first_tuple->p_local_cnxid = l_cid;
+                    if (cnx->client_mode == 0) {
+                        (void)picoquic_renew_connection_id(cnx, path_id);
+                    }
                 }
             }
         }

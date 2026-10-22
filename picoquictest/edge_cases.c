@@ -1363,7 +1363,29 @@ int reset_need_stop_test(void)
     return reset_repeat_test_one(reset_need_stop_sending);
 }
 
-/* Reset stream at end of stream. */
+/* Queue 5 bytes and the FIN on the stream, mark them as sent, and acknowledge the first nb_acked units.
+ * The FIN counts as one extra unit, so nb_acked = 6 acknowledges everything. */
+static int reset_at_end_prepare(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t nb_acked)
+{
+    int ret = picoquic_add_to_stream(cnx, stream_id, (uint8_t*)"Hello", 5, 1);
+    picoquic_stream_head_t* stream = (ret == 0) ? picoquic_find_stream(cnx, stream_id) : NULL;
+
+    if (stream == NULL) {
+        ret = -1;
+    }
+    else {
+        /* As on a real sending stream, only sent_offset marks the end; fin_offset is for received data. */
+        stream->sent_offset = 5;
+        stream->fin_sent = 1;
+        if (nb_acked > 0) {
+            ret = picoquic_update_sack_list(&stream->sack_list, 0, nb_acked - 1, 0);
+        }
+    }
+    return ret;
+}
+
+/* Reset stream at end of stream: a reset is allowed after the FIN is sent, unless
+ * all the stream bytes and the FIN were acknowledged by the peer. */
 int reset_at_end_test(void)
 {
     picoquic_quic_t* quic = NULL;
@@ -1377,13 +1399,105 @@ int reset_at_end_test(void)
     else {
         /* Ensure client mode for local bidirectional stream IDs */
         cnx->client_mode = 1;
+        cnx->is_reset_stream_at_enabled = 1;
 
-        /* Create a stream, send data, set fin. */
+        /* FIN queued but not yet sent. */
         if (ret == 0) {
             ret = picoquic_add_to_stream(cnx, 4, (uint8_t*)"Hello", 5, 1);
         }
         if (ret == 0) {
             ret = picoquic_reset_stream(cnx, 4, 0);
+        }
+        /* FIN sent but not acknowledged: the reset drops the data still in transit. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 8, 0)) == 0 &&
+            (ret = picoquic_reset_stream(cnx, 8, 0)) != 0) {
+            DBG_PRINTF("Reset after FIN sent returns 0x%x", ret);
+        }
+        /* FIN sent and only the first bytes acknowledged: the reset is queued. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 28, 2)) == 0 &&
+            ((ret = picoquic_reset_stream(cnx, 28, 0)) != 0 || !picoquic_find_stream(cnx, 28)->reset_requested)) {
+            DBG_PRINTF("Reset after FIN partially acknowledged returns 0x%x or does not queue a reset", ret);
+            ret = -1;
+        }
+        /* FIN sent and everything acknowledged: nothing left to reset, success without queuing a reset. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 12, 6)) == 0 &&
+            ((ret = picoquic_reset_stream(cnx, 12, 0)) != 0 || picoquic_find_stream(cnx, 12)->reset_requested)) {
+            DBG_PRINTF("Reset after FIN acknowledged returns 0x%x or queues a reset", ret);
+            ret = -1;
+        }
+        /* Reset stream at, with a reliable size equal to or below the last offset. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 16, 0)) == 0 &&
+            (ret = picoquic_reset_stream_at(cnx, 16, 0, 5)) != 0) {
+            DBG_PRINTF("Reset stream at last offset after FIN sent returns 0x%x", ret);
+        }
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 20, 0)) == 0 &&
+            (ret = picoquic_reset_stream_at(cnx, 20, 0, 3)) != 0) {
+            DBG_PRINTF("Reset stream at offset 3 after FIN sent returns 0x%x", ret);
+        }
+        /* A reliable size beyond the last offset is rejected. */
+        if (ret == 0 && (ret = reset_at_end_prepare(cnx, 24, 0)) == 0 &&
+            picoquic_reset_stream_at(cnx, 24, 0, 6) != PICOQUIC_ERROR_OFFSET_TOO_BIG) {
+            DBG_PRINTF("%s", "Reset stream at beyond the last offset is not rejected");
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+
+/* Reset stream that was already closed. */
+picoquic_stream_head_t* picoquic_find_or_create_stream(picoquic_cnx_t* cnx, uint64_t stream_id, int is_remote);
+const uint8_t* picoquic_apply_reset_stream_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    uint64_t error_code_64, uint64_t stream_id, uint64_t final_offset, uint64_t reliable_size);
+
+int reset_deleted_test(void)
+{
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    int ret = 0;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0 || quic == NULL || cnx == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_stream_head_t* stream = NULL;
+        /* Ensure client mode for local unidirectional stream IDs */
+        cnx->client_mode = 1;
+        cnx->cnx_state = picoquic_state_ready;
+
+        /* simulate sending a unidir stream with FIN mark */
+        simulated_time = 1000;
+        ret = picoquic_add_to_stream(cnx, 2, NULL, 0, 1);
+        if (ret != 0 || ((stream = picoquic_find_stream(cnx, 2)) == NULL)) {
+            DBG_PRINTF("Add to stream returns %d", ret);
+        }
+        else if ((ret = picoquic_reset_stream(cnx, 2, 0)) != 0) {
+            /* Immediate reset should succeed */
+            DBG_PRINTF("First reset stream returns %d", ret);
+        }
+        else {
+            /* simulate receiving the acknowledgement */
+            stream->fin_sent = 1;
+            stream->reset_sent = 1; 
+            stream->reset_acked = 1;
+            cnx->latest_receive_time = simulated_time;
+            picoquic_update_max_stream_ID_local(cnx, stream);
+            picoquic_delete_stream(cnx, stream);
+            /* check that the stream has been deleted */
+            if (picoquic_find_stream(cnx, 2) != NULL) {
+                DBG_PRINTF("Stream %d was not deleted.\n", 2);
+                ret = -1;
+            }
+            else {
+                int reset_ret = picoquic_reset_stream(cnx, 2, 0);
+                if (reset_ret != PICOQUIC_ERROR_STREAM_ALREADY_CLOSED) {
+                    DBG_PRINTF("Second reset returns %x.\n", reset_ret);
+                    ret = -1;
+                }
+            }
         }
     }
 
@@ -2704,6 +2818,139 @@ int stream_data_nodes_window_test(void)
         cnx->maxdata_local <= initial_window) {
         DBG_PRINTF("Window did not grow after %" PRIu64 " bytes delivered", cnx->data_received);
         ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+/* Receiver side of a reset after FIN: once the FIN was delivered to the application, the stream is
+ * in the terminal "Data Read" state (RFC 9000 3.2), and a later RESET_STREAM must not be signalled. */
+typedef struct st_reset_after_fin_ctx_t {
+    int nb_fin[3];
+    int nb_reset[3];
+} reset_after_fin_ctx_t;
+
+static int reset_after_fin_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t stream_id, uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* UNUSED(v_stream_ctx))
+{
+    reset_after_fin_ctx_t* ctx = (reset_after_fin_ctx_t*)callback_ctx;
+    size_t index = (size_t)(stream_id / 4);
+
+    if (index < 3) {
+        if (fin_or_event == picoquic_callback_stream_fin) {
+            ctx->nb_fin[index]++;
+        }
+        else if (fin_or_event == picoquic_callback_stream_reset) {
+            ctx->nb_reset[index]++;
+        }
+    }
+    return 0;
+}
+
+static int reset_after_fin_decode(picoquic_cnx_t* cnx, uint8_t* frame, size_t length, uint64_t simulated_time)
+{
+    int ret = picoquic_decode_frames(cnx, cnx->path[0], frame, length, NULL, picoquic_epoch_1rtt,
+        (struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
+        (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr,
+        123, 0, NULL, simulated_time);
+
+    if (ret != 0 || cnx->cnx_state > picoquic_state_ready) {
+        ret = -1;
+    }
+    return ret;
+}
+
+/* Receive a STREAM frame with OFF and LEN bits, and the FIN bit if requested. */
+static int reset_after_fin_stream(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t offset, size_t length, int fin, uint64_t simulated_time)
+{
+    int ret = 0;
+    uint8_t frame[64];
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + sizeof(frame);
+
+    *bytes++ = picoquic_frame_type_stream_range_min | 0x04 | 0x02 | ((fin) ? 0x01 : 0);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, length)) == NULL ||
+        bytes + length > bytes_max) {
+        ret = -1;
+    }
+    else {
+        memset(bytes, 'x', length);
+        ret = reset_after_fin_decode(cnx, frame, (bytes + length) - frame, simulated_time);
+    }
+    return ret;
+}
+
+static int reset_after_fin_reset(picoquic_cnx_t* cnx, uint64_t stream_id, uint64_t final_size, uint64_t simulated_time)
+{
+    int ret = 0;
+    uint8_t frame[32];
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + sizeof(frame);
+
+    *bytes++ = picoquic_frame_type_reset_stream;
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, stream_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0x17)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_size)) == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = reset_after_fin_decode(cnx, frame, bytes - frame, simulated_time);
+    }
+    return ret;
+}
+
+int reset_after_fin_received_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    reset_after_fin_ctx_t cb_ctx;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    memset(&cb_ctx, 0, sizeof(cb_ctx));
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0 && (cnx = test_ctx->cnx_server) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_callback(cnx, reset_after_fin_callback, &cb_ctx);
+        /* Stream 0: all data and FIN delivered, then reset: the reset is not signalled. */
+        if ((ret = reset_after_fin_stream(cnx, 0, 0, 5, 1, simulated_time)) == 0) {
+            ret = reset_after_fin_reset(cnx, 0, 5, simulated_time);
+        }
+        /* Stream 4: data without FIN, then reset: the reset is signalled. */
+        if (ret == 0 && (ret = reset_after_fin_stream(cnx, 4, 0, 3, 0, simulated_time)) == 0) {
+            ret = reset_after_fin_reset(cnx, 4, 5, simulated_time);
+        }
+        /* Stream 8: FIN received after a gap, so not delivered, then reset: the reset is signalled. */
+        if (ret == 0 && (ret = reset_after_fin_stream(cnx, 8, 2, 3, 1, simulated_time)) == 0) {
+            ret = reset_after_fin_reset(cnx, 8, 5, simulated_time);
+        }
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Error decoding the test frames");
+        }
+        else if (cb_ctx.nb_fin[0] != 1 || cb_ctx.nb_reset[0] != 0) {
+            DBG_PRINTF("Stream 0: %d FIN, %d reset, expected 1, 0", cb_ctx.nb_fin[0], cb_ctx.nb_reset[0]);
+            ret = -1;
+        }
+        else if (cb_ctx.nb_fin[1] != 0 || cb_ctx.nb_reset[1] != 1) {
+            DBG_PRINTF("Stream 4: %d FIN, %d reset, expected 0, 1", cb_ctx.nb_fin[1], cb_ctx.nb_reset[1]);
+            ret = -1;
+        }
+        else if (cb_ctx.nb_fin[2] != 0 || cb_ctx.nb_reset[2] != 1) {
+            DBG_PRINTF("Stream 8: %d FIN, %d reset, expected 0, 1", cb_ctx.nb_fin[2], cb_ctx.nb_reset[2]);
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL) {
