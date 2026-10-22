@@ -1062,9 +1062,13 @@ static picoquic_per_ack_state_t ack_loss_test_state;
 static picoquic_path_t* ack_loss_test_path;
 static int ack_loss_test_nb_notify;
 
-static void ack_loss_test_notify(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    picoquic_congestion_notification_t notification, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
+static void ack_loss_test_notify(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification, picoquic_per_ack_state_t* ack_state, uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     if (notification == picoquic_congestion_notification_acknowledgement && ack_state != NULL) {
         ack_loss_test_state = *ack_state;
         ack_loss_test_path = path_x;
