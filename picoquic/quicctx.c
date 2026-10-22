@@ -894,8 +894,8 @@ static int picoquic_set_tp_value_by_type(picoquic_tp_t* tp, uint64_t tp_type, ui
     case picoquic_tp_address_discovery:
         tp->max_idle_timeout = (int)tp_value;
         break;
+    case picoquic_tp_reset_stream_at_old:
     case picoquic_tp_reset_stream_at:
-    case picoquic_tp_reset_stream_at_v11:
         tp->is_reset_stream_at_enabled = (tp_value != 0);
         break;
     default:

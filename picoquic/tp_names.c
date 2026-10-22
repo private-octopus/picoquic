@@ -87,8 +87,10 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
         tp_name = "address_discovery";
         break;
     case picoquic_tp_reset_stream_at:
-    case picoquic_tp_reset_stream_at_v11:
         tp_name = "reset_stream_at";
+        break;
+    case picoquic_tp_reset_stream_at_old:
+        tp_name = "reset_stream_at_old";
         break;
     case picoquic_tp_is_scone_supported:
         tp_name = "scone_supported";
