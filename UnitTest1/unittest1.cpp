@@ -230,6 +230,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(sockloop_time_check_stop)
+        {
+            int ret = sockloop_time_check_stop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(sockloop_eio)
         {
             int ret = sockloop_eio_test();
@@ -1402,6 +1409,13 @@ namespace UnitTest1
           Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(keep_alive_idle)
+        {
+            int ret = keep_alive_idle_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(integrity_limit)
         {
             int ret = integrity_limit_test();
@@ -1448,6 +1462,13 @@ namespace UnitTest1
         TEST_METHOD(test_sockets_ecn)
         {
             int ret = socket_ecn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(test_sockets_cloexec)
+        {
+            int ret = socket_cloexec_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -1973,6 +1994,13 @@ namespace UnitTest1
         TEST_METHOD(nat_rebinding_fast)
         {
             int ret = fast_nat_rebinding_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(path_challenge_ack)
+        {
+            int ret = path_challenge_ack_test();
 
             Assert::AreEqual(ret, 0);
         }

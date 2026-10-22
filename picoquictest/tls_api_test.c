@@ -4365,6 +4365,65 @@ int keep_alive_test_impl(int keep_alive)
     return ret;
 }
 
+/* Keep alive enabled on an idle connection, whose next wake time is already set far
+ * away (the idle timeout): it must still keep the connection up. */
+int keep_alive_idle_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t end_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        return PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    /* Let the connection go idle: nothing left to send, next wake far away */
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, 1, 1);
+    }
+    for (int i = 0; ret == 0 && i < 64 && test_ctx->cnx_client->next_wake_time < simulated_time + 1000000; i++) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+
+    if (ret == 0) {
+        if (test_ctx->cnx_client->next_wake_time < simulated_time + 1000000) {
+            DBG_PRINTF("%s", "Client connection not idle, cannot test\n");
+            ret = -1;
+        }
+        else {
+            picoquic_enable_keep_alive(test_ctx->cnx_client, 0);
+            end_time = simulated_time + 2 * PICOQUIC_MICROSEC_SILENCE_MAX;
+        }
+    }
+
+    while (ret == 0 && simulated_time < end_time && TEST_CLIENT_READY) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, end_time, &was_active);
+    }
+
+    if (ret == 0 && (!TEST_CLIENT_READY || !TEST_SERVER_READY)) {
+        DBG_PRINTF("Connection dropped at %llu despite keep alive\n", (unsigned long long)simulated_time);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_attempt_to_close(test_ctx, &simulated_time);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
 int keep_alive_test(void)
 {
     int ret = keep_alive_test_impl(1);
@@ -6922,6 +6981,62 @@ int fast_nat_rebinding_test(void)
     /* verify that the transmission was complete */
     if (ret == 0) {
         ret = tls_api_one_scenario_verify(test_ctx);
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* The server checks the client's current address again, as it does after an apparent
+ * migration (RFC 9000, section 9.3.3). The packet carrying the PATH_CHALLENGE is
+ * ack-eliciting: the client must acknowledge it, which also gives the server the
+ * non-probing packet from that address that section 9.3.3 asks for.
+ */
+int path_challenge_ack_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t last_non_probing_pn = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+
+    if (ret == 0) {
+        uint64_t time_out = simulated_time + 1000000;
+
+        last_non_probing_pn = test_ctx->cnx_server->path[0]->last_non_path_probing_pn;
+        picoquic_set_path_challenge(test_ctx->cnx_server, 0, simulated_time);
+        picoquic_reinsert_by_wake_time(test_ctx->qserver, test_ctx->cnx_server, simulated_time);
+        while (ret == 0 && simulated_time < time_out) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, time_out, &was_active);
+        }
+    }
+
+    if (ret == 0 && !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified) {
+        DBG_PRINTF("%s", "The challenge was not verified");
+        ret = -1;
+    }
+
+    if (ret == 0 && test_ctx->cnx_server->path[0]->last_non_path_probing_pn <= last_non_probing_pn) {
+        DBG_PRINTF("%s", "The client answered the challenge with probing packets only");
+        ret = -1;
     }
 
     if (test_ctx != NULL) {

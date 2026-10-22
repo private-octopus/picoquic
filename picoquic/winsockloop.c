@@ -476,6 +476,10 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
                 time_check_arg.current_time = current_time;
                 time_check_arg.delta_t = delta_t;
                 ret = loop_callback(quic, picoquic_packet_loop_time_check, loop_callback_ctx, &time_check_arg);
+                if (ret != 0) {
+                    /* The application ends the loop: do not wait, see sockloop.c */
+                    break;
+                }
                 if (time_check_arg.delta_t < delta_t) {
                     delta_t = time_check_arg.delta_t;
                 }
