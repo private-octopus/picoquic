@@ -375,11 +375,22 @@ void picoquic_packet_loop_close_socket(picoquic_socket_ctx_t* s_ctx)
 
 
 #ifndef _WINDOWS
+/* Wake-up pipe and QMUX TCP sockets only. UDP sockets stay blocking so
+ * sendmsg is unchanged. The packet loop passes MSG_DONTWAIT to
+ * picoquic_recvmsg_ex instead. Windows does not use that function for
+ * the receive loop; it waits on overlapped WSARecv completion, so
+ * WSARecvMsg stays blocking. */
 static int picoquic_packet_loop_set_nonblocking(SOCKET_TYPE fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
     return (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) ? -1 : 0;
 }
+
+#ifdef MSG_DONTWAIT
+#define PICOQUIC_LOOP_RECV_FLAGS MSG_DONTWAIT
+#else
+#define PICOQUIC_LOOP_RECV_FLAGS 0
+#endif
 
 static int picoquic_packet_loop_would_block(void)
 {
@@ -492,6 +503,8 @@ picoquic_recv_batch_fill(picoquic_socket_ctx_t* s_ctx)
     n = recvmmsg(s_ctx->fd, b->msgs, PICOQUIC_RECV_BATCH, MSG_DONTWAIT, NULL);
     if (n <= 0) {
         if (n < 0 && (errno == ENOSYS || errno == EOPNOTSUPP)) {
+            /* This kernel has no recvmmsg. The caller falls back to recvmsg,
+             * and later receives skip the batch because disabled stays set. */
             b->disabled = 1;
         }
         if (n == 0) {
@@ -515,23 +528,27 @@ picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
     uint8_t* buffer, int buffer_max)
 {
     picoquic_recv_batch_t* b = (picoquic_recv_batch_t*)s_ctx->recv_batch;
-    if (b != NULL && !b->disabled) {
+    int bytes_recv = -1;
+    int use_recvmsg = (b == NULL || b->disabled);
+
+    if (!use_recvmsg) {
         if (b->next < b->count) {
-            return picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+            bytes_recv = picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
                 received_ecn, buffer, buffer_max);
         }
-        if (picoquic_recv_batch_fill(s_ctx) > 0) {
-            return picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
+        else if (picoquic_recv_batch_fill(s_ctx) > 0) {
+            bytes_recv = picoquic_recv_batch_take(s_ctx, addr_from, addr_dest, dest_if,
                 received_ecn, buffer, buffer_max);
         }
-        if (b->disabled) {
-            return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
-                received_ecn, buffer, buffer_max);
+        else if (b->disabled) {
+            use_recvmsg = 1;
         }
-        return -1;
     }
-    return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
-        received_ecn, buffer, buffer_max);
+    if (use_recvmsg) {
+        bytes_recv = picoquic_recvmsg_ex(s_ctx->fd, addr_from, addr_dest, dest_if,
+            received_ecn, buffer, buffer_max, PICOQUIC_LOOP_RECV_FLAGS);
+    }
+    return bytes_recv;
 }
 
 static void
@@ -557,8 +574,8 @@ picoquic_packet_loop_recv_socket(picoquic_socket_ctx_t* s_ctx,
     unsigned char* received_ecn,
     uint8_t* buffer, int buffer_max)
 {
-    return picoquic_recvmsg(s_ctx->fd, addr_from, addr_dest, dest_if,
-        received_ecn, buffer, buffer_max);
+    return picoquic_recvmsg_ex(s_ctx->fd, addr_from, addr_dest, dest_if,
+        received_ecn, buffer, buffer_max, PICOQUIC_LOOP_RECV_FLAGS);
 }
 
 static void
@@ -2008,6 +2025,16 @@ void picoquic_packet_loop_set_fds(
 
 
 #ifndef _WINDOWS
+static void picoquic_packet_loop_set_dest_port(struct sockaddr_storage* addr_dest, uint16_t n_port)
+{
+    if (addr_dest->ss_family == AF_INET6) {
+        ((struct sockaddr_in6*)addr_dest)->sin6_port = n_port;
+    }
+    else if (addr_dest->ss_family == AF_INET) {
+        ((struct sockaddr_in*)addr_dest)->sin_port = n_port;
+    }
+}
+
 /*
  * When the next wake delay is below poll's 1ms resolution, skip poll() and
  * try a nonblocking recv instead. Streams marked active already updated
@@ -2027,69 +2054,59 @@ static int picoquic_packet_loop_try_recv(
 {
     int bytes_recv = 0;
     int have_pending = 0;
+    int ret = 0;
 
     if (received_ecn != NULL) {
         *received_ecn = 0;
     }
     *action = picoquic_packet_loop_action_timeout;
 
-    for (int i = 0; i < nb_sockets; i++) {
+    for (int i = 0; i < nb_sockets && ret == 0 && *action == picoquic_packet_loop_action_timeout; i++) {
         if (picoquic_recv_batch_pending(&s_ctx[i])) {
             have_pending = 1;
             bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
                 addr_dest, dest_if, received_ecn,
                 buffer, buffer_max);
             if (bytes_recv > 0) {
-                if (addr_dest->ss_family == AF_INET6) {
-                    ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
-                }
-                else if (addr_dest->ss_family == AF_INET) {
-                    ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
-                }
+                picoquic_packet_loop_set_dest_port(addr_dest, s_ctx[i].n_port);
                 *socket_rank = i;
                 *action = picoquic_packet_loop_action_udp_received;
-                return bytes_recv;
+                ret = bytes_recv;
             }
         }
     }
 
-    if (thread_ctx->wake_up_defined && !have_pending) {
+    if (ret == 0 && *action == picoquic_packet_loop_action_timeout &&
+        thread_ctx->wake_up_defined && !have_pending) {
         uint8_t eventbuf[8];
         int pipe_recv = (int)read(thread_ctx->wake_up_pipe_fd[0], eventbuf, sizeof(eventbuf));
         if (pipe_recv > 0) {
             *action = picoquic_packet_loop_action_wake_up;
-            return 0;
         }
-        if (pipe_recv < 0 && !picoquic_packet_loop_would_block()) {
+        else if (pipe_recv < 0 && !picoquic_packet_loop_would_block()) {
             DBG_PRINTF("Error: read pipe returns %d\n", errno);
-            return -1;
+            ret = -1;
         }
     }
 
-    for (int i = 0; i < nb_sockets; i++) {
+    for (int i = 0; i < nb_sockets && ret == 0 && *action == picoquic_packet_loop_action_timeout; i++) {
         bytes_recv = picoquic_packet_loop_recv_socket(&s_ctx[i], addr_from,
             addr_dest, dest_if, received_ecn,
             buffer, buffer_max);
         if (bytes_recv > 0) {
-            if (addr_dest->ss_family == AF_INET6) {
-                ((struct sockaddr_in6*)addr_dest)->sin6_port = s_ctx[i].n_port;
-            }
-            else if (addr_dest->ss_family == AF_INET) {
-                ((struct sockaddr_in*)addr_dest)->sin_port = s_ctx[i].n_port;
-            }
+            picoquic_packet_loop_set_dest_port(addr_dest, s_ctx[i].n_port);
             *socket_rank = i;
             *action = picoquic_packet_loop_action_udp_received;
-            return bytes_recv;
+            ret = bytes_recv;
         }
-        if (bytes_recv < 0 && !picoquic_packet_loop_would_block()) {
+        else if (bytes_recv < 0 && !picoquic_packet_loop_would_block()) {
             DBG_PRINTF("Could not receive packet on UDP socket[%d]= %d!\n",
                 i, (int)s_ctx[i].fd);
-            return -1;
+            ret = -1;
         }
-        bytes_recv = 0;
     }
 
-    return 0;
+    return ret;
 }
 #endif
 
@@ -3113,7 +3130,9 @@ void* picoquic_packet_loop_v3(void* v_ctx)
 #elif defined(PICOQUIC_WITH_POLL)
         /* poll() is millisecond resolution. If picoquic already has send-ready
          * streams (delta_t < 1ms), skip it and try a nonblocking recv so ACKs
-         * still land while we keep sending. QMux still needs poll for TCP events. */
+         * still land while we keep sending. select() does not need this shortcut:
+         * its timeout is a timeval in microseconds, so a sub-millisecond delta_t
+         * is already exact. QMux still needs poll for TCP events. */
         if (delta_t < 1000 && nb_qmux_sockets == 0) {
             bytes_recv = picoquic_packet_loop_try_recv(
                 s_ctx, nb_sockets_available,
