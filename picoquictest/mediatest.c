@@ -1470,7 +1470,7 @@ int mediatest_wifi_test(void)
     spec.do_audio = 1;
     spec.data_size = 0;
     spec.link_latency = 15000;
-    spec.latency_average = 60000;
+    spec.latency_average = 62000;
     spec.latency_max = 350000;
     spec.priority_limit_for_bypass = 5;
     spec.do_not_check_video2 = 1;

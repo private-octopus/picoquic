@@ -157,6 +157,9 @@ extern "C" {
         struct st_h3zero_stream_ctx_t* stream_ctx,
         void* path_app_ctx);
 
+    /* Set a server path table item for the baton app. */
+    void wt_baton_set_path_item(picohttp_server_path_item_t* item, char const* path, void* path_app_ctx);
+
 #ifdef __cplusplus
 }
 #endif

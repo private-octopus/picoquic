@@ -915,7 +915,7 @@ picoquic_quic_t* picoquic_create_and_configure(picoquic_quic_config_t* config,
         if (config->cc_algo_id != NULL) {
             cc_algo = picoquic_get_congestion_algorithm(config->cc_algo_id);
             if (cc_algo == NULL) {
-                fprintf(stderr, "Unrecognized congestion algorithm: %s. Using BBR isntead.\n", config->cc_algo_id);
+                fprintf(stderr, "Unrecognized congestion algorithm: %s. Using BBR instead.\n", config->cc_algo_id);
             }
         }
         if (cc_algo == NULL) {

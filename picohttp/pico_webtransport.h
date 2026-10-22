@@ -65,6 +65,8 @@ extern "C" {
      */
     int picowt_connect(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx, h3zero_stream_ctx_t* stream_ctx, const char* authority, const char* path, picohttp_post_data_cb_fn wt_callback,
         void* wt_ctx, char const* wt_available_protocols);
+    /* Remove a WT session from the count of concurrent sessions, e.g., after the connection was refused. Safe to call more than once. */
+    void picowt_uncount_session(h3zero_callback_ctx_t* h3_ctx, h3zero_stream_ctx_t* control_stream_ctx);
     /* Send capsule to close web transport session,
      * and close web transport control stream.
      */
@@ -128,6 +130,12 @@ extern "C" {
      * not provide a "WT_AVAILABLE_PROTOCOLS" header, or if another error occured.
      */
     int picowt_select_wt_protocol(h3zero_stream_ctx_t* stream_ctx, char const* supported);
+
+    /* Return 1 if the incoming CONNECT request on this stream carries a web transport
+     * ":protocol", 0 otherwise. Web transport servers should call this when processing
+     * picohttp_callback_connect, and refuse the session if it returns 0.
+     */
+    int picowt_is_webtransport_connect(h3zero_stream_ctx_t* stream_ctx);
 
     /* Get the authority from a WebTransport request.
      * Returns a pointer to the null-terminated authority string, or NULL if not present.

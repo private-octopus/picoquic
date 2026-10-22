@@ -107,6 +107,7 @@ extern "C" {
 #define PICOQUIC_SPIN_RESERVE_MOD_256 17
 
 #define PICOQUIC_CHALLENGE_REPEAT_MAX 3
+#define PICOQUIC_MAX_SHARED_CID_TUPLES 16 /* Max tuples on a path for sharing the peer CID as a last resort */
 
 #define PICOQUIC_ALPN_NUMBER_MAX 32
 
@@ -1032,7 +1033,7 @@ typedef struct st_picoquic_tuple_t {
 * - At the beginning of the connection for path[0]
 * - When sending or receiving packets to a or from new addresses and ports.
 * 
-* When a path is created, it is assigned a local connection idand a remote connection ID.
+* When a path is created, it is assigned a local connection id and a remote connection ID.
 * After that, the path has to be validated by a successful challenge/response.
 *
 * If multipath is supported, paths remain in the list until they are abandoned.
@@ -1493,6 +1494,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Management of streams */
     picosplay_tree_t stream_tree;
+    uint64_t nb_stream_data_nodes; /* Sum of stream_data_tree.size over all data streams */
     picoquic_output_stream_t output_streams;
     uint64_t high_priority_stream_id;
     uint64_t next_stream_id[4];
@@ -1609,6 +1611,7 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
 /* Management of address tuples */
 picoquic_tuple_t * picoquic_create_tuple(picoquic_path_t* path_x, const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index);
 void picoquic_delete_demoted_tuples(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time);
+void picoquic_set_tuple_challenge_failed(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 void picoquic_delete_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple, int is_deleting_path);
 void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 /* Management of path */
@@ -1647,6 +1650,7 @@ int picoquic_find_path_by_address(picoquic_cnx_t* cnx, const struct sockaddr* ad
 int picoquic_find_path_by_unique_id(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_check_cid_for_new_tuple(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple);
+int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 //int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);

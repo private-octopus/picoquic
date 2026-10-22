@@ -1,27 +1,30 @@
 version: build{build}
 image: Visual Studio 2017
 
+# Build a branch with an open PR only once, as the PR build
+skip_branch_with_pr: true
+
 environment:
   matrix:
     - platform: x86
       configuration: Debug
-      OPENSSLDIR: C:\OpenSSL-v11-Win32
+      OPENSSLDIR: C:\OpenSSL-v111-Win32
     - platform: x64
       configuration: Debug
-      OPENSSL64DIR: C:\OpenSSL-v11-Win64
+      OPENSSL64DIR: C:\OpenSSL-v111-Win64
     - platform: x86
       configuration: Release
-      OPENSSLDIR: C:\OpenSSL-v11-Win32
+      OPENSSLDIR: C:\OpenSSL-v111-Win32
     - platform: x64
       configuration: Release
-      OPENSSL64DIR: C:\OpenSSL-v11-Win64
+      OPENSSL64DIR: C:\OpenSSL-v111-Win64
 matrix:
   allow_failures:
     # For some reason linking picoquicdemo.lib fails with
     # cifra.lib(chash.obj) : error LNK2001: unresolved external symbol __CheckForDebuggerJustMyCode [C:\projects\picoquic\picoquicfirst\picoquicfirst.vcxproj]
     - platform: x64
       configuration: Debug
-      OPENSSL64DIR: C:\OpenSSL-v11-Win64
+      OPENSSL64DIR: C:\OpenSSL-v111-Win64
 
 install:
   - ps: git submodule --quiet update --init --recursive
@@ -42,6 +45,53 @@ test_script:
  # - ps: vstest.console /logger:Appveyor "/testcasefilter:(Name!=config_quic)&(Name!=config_option)&(Name!=qlog_trace)&(Name!=qlog_trace_auto)&(Name!=qlog_trace_ecn)&(Name!=qlog_trace_only)&(Name!=simple_multipath_qlog)&(Name!=multipath_qlog)&(Name!=threading)" UnitTest1.dll
  # Alternative to UnitTest1 (running the same tests):
  # - ps: .\picoquic_t.exe -x fuzz_initial
+ # Run picoquic_t and picohttp_t on x86 Release only to limit cost, skipping the long-delay
+ # simulations, which take about half the picoquic_t run time. picoquic_t needs libcrypto-1_1.dll next to it, and
+ # check_imports.ps1 reports which DLL or entry point is missing if it cannot start.
+ # The AppVeyor host fails the step on native stderr lines, and only reads stderr at exit,
+ # so output goes through files, with a time limit. As in the Linux CI, -r reruns failed
+ # tests with debug output on.
+ - ps: |
+     if ($Env:Platform -eq "x86" -and $Env:Configuration -eq "Release") {
+       Copy-Item "$Env:OPENSSLDIR\bin\libcrypto-1_1.dll" .
+       ..\ci\check_imports.ps1 .\picoquic_t.exe
+       Write-Host "Sockets already using the QMUX test ports 3456-3458:"
+       netstat -ano | Select-String ":345[678] " | ForEach-Object { Write-Host $_.Line }
+       function Invoke-PicoquicTest([string]$exe, [string]$arguments, [int]$timeoutSeconds) {
+         $p = Start-Process ".\$exe" -ArgumentList $arguments -NoNewWindow -PassThru `
+           -RedirectStandardOutput test_out.txt -RedirectStandardError test_err.txt
+         $handle = $p.Handle
+         $exitCode = $null
+         if ($p.WaitForExit($timeoutSeconds * 1000)) {
+           $exitCode = $p.ExitCode
+         }
+         else {
+           $p.Kill()
+           $p.WaitForExit()
+           Write-Host "$exe $arguments did not complete in $timeoutSeconds seconds"
+         }
+         Get-Content test_out.txt | Write-Host
+         Get-Content test_err.txt -Tail 2000 | Write-Host
+         return $exitCode
+       }
+       $skip = @("dtn_data", "high_latency_bbr", "high_latency_probeRTT",
+         "satellite_basic", "satellite_seeded", "satellite_seeded_bbr1", "satellite_loss",
+         "satellite_loss_fc", "satellite_jitter", "satellite_medium", "satellite_preemptive",
+         "satellite_preemptive_fc", "satellite_small", "satellite_small_up", "satellite_bbr1",
+         "satellite_cubic", "satellite_cubic_seeded", "satellite_cubic_loss",
+         "satellite_dcubic_seeded", "satellite_prague_seeded")
+       $failures = @()
+       foreach ($run in @(@("picoquic_t.exe", "-n -r -S .. -x $($skip -join ' ')"), @("picohttp_t.exe", "-n -r -S .."))) {
+         $exitCode = Invoke-PicoquicTest $run[0] $run[1] 900
+         if ($exitCode -eq $null) {
+           $failures += "$($run[0]) timed out"
+         }
+         elseif ($exitCode -ne 0) {
+           $failures += ("{0} failed, exit code 0x{1:X8}" -f $run[0], $exitCode)
+         }
+       }
+       if ($failures.Count -gt 0) { throw ($failures -join "; ") }
+     }
 
 deploy: off
 

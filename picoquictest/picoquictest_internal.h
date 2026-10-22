@@ -203,6 +203,7 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
     struct sockaddr_in client_addr_natted; /* When simulating NAT (client use NAT) */
+    struct sockaddr_in client_addr_relayed; /* When client_use_multiple_addresses, packets to it reach the client */
     struct sockaddr_in client_addr_2; /* for use in multipath tests */
     struct sockaddr_in server_addr;
     test_api_callback_t client_callback;
@@ -433,6 +434,7 @@ typedef struct st_zero_rtt_test_t {
     int propose_ech;
     int change_params;
     int cipher_suite_id;
+    int refuse_0rtt;
 } zero_rtt_test_t;
 
 int zero_rtt_test_one(zero_rtt_test_t* zrt);

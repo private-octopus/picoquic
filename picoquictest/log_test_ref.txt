@@ -99,6 +99,7 @@
     stop_sending: Stream 19 (0x13), Error 0x17.
     Malformed STOP SENDING, requires more than 2 bytes
     Malformed new_token, requires 8 bytes out of 26
+    Malformed new_token, requires 12 bytes out of 12
     ack (nb=2), 4328719360-4328719365
         ack gap error: largest=4328719365, range=6, gap=4611686018427387904
     ack (nb=1)
@@ -109,6 +110,7 @@
         Malformed ACK RANGE, -5 blocks remain.
     Malformed crypto_hs frame.
     Malformed datagram: 318fffffffa0a1a2...
+    Malformed datagram: 31c0000000ffffff...
     ping, 1 bytes
     padding, 1 bytes
     stream 4611684923227504639, offset 4611686018427387903, length 3, fin = 1: ffffff

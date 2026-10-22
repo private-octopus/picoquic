@@ -521,7 +521,7 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                     }
                 }
                 else if (i == 1 && bdp_test_option == bdp_test_option_short_lo) {
-                    max_completion_time = 4650000;
+                    max_completion_time = 4800000;
                 }
             }
             else if (i > 0) {

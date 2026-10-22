@@ -3043,7 +3043,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                                 max_data_increase);
                         }
                     }
-                    else if (2 * cnx->offset_received > cnx->maxdata_local) {
+                    else if (2 * cnx->data_received > cnx->maxdata_local) {
+                        /* Use delivered data, not highest offsets, so out of order fragments cannot inflate the window */
                         bytes_next = picoquic_format_max_data_frame(cnx, bytes_next, bytes_max, &more_data, &is_pure_ack,
                             picoquic_cc_increased_window(cnx, cnx->maxdata_local));
                     }
