@@ -4,6 +4,13 @@ image: Visual Studio 2017
 # Build a branch with an open PR only once, as the PR build
 skip_branch_with_pr: true
 
+# Do not build the release tags pushed by the BuildLibs workflow
+skip_tags: true
+
+# Build pull requests only: end branch-push builds (e.g. merges to master) at once
+init:
+  - ps: if (-not $Env:APPVEYOR_PULL_REQUEST_NUMBER) { Exit-AppveyorBuild }
+
 environment:
   matrix:
     - platform: x86
