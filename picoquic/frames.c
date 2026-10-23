@@ -3131,7 +3131,10 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
             ack_state.nb_bytes_newly_lost = nb_bytes_newly_lost;
             ack_state.nb_loss_ranges_newly_lost = packet_data->path_ack[i].acked_path->nb_loss_ranges_found - loss_ranges_before_ack;
             if (cnx->cnx_state == picoquic_state_ready) {
-                ack_state.nb_bytes_lost_since_packet_sent = path_x->total_bytes_lost - packet_data->path_ack[i].lost_prior;
+                picoquic_path_t* acked_path = packet_data->path_ack[i].acked_path;
+                /* Spurious loss corrections can bring total_bytes_lost below lost_prior. */
+                ack_state.nb_bytes_lost_since_packet_sent = (acked_path->total_bytes_lost > packet_data->path_ack[i].lost_prior) ?
+                    acked_path->total_bytes_lost - packet_data->path_ack[i].lost_prior : 0;
             }
             else {
                 /* the count of lost bytes is very unreliable before the handshake completes.
@@ -3141,7 +3144,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
                  */
                 ack_state.nb_bytes_lost_since_packet_sent = nb_bytes_newly_lost;
             }
-            ack_state.nb_bytes_delivered_since_packet_sent = path_x->delivered - packet_data->path_ack[i].delivered_prior;
+            ack_state.nb_bytes_delivered_since_packet_sent = packet_data->path_ack[i].acked_path->delivered - packet_data->path_ack[i].delivered_prior;
             ack_state.inflight_prior = packet_data->path_ack[i].inflight_prior;
             ack_state.is_app_limited = packet_data->path_ack[i].rs_is_path_limited;
             ack_state.is_cwnd_limited = packet_data->path_ack[i].rs_is_cwnd_limited;

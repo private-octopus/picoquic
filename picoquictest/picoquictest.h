@@ -129,6 +129,7 @@ int ack_horizon_test(void);
 int sack_list_unbounded_growth_test(void);
 int sack_list_stream_bytes_unbounded_test(void);
 int sack_list_horizon_backward_test(void);
+int ack_loss_since_sent_test(void);
 int tls_api_two_connections_test(void);
 int cleartext_aead_test(void);
 int tls_api_multiple_versions_test(void);
