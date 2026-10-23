@@ -2963,12 +2963,24 @@ int test_version_negotiation_spoof(void)
  * This will start a connection with version 1, and verify that it gets established with version 2,
  * or to version 2 draft.
  */
-int vn_compat_test_one(uint32_t current, uint32_t target)
+int vn_compat_test_one(uint32_t current, uint32_t target, uint8_t t_id)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, current, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0x5e, 0xa5, 0x10, 0xc0, 0, 0, 0, 0}, 8 };
+    int ret;
 
+    initial_cid.id[4] = t_id;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, current,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0) {
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+    }
 
     if (ret == 0) {
         /* Set the desired version */
@@ -2986,9 +2998,13 @@ int vn_compat_test_one(uint32_t current, uint32_t target)
         (void)tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
     }
 
-
     if (ret == 0) {
-        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
+        if (!TEST_CLIENT_READY || test_ctx->cnx_server == NULL || !TEST_SERVER_READY) {
+            DBG_PRINTF("Connection failed, client state: %d",
+                test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+        else if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
             DBG_PRINTF("Client remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
@@ -2997,6 +3013,10 @@ int vn_compat_test_one(uint32_t current, uint32_t target)
             DBG_PRINTF("Server remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
+        }
+        else if ((ret = wait_client_connection_ready(test_ctx, &simulated_time)) != 0) {
+            DBG_PRINTF("Client connection not ready, state: %d",
+                test_ctx->cnx_client->cnx_state);
         }
     }
 
@@ -3012,13 +3032,13 @@ int vn_compat_test(void)
 {
     int ret = 0;
 
-    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION) != 0) {
+    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION, 1) != 0) {
         ret = -1;
     }
-    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT) != 0) {
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT, 2) != 0) {
         ret = -1;
     }
-    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1) == 0) {
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1, 3) == 0) {
         ret = -1;
     }
 
