@@ -227,11 +227,6 @@ int picoquic_parse_long_packet_header(
         ret = -1;
     }
     else if (ph->vn != 0) {
-#if 1
-        if (ph->vn != 1) {
-            DBG_PRINTF("%s", "New version");
-        }
-#endif
         ph->version_index = picoquic_get_version_index(ph->vn);
         if (ph->version_index < 0) {
             if (picoquic_scone_incoming(quic, ph, bytes_start, bytes_max) != 0) {
