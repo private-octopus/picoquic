@@ -820,7 +820,7 @@ int picoquic_parse_header_and_decrypt(
                         ret = PICOQUIC_ERROR_PACKET_WRONG_VERSION;
                     }
                 }
-                else {
+                if (ret == 0) {
                     /* Remove header protection at this point -- values of bytes will not change */
                     ret = picoquic_remove_header_protection(*pcnx, (uint8_t*)bytes, decrypted_data->data, ph);
 
