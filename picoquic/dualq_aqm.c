@@ -315,7 +315,7 @@ void dualq_pi2_update(dualq_state_t* dualq, uint64_t current_time)
     if ((dualq->p_CL = dualq->pprime * dualq->k) > 1.0) {
         dualq->p_CL = 1.0;
     }
-    dualq->p_C = dualq->pprime * dualq->pprime_L;
+    dualq->p_C = dualq->pprime * dualq->pprime;
     dualq->prevq = dualq->curq;
 }
 
