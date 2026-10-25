@@ -327,17 +327,31 @@ if(WITH_AEGIS AND PICOQUIC_FETCH_AEGIS)
 endif()
 
 if(PICOQUIC_FETCH_PTLS)
+    # Picoquic does not use certificate compression. Keep the dependency out of
+    # shared libraries even when Brotli development packages are installed.
+    set(WITH_BROTLI OFF CACHE BOOL "Build picotls with Brotli certificate compression" FORCE)
+    set(WITH_BROTLI OFF)
     if(WITH_AEGIS)
         FetchContent_Declare(picotls
             GIT_REPOSITORY      https://github.com/h2o/picotls.git
             GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG}
-            PATCH_COMMAND       ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findaegis.cmake <SOURCE_DIR>/cmake/Findaegis.cmake)
+            PATCH_COMMAND       ${CMAKE_COMMAND} -DPICOTLS_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchPicotlsBrotli.cmake
+            COMMAND             ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findaegis.cmake <SOURCE_DIR>/cmake/Findaegis.cmake)
     else()
         FetchContent_Declare(picotls
             GIT_REPOSITORY      https://github.com/h2o/picotls.git
-            GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG})
+            GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG}
+            PATCH_COMMAND       ${CMAKE_COMMAND} -DPICOTLS_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchPicotlsBrotli.cmake)
     endif()
     FetchContent_MakeAvailable(picotls)
+    # FetchContent source overrides bypass PATCH_COMMAND; fail rather than
+    # silently build Brotli with an older, unpatched source override.
+    get_target_property(_picotls_sources picotls-core SOURCES)
+    foreach(_picotls_source IN LISTS _picotls_sources)
+        if(_picotls_source MATCHES "(^|/)certificate_compression\\.c$")
+            message(FATAL_ERROR "Fetched picotls still enables Brotli. Apply cmake/PatchPicotlsBrotli.cmake to the picotls source override or use a revision supporting WITH_BROTLI=OFF.")
+        endif()
+    endforeach()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

@@ -10,6 +10,17 @@ on:
       - master
 
 jobs:
+  brotli-disabled:
+    name: Picotls without Brotli
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libbrotli-dev pkg-config
+      - name: Check shared build and runtime defaults
+        run: sh ci/test_picotls_brotli.sh "$RUNNER_TEMP/picoquic-brotli"
+      - name: Check patching a vendored source snapshot
+        run: sh ci/test_picotls_brotli_patch.sh "$RUNNER_TEMP/picoquic-brotli/_deps/picotls-src" "$RUNNER_TEMP/picotls-patch"
   citests:
     name: CI-Tests
     runs-on: ubuntu-latest
