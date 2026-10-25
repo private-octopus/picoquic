@@ -304,6 +304,8 @@ typedef struct st_test_vary_link_spec_t {
     uint64_t microsec_latency;
 } test_vary_link_spec_t;
 
+uint64_t test_vary_link(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t transition_time, test_vary_link_spec_t* link_state);
+
 
 
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
