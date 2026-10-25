@@ -3465,6 +3465,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(l4s_prague_shallow)
+        {
+            int ret = l4s_prague_shallow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_prague_long_rtt)
         {
             int ret = l4s_prague_long_rtt_test();

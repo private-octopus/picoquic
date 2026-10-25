@@ -156,6 +156,7 @@ typedef enum {
 #define NB_RTT_RENO 4
 #define PRAGUE_SHIFT_G 4 /* g = 1/2^4, gain parameter for alpha EWMA */
 #define PRAGUE_G_INV (1<<PRAGUE_SHIFT_G)
+#define PRAGUE_MAX_BURST_DELAY 250 /* microseconds of bottleneck queue a pacing burst may build */
 
 typedef struct st_picoquic_prague_state_t {
     picoquic_prague_alg_state_t alg_state;
@@ -403,6 +404,28 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
 }
 
 
+/* Pacing for Prague, draft-briscoe-iccrg-prague-congestion-control section 2.5:
+ * pace cwin over the RTT, and allow bursts of at most MAX_BURST_DELAY at the
+ * pacing rate. The generic quantum of cwin/4, capped at 16 packets, builds a
+ * queue of up to 16 packets at line rate, which crosses a shallow L4S marking
+ * threshold even when the standing queue is empty.
+ */
+static void picoquic_prague_update_pacing(picoquic_path_t* path_x, int slow_start)
+{
+    if (slow_start || path_x->cwin < 8 * (uint64_t)path_x->send_mtu || path_x->smoothed_rtt <= 1) {
+        picoquic_update_pacing_data(path_x, slow_start);
+    }
+    else {
+        double pacing_rate = ((double)path_x->cwin * 1000000.0) / (double)path_x->smoothed_rtt;
+        uint64_t quantum = (uint64_t)((pacing_rate * PRAGUE_MAX_BURST_DELAY) / 1000000.0);
+
+        if (quantum < 2 * (uint64_t)path_x->send_mtu) {
+            quantum = 2 * (uint64_t)path_x->send_mtu;
+        }
+        picoquic_update_pacing_rate(path_x, pacing_rate, quantum);
+    }
+}
+
 /* Callback management for Prague
  */
 void picoquic_prague_notify(
@@ -474,7 +497,7 @@ void picoquic_prague_notify(
             break;
         }
         /* Compute pacing data */
-        picoquic_update_pacing_data(path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
+        picoquic_prague_update_pacing(path_x, pr_state->alg_state == picoquic_prague_alg_slow_start &&
             pr_state->ssthresh == UINT64_MAX);
     }
 }

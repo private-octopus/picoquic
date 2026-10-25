@@ -255,9 +255,23 @@ int l4s_bbr_updown_test(void)
 }
 
 /* 100 Mbps links for the Prague tests, by RTT. */
+static test_vary_link_spec_t l4s_link_100mbps_20ms[] = {
+    { 60000000, 100000000, 100000000, 10000 }
+};
+
 static test_vary_link_spec_t l4s_link_100mbps_40ms[] = {
     { 60000000, 100000000, 100000000, 20000 }
 };
+
+/* A 1 ms marking step at 20 ms RTT. Pacing bursts longer than the step get
+ * marked even when there is no standing queue.
+ */
+int l4s_prague_shallow_test(void)
+{
+    l4s_test_options_t options = { 50000000, 1000, 1000, 0 };
+
+    return l4s_congestion_test(picoquic_prague_algorithm, 1, 6000000, 50, 1000, 1, l4s_link_100mbps_20ms, &options);
+}
 
 /* The RFC 9332 ramp from 3 to 6 ms at 40 ms RTT, with a 100 ms buffer so
  * that the slow start overshoot is marked rather than dropped. The window
