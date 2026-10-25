@@ -603,6 +603,7 @@ static const picoquic_test_def_t test_table[] = {
     { "l4s_reno", l4s_reno_test },
     { "l4s_prague", l4s_prague_test },
     { "l4s_prague_updown", l4s_prague_updown_test },
+    { "l4s_prague_long_rtt", l4s_prague_long_rtt_test },
     { "l4s_bbr", l4s_bbr_test },
     { "l4s_bbr1", l4s_bbr1_test },
     { "l4s_c4", l4s_c4_test },

@@ -253,3 +253,20 @@ int l4s_bbr_updown_test(void)
     return ret;
 #endif
 }
+
+/* 100 Mbps links for the Prague tests, by RTT. */
+static test_vary_link_spec_t l4s_link_100mbps_40ms[] = {
+    { 60000000, 100000000, 100000000, 20000 }
+};
+
+/* The RFC 9332 ramp from 3 to 6 ms at 40 ms RTT, with a 100 ms buffer so
+ * that the slow start overshoot is marked rather than dropped. The window
+ * must not be reduced a second time for that overshoot, since recovering
+ * by one packet per RTT takes seconds at that RTT.
+ */
+int l4s_prague_long_rtt_test(void)
+{
+    l4s_test_options_t options = { 50000000, 3000, 6000, 120000 };
+
+    return l4s_congestion_test(picoquic_prague_algorithm, 1, 5000000, 10, 6000, 1, l4s_link_100mbps_40ms, &options);
+}

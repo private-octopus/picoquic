@@ -604,6 +604,7 @@ int bbr_asym400_test(void);
 int l4s_reno_test(void);
 int l4s_prague_test(void);
 int l4s_prague_updown_test(void);
+int l4s_prague_long_rtt_test(void);
 int l4s_c4_test(void);
 int l4s_bbr_test(void);
 int l4s_bbr1_test(void);
