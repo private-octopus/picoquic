@@ -1,4 +1,5 @@
 # Backport the Brotli opt-in switch until the pinned picotls includes it.
+# Upstream: https://github.com/h2o/picotls/pull/663
 if(NOT DEFINED PICOTLS_SOURCE_DIR)
     message(FATAL_ERROR "PICOTLS_SOURCE_DIR is required")
 endif()
