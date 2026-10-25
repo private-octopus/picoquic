@@ -240,7 +240,7 @@ picoquictest_sim_packet_t* dualq_dequeue_one(dualq_state_t* dualq, uint64_t curr
             if (dualq->p_CL < dualq->p_Lmax) {
                 dualq->pprime_L = dualq_laqm(dualq, current_time); /* Native LAQM */
                 dualq->p_L = (dualq->pprime_L > dualq->p_CL) ? dualq->pprime_L : dualq->p_CL; /* Combining function */
-                if (dualq_recur(&dualq->lq, dualq->pprime_L)) {
+                if (dualq_recur(&dualq->lq, dualq->p_L)) {
                     /* Linear marking */
                     packet->ecn_mark = PICOQUIC_ECN_CE;
                 }
