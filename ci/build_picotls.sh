@@ -2,8 +2,7 @@
 # build last picotls master (for Travis)
 
 # Build at a known-good commit
-COMMIT_ID=f06553b877ada93c860dd1db9002eabf7365292d
-PICOQUIC_SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+COMMIT_ID=33818dace673591cd88237a65adf487535c93af2
 
 cd .. || exit
 # git clone --branch master --single-branch --shallow-submodules --recurse-submodules \
@@ -13,7 +12,6 @@ cd picotls || exit
 git checkout -q "$COMMIT_ID"
 git submodule init
 git submodule update
-cmake -DPICOTLS_SOURCE_DIR="$PWD" -P "$PICOQUIC_SOURCE_DIR/cmake/PatchPicotlsBrotli.cmake" || exit
 # shellcheck disable=SC2154
 echo "Using options:  $PTLS_CMAKE_OPTS"
 # shellcheck disable=SC2086
