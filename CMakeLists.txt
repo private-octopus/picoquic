@@ -304,8 +304,8 @@ OPTION(PICOQUIC_FETCH_PTLS "Fetch PicoTLS during configuration" OFF)
 OPTION(PICOQUIC_FETCH_AEGIS "Fetch libaegis during configuration when WITH_AEGIS is enabled" OFF)
 OPTION(PICOQUIC_AEGIS_FAVOR_PERFORMANCE "Build fetched libaegis with FAVOR_PERFORMANCE enabled" ON)
 OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for this host CPU" OFF)
-# Set to picotls build as of 2026-10-08, which includes AEGIS support when available.
-set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "f06553b877ada93c860dd1db9002eabf7365292d")
+# Set to picotls build as of 2026-10-27, which supports WITH_BROTLI=OFF.
+set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "e446233b4100ebcdec60901c05bfb7f4cd369c5d")
 set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
 set(PICOQUIC_FETCH_AEGIS_TAG "0.10.1" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
 if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
@@ -327,6 +327,10 @@ if(WITH_AEGIS AND PICOQUIC_FETCH_AEGIS)
 endif()
 
 if(PICOQUIC_FETCH_PTLS)
+    # Picoquic does not use certificate compression. Keep the dependency out of
+    # shared libraries even when Brotli development packages are installed.
+    set(WITH_BROTLI OFF CACHE BOOL "Build picotls with Brotli certificate compression" FORCE)
+    set(WITH_BROTLI OFF)
     if(WITH_AEGIS)
         FetchContent_Declare(picotls
             GIT_REPOSITORY      https://github.com/h2o/picotls.git
@@ -338,6 +342,13 @@ if(PICOQUIC_FETCH_PTLS)
             GIT_TAG             ${PICOQUIC_FETCH_PTLS_TAG})
     endif()
     FetchContent_MakeAvailable(picotls)
+    # Reject older source overrides that do not honor WITH_BROTLI=OFF.
+    get_target_property(_picotls_sources picotls-core SOURCES)
+    foreach(_picotls_source IN LISTS _picotls_sources)
+        if(_picotls_source MATCHES "(^|/)certificate_compression\\.c$")
+            message(FATAL_ERROR "Fetched picotls still enables Brotli. Update the picotls source override or PICOQUIC_FETCH_PTLS_TAG to a revision supporting WITH_BROTLI=OFF (33818dace673591cd88237a65adf487535c93af2 or later).")
+        endif()
+    endforeach()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

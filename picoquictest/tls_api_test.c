@@ -15231,6 +15231,26 @@ ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_ro
     unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx* p_free_certificate_verifier_fn);
 void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier);
 
+int tls_api_certificate_compression_disabled_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+        if (ctx == NULL || ctx->decompress_certificate != NULL || ctx->emit_certificate != NULL) {
+            DBG_PRINTF("%s", "Default TLS context enables certificate compression");
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+    return ret;
+}
+
 /* picoquic_dispose_certificate_verifier is a public wrapper with no callers anywhere in the
  * codebase -- picoquic itself disposes a verify_certificate callback by invoking the captured
  * function pointer directly (see picoquic_dispose_verify_certificate_callback_ctx in
