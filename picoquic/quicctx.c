@@ -4124,6 +4124,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
 
         for (int epoch = 0; epoch < PICOQUIC_NUMBER_OF_EPOCHS; epoch++) {
             cnx->tls_stream[epoch].send_queue = NULL;
+            cnx->tls_stream[epoch].send_queue_last = NULL;
         }
 
         /* Perform different initializations for clients and servers */

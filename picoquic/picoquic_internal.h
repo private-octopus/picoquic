@@ -784,6 +784,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t sent_offset; /* Amount of data sent in the stream */
     uint64_t reliable_size; /* Length guaranteed when sending "reset at" */
     picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
+    picoquic_stream_queue_node_t* send_queue_last; /* tail of send_queue, or NULL when empty */
     void * app_stream_ctx;
     picoquic_stream_direct_receive_fn direct_receive_fn; /* direct receive function, if not NULL */
     void* direct_receive_ctx; /* direct receive context */

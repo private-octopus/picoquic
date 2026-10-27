@@ -127,6 +127,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
         free(next);
     }
     stream->send_queue = NULL;
+    stream->send_queue_last = NULL;
     if (stream->is_output_stream) {
         picoquic_remove_output_stream(stream->cnx, stream);
     }
@@ -374,20 +375,16 @@ int picoquic_add_to_stream_with_ctx(picoquic_cnx_t* cnx, uint64_t stream_id,
                 ret = -1;
             }
             else {
-                picoquic_stream_queue_node_t** pprevious = &stream->send_queue;
-                picoquic_stream_queue_node_t* next = stream->send_queue;
+                picoquic_stream_queue_node_t** pprevious = (stream->send_queue_last == NULL) ?
+                    &stream->send_queue : &stream->send_queue_last->next_stream_data;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
                 stream_data->offset = 0;
                 stream_data->next_stream_data = NULL;
 
-                while (next != NULL) {
-                    pprevious = &next->next_stream_data;
-                    next = next->next_stream_data;
-                }
-
                 *pprevious = stream_data;
+                stream->send_queue_last = stream_data;
             }
         }
 
