@@ -617,7 +617,12 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_last;
     struct st_picoquic_cnx_t* cnx_wake_ready_first;
     struct st_picoquic_cnx_t* cnx_wake_ready_last;
-    picosplay_tree_t cnx_wake_tree;
+    /* Future timers live in this indexed min-heap. The ready timers retain
+     * their separate FIFO above. Capacity grows only at connection creation. */
+    struct st_picoquic_cnx_t** cnx_wake_heap;
+    size_t cnx_wake_heap_size;
+    size_t cnx_wake_heap_capacity;
+    uint64_t cnx_wake_heap_next_sequence;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 
@@ -1286,7 +1291,7 @@ typedef struct st_picoquic_cnx_t {
     unsigned int is_loss_bit_enabled_incoming : 1; /* Read the loss bits in incoming packets */
     unsigned int is_loss_bit_enabled_outgoing : 1; /* Insert the loss bits in outgoing packets */
     unsigned int is_wake_ready : 1; /* Connection is in the due-now wake FIFO */
-    unsigned int is_wake_tree : 1; /* Connection is in the future wake-time tree */
+    unsigned int is_wake_tree : 1; /* Connection is in the future wake-time heap */
     unsigned int is_ack_frequency_negotiated : 1; /* Ack Frequency extension negotiated */
     unsigned int is_ack_frequency_updated : 1; /* Should send an ack frequency frame asap. */
     unsigned int recycle_sooner_needed : 1; /* There may be a need to recycle "sooner" packets */
@@ -1382,7 +1387,8 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
-    picosplay_node_t cnx_wake_node;
+    size_t cnx_wake_heap_index;
+    uint64_t cnx_wake_heap_sequence;
     struct st_picoquic_cnx_t* cnx_wake_next;
     struct st_picoquic_cnx_t* cnx_wake_previous;
     /* Wakeup time requested by the application */

@@ -26,6 +26,7 @@
 #include "picoquic_utils.h"
 #include "picoquic_unified_log.h"
 #include "tls_api.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WINDOWS
@@ -638,7 +639,7 @@ uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
 }
 
 /* Forward reference */
-static void picoquic_wake_list_init(picoquic_quic_t* quic);
+static int picoquic_wake_list_init(picoquic_quic_t* quic, size_t capacity);
 
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
@@ -691,8 +692,6 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         picoquic_init_transport_parameters(&quic->default_tp);
 
         quic->random_initial = 1;
-        picoquic_wake_list_init(quic);
-
         if (cnx_id_callback != NULL) {
             quic->unconditional_cnx_id = 1;
         }
@@ -714,8 +713,10 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
             /* Each connection can hold up to PICOQUIC_NB_TUPLE_TARGET local CIDs */
             max_cnx_by_id = max_cnx4 * PICOQUIC_NB_TUPLE_TARGET;
 
-            if (max_cnx4 < (size_t)max_nb_connections ||
+            if ((size_t)max_nb_connections > SIZE_MAX / sizeof(picoquic_cnx_t*) ||
+                max_cnx4 < (size_t)max_nb_connections ||
                 max_cnx_by_id < max_cnx4 ||
+                picoquic_wake_list_init(quic, (size_t)max_nb_connections) != 0 ||
                 (quic->table_cnx_by_id = picohash_create_ex(max_cnx_by_id,
                 picoquic_local_cnxid_hash, picoquic_local_cnxid_compare, picoquic_local_cnxid_to_item, quic->hash_seed)) == NULL ||
                 (quic->table_cnx_by_net = picohash_create_ex((size_t)max_nb_connections * 4,
@@ -1085,6 +1086,7 @@ void picoquic_free(picoquic_quic_t* quic)
         while (quic->cnx_list != NULL) {
             picoquic_delete_cnx(quic->cnx_list);
         }
+        free(quic->cnx_wake_heap);
 
         /* Delete ECH context if it was created */
         picoquic_release_quic_ech_ctx(quic);
@@ -1487,38 +1489,158 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
     cnx->quic->current_number_connections--;
 }
 
-/* Management of the list of connections, sorted by wake time */
-
-static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
+/* Future timers use an indexed min-heap. The sequence number makes equal
+ * deadlines FIFO-stable; the due-now queue remains a separate FIFO below. */
+static int picoquic_wake_list_init(picoquic_quic_t* quic, size_t capacity)
 {
-    return (cnx_wake_node == NULL)?NULL:(void*)((char*)cnx_wake_node - offsetof(struct st_picoquic_cnx_t, cnx_wake_node));
-}
-
-static int64_t picoquic_wake_list_compare(void* l, void* r) {
-    const uint64_t ltime = ((picoquic_cnx_t*)l)->next_wake_time;
-    const uint64_t rtime = ((picoquic_cnx_t*)r)->next_wake_time;
-    if (ltime < rtime) return -1;
-    if (ltime > rtime) return 1;
+    quic->cnx_wake_heap = (picoquic_cnx_t**)malloc(capacity * sizeof(picoquic_cnx_t*));
+    if (quic->cnx_wake_heap == NULL) {
+        return -1;
+    }
+    quic->cnx_wake_heap_capacity = capacity;
+    quic->cnx_wake_heap_next_sequence = 1;
     return 0;
 }
 
-static picosplay_node_t* picoquic_wake_list_create_node(void* v_cnx)
+static int picoquic_wake_heap_reserve(picoquic_quic_t* quic, size_t required)
 {
-    return &((picoquic_cnx_t*)v_cnx)->cnx_wake_node;
+    size_t capacity = quic->cnx_wake_heap_capacity;
+    picoquic_cnx_t** heap;
+
+    if (required <= capacity) {
+        return 0;
+    }
+    while (capacity < required) {
+        if (capacity > SIZE_MAX / 2 / sizeof(picoquic_cnx_t*)) {
+            return -1;
+        }
+        capacity *= 2;
+    }
+    if (capacity > SIZE_MAX / sizeof(picoquic_cnx_t*)) {
+        return -1;
+    }
+    heap = (picoquic_cnx_t**)realloc(quic->cnx_wake_heap,
+        capacity * sizeof(picoquic_cnx_t*));
+    if (heap == NULL) {
+        return -1;
+    }
+    quic->cnx_wake_heap = heap;
+    quic->cnx_wake_heap_capacity = capacity;
+    return 0;
 }
 
-static void picoquic_wake_list_delete_node(void* UNUSED(tree), picosplay_node_t* node)
+static int picoquic_wake_heap_before(const picoquic_cnx_t* left, const picoquic_cnx_t* right)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
-    memset(node, 0, sizeof(picosplay_node_t));
+    return left->next_wake_time < right->next_wake_time ||
+        (left->next_wake_time == right->next_wake_time &&
+            left->cnx_wake_heap_sequence < right->cnx_wake_heap_sequence);
 }
 
-static void picoquic_wake_list_init(picoquic_quic_t * quic)
+static void picoquic_wake_heap_swap(picoquic_quic_t* quic, size_t left, size_t right)
 {
-    picosplay_init_tree(&quic->cnx_wake_tree, picoquic_wake_list_compare,
-        picoquic_wake_list_create_node, picoquic_wake_list_delete_node, picoquic_wake_list_node_value);
+    picoquic_cnx_t* cnx = quic->cnx_wake_heap[left];
+    quic->cnx_wake_heap[left] = quic->cnx_wake_heap[right];
+    quic->cnx_wake_heap[right] = cnx;
+    quic->cnx_wake_heap[left]->cnx_wake_heap_index = left;
+    quic->cnx_wake_heap[right]->cnx_wake_heap_index = right;
+}
+
+static void picoquic_wake_heap_sift_up(picoquic_quic_t* quic, size_t index)
+{
+    while (index != 0) {
+        size_t parent = (index - 1) / 2;
+        if (!picoquic_wake_heap_before(quic->cnx_wake_heap[index], quic->cnx_wake_heap[parent])) {
+            break;
+        }
+        picoquic_wake_heap_swap(quic, index, parent);
+        index = parent;
+    }
+}
+
+static void picoquic_wake_heap_sift_down(picoquic_quic_t* quic, size_t index)
+{
+    for (;;) {
+        size_t left = 2 * index + 1;
+        size_t right = left + 1;
+        size_t smallest = index;
+        if (left < quic->cnx_wake_heap_size &&
+            picoquic_wake_heap_before(quic->cnx_wake_heap[left], quic->cnx_wake_heap[smallest])) {
+            smallest = left;
+        }
+        if (right < quic->cnx_wake_heap_size &&
+            picoquic_wake_heap_before(quic->cnx_wake_heap[right], quic->cnx_wake_heap[smallest])) {
+            smallest = right;
+        }
+        if (smallest == index) {
+            break;
+        }
+        picoquic_wake_heap_swap(quic, index, smallest);
+        index = smallest;
+    }
+}
+
+/* This runs only after 2^64 insertions. It avoids changing the order of
+ * existing ties without adding an allocation path to the void reinsert API. */
+static void picoquic_wake_list_renumber(picoquic_quic_t* quic)
+{
+    uint64_t sequence;
+    for (sequence = 1; sequence <= quic->cnx_wake_heap_size; sequence++) {
+        picoquic_cnx_t* oldest = NULL;
+        for (size_t i = 0; i < quic->cnx_wake_heap_size; i++) {
+            picoquic_cnx_t* cnx = quic->cnx_wake_heap[i];
+            if (cnx->cnx_wake_heap_sequence != 0 &&
+                (oldest == NULL || cnx->cnx_wake_heap_sequence < oldest->cnx_wake_heap_sequence)) {
+                oldest = cnx;
+            }
+        }
+        oldest->cnx_wake_heap_sequence = 0;
+        oldest->cnx_wake_heap_index = (size_t)(sequence - 1);
+    }
+    for (size_t i = 0; i < quic->cnx_wake_heap_size; i++) {
+        quic->cnx_wake_heap[i]->cnx_wake_heap_sequence =
+            quic->cnx_wake_heap[i]->cnx_wake_heap_index + 1;
+        quic->cnx_wake_heap[i]->cnx_wake_heap_index = i;
+    }
+    quic->cnx_wake_heap_next_sequence = sequence;
+}
+
+static uint64_t picoquic_wake_list_next_sequence(picoquic_quic_t* quic)
+{
+    if (quic->cnx_wake_heap_next_sequence == UINT64_MAX) {
+        picoquic_wake_list_renumber(quic);
+    }
+    return quic->cnx_wake_heap_next_sequence++;
+}
+
+static void picoquic_wake_heap_remove(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    size_t index = cnx->cnx_wake_heap_index;
+    size_t last = --quic->cnx_wake_heap_size;
+    cnx->is_wake_tree = 0;
+    cnx->cnx_wake_heap_sequence = 0;
+    if (index != last) {
+        quic->cnx_wake_heap[index] = quic->cnx_wake_heap[last];
+        quic->cnx_wake_heap[index]->cnx_wake_heap_index = index;
+        if (index != 0 && picoquic_wake_heap_before(quic->cnx_wake_heap[index],
+            quic->cnx_wake_heap[(index - 1) / 2])) {
+            picoquic_wake_heap_sift_up(quic, index);
+        }
+        else {
+            picoquic_wake_heap_sift_down(quic, index);
+        }
+    }
+}
+
+static void picoquic_wake_heap_insert(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+{
+    size_t index;
+    assert(quic->cnx_wake_heap_size < quic->cnx_wake_heap_capacity);
+    cnx->cnx_wake_heap_sequence = picoquic_wake_list_next_sequence(quic);
+    index = quic->cnx_wake_heap_size++;
+    cnx->cnx_wake_heap_index = index;
+    cnx->is_wake_tree = 1;
+    quic->cnx_wake_heap[index] = cnx;
+    picoquic_wake_heap_sift_up(quic, index);
 }
 
 static void picoquic_insert_cnx_in_wake_ready_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
@@ -1563,15 +1685,13 @@ static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
         picoquic_remove_cnx_from_wake_ready_list(cnx);
     }
     else if (cnx->is_wake_tree) {
-        cnx->is_wake_tree = 0;
-        picosplay_delete_hint(&cnx->quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picoquic_wake_heap_remove(cnx->quic, cnx);
     }
 }
 
-static void picoquic_insert_cnx_in_wake_tree(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
+static void picoquic_insert_cnx_in_wake_heap(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    picosplay_insert(&quic->cnx_wake_tree, cnx);
-    cnx->is_wake_tree = 1;
+    picoquic_wake_heap_insert(quic, cnx);
 }
 
 static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
@@ -1580,7 +1700,7 @@ static void picoquic_insert_cnx_by_wake_time(picoquic_quic_t* quic, picoquic_cnx
         picoquic_insert_cnx_in_wake_ready_list(quic, cnx);
     }
     else {
-        picoquic_insert_cnx_in_wake_tree(quic, cnx);
+        picoquic_insert_cnx_in_wake_heap(quic, cnx);
     }
 }
 
@@ -1602,12 +1722,11 @@ static void picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max
     uint64_t due_time = (max_wake_time == 0) ? picoquic_get_quic_time(quic) : max_wake_time;
 
     for (;;) {
-        picoquic_cnx_t* cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay_first(&quic->cnx_wake_tree));
+        picoquic_cnx_t* cnx = (quic->cnx_wake_heap_size == 0) ? NULL : quic->cnx_wake_heap[0];
         if (cnx == NULL || cnx->next_wake_time > due_time) {
             break;
         }
-        cnx->is_wake_tree = 0;
-        picosplay_delete_hint(&quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picoquic_wake_heap_remove(quic, cnx);
         picoquic_insert_cnx_in_wake_ready_list(quic, cnx);
     }
 }
@@ -1623,7 +1742,7 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
         cnx = cnx->cnx_wake_next;
     }
     if (cnx == NULL) {
-        cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay_first(&quic->cnx_wake_tree));
+        cnx = (quic->cnx_wake_heap_size == 0) ? NULL : quic->cnx_wake_heap[0];
     }
     if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
     {
@@ -1645,8 +1764,7 @@ uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_tim
         wake_time = quic->cnx_wake_ready_first->next_wake_time;
     }
     else {
-        picoquic_cnx_t* cnx_wake_first = (picoquic_cnx_t*)picoquic_wake_list_node_value(
-            picosplay_first(&quic->cnx_wake_tree));
+        picoquic_cnx_t* cnx_wake_first = (quic->cnx_wake_heap_size == 0) ? NULL : quic->cnx_wake_heap[0];
 
         if (cnx_wake_first != NULL) {
             wake_time = cnx_wake_first->next_wake_time;
@@ -3864,7 +3982,13 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
     char const* sni, char const* alpn, char client_mode,
     void * initial_aead_dec, void* initial_pn_dec)
 {
-    picoquic_cnx_t* cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
+    picoquic_cnx_t* cnx = NULL;
+
+    /* Reinsertion is void, so reserve for every live connection before this
+     * connection becomes visible to the scheduler. */
+    if (picoquic_wake_heap_reserve(quic, (size_t)quic->current_number_connections + 1) == 0) {
+        cnx = (picoquic_cnx_t*)malloc(sizeof(picoquic_cnx_t));
+    }
 
     if (cnx != NULL) {
         int ret;

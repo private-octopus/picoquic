@@ -59,6 +59,7 @@ int perflog_file_is_empty_test(void);
 int perflog_multi_cnx_test(void);
 int bytestream_test(void);
 int create_cnx_test(void);
+int wake_queue_test(void);
 int create_quic_test(void);
 int stateless_packet_queue_limit_test(void);
 int parseheadertest(void);
