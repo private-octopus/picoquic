@@ -774,6 +774,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_basic", multipath_basic_test },
     { "multipath_drop_first", multipath_drop_first_test },
     { "multipath_drop_second", multipath_drop_second_test },
+    { "multipath_drop_first_c2s", multipath_drop_first_c2s_test },
+    { "multipath_drop_first_s2c", multipath_drop_first_s2c_test },
     { "multipath_fail", multipath_fail_test },
     { "multipath_ab1", multipath_ab1_test },
     { "multipath_sat_plus", multipath_sat_plus_test },

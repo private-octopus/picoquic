@@ -83,6 +83,19 @@ static void multipath_test_kill_server_links(picoquic_test_tls_api_ctx_t* test_c
     }
 }
 
+static void multipath_test_kill_client_links(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
+{
+    /* Make sure that nothing sent by the client gets through on that link */
+    if (link_id == 0) {
+        test_ctx->c_to_s_link->next_send_time = UINT64_MAX;
+        test_ctx->c_to_s_link->is_switched_off = 1;
+    }
+    else {
+        test_ctx->c_to_s_link_2->next_send_time = UINT64_MAX;
+        test_ctx->c_to_s_link_2->is_switched_off = 1;
+    }
+}
+
 static void multipath_test_set_unreachable(picoquic_test_tls_api_ctx_t* test_ctx, int link_id)
 {
     if (link_id == 0) {
@@ -597,6 +610,8 @@ typedef enum {
     multipath_test_keep_alive,
     multipath_test_just_one,
     multipath_test_break_both,
+    multipath_test_drop_first_c2s,
+    multipath_test_drop_first_s2c,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -1122,7 +1137,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_renew || test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
         test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
         test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
-        test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both)) {
+        test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both ||
+        test_id == multipath_test_drop_first_c2s || test_id == multipath_test_drop_first_s2c)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
          * For the tunnel scenario, do the same but kill both links.
@@ -1172,6 +1188,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
                 /* Break both paths, program them to return socket errors */
                 multipath_test_set_unreachable(test_ctx, 0);
                 multipath_test_set_unreachable(test_ctx, 1);
+            }
+            else if (test_id == multipath_test_drop_first_c2s) {
+                /* Only the client to server direction of path 0 fails */
+                multipath_test_kill_client_links(test_ctx, 0);
+            }
+            else if (test_id == multipath_test_drop_first_s2c) {
+                /* Only the server to client direction of path 0 fails */
+                multipath_test_kill_server_links(test_ctx, 0);
             } else {
                 multipath_test_kill_links(test_ctx, 
                     (test_id == multipath_test_drop_first ||
@@ -1518,6 +1542,22 @@ int multipath_drop_second_test(void)
     uint64_t max_completion_microsec = 1260000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
+}
+
+/* Same as drop first, but only the client to server direction of path 0 fails. */
+int multipath_drop_first_c2s_test(void)
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first_c2s);
+}
+
+/* Same as drop first, but only the server to client direction of path 0 fails. */
+int multipath_drop_first_s2c_test(void)
+{
+    uint64_t max_completion_microsec = 1300000;
+
+    return multipath_test_one(max_completion_microsec, multipath_test_drop_first_s2c);
 }
 
 /* Simulate the combination of a satellite link and a low latency low bandwidth

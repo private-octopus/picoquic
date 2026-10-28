@@ -4241,6 +4241,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_drop_first_c2s) {
+            int ret = multipath_drop_first_c2s_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_drop_first_s2c) {
+            int ret = multipath_drop_first_s2c_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_fail) {
             int ret = multipath_fail_test();
 

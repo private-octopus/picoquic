@@ -745,6 +745,8 @@ int multipath_fail_test(void);
 int multipath_ab1_test(void);
 int multipath_drop_first_test(void);
 int multipath_drop_second_test(void);
+int multipath_drop_first_c2s_test(void);
+int multipath_drop_first_s2c_test(void);
 int multipath_sat_plus_test(void);
 int multipath_renew_test(void);
 int multipath_rotation_test(void);
