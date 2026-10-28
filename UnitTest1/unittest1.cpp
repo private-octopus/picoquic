@@ -778,6 +778,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ack_delay_per_path)
+        {
+            int ret = ack_delay_per_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -4428,6 +4435,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_cid_retire) {
             int ret = multipath_cid_retire_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_ack_delay) {
+            int ret = multipath_ack_delay_test();
 
             Assert::AreEqual(ret, 0);
         }

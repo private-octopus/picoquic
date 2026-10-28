@@ -1570,11 +1570,12 @@ typedef struct st_picoquic_cnx_t {
 
 typedef struct st_picoquic_packet_data_t {
     uint64_t last_time_stamp_received;
-    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
+    uint64_t last_ack_delay; /* ACK Delay in the ACK frame being decoded, 0 if its largest was already acked */
     int nb_path_ack;
     struct {
         picoquic_path_t* acked_path; /* path for which ACK was received */
         uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
+        uint64_t ack_delay; /* ACK Delay of the frame that acked that packet */
         uint64_t delivered_prior; /* Amount delivered prior to that packet */
         uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
         uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
