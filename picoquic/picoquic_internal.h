@@ -1021,6 +1021,10 @@ typedef struct st_picoquic_tuple_t {
     uint64_t demotion_time;
     uint64_t challenge_time_first;
     uint64_t is_nat_rebinding;
+    /* Bytes received from and sent to this address, for the anti-amplification limit
+     * while the server sends to it before it is validated (RFC 9000, sections 8 and 9.3.1). */
+    uint64_t bytes_received;
+    uint64_t bytes_sent;
     uint8_t challenge_repeat_count;
     /* Flags */
     unsigned int is_backup;
@@ -1029,6 +1033,7 @@ typedef struct st_picoquic_tuple_t {
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int to_preferred_address : 1;
+    unsigned int is_promoted_unverified : 1; /* first tuple of a server path before its validation completes */
 } picoquic_tuple_t;
 
 /*
@@ -1659,6 +1664,11 @@ int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t* pa
 int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 //int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
+void picoquic_follow_peer_address(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    const struct sockaddr* addr_from, const struct sockaddr* addr_to, uint64_t current_time);
+int picoquic_tuple_is_sending_allowed(const picoquic_path_t* path_x, const picoquic_tuple_t* tuple);
+void picoquic_follow_back_on_duplicate(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, uint64_t pn64, uint64_t current_time);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 
 picoquic_remote_cnxid_stash_t* picoquic_find_or_create_remote_cnxid_stash(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);

@@ -2390,6 +2390,9 @@ int picoquic_incoming_segment(
         ret == PICOQUIC_ERROR_AEAD_NOT_READY ||
         ret == PICOQUIC_ERROR_PATH_ID_INVALID ||
         ret == PICOQUIC_ERROR_REDIRECTED) {
+        if (ret == PICOQUIC_ERROR_DUPLICATE && cnx != NULL && ph.epoch == picoquic_epoch_1rtt) {
+            picoquic_follow_back_on_duplicate(cnx, addr_from, addr_to, ph.pn64, current_time);
+        }
         /* Bad packets are dropped silently */
         if (ret == PICOQUIC_ERROR_AEAD_CHECK ||
             ret == PICOQUIC_ERROR_PACKET_WRONG_VERSION ||

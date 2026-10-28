@@ -4966,6 +4966,89 @@ uint8_t * picoquic_format_path_response_frame(uint8_t* bytes, uint8_t* bytes_max
     return bytes;
 }
 
+/* Data goes to a validated address, or to a new one that a server moved to before validating it,
+ * within 3 times the bytes received from it (RFC 9000, sections 8 and 9.3.1). */
+int picoquic_tuple_is_sending_allowed(const picoquic_path_t* path_x, const picoquic_tuple_t* tuple)
+{
+    return tuple->challenge_verified ||
+        (tuple->is_promoted_unverified && !tuple->challenge_failed &&
+            tuple->bytes_sent + path_x->send_mtu <= 3 * tuple->bytes_received);
+}
+
+/* Whether the packet came from this tuple. A local address unknown on either side matches. */
+static int picoquic_tuple_has_addresses(const picoquic_tuple_t* tuple, const struct sockaddr* addr_from, const struct sockaddr* addr_to)
+{
+    return picoquic_compare_addr(addr_from, (const struct sockaddr*)&tuple->peer_addr) == 0 &&
+        (addr_to == NULL || addr_to->sa_family == AF_UNSPEC || tuple->local_addr.ss_family == AF_UNSPEC ||
+            picoquic_compare_addr(addr_to, (const struct sockaddr*)&tuple->local_addr) == 0);
+}
+
+/* RFC 9000, section 9.3: "Receiving a packet from a new peer address containing a non-probing
+ * frame indicates that the peer has migrated to that address." A server on a single path sends
+ * there from now on. Called for the highest-numbered non-probing packet only, so that packets
+ * reordered from an older address do not move it back. With multipath, picoquic_find_incoming_path
+ * promotes the new tuple by itself.
+ */
+void picoquic_follow_peer_address(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    const struct sockaddr* addr_from, const struct sockaddr* addr_to, uint64_t current_time)
+{
+    picoquic_tuple_t* tuple;
+    picoquic_tuple_t* previous_tuple = NULL;
+
+    if (cnx->client_mode || cnx->is_multipath_enabled || addr_from == NULL || path_x == NULL || path_x->first_tuple == NULL) {
+        return;
+    }
+    tuple = path_x->first_tuple;
+    while (tuple != NULL && !picoquic_tuple_has_addresses(tuple, addr_from, addr_to)) {
+        previous_tuple = tuple;
+        tuple = tuple->next_tuple;
+    }
+    if (tuple == NULL || previous_tuple == NULL || tuple->challenge_failed) {
+        /* Unknown address, already the first tuple, or an address that failed its validation */
+        return;
+    }
+    path_x->first_tuple->is_promoted_unverified = 0;
+    previous_tuple->next_tuple = tuple->next_tuple;
+    tuple->next_tuple = path_x->first_tuple;
+    path_x->first_tuple = tuple;
+    picoquic_reset_path_mtu(path_x);
+
+    if (!tuple->challenge_verified) {
+        /* Not validated yet: data goes there within the anti-amplification limit until it is.
+         * If the validation fails, the tuple moves to the end of the list and the previous
+         * address is used again. */
+        if (!tuple->challenge_required) {
+            picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
+            tuple->challenge_required = 1;
+        }
+        tuple->is_promoted_unverified = 1;
+    }
+    picoquic_log_app_message(cnx, "Path %" PRIu64 ": peer address changed, sending to the new address %s",
+        path_x->unique_path_id, tuple->challenge_verified ? "(validated)" : "while validating it");
+}
+
+/* RFC 9000, section 9.3.3: an attacker that forwards a copy of a packet from another address can
+ * get it there before the original, which then arrives as a duplicate. A peer never sends the same
+ * packet from two addresses: when the duplicate of the packet that moved the server comes from
+ * another validated address, the copy was the forwarded one, and the server goes back. */
+void picoquic_follow_back_on_duplicate(picoquic_cnx_t* cnx, const struct sockaddr* addr_from,
+    const struct sockaddr* addr_to, uint64_t pn64, uint64_t current_time)
+{
+    picoquic_path_t* path_x = (cnx->nb_paths > 0) ? cnx->path[0] : NULL;
+
+    if (!cnx->client_mode && !cnx->is_multipath_enabled && path_x != NULL && path_x->first_tuple != NULL &&
+        pn64 == path_x->last_non_path_probing_pn) {
+        for (picoquic_tuple_t* tuple = path_x->first_tuple->next_tuple; tuple != NULL; tuple = tuple->next_tuple) {
+            if (picoquic_tuple_has_addresses(tuple, addr_from, addr_to)) {
+                if (tuple->challenge_verified) {
+                    picoquic_follow_peer_address(cnx, path_x, addr_from, addr_to, current_time);
+                }
+                break;
+            }
+        }
+    }
+}
+
 const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_path_t * path_x, uint64_t current_time)
 {
@@ -4996,14 +5079,16 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
 
             if (found_challenge && !tuple->challenge_verified) {
                 tuple->challenge_verified = 1;
+                tuple->is_promoted_unverified = 0;
                 /* Provide a qualified time estimate from challenge time */
                 picoquic_update_path_rtt(cnx, path_x, -1, tuple->challenge_time_first, current_time, 0, 0);
-                /* This challenge is verified. 
+                /* This challenge is verified.
                 * If this is a client, the path should replace the current path.
-                * If this is a server, the replacement should happen if we have a NAT, maybe,
-                * or if qualifying data is received, which will happen later.
+                * A server on a single path moves only when non-probing packets come from the
+                * address (picoquic_follow_peer_address, RFC 9000, section 9.3): an address that
+                * the peer only probed is validated, nothing more.
                 */
-                if (previous_tuple != NULL /* && cnx->client_mode */) {
+                if (previous_tuple != NULL && (cnx->client_mode || cnx->is_multipath_enabled)) {
                     previous_tuple->next_tuple = tuple->next_tuple;
                     tuple->next_tuple = path_x->first_tuple;
                     path_x->first_tuple = tuple;
@@ -6857,6 +6942,8 @@ int picoquic_decode_frames(picoquic_cnx_t* cnx, picoquic_path_t * path_x, const 
         }
 
         if (epoch == picoquic_epoch_1rtt && !is_path_probing_packet && pn64 > path_x->last_non_path_probing_pn) {
+            /* RFC 9000, section 9.3: the highest-numbered non-probing packet decides where packets go */
+            picoquic_follow_peer_address(cnx, path_x, addr_from, addr_to, current_time);
             path_x->last_non_path_probing_pn = pn64;
         }
     }
