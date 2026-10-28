@@ -3077,6 +3077,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
 
         if (!packet_data->path_ack[path_i].is_set) {
             packet_data->path_ack[path_i].largest_sent_time = acked_packet->send_time;
+            packet_data->path_ack[path_i].ack_delay = packet_data->last_ack_delay;
             packet_data->path_ack[path_i].delivered_prior = acked_packet->delivered_prior;
             packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
@@ -3106,7 +3107,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         uint64_t nb_bytes_newly_lost = 0;
 
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, epoch,
-            packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
+            packet_data->path_ack[i].largest_sent_time, current_time, packet_data->path_ack[i].ack_delay,
             packet_data->last_time_stamp_received);
 
         picoquic_estimate_path_bandwidth(cnx, packet_data->path_ack[i].acked_path, packet_data->path_ack[i].largest_sent_time,
@@ -3928,6 +3929,10 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 if (packet_data != NULL) {
                     packet_data->last_ack_delay = ack_delay;
                 }
+            }
+            else if (packet_data != NULL) {
+                /* The ack delay only applies to the largest packet, do not use it for lower ones. */
+                packet_data->last_ack_delay = 0;
             }
 
             do {

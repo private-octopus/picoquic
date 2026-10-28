@@ -219,6 +219,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sack_list_stream_bytes_unbounded", sack_list_stream_bytes_unbounded_test },
     { "sack_list_horizon_backward", sack_list_horizon_backward_test },
     { "ack_loss_since_sent", ack_loss_since_sent_test },
+    { "ack_delay_per_path", ack_delay_per_path_test },
     { "ack_of_ack", ack_of_ack_test },
     { "ackfrq_basic", ackfrq_basic_test },
     { "ackfrq_short", ackfrq_short_test },

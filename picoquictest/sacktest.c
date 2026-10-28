@@ -1162,3 +1162,59 @@ int ack_loss_since_sent_test(void)
     }
     return ret;
 }
+
+/* One packet acks two paths with different ack delays: each RTT sample must use the delay of its own frame. */
+int ack_delay_per_path_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t current_time = 1000000;
+    uint64_t ack_delay[2] = { 0, 2000 };
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_path_t* other_path = (picoquic_path_t*)calloc(1, sizeof(picoquic_path_t));
+    picoquic_packet_t* acked_packet = (picoquic_packet_t*)calloc(1, sizeof(picoquic_packet_t));
+
+    if (other_path == NULL || acked_packet == NULL ||
+        picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_congestion_algorithm_t const* saved_alg = cnx->congestion_alg;
+        picoquic_path_t* paths[2] = { cnx->path[0], other_path };
+        picoquic_packet_data_t packet_data;
+
+        cnx->congestion_alg = &ack_loss_test_alg;
+        cnx->cnx_state = picoquic_state_ready;
+        memset(&packet_data, 0, sizeof(packet_data));
+        for (int i = 0; i < 2; i++) {
+            paths[i]->rtt_is_initialized = 1;
+            paths[i]->rtt_min = 20000;
+            paths[i]->smoothed_rtt = 20000;
+            /* Decoding the PATH_ACK frame sets the ack delay, then records the acked packets. */
+            packet_data.last_ack_delay = ack_delay[i];
+            acked_packet->send_path = paths[i];
+            acked_packet->send_time = current_time - 30000;
+            acked_packet->length = 1200;
+            picoquic_record_ack_packet_data(&packet_data, acked_packet);
+        }
+        process_decoded_packet_data(cnx, cnx->path[0], picoquic_epoch_1rtt, picoquic_packet_context_application,
+            current_time, &packet_data);
+        for (int i = 0; ret == 0 && i < 2; i++) {
+            if (paths[i]->rtt_sample != 30000 - ack_delay[i]) {
+                DBG_PRINTF("Path %d: RTT sample %" PRIu64 ", expected %" PRIu64, i, paths[i]->rtt_sample, 30000 - ack_delay[i]);
+                ret = -1;
+            }
+        }
+        cnx->congestion_alg = saved_alg;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    if (other_path != NULL) {
+        free(other_path);
+    }
+    if (acked_packet != NULL) {
+        free(acked_packet);
+    }
+    return ret;
+}

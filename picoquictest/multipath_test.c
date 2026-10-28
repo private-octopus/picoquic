@@ -2128,7 +2128,7 @@ int multipath_datagram_test(void)
 
 int multipath_dg_af_test(void)
 {
-    uint64_t max_completion_microsec = 1150000;
+    uint64_t max_completion_microsec = 1100000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_dg_af);
 }
