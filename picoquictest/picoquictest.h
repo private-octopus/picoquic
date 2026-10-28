@@ -775,6 +775,7 @@ int multipath_break_both_test(void);
 int multipath_qlog_test(void);
 int multipath_tunnel_test(void);
 int multipath_cid_retire_test(void);
+int multipath_ack_delay_test(void);
 int multipath_idle_rotation_test(void);
 int token_reuse_api_test(void);
 int token_reuse_cap_test(void);

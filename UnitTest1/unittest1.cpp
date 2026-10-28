@@ -4432,6 +4432,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_ack_delay) {
+            int ret = multipath_ack_delay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_idle_rotation) {
             int ret = multipath_idle_rotation_test();
 
