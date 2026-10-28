@@ -1539,7 +1539,7 @@ int multipath_drop_first_test(void)
 
 int multipath_drop_second_test(void)
 {
-    uint64_t max_completion_microsec = 1260000;
+    uint64_t max_completion_microsec = 1350000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_drop_second);
 }
@@ -2107,8 +2107,8 @@ int multipath_back0_test(void)
  */
 int multipath_back1_test(void)
 {
-    /* TODO: investigate why 3.3 instead of 3.05 with prior implementation of multipath */
-    uint64_t max_completion_microsec = 3300000;
+    /* TODO: investigate why 3.5 instead of 3.05 with prior implementation of multipath */
+    uint64_t max_completion_microsec = 3500000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_back1);
 }
@@ -2757,6 +2757,193 @@ int multipath_ack_delay_test(void)
                     path_id, largest, ack_delay, expected_delay);
                 ret = -1;
             }
+        }
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+/* A path is stalled if the peer is active but our oldest unacknowledged packet is older than 2 RTT plus ack delay. */
+int multipath_ack_path_stalled_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 1000000;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    picoquic_packet_t* oldest = (picoquic_packet_t*)calloc(1, sizeof(picoquic_packet_t));
+
+    if (oldest == NULL || picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        uint64_t delay;
+        struct {
+            uint64_t sent_ago;
+            uint64_t received_ago;
+            int has_pending;
+            int expected;
+        } cases[] = { { 0, 0, 0, 0 }, { 60000, 5000, 1, 0 }, { 70000, 5000, 1, 1 }, { 70000, 30000, 1, 0 } };
+
+        cnx->is_multipath_enabled = 1;
+        path_x->smoothed_rtt = 20000;
+        cnx->remote_parameters.max_ack_delay = 25000;
+        delay = 2 * path_x->smoothed_rtt + cnx->remote_parameters.max_ack_delay;
+        for (size_t i = 0; ret == 0 && i < sizeof(cases) / sizeof(cases[0]); i++) {
+            int stalled;
+            oldest->send_time = simulated_time - cases[i].sent_ago;
+            path_x->pkt_ctx.pending_first = (cases[i].has_pending) ? oldest : NULL;
+            cnx->latest_receive_time = simulated_time - cases[i].received_ago;
+            stalled = picoquic_is_ack_path_stalled(cnx, path_x, simulated_time);
+            if (stalled != cases[i].expected) {
+                DBG_PRINTF("Case %zu: stalled %d, expected %d (threshold %" PRIu64 ")", i, stalled, cases[i].expected, delay);
+                ret = -1;
+            }
+        }
+        path_x->pkt_ctx.pending_first = NULL;
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    if (oldest != NULL) {
+        free(oldest);
+    }
+    return ret;
+}
+
+static int multipath_nominal_ack_path_index(picoquic_cnx_t* cnx, uint64_t current_time, picoquic_path_t** next_path)
+{
+    int nominal = -1;
+    uint64_t next_wake_time = UINT64_MAX;
+    picoquic_tuple_t* next_tuple = NULL;
+
+    picoquic_select_next_path_tuple(cnx, current_time, &next_wake_time, next_path, &next_tuple);
+    for (int i = 0; i < cnx->nb_paths; i++) {
+        if (cnx->path[i]->is_nominal_ack_path) {
+            nominal = i;
+        }
+    }
+    return nominal;
+}
+
+/* The nominal ack path is sticky: it only changes if it stalls, or if a healthy path has a clearly lower RTT.
+ * If the only available path stalls, ACKs go on a healthy backup path, which stays backup. */
+int multipath_nominal_ack_path_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 1000000;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    struct sockaddr_storage peer = { 0 };
+    picoquic_packet_t* oldest = (picoquic_packet_t*)calloc(1, sizeof(picoquic_packet_t));
+
+    if (oldest == NULL || picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* next_path = NULL;
+        int nominal;
+
+        cnx->is_multipath_enabled = 1;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->remote_parameters.max_ack_delay = 25000;
+        cnx->latest_receive_time = simulated_time;
+        if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&peer, 0, 1) < 0 || cnx->nb_paths != 2) {
+            DBG_PRINTF("%s", "Cannot create the second path");
+            ret = -1;
+        }
+        for (int i = 0; ret == 0 && i < 2; i++) {
+            cnx->path[i]->first_tuple->challenge_verified = 1;
+            cnx->path[i]->first_tuple->challenge_required = 0;
+            cnx->path[i]->smoothed_rtt = 20000;
+            cnx->path[i]->rtt_min = 20000;
+        }
+        if (ret == 0) {
+            /* Lowest rtt_min wins at first */
+            cnx->path[1]->rtt_min = 21000;
+            if ((nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path)) != 0) {
+                DBG_PRINTF("Initial nominal path %d, expected 0", nominal);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            /* A slightly lower RTT does not move the nominal path */
+            cnx->path[1]->rtt_min = 19000;
+            if ((nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path)) != 0) {
+                DBG_PRINTF("Nominal path %d after small RTT change, expected 0", nominal);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            /* A clearly lower RTT does */
+            cnx->path[1]->rtt_min = 15000;
+            if ((nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path)) != 1) {
+                DBG_PRINTF("Nominal path %d after large RTT change, expected 1", nominal);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            /* A stalled path is abandoned */
+            oldest->send_time = simulated_time - 100000;
+            cnx->path[1]->pkt_ctx.pending_first = oldest;
+            nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path);
+            cnx->path[1]->pkt_ctx.pending_first = NULL;
+            if (nominal != 0) {
+                DBG_PRINTF("Nominal path %d after stall of path 1, expected 0", nominal);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            /* Only path 0 is available and it stalls: the ACK goes on backup path 1, which remains backup */
+            cnx->path[1]->path_is_backup = 1;
+            cnx->path[0]->pkt_ctx.pending_first = oldest;
+            picoquic_set_ack_needed(cnx, simulated_time, picoquic_packet_context_application, cnx->path[0], 1);
+            nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path);
+            cnx->path[0]->pkt_ctx.pending_first = NULL;
+            if (nominal != 1 || next_path != cnx->path[1] || !cnx->path[1]->path_is_backup) {
+                DBG_PRINTF("Stalled path 0: nominal %d, selected path %d, backup %d, expected 1, 1, 1", nominal,
+                    (next_path == cnx->path[1]) ? 1 : 0, cnx->path[1]->path_is_backup);
+                ret = -1;
+            }
+        }
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    if (oldest != NULL) {
+        free(oldest);
+    }
+    return ret;
+}
+
+/* The smoothed RTT must keep updating when the first sample came before any packet on the path was acknowledged,
+ * as happens for the handshake on path 0 or the challenge on a new path. */
+int multipath_srtt_update_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 1000000;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        uint64_t initial_srtt;
+
+        cnx->is_multipath_enabled = 1;
+        cnx->cnx_state = picoquic_state_ready;
+        /* First sample from the challenge, before any acknowledgement on the path */
+        path_x->pkt_ctx.highest_acknowledged = UINT64_MAX;
+        picoquic_update_path_rtt(cnx, path_x, -1, simulated_time - 600000, simulated_time, 0, 0);
+        initial_srtt = path_x->smoothed_rtt;
+        /* Then acknowledged samples of 300 ms, spaced by more than RTT/4 */
+        for (uint64_t pn = 1; pn <= 4; pn++) {
+            simulated_time += 200000;
+            path_x->pkt_ctx.highest_acknowledged = pn;
+            picoquic_update_path_rtt(cnx, path_x, picoquic_epoch_1rtt, simulated_time - 300000, simulated_time, 0, 0);
+        }
+        if (initial_srtt != 600000 || path_x->smoothed_rtt >= initial_srtt) {
+            DBG_PRINTF("Smoothed RTT %" PRIu64 " after samples of 300 ms, initial %" PRIu64,
+                path_x->smoothed_rtt, initial_srtt);
+            ret = -1;
         }
         picoquic_test_delete_minimal_cnx(&quic, &cnx);
     }

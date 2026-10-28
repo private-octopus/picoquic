@@ -2903,6 +2903,25 @@ static int picoquic_prepare_packet_ready_finish(picoquic_cnx_t* cnx, picoquic_pa
     return ret;
 }
 
+/* ACK copies off the nominal path ride with data, or are sent alone only if the nominal path is in trouble. */
+static int picoquic_is_ack_copy_allowed(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    int allowed = 1;
+
+    /* Cheap test: an empty output stream list means no stream data will ride with the ACK. */
+    if (cnx->output_streams.first_output_stream == NULL && !cnx->is_datagram_ready && !path_x->is_datagram_ready &&
+        cnx->first_misc_frame == NULL) {
+        picoquic_path_t* nominal = NULL;
+        for (int i = 0; nominal == NULL && i < cnx->nb_paths; i++) {
+            if (cnx->path[i]->is_nominal_ack_path) {
+                nominal = cnx->path[i];
+            }
+        }
+        allowed = (nominal == NULL || nominal->nb_retransmit > 0 || picoquic_is_ack_path_stalled(cnx, nominal, current_time));
+    }
+    return allowed;
+}
+
 int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length, uint64_t* next_wake_time)
 {
@@ -3027,7 +3046,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, next_wake_time)) {
                 /* Send here the frames that are not exempt from the pacing control,
                  * but are exempt for congestion control */
-                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, !is_nominal_ack_path)) {
+                if (picoquic_is_ack_needed(cnx, current_time, next_wake_time, pc, !is_nominal_ack_path) &&
+                    (is_nominal_ack_path || picoquic_is_ack_copy_allowed(cnx, path_x, current_time))) {
                     uint8_t* bytes_ack = bytes_next;
                     bytes_next = picoquic_format_ack_frame(cnx, bytes_next, bytes_max, &more_data,
                         current_time, pc, !is_nominal_ack_path);

@@ -4457,6 +4457,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_ack_path_stalled) {
+            int ret = multipath_ack_path_stalled_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_nominal_ack_path) {
+            int ret = multipath_nominal_ack_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_srtt_update) {
+            int ret = multipath_srtt_update_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_idle_rotation) {
             int ret = multipath_idle_rotation_test();
 

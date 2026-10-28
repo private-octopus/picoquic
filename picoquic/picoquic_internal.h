@@ -1528,9 +1528,10 @@ typedef struct st_picoquic_cnx_t {
     picoquic_path_t ** path;
     int nb_paths;
     int nb_path_alloc;
-    int last_path_polled;
+    int last_path_polled; /* Index of the last path selected, for round robin */
     uint64_t unique_path_id_next;
-    picoquic_path_t* nominal_path_for_ack;
+    uint64_t nominal_ack_path_id; /* Unique path id of the sticky nominal ack path */
+    int nominal_nb_candidates; /* Number of candidate paths when the nominal ack path was chosen */
     uint64_t status_sequence_to_send_next;
     uint64_t max_path_id_local;
     uint64_t max_path_id_acknowledged;
@@ -1638,6 +1639,7 @@ uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_pa
     uint64_t current_time, uint64_t* next_wake_time); 
 void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_path_t** next_path, picoquic_tuple_t** next_tuple);
+int picoquic_is_ack_path_stalled(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 int picoquic_renew_connection_id(picoquic_cnx_t* cnx, int path_id);
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index);
 void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_time, uint64_t reason);
