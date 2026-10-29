@@ -5369,6 +5369,12 @@ uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx)
     return cnx->remote_application_error;
 }
 
+char const* picoquic_get_remote_error_reason(picoquic_cnx_t* cnx)
+{
+    PICOQUIC_THREAD_CHECK(cnx->quic);
+    return cnx->remote_error_reason;
+}
+
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id)
 {
     uint64_t remote_error = 0;

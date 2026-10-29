@@ -14532,11 +14532,23 @@ int error_reason_test(void)
         /* verify that the connection will be closed */
         int nb_trials = 0;
         int nb_inactive = 0;
+        int reason_checked = 0;
         while (ret == 0 && nb_trials < 1024 && nb_inactive < 512 ) {
             int was_active = 0;
             nb_trials++;
 
             ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+
+            if (ret == 0 && !reason_checked && test_ctx->cnx_server != NULL &&
+                test_ctx->cnx_server->cnx_state >= picoquic_state_closing_received) {
+                /* The server reads the client's reason. */
+                char const* reason = picoquic_get_remote_error_reason(test_ctx->cnx_server);
+                if (reason == NULL || strcmp(reason, "error reason test") != 0) {
+                    DBG_PRINTF("Remote error reason: %s", (reason == NULL) ? "NULL" : reason);
+                    ret = -1;
+                }
+                reason_checked = 1;
+            }
 
             if (test_ctx->cnx_client->cnx_state == picoquic_state_disconnected &&
                 (test_ctx->cnx_server == NULL || test_ctx->cnx_server->cnx_state == picoquic_state_disconnected)) {
@@ -14555,6 +14567,10 @@ int error_reason_test(void)
             else {
                 nb_inactive++;
             }
+        }
+        if (ret == 0 && !reason_checked) {
+            DBG_PRINTF("%s", "Server did not receive the close");
+            ret = -1;
         }
     }
     /* Close the contexts, which will close the logs.
