@@ -1806,6 +1806,11 @@ uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx);
 /* Returns the application error after application close */
 uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
 
+/* Returns the reason phrase of the peer's close, or NULL. The text is chosen by
+ * the peer application and not checked by the stack: it may have any encoding
+ * or content. It is meant for debugging. */
+char const* picoquic_get_remote_error_reason(picoquic_cnx_t* cnx);
+
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);
 

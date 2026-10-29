@@ -14556,6 +14556,17 @@ int error_reason_test(void)
                 nb_inactive++;
             }
         }
+        if (ret == 0 && test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Server connection context is NULL");
+            ret = -1;
+        }
+        if (ret == 0) {
+            char const* reason = picoquic_get_remote_error_reason(test_ctx->cnx_server);
+            if (reason == NULL || strcmp(reason, "error reason test") != 0) {
+                DBG_PRINTF("Remote error reason: %s", (reason == NULL) ? "NULL" : reason);
+                ret = -1;
+            }
+        }
     }
     /* Close the contexts, which will close the logs.
      */
