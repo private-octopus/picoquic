@@ -208,6 +208,42 @@ int wt_interop_url_test(void)
     return ret;
 }
 
+/* The wildcard path item also receives POST events, whose context is the parameters, not a session. */
+int wt_interop_wildcard_post_test(void)
+{
+    int ret = 0;
+    wt_interop_param_t param;
+    picohttp_server_path_item_t item;
+    h3zero_stream_ctx_t stream_ctx;
+    uint8_t buffer[64];
+
+    memset(&stream_ctx, 0, sizeof(stream_ctx));
+    stream_ctx.stream_id = 4;
+    if (wt_interop_param_init(&param, 0, "transfer", NULL, NULL, NULL, NULL) != 0) {
+        ret = -1;
+    }
+    else {
+        wt_interop_set_path_item(&item, &param);
+        if (item.path_callback == wt_interop_callback) {
+            DBG_PRINTF("%s", "The path item must not use the session callback");
+            ret = -1;
+        }
+        else if (item.path_callback(NULL, (uint8_t*)"/x", 2, picohttp_callback_post, &stream_ctx, item.path_app_ctx) != 0 ||
+            item.path_callback(NULL, buffer, sizeof(buffer), picohttp_callback_post_data, &stream_ctx, item.path_app_ctx) != 0 ||
+            item.path_callback(NULL, buffer, sizeof(buffer), picohttp_callback_post_fin, &stream_ctx, item.path_app_ctx) != 0) {
+            DBG_PRINTF("%s", "POST events not ignored by the wildcard path item");
+            ret = -1;
+        }
+        else if (item.path_callback(NULL, buffer, sizeof(buffer), picohttp_callback_provide_data, &stream_ctx, item.path_app_ctx) == 0 ||
+            item.path_callback(NULL, buffer, sizeof(buffer), picohttp_callback_post_datagram, &stream_ctx, item.path_app_ctx) == 0) {
+            DBG_PRINTF("%s", "Session events accepted by the wildcard path item");
+            ret = -1;
+        }
+        wt_interop_param_clear(&param);
+    }
+    return ret;
+}
+
 typedef struct st_wt_interop_test_spec_t {
     char const* name;
     char const* client_test_case;
@@ -442,43 +478,43 @@ static const size_t wt_interop_stream_sizes[] = { 100, 0, 25000, 300000 };
 
 int wt_interop_handshake_test(void)
 {
-    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0 };
+    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0, 0 };
     return wt_interop_test_one(&spec, 1);
 }
 
 int wt_interop_uni_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0 };
+    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0 };
     return wt_interop_test_one(&spec, 2);
 }
 
 int wt_interop_uni_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0 };
+    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0 };
     return wt_interop_test_one(&spec, 3);
 }
 
 int wt_interop_bidi_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0 };
+    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0 };
     return wt_interop_test_one(&spec, 4);
 }
 
 int wt_interop_bidi_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0 };
+    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0 };
     return wt_interop_test_one(&spec, 5);
 }
 
 int wt_interop_datagram_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600 };
+    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0 };
     return wt_interop_test_one(&spec, 6);
 }
 
 int wt_interop_datagram_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600 };
+    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0 };
     return wt_interop_test_one(&spec, 7);
 }
 

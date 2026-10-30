@@ -5141,6 +5141,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wt_interop_wildcard_post) {
+            int ret = wt_interop_wildcard_post_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_bad_params) {
             int ret = picowt_baton_bad_params_test();
 

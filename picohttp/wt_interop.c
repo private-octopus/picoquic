@@ -1378,9 +1378,6 @@ int wt_interop_callback(picoquic_cnx_t* cnx,
     case picohttp_callback_connecting:
         session->control_stream_id = stream_ctx->stream_id;
         break;
-    case picohttp_callback_connect:
-        ret = wt_interop_accept(cnx, bytes, length, stream_ctx, (wt_interop_param_t const*)path_app_ctx);
-        break;
     case picohttp_callback_connect_refused:
         picoquic_log_app_message(cnx, "WT interop session refused, status %d", stream_ctx->ps.stream_state.header.status);
         picowt_uncount_session((h3zero_callback_ctx_t*)picoquic_get_callback_context(cnx), stream_ctx);
@@ -1421,12 +1418,39 @@ int wt_interop_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
+/* Path table callback, whose context is the parameters: once a CONNECT is accepted, wt_interop_callback handles the session. */
+static int wt_interop_server_callback(picoquic_cnx_t* cnx,
+    uint8_t* bytes, size_t length,
+    picohttp_call_back_event_t wt_event,
+    struct st_h3zero_stream_ctx_t* stream_ctx,
+    void* path_app_ctx)
+{
+    int ret = 0;
+
+    switch (wt_event) {
+    case picohttp_callback_connect:
+        ret = wt_interop_accept(cnx, bytes, length, stream_ctx, (wt_interop_param_t const*)path_app_ctx);
+        break;
+    case picohttp_callback_post:
+    case picohttp_callback_post_data:
+    case picohttp_callback_post_fin:
+        /* The wildcard also matches POST requests: ignore the data and send an empty response. */
+        break;
+    case picohttp_callback_free:
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
 void wt_interop_set_path_item(picohttp_server_path_item_t* item, wt_interop_param_t* param)
 {
     memset(item, 0, sizeof(picohttp_server_path_item_t));
     item->path = "*";
     item->path_length = 1;
-    item->path_callback = wt_interop_callback;
+    item->path_callback = wt_interop_server_callback;
     item->path_app_ctx = param;
     item->connect_protocol = H3ZERO_WEBTRANSPORT_H3_PROTOCOL;
     item->connect_protocol_length = sizeof(H3ZERO_WEBTRANSPORT_H3_PROTOCOL) - 1;
