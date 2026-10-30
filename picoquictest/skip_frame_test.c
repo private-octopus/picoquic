@@ -2519,6 +2519,7 @@ int frames_format_test(void)
             else {
                 memcpy(crypto_data->bytes, data, sizeof(data));
                 cnx->tls_stream[picoquic_epoch_1rtt].send_queue = crypto_data;
+                cnx->tls_stream[picoquic_epoch_1rtt].send_queue_last = crypto_data;
             }
         }
         FRAME_FORMAT_TEST(picoquic_format_crypto_hs_frame, &cnx->tls_stream[picoquic_epoch_1rtt], bytes, bytes_max, &more_data, &is_pure_ack);

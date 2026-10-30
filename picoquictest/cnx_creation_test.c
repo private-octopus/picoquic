@@ -380,3 +380,87 @@ int stateless_packet_queue_limit_test(void)
 
     return ret;
 }
+
+/* Exercise future minima through the public scheduler and real connection
+ * destruction. Equal deadlines retain insertion order, including reinsertion. */
+int wake_queue_test(void)
+{
+    enum { count = 16 };
+    uint64_t now = 1000;
+    uint64_t serial = 0;
+    uint64_t order[count];
+    picoquic_cnx_t* cnx[count] = { 0 };
+    struct sockaddr_in peer = { 0 };
+    int ret = 0;
+    picoquic_quic_t* quic = picoquic_create(2, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, NULL, now, &now, NULL, NULL, 0);
+    if (quic == NULL) {
+        return -1;
+    }
+    peer.sin_family = AF_INET;
+    peer.sin_addr.s_addr = htonl(0x7f000001);
+    for (int i = 0; ret == 0 && i < count; i++) {
+        peer.sin_port = htons((uint16_t)(1234 + i));
+        cnx[i] = picoquic_create_cnx(quic, picoquic_null_connection_id,
+            picoquic_null_connection_id, (struct sockaddr*)&peer, now, 0, NULL, NULL, 1);
+        if (cnx[i] == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_reinsert_by_wake_time(quic, cnx[i], 1100 + (i % 4));
+            order[i] = serial++;
+        }
+    }
+    for (int step = 0; ret == 0 && step < 1024; step++) {
+        int i = (step * 13) % count;
+        uint64_t deadline = (step % 31 == 0) ? UINT64_MAX : 1100 + ((step * 7) % 17);
+        picoquic_reinsert_by_wake_time(quic, cnx[i], deadline);
+        order[i] = serial++;
+        int first = 0;
+        for (int j = 1; j < count; j++) {
+            if (cnx[j]->next_wake_time < cnx[first]->next_wake_time ||
+                (cnx[j]->next_wake_time == cnx[first]->next_wake_time && order[j] < order[first])) {
+                first = j;
+            }
+        }
+        if (picoquic_get_next_wake_time(quic, now) != cnx[first]->next_wake_time ||
+            picoquic_get_earliest_cnx_to_wake(quic, 0) != cnx[first] ||
+            picoquic_get_earliest_cnx_to_wake(quic, cnx[first]->next_wake_time - 1) != NULL) {
+            ret = -1;
+        }
+    }
+    /* Move the minimum to ready and back; then promote and delete all entries
+     * in deadline/insertion order. Deletion includes the final future timer. */
+    if (ret == 0) {
+        picoquic_reinsert_by_wake_time(quic, cnx[0], now);
+        if (picoquic_get_earliest_cnx_to_wake(quic, now) != cnx[0]) {
+            ret = -1;
+        }
+        picoquic_reinsert_by_wake_time(quic, cnx[0], 1100);
+        order[0] = serial++;
+    }
+    for (int n = 0; ret == 0 && n < count; n++) {
+        int first = -1;
+        for (int j = 0; j < count; j++) {
+            if (cnx[j] != NULL && (first < 0 || cnx[j]->next_wake_time < cnx[first]->next_wake_time ||
+                (cnx[j]->next_wake_time == cnx[first]->next_wake_time && order[j] < order[first]))) {
+                first = j;
+            }
+        }
+        /* Alternate deleting a future minimum and promoting it before delete. */
+        uint64_t cutoff = (n % 2 == 0) ? 0 : cnx[first]->next_wake_time;
+        if (picoquic_get_earliest_cnx_to_wake(quic, cutoff) != cnx[first]) {
+            ret = -1;
+        }
+        else {
+            picoquic_delete_cnx(cnx[first]);
+            cnx[first] = NULL;
+        }
+    }
+    if (ret == 0 && (picoquic_get_earliest_cnx_to_wake(quic, 0) != NULL ||
+        picoquic_get_next_wake_time(quic, now) != UINT64_MAX)) {
+        ret = -1;
+    }
+    picoquic_free(quic);
+    return ret;
+}

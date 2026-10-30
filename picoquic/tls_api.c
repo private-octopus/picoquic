@@ -2659,20 +2659,16 @@ static int picoquic_add_to_tls_stream(picoquic_cnx_t* cnx, const uint8_t* data, 
                 ret = -1;
             }
             else {
-                picoquic_stream_queue_node_t** pprevious = &stream->send_queue;
-                picoquic_stream_queue_node_t* next = stream->send_queue;
+                picoquic_stream_queue_node_t** pprevious = (stream->send_queue_last == NULL) ?
+                    &stream->send_queue : &stream->send_queue_last->next_stream_data;
 
                 memcpy(stream_data->bytes, data, length);
                 stream_data->length = length;
                 stream_data->offset = 0;
                 stream_data->next_stream_data = NULL;
 
-                while (next != NULL) {
-                    pprevious = &next->next_stream_data;
-                    next = next->next_stream_data;
-                }
-
                 *pprevious = stream_data;
+                stream->send_queue_last = stream_data;
             }
         }
     }

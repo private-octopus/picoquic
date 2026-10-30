@@ -255,6 +255,7 @@ void picoquic_enforce_reset_stream_frame(picoquic_stream_head_t* stream)
         free(not_needed);
     }
     stream->send_queue = NULL;
+    stream->send_queue_last = NULL;
 }
 
 uint8_t* picoquic_format_reset_stream_frame(picoquic_stream_head_t* stream,
@@ -1964,6 +1965,9 @@ uint8_t * picoquic_format_stream_frame(picoquic_cnx_t* cnx, picoquic_stream_head
                         free(stream->send_queue->bytes);
                         free(stream->send_queue);
                         stream->send_queue = next;
+                        if (next == NULL) {
+                            stream->send_queue_last = NULL;
+                        }
                     }
 
                     stream->sent_offset += length;
@@ -2588,6 +2592,9 @@ uint8_t* picoquic_format_crypto_hs_frame(picoquic_stream_head_t* stream, uint8_t
                         free(stream->send_queue->bytes);
                         free(stream->send_queue);
                         stream->send_queue = next;
+                        if (next == NULL) {
+                            stream->send_queue_last = NULL;
+                        }
                     }
 
                     stream->sent_offset += length;
