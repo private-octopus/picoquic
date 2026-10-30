@@ -295,7 +295,8 @@ set(PICOHTTP_TEST_LIBRARY_FILES
     picoquictest/h3zero_uri_test.c
     picoquictest/picomask_test.c
     picoquictest/quicperf_test.c
-    picoquictest/webtransport_test.c)
+    picoquictest/webtransport_test.c
+    picoquictest/wt_interop_test.c)
 
 OPTION(WITH_OPENSSL "build with OpenSSL" ON)
 OPTION(WITH_AEGIS "enable AEGIS support through picotls/libaegis" OFF)
@@ -601,6 +602,13 @@ if (BUILD_HTTP)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>)
     set_picoquic_compile_settings(wt_baton)
+
+    add_library(wt_interop STATIC EXCLUDE_FROM_ALL picohttp/wt_interop.c)
+    target_link_libraries(wt_interop PUBLIC picoquic-log picoquic-core picohttp-core)
+    target_include_directories(wt_interop PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picoquic>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/picohttp>)
+    set_picoquic_compile_settings(wt_interop)
 endif()
 
 # VERSION/SOVERSION give shared objects conventional versioned names
@@ -629,7 +637,8 @@ if (BUILD_DEMO)
             picoquic-log
             picoquic-core
             picohttp-core
-            wt_baton)
+            wt_baton
+            wt_interop)
     target_include_directories(picoquicdemo PRIVATE picohttp)
     set_picoquic_compile_settings(picoquicdemo)
 endif()
@@ -737,7 +746,8 @@ if(BUILD_TESTING AND picoquic_BUILD_TESTS)
             picoquic-log
             picohttp-core
             picoquic-core
-            wt_baton)
+            wt_baton
+            wt_interop)
 
     target_include_directories(picohttp_ct PRIVATE picohttp)
     set_picoquic_compile_settings(picohttp_ct)
