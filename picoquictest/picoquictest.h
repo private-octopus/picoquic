@@ -884,6 +884,8 @@ int wt_interop_bidi_send_test(void);
 int wt_interop_datagram_receive_test(void);
 int wt_interop_datagram_send_test(void);
 int wt_interop_missing_file_test(void);
+int wt_interop_download_fail_test(void);
+int wt_interop_datagram_large_test(void);
 int wt_interop_wildcard_post_test(void);
 int picowt_baton_bad_params_test(void);
 int picowt_baton_bad_params_syntax_test(void);

@@ -45,7 +45,8 @@ extern "C" {
 
 #define WT_INTEROP_NAME_MAX 256
 #define WT_INTEROP_LINE_MAX (WT_INTEROP_NAME_MAX + 8)
-#define WT_INTEROP_DATAGRAM_MAX 1200
+/* Fits in one packet at the minimum MTU, even with a 20 byte CID. */
+#define WT_INTEROP_DATAGRAM_MAX 1100
 #define WT_INTEROP_NEGOTIATED_FILE "negotiated_protocol.txt"
 
 #define WT_INTEROP_SESSION_ERR_DONE 0

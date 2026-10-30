@@ -208,6 +208,8 @@ static const picoquic_test_def_t test_table[] = {
     { "wt_interop_datagram_receive", wt_interop_datagram_receive_test },
     { "wt_interop_datagram_send", wt_interop_datagram_send_test },
     { "wt_interop_missing_file", wt_interop_missing_file_test },
+    { "wt_interop_download_fail", wt_interop_download_fail_test },
+    { "wt_interop_datagram_large", wt_interop_datagram_large_test },
     { "wt_interop_wildcard_post", wt_interop_wildcard_post_test },
     { "picowt_baton_bad_params", picowt_baton_bad_params_test },
     { "picowt_baton_bad_params_syntax", picowt_baton_bad_params_syntax_test },

@@ -270,7 +270,19 @@ int wt_interop_parse_url(char const* url, char* host, size_t host_max, uint16_t*
     return ret;
 }
 
-/* Split "endpoint[/file]" and add it to the request list. */
+static int wt_interop_request_exists(wt_interop_param_t const* param, char const* ep, size_t ep_length, char const* file, size_t file_length)
+{
+    int found = 0;
+
+    for (wt_interop_request_t const* r = param->first_request; !found && r != NULL; r = r->next) {
+        found = strlen(r->endpoint) == ep_length && memcmp(r->endpoint, ep, ep_length) == 0 &&
+            ((r->file_name == NULL) ? (file_length == 0) :
+                (strlen(r->file_name) == file_length && memcmp(r->file_name, file, file_length) == 0));
+    }
+    return found;
+}
+
+/* Split "endpoint[/file]" and add it to the request list, ignoring duplicates. */
 static int wt_interop_add_request(wt_interop_param_t* param, char const* path, size_t length)
 {
     int ret = 0;
@@ -293,6 +305,9 @@ static int wt_interop_add_request(wt_interop_param_t* param, char const* path, s
     if (!wt_interop_name_is_sane(path, ep_length) ||
         (file_length > 0 && !wt_interop_name_is_sane(file, file_length))) {
         ret = -1;
+    }
+    else if (wt_interop_request_exists(param, path, ep_length, file, file_length)) {
+        ret = 0;
     }
     else if ((request = (wt_interop_request_t*)malloc(sizeof(wt_interop_request_t))) == NULL) {
         ret = -1;
@@ -963,12 +978,12 @@ static int wt_interop_write_body(wt_interop_session_t* session, wt_interop_strea
     if (stream->F_receive == NULL && stream->receive_name != NULL) {
         stream->F_receive = wt_interop_open_download(session, stream->receive_name);
         if (stream->F_receive == NULL) {
+            /* The caller counts the error and ends the session now, not at the FIN. */
             stream->is_body_expected = 0;
-            session->nb_errors++;
+            ret = -1;
         }
     }
-    if (length > 0 && stream->F_receive != NULL && fwrite(bytes, 1, length, stream->F_receive) != length) {
-        session->nb_errors++;
+    if (ret == 0 && length > 0 && stream->F_receive != NULL && fwrite(bytes, 1, length, stream->F_receive) != length) {
         ret = -1;
     }
     return ret;

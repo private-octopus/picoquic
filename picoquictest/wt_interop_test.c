@@ -181,6 +181,25 @@ int wt_interop_url_test(void)
         wt_interop_param_clear(&param);
     }
 
+    /* Duplicate requests are merged, so the client asks for each file once. */
+    if (ret == 0) {
+        if (wt_interop_param_init(&param, 1, "transfer-unidirectional-receive",
+            "https://s/ep/f1 https://s/ep/f2 https://s/ep/f1", NULL, NULL, NULL) != 0 ||
+            param.nb_requests != 2) {
+            DBG_PRINTF("%s", "Duplicate client requests not merged");
+            ret = -1;
+        }
+        wt_interop_param_clear(&param);
+    }
+    if (ret == 0) {
+        if (wt_interop_param_init(&param, 0, "transfer-datagram-send", "ep/f1 /ep/f1", NULL, NULL, NULL) != 0 ||
+            param.nb_requests != 1) {
+            DBG_PRINTF("%s", "Duplicate server requests not merged");
+            ret = -1;
+        }
+        wt_interop_param_clear(&param);
+    }
+
     /* Invalid combinations must be rejected. */
     if (ret == 0) {
         static const struct {
@@ -254,6 +273,7 @@ typedef struct st_wt_interop_test_spec_t {
     size_t const* sizes;
     size_t size_base;
     int add_missing;
+    int block_download;
 } wt_interop_test_spec_t;
 
 /* Build the request lists, create source files, and remove stale downloads. */
@@ -389,6 +409,17 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
             (spec->is_send) ? dir_s_dl : dir_c_dl, client_requests, sizeof(client_requests),
             server_requests, sizeof(server_requests));
     }
+    if (ret == 0 && spec->block_download) {
+        /* A plain file where the endpoint directory should be makes every download open fail. */
+        char blocker[128];
+        FILE* F = NULL;
+        if (picoquic_sprintf(blocker, sizeof(blocker), NULL, "%s/%s", dir_c_dl, WT_INTEROP_TEST_ENDPOINT) != 0 ||
+            (F = picoquic_file_open(blocker, "w")) == NULL) {
+            DBG_PRINTF("%s", "Cannot create the download blocker");
+            ret = -1;
+        }
+        (void)picoquic_file_close(F);
+    }
 
     if (ret == 0 &&
         (wt_interop_param_init(&client_param, 1, spec->client_test_case, client_requests, protocols_c, dir_c_www, dir_c_dl) != 0 ||
@@ -434,10 +465,10 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
         }
     }
 
-    if (ret == 0 && spec->add_missing) {
-        /* The missing file must fail the test promptly, not after an idle timeout. */
+    if (ret == 0 && (spec->add_missing || spec->block_download)) {
+        /* The failure must end the test promptly, not after an idle timeout. */
         if (wt_interop_client_is_success(session) || session->nb_errors == 0 || simulated_time > 2000000) {
-            DBG_PRINTF("Missing file not detected: errors %d, time %" PRIu64, session->nb_errors, simulated_time);
+            DBG_PRINTF("Failure not detected: errors %d, time %" PRIu64, session->nb_errors, simulated_time);
             ret = -1;
         }
     }
@@ -457,7 +488,7 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
             ret = wt_interop_test_check_negotiated(dir_s_dl, "p2");
         }
     }
-    if (ret == 0 && !spec->add_missing) {
+    if (ret == 0 && !spec->add_missing && !spec->block_download) {
         ret = wt_interop_test_check_files(spec, (spec->is_send) ? dir_c_www : dir_s_www, (spec->is_send) ? dir_s_dl : dir_c_dl);
     }
 
@@ -478,48 +509,77 @@ static const size_t wt_interop_stream_sizes[] = { 100, 0, 25000, 300000 };
 
 int wt_interop_handshake_test(void)
 {
-    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0, 0 };
+    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0, 0, 0 };
     return wt_interop_test_one(&spec, 1);
 }
 
 int wt_interop_uni_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0 };
+    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
     return wt_interop_test_one(&spec, 2);
 }
 
 int wt_interop_uni_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0 };
+    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
     return wt_interop_test_one(&spec, 3);
 }
 
 int wt_interop_bidi_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0 };
+    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
     return wt_interop_test_one(&spec, 4);
 }
 
 int wt_interop_bidi_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0 };
+    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
     return wt_interop_test_one(&spec, 5);
 }
 
 int wt_interop_datagram_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0 };
+    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0, 0 };
     return wt_interop_test_one(&spec, 6);
 }
 
 int wt_interop_datagram_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0 };
+    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0, 0 };
     return wt_interop_test_one(&spec, 7);
 }
 
 int wt_interop_missing_file_test(void)
 {
-    wt_interop_test_spec_t spec = { "mf", "transfer-bidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1 };
+    wt_interop_test_spec_t spec = { "mf", "transfer-bidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0 };
     return wt_interop_test_one(&spec, 8);
+}
+
+/* A single large file, so the FIN arrives in a later callback than the failed open. */
+static const size_t wt_interop_download_fail_sizes[] = { 300000 };
+
+int wt_interop_download_fail_test(void)
+{
+    wt_interop_test_spec_t spec = { "df", "transfer-bidirectional-receive", "transfer", 0, 0, 1, wt_interop_download_fail_sizes, 0, 0, 1 };
+    return wt_interop_test_one(&spec, 9);
+}
+
+/* The largest payload, header "PUSH file1.bin\n" included. */
+static const size_t wt_interop_datagram_large_sizes[] = { 600, WT_INTEROP_DATAGRAM_MAX - 15 };
+
+int wt_interop_datagram_large_test(void)
+{
+    int ret = 0;
+    /* Worst case at the minimum MTU: flags, 20 byte CID, 4 byte PN, AEAD tag, frame type and length, quarter stream ID. */
+    size_t budget = PICOQUIC_ENFORCED_INITIAL_MTU - (1 + 20 + 4 + 16 + 1 + 2 + 8);
+
+    if (WT_INTEROP_DATAGRAM_MAX > budget) {
+        DBG_PRINTF("Datagram max %d exceeds the minimum MTU budget %zu", WT_INTEROP_DATAGRAM_MAX, budget);
+        ret = -1;
+    }
+    else {
+        wt_interop_test_spec_t spec = { "dl", "transfer-datagram-receive", "transfer", 0, 0, 2, wt_interop_datagram_large_sizes, 0, 0, 0 };
+        ret = wt_interop_test_one(&spec, 10);
+    }
+    return ret;
 }
