@@ -5087,6 +5087,60 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wt_interop_url) {
+            int ret = wt_interop_url_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_handshake) {
+            int ret = wt_interop_handshake_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_uni_receive) {
+            int ret = wt_interop_uni_receive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_uni_send) {
+            int ret = wt_interop_uni_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_bidi_receive) {
+            int ret = wt_interop_bidi_receive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_bidi_send) {
+            int ret = wt_interop_bidi_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_receive) {
+            int ret = wt_interop_datagram_receive_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_send) {
+            int ret = wt_interop_datagram_send_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_missing_file) {
+            int ret = wt_interop_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(picowt_baton_bad_params) {
             int ret = picowt_baton_bad_params_test();
 

@@ -129,6 +129,9 @@
     <ClCompile Include="webtransport_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="wt_interop_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="code_version_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
