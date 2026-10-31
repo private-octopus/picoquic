@@ -1096,28 +1096,6 @@ void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx)
     free(test_ctx);
 }
 
-/* Restrict a test server to the classic (non PQ) key exchanges.
- * Recent picotls servers send HelloRetryRequest when both peers
- * support PQ but the client offered a classic share, as test
- * clients do; that extra round trip would change most tests.
- */
-static ptls_key_exchange_algorithm_t* tls_api_classic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];
-
-void tls_api_set_classic_key_exchanges(picoquic_quic_t* quic)
-{
-    size_t nb_classic = 0;
-
-    for (size_t i = 0; picoquic_key_exchanges[i] != NULL; i++) {
-        uint16_t id = picoquic_key_exchanges[i]->id;
-        if (id == PTLS_GROUP_SECP256R1 || id == PTLS_GROUP_X25519 ||
-            id == PTLS_GROUP_SECP384R1 || id == PTLS_GROUP_SECP521R1) {
-            tls_api_classic_key_exchanges[nb_classic++] = picoquic_key_exchanges[i];
-        }
-    }
-    tls_api_classic_key_exchanges[nb_classic] = NULL;
-    ((ptls_context_t*)quic->tls_master_ctx)->key_exchanges = tls_api_classic_key_exchanges;
-}
-
 int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_version,
     char const* sni, char const* alpn, uint64_t* p_simulated_time, 
     char const* ticket_file_name, char const* token_file_name,
@@ -1215,7 +1193,8 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
                 /* Do not use randomization by default during tests */
                 picoquic_set_random_initial(test_ctx->qclient, 0);
                 picoquic_set_random_initial(test_ctx->qserver, 0);
-                tls_api_set_classic_key_exchanges(test_ctx->qserver);
+                /* Match the client's first key share, so PQ capable servers do not send HRR */
+                ret = picoquic_set_key_exchange(test_ctx->qserver, PICOQUIC_GROUP_SECP256R1);
             }
 
             /* register the links */
@@ -14081,9 +14060,13 @@ int bad_chello_test(void)
     }
     else {
         picoquic_sort_key_exchange_algorithms(bad_hello_key_exchanges, nb_bad_hello_key_exchanges);
+        /* The canned client hello needs a server that accepts every group */
+        ret = picoquic_set_key_exchange(test_ctx->qserver, 0);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* Create an initial packet with a bad chello */
-        ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
+        if (ret == 0) {
+            ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
+        }
     }
 
     /* Submit the packet to the server context */
