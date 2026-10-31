@@ -529,6 +529,7 @@ typedef struct st_picoquic_ticket_key_state_t {
 
 typedef struct st_picoquic_quic_t {
     void* tls_master_ctx;
+    const struct st_ptls_key_exchange_algorithm_t* key_exchange_selected[2]; /* for picoquic_set_key_exchange */
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     struct st_picomask_ctx_t* picomask_ctx;

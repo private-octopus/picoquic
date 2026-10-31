@@ -111,7 +111,6 @@ struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES
 
 ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1] = { 0 };
 ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2] = { 0 };
-ptls_key_exchange_algorithm_t* picoquic_key_exchange_selected[2] = { 0 };
 ptls_hpke_cipher_suite_t* picoquic_hpke_cipher_suites[PICOQUIC_HPKE_CIPHER_SUITE_NB_MAX + 1] = { 0 };
 ptls_hpke_kem_t* picoquic_hpke_kems[PICOQUIC_HPKE_KEM_NB_MAX + 1] = { 0 };
 picoquic_set_private_key_from_file_t picoquic_set_private_key_from_file_fn = NULL;
@@ -754,26 +753,28 @@ size_t picoquic_hash_get_length(char const* algorithm_name) {
 * - PICOQUIC_GROUP_SECP256R1: secp256r1
 */
 
-static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, int key_exchange_id)
+static int picoquic_set_key_exchange_in_ctx(ptls_context_t* ctx, ptls_key_exchange_algorithm_t** selected, int key_exchange_id)
 {
     int ret = 0;
-
 
     if (key_exchange_id == 0) {
         ctx->key_exchanges = picoquic_key_exchanges;
     }
     else {
-        picoquic_key_exchange_selected[0] = NULL;
-        picoquic_key_exchange_selected[1] = NULL;
-        /* find whether the key echange is supported */
-        for (int i = 0; picoquic_key_exchanges[i] != NULL; i++) {
+        ptls_key_exchange_algorithm_t* found = NULL;
+        /* find whether the key exchange is supported */
+        for (int i = 0; found == NULL && picoquic_key_exchanges[i] != NULL; i++) {
             if (picoquic_key_exchanges[i]->id == key_exchange_id) {
-                picoquic_key_exchange_selected[0] = picoquic_key_exchanges[i];
-                ctx->key_exchanges = picoquic_key_exchange_selected;
+                found = picoquic_key_exchanges[i];
             }
         }
-        if (picoquic_key_exchange_selected[0] == NULL) {
+        if (found == NULL) {
             ret = -1;
+        }
+        else {
+            selected[0] = found;
+            selected[1] = NULL;
+            ctx->key_exchanges = selected;
         }
     }
 
@@ -790,7 +791,7 @@ int picoquic_set_key_exchange(picoquic_quic_t* quic, int key_exchange_id)
         ret = -1;
     }
     else {
-        ret = picoquic_set_key_exchange_in_ctx(ctx, key_exchange_id);
+        ret = picoquic_set_key_exchange_in_ctx(ctx, quic->key_exchange_selected, key_exchange_id);
     }
     return ret;
 }
@@ -2192,7 +2193,7 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
 
         if (old_ctx == NULL) {
             picoquic_set_random_provider_in_ctx(ctx);
-            ret = picoquic_set_key_exchange_in_ctx(ctx, 0);
+            ret = picoquic_set_key_exchange_in_ctx(ctx, quic->key_exchange_selected, 0);
             if (ret == 0) {
                 ret = picoquic_set_cipher_suite_in_ctx(ctx, 0, quic->use_low_memory);
             }
