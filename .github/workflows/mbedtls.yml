@@ -49,25 +49,25 @@ jobs:
           echo $CXX
           # $CC --version
           ./ci/build_picotls.sh
-          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
+          cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON" "-DENABLE_ASAN=ON" "-DENABLE_UBSAN=ON"
           echo ls  /home/runner/work/picoquic/mbedtls/include
           ls /home/runner/work/picoquic/mbedtls/include
-          cmake --build build -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
+          cmake --build build
 
       - name: Perform Unit Tests
         run: |
             ulimit -c unlimited -S
             cd build
             make picoquic_ct
+            QUICRESULT=0
             ./picoquic_ct -S .. mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
                           mbedtls_retrieve_pubkey mbedtls_sign_verify mbedtls_ecdsa_der mbedtls_ecdsa_verify \
                           cert_verify_bad_cert cert_verify_bad_sni cert_verify_invalid \
                           cert_verify_null cert_verify_null_sni cert_verify_rsa \
-                          minicrypto_is_last mbedtls 2 > mbedtls_sanity.txt && QUICRESULT=$?
+                          minicrypto_is_last mbedtls > mbedtls_sanity.txt 2>&1 || QUICRESULT=$?
             cat mbedtls_sanity.txt
-            if [ ! -z ${QUICRESULT} ]; then
-                if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
-            fi
+            echo "picoquic_ct returns <${QUICRESULT}>"
+            if [ "${QUICRESULT}" != "0" ]; then exit 1; fi
             leaked=`grep "SUMMARY: AddressSanitizer:" mbedtls_sanity.txt | cut -d ' ' -f 3`
             if [ ! -z "$leaked" ]; then
                 echo "leaked: $leaked > 0"; exit 1;
