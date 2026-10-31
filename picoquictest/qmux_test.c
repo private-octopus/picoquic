@@ -1045,6 +1045,7 @@ int qmux_test_init(qmux_sim_ctx_t* sim_ctx, qmux_sim_spec_t* spec)
                 /* set the default idle timeout to the specified value */
                 picoquic_set_default_idle_timeout(sim_ctx->quic[i], spec->idle_timeout);
             }
+            tls_api_set_classic_key_exchanges(sim_ctx->quic[1]);
             sim_ctx->test_idle = spec->test_idle;
             sim_ctx->test_close = spec->test_close;
             sim_ctx->idle_timeout = spec->idle_timeout;

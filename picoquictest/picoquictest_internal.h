@@ -334,6 +334,7 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
     size_t send_buffer_size, int use_ecdsa);
 
 void tls_api_delete_ctx(picoquic_test_tls_api_ctx_t* test_ctx);
+void tls_api_set_classic_key_exchanges(picoquic_quic_t* quic);
 void test_api_delete_test_streams(picoquic_test_tls_api_ctx_t* test_ctx);
 
 int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
