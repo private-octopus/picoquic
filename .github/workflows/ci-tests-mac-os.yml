@@ -25,12 +25,13 @@ jobs:
 
       - name: Building picoquic
         run: |
-          # brew reinstall pkg-config
-          brew install openssl
-          whereis openssl
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig"
-          ./ci/build_picotls.sh
-          cmake -S . -B build -DCMAKE_C_FLAGS="-Wall -Wextra -Werror -Wpedantic"
+          # Pin OpenSSL 3: "openssl" resolves to openssl@4 on recent images
+          brew install openssl@3
+          export OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+          export PKG_CONFIG_PATH="${OPENSSL_ROOT_DIR}/lib/pkgconfig"
+          "${OPENSSL_ROOT_DIR}/bin/openssl" version
+          PTLS_CMAKE_OPTS="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}" ./ci/build_picotls.sh
+          cmake -S . -B build -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" -DCMAKE_C_FLAGS="-Wall -Wextra -Werror -Wpedantic"
           cmake --build build 
 
       - name: Perform Unit Tests
