@@ -13460,8 +13460,14 @@ int integrity_limit_test(void)
     }
 
     /* Perform a data sending loop for a few rounds after the ready state */
-    while (ret == 0 && nb_initial_loop < 64) {
-        if (test_ctx->cnx_server != NULL && 
+    for (int nb_rounds = 0; ret == 0 && nb_initial_loop < 64; nb_rounds++) {
+        if (nb_rounds >= 1024) {
+            /* Do not loop forever if the 1-RTT keys never get ready */
+            DBG_PRINTF("Only %d of %d rounds had 1-RTT keys", nb_initial_loop, nb_rounds);
+            ret = -1;
+            break;
+        }
+        if (test_ctx->cnx_server != NULL &&
             test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt != NULL) {
             nb_initial_loop++;
         }
