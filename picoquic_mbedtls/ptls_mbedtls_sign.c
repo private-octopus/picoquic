@@ -1412,6 +1412,7 @@ static int mbedtls_verify_certificate(ptls_verify_certificate_t *_self, ptls_t *
 
     if (chain_head != NULL) {
         mbedtls_x509_crt_free(chain_head);
+        free(chain_head);
     }
     return ret;
 }
