@@ -280,7 +280,10 @@ static int socket_cloexec_get_port(socket_cloexec_port_t* p, char const* name, S
     return ret;
 }
 
-/* Bind a new socket to the same port, without SO_REUSEADDR or SO_REUSEPORT */
+/* Bind a new socket to the same port, without SO_REUSEADDR or SO_REUSEPORT.
+ * Under load, macOS may release the child's copy of a FD_CLOEXEC socket some
+ * tens of ms after posix_spawn returns, so retry for up to 1 second. A leaked
+ * socket would stay bound for the whole life of the child, 10 seconds. */
 static int socket_cloexec_bind_again(socket_cloexec_port_t* p)
 {
     int ret = 0;
@@ -288,8 +291,17 @@ static int socket_cloexec_bind_again(socket_cloexec_port_t* p)
     SOCKET_TYPE fd = socket(p->af, p->sock_type, 0);
 
     if (fd == INVALID_SOCKET ||
-        (p->af == AF_INET6 && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val)) != 0) ||
-        picoquic_bind_to_port(fd, p->af, p->port) != 0) {
+        (p->af == AF_INET6 && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val)) != 0)) {
+        ret = -1;
+    }
+    else {
+        ret = picoquic_bind_to_port(fd, p->af, p->port);
+        for (int i = 0; ret != 0 && errno == EADDRINUSE && i < 100; i++) {
+            usleep(10000);
+            ret = picoquic_bind_to_port(fd, p->af, p->port);
+        }
+    }
+    if (ret != 0) {
         DBG_PRINTF("%s socket (af=%d), port %d still in use after close, errno=%d: %s",
             p->name, p->af, p->port, errno, strerror(errno));
         ret = -1;
