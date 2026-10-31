@@ -364,6 +364,16 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
     return tuple;
 }
 
+/* Path stalled: peer active within 1 RTT, but our oldest unacked packet is older than 2 RTT plus ack delay. */
+int picoquic_is_ack_path_stalled(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_packet_t* oldest = path_x->pkt_ctx.pending_first;
+    uint64_t delay = 2 * path_x->smoothed_rtt + cnx->remote_parameters.max_ack_delay;
+
+    return (cnx->is_multipath_enabled && oldest != NULL && oldest->send_time + delay < current_time &&
+        cnx->latest_receive_time + path_x->smoothed_rtt > current_time);
+}
+
 /* Find available paths:
 * Check that there is at least one available path. If not, promote one of the candidates.
 */
@@ -426,120 +436,113 @@ int picoquic_verify_path_available(picoquic_cnx_t* cnx, picoquic_path_t** next_p
  * Produce a sorting of available paths
  */
 
+/* A path is a candidate if it is validated, not demoted, has the fewest retransmits, and is not
+ * a backup path. A backup path pinned by stream affinity (picoquic_set_stream_path_affinity) is
+ * still a candidate, so that the pinned stream does not stall forever. */
+static int picoquic_is_path_candidate(picoquic_path_t* path_x, uint64_t min_retransmit, picoquic_stream_head_t* next_stream)
+{
+    return (path_x->first_tuple->challenge_verified && !path_x->path_is_demoted && path_x->nb_retransmit <= min_retransmit &&
+        (!path_x->path_is_backup || (next_stream != NULL && next_stream->affinity_path == path_x)));
+}
+
+/* Keep the nominal ack path unless in trouble, candidates changed, or a healthy path has rtt_min lower by 1/8. */
+static int picoquic_update_nominal_ack_path(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t min_retransmit,
+    picoquic_stream_head_t* next_stream)
+{
+    int i_min_rtt = -1;
+    int i_nominal = -1;
+    int is_nominal_stalled = 0;
+    int is_min_rtt_stalled = 0;
+    int nb_candidates = 0;
+
+    for (int path_index = 0; path_index < cnx->nb_paths; path_index++) {
+        picoquic_path_t* path_x = cnx->path[path_index];
+        path_x->is_nominal_ack_path = 0;
+        if (picoquic_is_path_candidate(path_x, min_retransmit, next_stream)) {
+            int is_stalled = picoquic_is_ack_path_stalled(cnx, path_x, current_time);
+            nb_candidates++;
+            if (path_x->unique_path_id == cnx->nominal_ack_path_id) {
+                i_nominal = path_index;
+                is_nominal_stalled = is_stalled;
+            }
+            /* Best candidate: fewest retransmits, not stalled, lowest rtt_min */
+            if (i_min_rtt < 0 ||
+                path_x->nb_retransmit < cnx->path[i_min_rtt]->nb_retransmit ||
+                (path_x->nb_retransmit == cnx->path[i_min_rtt]->nb_retransmit && is_stalled < is_min_rtt_stalled) ||
+                (path_x->nb_retransmit == cnx->path[i_min_rtt]->nb_retransmit && is_stalled == is_min_rtt_stalled &&
+                    path_x->rtt_min < cnx->path[i_min_rtt]->rtt_min)) {
+                i_min_rtt = path_index;
+                is_min_rtt_stalled = is_stalled;
+            }
+        }
+    }
+    if (i_nominal < 0 || nb_candidates != cnx->nominal_nb_candidates ||
+        cnx->path[i_nominal]->nb_retransmit > 0 || is_nominal_stalled ||
+        (i_min_rtt >= 0 && i_min_rtt != i_nominal && !is_min_rtt_stalled &&
+            cnx->path[i_min_rtt]->nb_retransmit == 0 &&
+            cnx->path[i_min_rtt]->rtt_min + cnx->path[i_min_rtt]->rtt_min / 8 < cnx->path[i_nominal]->rtt_min)) {
+        i_nominal = i_min_rtt;
+        cnx->nominal_nb_candidates = nb_candidates;
+        if (i_nominal >= 0) {
+            cnx->nominal_ack_path_id = cnx->path[i_nominal]->unique_path_id;
+        }
+    }
+    if (i_nominal >= 0) {
+        cnx->path[i_nominal]->is_nominal_ack_path = 1;
+    }
+    return i_nominal;
+}
+
 void picoquic_sort_available_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t* next_wake_time,
     picoquic_path_t** next_path, uint64_t min_retransmit, picoquic_tuple_t** next_tuple)
 {
-    int data_path_cwin = -1;
-    int data_path_pacing = -1;
+    int selected = -1;
+    int fallback_cwin = -1;
+    int fallback_pacing = -1;
     uint64_t pacing_time_next = UINT64_MAX;
-    uint64_t last_sent_pacing = UINT64_MAX;
-    uint64_t last_sent_cwin = UINT64_MAX;
-    int i_min_rtt = -1;
-    int is_min_rtt_pacing_ok = 0;
-    int is_ack_needed = 0;
     picoquic_stream_head_t* next_stream = picoquic_find_ready_stream(cnx);
-    int affinity_path_id = -1;
+    int is_cnx_data_ready = (cnx->is_datagram_ready || cnx->first_misc_frame != NULL || cnx->queue_data_repeat_tree.size > 0);
+    int i_nominal = picoquic_update_nominal_ack_path(cnx, current_time, min_retransmit, next_stream);
+    int is_ack_needed = (i_nominal >= 0) ? picoquic_is_ack_needed(cnx, current_time, next_wake_time, 0, 0) : 0;
 
-    /* Several paths are available. We will chose from that.
-     */
-    for (int path_index = 0; path_index < cnx->nb_paths; path_index++) {
+    /* Round robin: select the first path allowed by pacing that is the nominal path with an ACK due, or has data and window. */
+    for (int k = 0; selected < 0 && k < cnx->nb_paths; k++) {
+        int path_index = (cnx->last_path_polled + 1 + k) % cnx->nb_paths;
         picoquic_path_t* path_x = cnx->path[path_index];
-        /* Clear the nominal ack path flag from all path -- it will be reset to the low RTT path later */
-        path_x->is_nominal_ack_path = 0;
-        /* Only continue processing if the path is available. A path marked backup is
-         * normally excluded here -- backup paths are otherwise only promoted based on
-         * relative retransmit counts (see picoquic_verify_path_available), never because
-         * a stream is waiting on them. But a stream that has been explicitly pinned to
-         * this path via picoquic_set_stream_path_affinity is asking for that path
-         * specifically, even if it is on backup duty for everything else, so let it
-         * compete normally below instead of stalling forever. */
-        if (!path_x->first_tuple->challenge_verified || path_x->path_is_demoted || path_x->nb_retransmit > min_retransmit) {
-            continue;
-        }
-        if (path_x->path_is_backup && !(next_stream != NULL && next_stream->affinity_path == path_x)) {
-            continue;
-        }
-        /* This path is a candidate for min rtt */
-        if (i_min_rtt < 0 ||
-            path_x->nb_retransmit < cnx->path[i_min_rtt]->nb_retransmit ||
-            (path_x->nb_retransmit == cnx->path[i_min_rtt]->nb_retransmit &&
-                path_x->rtt_min < cnx->path[i_min_rtt]->rtt_min)) {
-            i_min_rtt = path_index;
-            is_min_rtt_pacing_ok = 0;
-        }
-        path_x->polled++;
-        /* Find the best path authorized by pacing and then by congestion control,
-         * taking into account affinity, datagrams, etc.
-         */
-        if (picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, &pacing_time_next)) {
-            if (path_x->last_sent_time < last_sent_pacing) {
-                last_sent_pacing = path_x->last_sent_time;
-                data_path_pacing = path_index;
-                if (path_index == i_min_rtt) {
-                    is_min_rtt_pacing_ok = 1;
-                }
+
+        if (picoquic_is_path_candidate(path_x, min_retransmit, next_stream)) {
+            path_x->polled++;
+            if (!picoquic_is_sending_authorized_by_pacing(cnx, path_x, current_time, &pacing_time_next)) {
+                path_x->paced++;
             }
-            if (path_x->bytes_in_transit < path_x->cwin &&
-                path_x->bytes_in_transit < cnx->quic->cwin_max) {
-                if (path_x->last_sent_time < last_sent_cwin) {
-                    last_sent_cwin = path_x->last_sent_time;
-                    data_path_cwin = path_index;
-                }
-                if (affinity_path_id < 0) {
-                    /* we select here the first path that is either ready to send on
-                        * the highest priority stream with affinity on this path, or
-                        * ready to send datagrams on this path. */
-                    if (next_stream != NULL && path_x == next_stream->affinity_path) {
-                        affinity_path_id = path_index;
-                    }
-                    else if (path_x->is_datagram_ready || cnx->is_datagram_ready) {
-                        affinity_path_id = path_index;
-                    }
-                }
+            else if (path_index == i_nominal && is_ack_needed) {
+                selected = path_index;
             }
-            else {
+            else if (path_x->bytes_in_transit >= path_x->cwin || path_x->bytes_in_transit >= cnx->quic->cwin_max) {
                 path_x->congested++;
+                if (fallback_pacing < 0 || path_x->last_sent_time < cnx->path[fallback_pacing]->last_sent_time) {
+                    fallback_pacing = path_index;
+                }
+            }
+            else if (is_cnx_data_ready || path_x->is_datagram_ready ||
+                (next_stream != NULL && (next_stream->affinity_path == NULL || next_stream->affinity_path == path_x))) {
+                selected = path_index;
+            }
+            else if (fallback_cwin < 0 || path_x->last_sent_time < cnx->path[fallback_cwin]->last_sent_time) {
+                fallback_cwin = path_index;
             }
         }
-        else {
-            path_x->paced++;
-        }
     }
-    /* Putting it all together:
-     * - fix the nominal ACK path that we erased.
-     * - retain the ACK
-     */
-
-    if (i_min_rtt >= 0) {
-        is_ack_needed = picoquic_is_ack_needed(cnx, current_time, next_wake_time, 0, 0);
-        cnx->path[i_min_rtt]->is_nominal_ack_path = 1;
-    }
-
-    if (is_ack_needed && is_min_rtt_pacing_ok) {
-        *next_path = cnx->path[i_min_rtt];
-    }
-    else if (data_path_cwin >= 0) {
-        /* if there is a path ready to send the most urgent data, select it */
-        if (affinity_path_id >= 0) {
-            *next_path = cnx->path[affinity_path_id];
-        }
-        else {
-            *next_path = cnx->path[data_path_cwin];
-        }
-    }
-    else if (data_path_pacing >= 0) {
-        *next_path = cnx->path[data_path_pacing];
-    }
-    else {
-        /* No path is ready at all. Set the next wake time to the min of current
-         * value and next pacing time.
-         */
+    if (selected < 0) {
+        /* Nothing ready: least recently used path with window, else paced ok, else path 0; wake up for paced paths. */
+        selected = (fallback_cwin >= 0) ? fallback_cwin : ((fallback_pacing >= 0) ? fallback_pacing : 0);
         if (pacing_time_next < *next_wake_time) {
             *next_wake_time = pacing_time_next;
             SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
-        *next_path = cnx->path[0];
     }
+    cnx->last_path_polled = selected;
+    *next_path = cnx->path[selected];
     (*next_path)->selected++;
     *next_tuple = (*next_path)->first_tuple;
 }
@@ -626,6 +629,24 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         /* Only 0 or 1 path to chose from. Just select that. */
         if (*next_path == NULL) {
             *next_path = cnx->path[0];
+        }
+        /* That path is the nominal ack path, unless stalled: then a healthy backup carries ACKs, without promotion. */
+        picoquic_path_t* ack_path = *next_path;
+        if (cnx->is_multipath_enabled && cnx->nb_paths > 1 && picoquic_is_ack_path_stalled(cnx, *next_path, current_time)) {
+            for (int i = 0; ack_path == *next_path && i < cnx->nb_paths; i++) {
+                picoquic_path_t* path_x = cnx->path[i];
+                if (path_x != *next_path && path_x->path_is_backup && path_x->first_tuple->challenge_verified &&
+                    !path_x->path_is_demoted && !picoquic_is_ack_path_stalled(cnx, path_x, current_time)) {
+                    ack_path = path_x;
+                }
+            }
+        }
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            cnx->path[i]->is_nominal_ack_path = (cnx->path[i] == ack_path);
+        }
+        if (ack_path != *next_path && picoquic_is_ack_needed(cnx, current_time, next_wake_time, picoquic_packet_context_application, 0) &&
+            picoquic_is_sending_authorized_by_pacing(cnx, ack_path, current_time, next_wake_time)) {
+            *next_path = ack_path;
         }
         *next_tuple = (*next_path)->first_tuple;
     }

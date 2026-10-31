@@ -242,8 +242,9 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, in
             picoquic_update_path_rtt_one_way(cnx, old_path, send_time, current_time, ack_delay, time_stamp);
         }
         /* At the end of the period, update the smoothed and variants statistics.
-        */
-        if (pkt_ctx == NULL || pkt_ctx->highest_acknowledged > old_path->rtt_packet_previous_period ||
+         * A period that started before any acknowledgement (UINT64_MAX) ends at the next sample. */
+        if (pkt_ctx == NULL || old_path->rtt_packet_previous_period == UINT64_MAX ||
+            pkt_ctx->highest_acknowledged > old_path->rtt_packet_previous_period ||
             old_path->rtt_time_previous_period + (rtt_estimate / 4) > current_time) {
             old_path->rtt_time_previous_period = current_time;
 
