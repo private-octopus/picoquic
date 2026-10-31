@@ -52,7 +52,7 @@ jobs:
           cmake -S . -B build "-DWITH_OPENSSL=OFF" "-DWITH_MBEDTLS=ON"
           echo ls  /home/runner/work/picoquic/mbedtls/include
           ls /home/runner/work/picoquic/mbedtls/include
-          cmake --build build
+          cmake --build build -DENABLE_ASAN=ON -DENABLE_UBSAN=on .
 
       - name: Perform Unit Tests
         run: |
@@ -63,6 +63,16 @@ jobs:
                           mbedtls_retrieve_pubkey mbedtls_sign_verify mbedtls_ecdsa_der mbedtls_ecdsa_verify \
                           cert_verify_bad_cert cert_verify_bad_sni cert_verify_invalid \
                           cert_verify_null cert_verify_null_sni cert_verify_rsa \
-                          minicrypto_is_last mbedtls && QUICRESULT=$?
-            if [[ ${QUICRESULT} == 0 ]]; then exit 0; fi;
-            exit 1
+                          minicrypto_is_last mbedtls 2 > mbedtls_sanity.txt && QUICRESULT=$?
+            cat mbedtls_sanity.txt
+            if [ ! -z ${QUICRESULT} ]; then
+                if [ ${QUICRESULT} != 0 ]; then exit 1; fi;
+            fi
+            leaked=`grep "SUMMARY: AddressSanitizer:" mbedtls_sanity.txt | cut -d ' ' -f 3`
+            if [ ! -z "$leaked" ]; then
+                echo "leaked: $leaked > 0"; exit 1;
+            else
+                echo "No leaks detected in picoquic_ct"
+            fi
+            exit 0
+
