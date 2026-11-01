@@ -1162,6 +1162,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wrong_source_addr_initial)
+        {
+            int ret = wrong_source_addr_initial_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wrong_source_addr_vn)
+        {
+            int ret = wrong_source_addr_vn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wrong_source_addr_retry)
+        {
+            int ret = wrong_source_addr_retry_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();
