@@ -195,6 +195,7 @@ static const picoquic_test_def_t test_table[] = {
     { "frames_format", frames_format_test },
     { "flow_control_check_stream_offset", flow_control_check_stream_offset_test },
     { "signal_stream_reset", signal_stream_reset_test },
+    { "null_callback_setters", null_callback_setters_test },
     { "logger", logger_test },
     { "binlog", binlog_test },
     { "binlog_compare_mismatch", binlog_compare_mismatch_test },

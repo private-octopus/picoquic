@@ -2734,7 +2734,7 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
         ctx->handshake_properties.client.negotiated_protocols.count = 1;
         ctx->handshake_properties.client.negotiated_protocols.list = ctx->alpn_vec;
     }
-    else if (cnx->callback_fn != NULL) {
+    else {
         /* Get the default ALPN list for the callback function */
         ret = cnx->callback_fn(cnx, 0, (uint8_t*)ctx, 0, picoquic_callback_request_alpn_list, cnx->callback_ctx, NULL);
 
@@ -3148,12 +3148,7 @@ int picoquic_tls_stream_process(picoquic_cnx_t* cnx, int * data_consumed, uint64
 
                             picoquic_log_negotiated_alpn(cnx, 0, NULL, 0, (const uint8_t*)alpn, strlen(alpn), NULL, 0);
 
-                            if (cnx->callback_fn != NULL) {
-                                cnx->callback_fn(cnx, 0, (uint8_t*)alpn, 0, picoquic_callback_set_alpn, cnx->callback_ctx, NULL);
-                            }
-                            else {
-                                DBG_PRINTF("Negotiated ALPN: %s", alpn);
-                            }
+                            cnx->callback_fn(cnx, 0, (uint8_t*)alpn, 0, picoquic_callback_set_alpn, cnx->callback_ctx, NULL);
                         }
                     }
                     switch (ctx->handshake_properties.client.early_data_acceptance) {
