@@ -418,6 +418,69 @@ static int64_t splay_u64_key_zero_compare(void* left, void* right)
     return l < r ? -1 : l > r;
 }
 
+/* A sentinel keeps both subtrees present while successive root deletions drain
+ * an insertion-built comb. Plain successor transplantation repeatedly walks the
+ * same ancestors: n*n/8 + 3*n/4 minimum-path nodes for n divisible by four. */
+static int splay_u64_delete_join_test(const splay_u64_layout_t* layout, picosplay_comparator comp, int typed)
+{
+    enum { population = 1024 };
+    picosplay_node_t* records[population + 2] = { 0 };
+    picosplay_tree_t generic;
+    picosplay64u_tree_t direct;
+    size_t minimum_path_nodes = 0;
+    int ret = 0;
+    int i;
+
+    picosplay_init_tree(&generic, comp, layout->create, layout->delete_node, layout->value);
+    picosplay64u_init_tree(&direct, layout->key_offset, layout->node_offset, layout->create, layout->delete_node);
+    for (i = 0; ret == 0 && i < population + 2; i++) {
+        uint64_t key = i < population ? 2 * (uint64_t)(i + 1) : (uint64_t)(i - population);
+        void* value = layout->new_value(key, (unsigned int)i);
+        if (value == NULL) {
+            ret = -1;
+        }
+        else {
+            records[i] = typed ? picosplay64u_insert(&direct, value) : picosplay_insert(&generic, value);
+            if (records[i] == NULL) { free(value); ret = -1; }
+        }
+    }
+    for (i = 0; ret == 0 && i < population + 2; i++) {
+        picosplay_node_t* root = typed ? direct.root : generic.root;
+        uint64_t last_key = 0;
+        unsigned int last_serial = 0;
+        int have_last = 0;
+        int expected = population + 2 - i;
+        /* Reuse the read-only parent/order checker. first() may splay and would
+         * change the very paths this regression needs to observe. */
+        if ((typed ? direct.size : generic.size) != expected ||
+            splay_u64_check_node(root, NULL, layout, &last_key, &last_serial, &have_last) != expected) {
+            ret = -1;
+        }
+        else if (i <= population) {
+            picosplay_node_t* hint = i == 0 ? records[population + 1] : records[i - 1];
+            picosplay_node_t* cursor;
+            if (root != hint) { ret = -1; break; }
+            /* These hints are roots, so this read-only walk counts exactly the
+             * minimum traversal that unlink will do after its initial splay. */
+            if (root->left != NULL) {
+                for (cursor = root->right; cursor != NULL; cursor = cursor->left) minimum_path_nodes++;
+            }
+            if (typed) picosplay64u_delete_hint(&direct, hint);
+            else picosplay_delete_hint(&generic, hint);
+            if (splay_u64_deleted != hint) ret = -1;
+        }
+    }
+    /* A workload-specific work limit, not a worst-case bound for one deletion.
+     * The old join visits 131840 nodes here; canonical join stays below 8192. */
+    if (minimum_path_nodes > 8 * population) {
+        DBG_PRINTF("Successor minimum paths: %zu nodes exceed %d for typed=%d\n", minimum_path_nodes, 8 * population, typed);
+        ret = -1;
+    }
+    picosplay_empty_tree(&generic);
+    picosplay64u_empty_tree(&direct);
+    return ret;
+}
+
 static int splay_uint64_test(void)
 {
     splay_u64_layout_t node_first = { offsetof(splay_u64_node_first_t, key), offsetof(splay_u64_node_first_t, node), offsetof(splay_u64_node_first_t, serial), splay_u64_node_first_new, splay_u64_node_first_create, splay_u64_node_first_value, splay_u64_node_first_delete };
@@ -432,7 +495,10 @@ static int splay_uint64_test(void)
     free(value);
     return splay_u64_layout_test(&node_first, splay_u64_generic_compare) ||
         splay_u64_layout_test(&key_first, splay_u64_key_first_compare) ||
-        splay_u64_layout_test(&key_zero, splay_u64_key_zero_compare);
+        splay_u64_layout_test(&key_zero, splay_u64_key_zero_compare) ||
+        splay_u64_delete_join_test(&node_first, splay_u64_generic_compare, 0) ||
+        splay_u64_delete_join_test(&key_first, splay_u64_key_first_compare, 0) ||
+        splay_u64_delete_join_test(&key_zero, splay_u64_key_zero_compare, 0);
 }
 
 static int splay64_uint64_test(void)
@@ -488,7 +554,10 @@ static int splay64_uint64_test(void)
     }
     picosplay_empty_tree(&generic);
     picosplay64u_empty_tree(&direct);
-    return splay64_u64_layout_test(&node_first) || splay64_u64_layout_test(&key_first) || splay64_u64_layout_test(&key_zero);
+    return splay64_u64_layout_test(&node_first) || splay64_u64_layout_test(&key_first) || splay64_u64_layout_test(&key_zero) ||
+        splay_u64_delete_join_test(&node_first, splay_u64_generic_compare, 1) ||
+        splay_u64_delete_join_test(&key_first, splay_u64_key_first_compare, 1) ||
+        splay_u64_delete_join_test(&key_zero, splay_u64_key_zero_compare, 1);
 }
 
 int splay_test(void) {

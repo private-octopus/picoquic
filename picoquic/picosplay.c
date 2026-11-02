@@ -204,18 +204,12 @@ static void picosplay_unlink(picosplay_node_t** root, picosplay_node_t* node)
         *root = node->left;
         (*root)->parent = NULL;
     } else {
-        picosplay_node_t *x = leftmost(node->right);
-        if(x->parent != node) {
-            x->parent->left = x->right;
-            if(x->right != NULL)
-                x->right->parent = x->parent;
-            x->right = node->right;
-            x->right->parent = x;
-        }
-        *root = x;
-        x->parent = NULL;
-        x->left = node->left;
-        x->left->parent = x;
+        picosplay_node_t* right = node->right;
+        right->parent = NULL;
+        splay(&right, leftmost(right));
+        right->left = node->left;
+        right->left->parent = right;
+        *root = right;
     }
 }
 
