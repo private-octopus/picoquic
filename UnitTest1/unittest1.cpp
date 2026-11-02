@@ -897,6 +897,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(picoquic_ptls_fusion)
+        {
+            int ret = picoquic_ptls_fusion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();

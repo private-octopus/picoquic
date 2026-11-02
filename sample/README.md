@@ -75,6 +75,7 @@ You will then need to link the objects with the following dependencies:
 * Picoquic core library: `libpicoquic-core.a`
 * Picoquic logging library: `libpicoquic-log.a`
 * Picotls core library: `libpicotls-core.a` 
+* Picotls fusion library: `libpicotls-fusion.a`
 * Picotls minicrypto library: `libpicotls-minicrypto.a`
 * Picotls openssl mapping library: `libpicotls-openssl.a`
 * OpenSSL library: `libssl.so`

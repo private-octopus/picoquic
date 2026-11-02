@@ -111,26 +111,39 @@ int minicrypto_is_last_test(void)
 {
     int ret = 0;
     int expected_aes128gcm_sha256 = 1;
+    int expected_aes128gcm_sha256_low = 1;
     int expected_set_key = 1;
     int using_aes128gcm_sha256;
+    int using_aes128gcm_sha256_low;
     int actual_set_key;
-    void* actual_aes128gcm_sha256 = picoquic_get_aes128gcm_sha256_v();
+    void* actual_aes128gcm_sha256 = picoquic_get_aes128gcm_sha256_v(0);
+    void* actual_aes128gcm_sha256_low = picoquic_get_aes128gcm_sha256_v(1);
 
     picoquic_tls_api_reset(0);
 
-#if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL)
+#if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL) || !defined(PTLS_WITHOUT_FUSION)
     expected_aes128gcm_sha256 = 0;
     expected_set_key = 0;
+#endif
+#if defined(PICOQUIC_WITH_MBEDTLS) || !defined(PTLS_WITHOUT_OPENSSL)
+    expected_aes128gcm_sha256_low = 0;
 #endif
 #if !defined(PTLS_WITHOUT_OPENSSL)
     expected_set_key = 0;
 #endif
     using_aes128gcm_sha256 = (actual_aes128gcm_sha256 == (void*)&ptls_minicrypto_aes128gcmsha256);
+    using_aes128gcm_sha256_low = (actual_aes128gcm_sha256_low == (void*)&ptls_minicrypto_aes128gcmsha256);
     actual_set_key = (picoquic_set_private_key_from_file_fn == picoquic_minicrypto_set_key_fn);
     if (using_aes128gcm_sha256 != expected_aes128gcm_sha256) {
         DBG_PRINTF("Wrong aes gcm 128 sha 256. Expected: %s, actual: %s",
             (expected_aes128gcm_sha256) ? "minicrypto" : "other",
             (using_aes128gcm_sha256) ? "minicrypto" : "other");
+        ret = -1;
+    }
+    if (using_aes128gcm_sha256_low != expected_aes128gcm_sha256_low) {
+        DBG_PRINTF("Wrong aes gcm 128 sha 256 low. Expected: %s, actual: %s",
+            (expected_aes128gcm_sha256_low) ? "minicrypto" : "other",
+            (using_aes128gcm_sha256_low) ? "minicrypto" : "other");
         ret = -1;
     }
     if (actual_set_key != expected_set_key) {

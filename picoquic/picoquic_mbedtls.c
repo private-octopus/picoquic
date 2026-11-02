@@ -98,10 +98,10 @@ void picoquic_mbedtls_load(int unload)
 #endif
         DBG_PRINTF("mbedtls_version_get_number(): %x", mbedtls_version_get_number());
 
-        picoquic_register_ciphersuite(&ptls_mbedtls_aes128gcmsha256);
-        picoquic_register_ciphersuite(&ptls_mbedtls_aes256gcmsha384);
+        picoquic_register_ciphersuite(&ptls_mbedtls_aes128gcmsha256, 1);
+        picoquic_register_ciphersuite(&ptls_mbedtls_aes256gcmsha384, 1);
 #ifndef ESP_PLATFORM
-        picoquic_register_ciphersuite(&ptls_mbedtls_chacha20poly1305sha256);
+        picoquic_register_ciphersuite(&ptls_mbedtls_chacha20poly1305sha256, 1);
 #endif
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_secp256r1);
         picoquic_register_key_exchange_algorithm(&ptls_mbedtls_x25519);

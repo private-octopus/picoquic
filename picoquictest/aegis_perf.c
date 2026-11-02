@@ -168,7 +168,7 @@ static void aegis_perf_usage(char const* argv0)
 
 static int aegis_perf_micro_one(aegis_perf_suite_t* suite_spec, aegis_perf_config_t* config)
 {
-    ptls_cipher_suite_t* suite = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(suite_spec->cipher_suite_id);
+    ptls_cipher_suite_t* suite = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(suite_spec->cipher_suite_id, 0);
     double mbps[AEGISPERF_SAMPLES_MAX];
     double usec[AEGISPERF_SAMPLES_MAX];
     uint8_t* input = NULL;
@@ -327,7 +327,7 @@ static int aegis_perf_transfer_sample_repeat(aegis_perf_suite_t* suite_spec, siz
 
 static int aegis_perf_transfer_one(aegis_perf_suite_t* suite_spec, aegis_perf_config_t* config)
 {
-    ptls_cipher_suite_t* suite = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(suite_spec->cipher_suite_id);
+    ptls_cipher_suite_t* suite = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(suite_spec->cipher_suite_id, 0);
     double mbps[AEGISPERF_SAMPLES_MAX];
     double usec[AEGISPERF_SAMPLES_MAX];
     int ret = 0;

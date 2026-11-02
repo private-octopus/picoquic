@@ -44,6 +44,10 @@
 
 #ifdef _WINDOWS
 #include "wincompat.h"
+#ifndef PTLS_WITHOUT_FUSION
+/* temporary disabling of PTLS_FUSION until memory alignment issues are fixed*/
+#define PTLS_WITHOUT_FUSION
+#endif
 #endif
 
 #include <stddef.h>
@@ -103,7 +107,7 @@ static void picoquic_free_log_event_ctx(ptls_context_t* ctx);
 
 #ifdef CRYPTO_PROVIDERS_REGION
 
-ptls_cipher_suite_t* picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1] = { 0 };
+struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1] = { 0 };
 
 ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1] = { 0 };
 ptls_key_exchange_algorithm_t* picoquic_key_exchange_secp256r1[2] = { 0 };
@@ -157,6 +161,9 @@ size_t nb_picoquic_key_exchanges_default_order = sizeof(picoquic_key_exchanges_d
 void picoquic_mbedtls_load(int unload);
 void picoquic_mbedtls_log_version(picoquic_cnx_t* cnx);
 #endif
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+void picoquic_ptls_fusion_load(int unload);
+#endif
 /* void picoquic_bcrypt_load(int unload); */
 #ifndef PTLS_WITHOUT_OPENSSL
 void picoquic_ptls_openssl_load(int unload);
@@ -192,6 +199,16 @@ void picoquic_tls_api_init_providers(int unload)
     }
 #endif
     // picoquic_bcrypt_load(unload);
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+        DBG_PRINTF("%s fusion", (unload)?"Unloading":"Loading");
+        picoquic_ptls_fusion_load(unload);
+    }
+#else
+    if (unload == 0 && tls_api_is_init == 0) {
+        DBG_PRINTF("%s", "Picoquic was compiled without Fusion");
+    }
+#endif
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
@@ -204,7 +221,7 @@ void picoquic_tls_api_init_providers(int unload)
 
 static void picoquic_tls_api_zero(void)
 {
-    memset((void*)picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
+    memset(picoquic_cipher_suites, 0, sizeof(picoquic_cipher_suites));
     memset((void*)picoquic_key_exchanges, 0, sizeof(picoquic_key_exchanges));
 
     picoquic_set_private_key_from_file_fn = NULL;
@@ -234,6 +251,11 @@ void picoquic_tls_api_log_versions(picoquic_cnx_t * cnx)
     }
 #endif
     // picoquic_bcrypt_load(unload);
+#if (!defined(_WINDOWS) || defined(_WINDOWS64)) && !defined(PTLS_WITHOUT_FUSION)
+    if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_FUSION) == 0) {
+        picoquic_log_app_message(cnx, "%s", "Fusion was loaded.");
+    }
+#endif
 
 #ifdef PICOQUIC_WITH_MBEDTLS
     if ((tls_api_init_flags & TLS_API_INIT_FLAGS_NO_MBEDTLS) == 0) {
@@ -276,13 +298,16 @@ void picoquic_tls_api_reset(uint64_t init_flags)
 /* Registration of ciphersuites.
  * This API is called by crypto providers to register available cipher suites.
  */
-void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite)
+void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory)
 {
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
-        if (picoquic_cipher_suites[i] == NULL ||
-            picoquic_cipher_suites[i]->id == suite->id) {
+        if (picoquic_cipher_suites[i].high_memory_suite == NULL ||
+            picoquic_cipher_suites[i].high_memory_suite->id == suite->id) {
             /* Replace the lower priority provider if present! */
-            picoquic_cipher_suites[i] = suite;
+            picoquic_cipher_suites[i].high_memory_suite = suite;
+            if (is_low_memory) {
+                picoquic_cipher_suites[i].low_memory_suite = suite;
+            }
             break;
         }
     }
@@ -550,16 +575,23 @@ static ptls_cipher_algorithm_t* picoquic_get_header_protection_cipher(ptls_ciphe
 }
 
 /* List of cipher suites that are suitable for this context */
-static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites, int cipher_suite_id)
+static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites, int cipher_suite_id, int use_low_memory)
 {
     int nb_suites = 0;
 
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && nb_suites < PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX; i++) {
-        if (picoquic_cipher_suites[i] == NULL) {
+        if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
             break;
         }
-        if (cipher_suite_id == 0 || cipher_suite_id == picoquic_cipher_suites[i]->id) {
-            selected_suites[nb_suites++] = picoquic_cipher_suites[i];
+        if (cipher_suite_id == 0 || cipher_suite_id == picoquic_cipher_suites[i].high_memory_suite->id) {
+            if (use_low_memory) {
+                if (picoquic_cipher_suites[i].low_memory_suite != NULL) {
+                    selected_suites[nb_suites++] = picoquic_cipher_suites[i].low_memory_suite;
+                }
+            }
+            else {
+                selected_suites[nb_suites++] = picoquic_cipher_suites[i].high_memory_suite;
+            }
         }
     }
 
@@ -567,7 +599,7 @@ static int picoquic_set_cipher_suite_list(ptls_cipher_suite_t** selected_suites,
 }
 
 /* Set the cipher suites */
-static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suite_id)
+static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suite_id, int use_low_memory)
 {
     ptls_cipher_suite_t** selected_suites = (ptls_cipher_suite_t**)malloc(sizeof(ptls_cipher_suite_t*) * (PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX + 1));
     int nb_suites = 0;
@@ -582,7 +614,7 @@ static int picoquic_set_cipher_suite_in_ctx(ptls_context_t* ctx, int cipher_suit
             free((void*)ctx->cipher_suites);
         }
 
-        nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id);
+        nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id, use_low_memory);
 
         if (nb_suites == 0) {
             ctx->cipher_suites = NULL;
@@ -605,15 +637,15 @@ int picoquic_set_cipher_suite(picoquic_quic_t* quic, int cipher_suite_id)
     ptls_context_t* ctx;
     PICOQUIC_THREAD_CHECK(quic);
     ctx = (ptls_context_t*)quic->tls_master_ctx;
-    return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id));
+    return (picoquic_set_cipher_suite_in_ctx(ctx, cipher_suite_id, quic->use_low_memory));
 }
 
 /* Obtain AES128GCM SHA256, AES256GCM_SHA384 or CHACHA20 suite according to current provider */
-ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id)
+ptls_cipher_suite_t* picoquic_get_cipher_suite_by_id(int cipher_suite_id, int use_low_memory)
 {
     ptls_cipher_suite_t* selected_suites[PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX + 1];
     ptls_cipher_suite_t* cipher;
-    int nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id);
+    int nb_suites = picoquic_set_cipher_suite_list(selected_suites, cipher_suite_id, use_low_memory);
     if (nb_suites <= 0) {
         cipher = NULL;
     }
@@ -628,12 +660,17 @@ static ptls_cipher_algorithm_t* picoquic_get_ecb_cipher_by_id(const char* ecb_ci
 {
     ptls_cipher_algorithm_t* ecb_cipher = NULL;
 
-    for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
-        ptls_cipher_suite_t* suite = picoquic_cipher_suites[i];
+    for (int j = 0; j < 2 && ecb_cipher == NULL; j++) {
+        for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && ecb_cipher == NULL; i++) {
+            ptls_cipher_suite_t* suite = (j == 0) ?
+                picoquic_cipher_suites[i].high_memory_suite :
+                picoquic_cipher_suites[i].low_memory_suite;
 
-        if (suite != NULL && suite->aead != NULL && suite->aead->ecb_cipher != NULL &&
-            strcmp(suite->aead->ecb_cipher->name, ecb_cipher_name) == 0){
-            ecb_cipher = suite->aead->ecb_cipher;
+            if (suite != NULL && suite->aead != NULL && suite->aead->ecb_cipher != NULL &&
+                strcmp(suite->aead->ecb_cipher->name, ecb_cipher_name) == 0){
+                ecb_cipher = suite->aead->ecb_cipher;
+                break;
+            }
         }
     }
     return ecb_cipher;
@@ -667,11 +704,11 @@ ptls_hash_algorithm_t* picoquic_get_hash_algorithm_by_name(const char* hash_algo
     ptls_hash_algorithm_t* hash = NULL;
 
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX && hash == NULL; i++) {
-        if (picoquic_cipher_suites[i] == NULL) {
+        if (picoquic_cipher_suites[i].high_memory_suite == NULL) {
             break;
         }
-        if (strcmp(picoquic_cipher_suites[i]->hash->name, hash_algorithm_name) == 0) {
-            hash = picoquic_cipher_suites[i]->hash;
+        if (strcmp(picoquic_cipher_suites[i].high_memory_suite->hash->name, hash_algorithm_name) == 0) {
+            hash = picoquic_cipher_suites[i].high_memory_suite->hash;
             break;
         }
     }
@@ -884,20 +921,20 @@ void picoquic_clear_crypto_errors(void)
 
 
 /* Get the AES128GCM+SHA256 cipher suite required for Initial packets */
-static ptls_cipher_suite_t* picoquic_get_aes128gcm_sha256(void)
+static ptls_cipher_suite_t* picoquic_get_aes128gcm_sha256(int use_low_memory)
 {
-    return picoquic_get_cipher_suite_by_id(PICOQUIC_AES_128_GCM_SHA256);
+    return picoquic_get_cipher_suite_by_id(PICOQUIC_AES_128_GCM_SHA256, use_low_memory);
 }
 
-void* picoquic_get_aes128gcm_sha256_v(void)
+void* picoquic_get_aes128gcm_sha256_v(int use_low_memory)
 {
-    return (void*)picoquic_get_aes128gcm_sha256();
+    return (void*)picoquic_get_aes128gcm_sha256(use_low_memory);
 }
 
-void* picoquic_get_aes128gcm_v(void)
+void* picoquic_get_aes128gcm_v(int use_low_memory)
 {
     void* aead = NULL;
-    ptls_cipher_suite_t* cipher = picoquic_get_aes128gcm_sha256();
+    ptls_cipher_suite_t* cipher = picoquic_get_aes128gcm_sha256(use_low_memory);
 
     if (cipher != NULL) {
         aead = (void*)(cipher->aead);
@@ -905,9 +942,9 @@ void* picoquic_get_aes128gcm_v(void)
     return aead;
 }
 
-void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id)
+void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id, int use_low_memory)
 {
-    return (void*)picoquic_get_cipher_suite_by_id(cipher_suite_id);
+    return (void*)picoquic_get_cipher_suite_by_id(cipher_suite_id, use_low_memory);
 }
 
 void picoquic_hash_update(uint8_t* input, size_t input_length, void* hash_context) {
@@ -1528,7 +1565,8 @@ static int picoquic_set_aead_from_secret(void ** v_aead,ptls_cipher_suite_t * ci
     }
 
     if (cipher == NULL) {
-        /* Can happen when the caller asked for a cipher suite that was not registered in this build. */
+        /* Can happen when the caller asked for a cipher suite variant (e.g. the
+         * low-memory/Fusion one) that was not registered in this build. */
         ret = PTLS_ERROR_NO_MEMORY;
     }
     else if ((*v_aead = ptls_aead_new(cipher->aead, cipher->hash, is_enc, secret, prefix_label)) == NULL) {
@@ -1715,7 +1753,7 @@ static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_
     int ret = 0;
     ptls_iovec_t salt;
     uint8_t master_secret[256]; /* secret_max */
-    *cipher = picoquic_get_aes128gcm_sha256();
+    *cipher = picoquic_get_aes128gcm_sha256(quic->use_low_memory);
     if (*cipher == NULL) {
         ret = -1;
     }
@@ -2156,7 +2194,7 @@ static int picoquic_create_ptls_context(picoquic_quic_t* quic,
             picoquic_set_random_provider_in_ctx(ctx);
             ret = picoquic_set_key_exchange_in_ctx(ctx, 0);
             if (ret == 0) {
-                ret = picoquic_set_cipher_suite_in_ctx(ctx, 0);
+                ret = picoquic_set_cipher_suite_in_ctx(ctx, 0, quic->use_low_memory);
             }
             ctx->send_change_cipher_spec = 0;
             ctx->hkdf_label_prefix__obsolete = NULL;
@@ -2805,7 +2843,7 @@ void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefi
      * rely on some other test having initialized them first. */
     picoquic_tls_api_init();
 
-    cipher = picoquic_get_aes128gcm_sha256();
+    cipher = picoquic_get_aes128gcm_sha256(1);
 
     (void)picoquic_set_pn_enc_from_secret(&v_pn_enc, cipher, 1, secret, prefix_label);
 
@@ -2814,7 +2852,7 @@ void * picoquic_pn_enc_create_for_test(const uint8_t * secret, const char *prefi
 
 void * picoquic_hp_enc_create_for_test(int cipher_suite_id, const uint8_t * hp_key)
 {
-    ptls_cipher_suite_t* cipher = picoquic_get_cipher_suite_by_id(cipher_suite_id);
+    ptls_cipher_suite_t* cipher = picoquic_get_cipher_suite_by_id(cipher_suite_id, 0);
     ptls_cipher_algorithm_t* hp_cipher = picoquic_get_header_protection_cipher(cipher);
 
     return (hp_cipher == NULL) ? NULL : ptls_cipher_new(hp_cipher, 1, hp_key);
@@ -2860,7 +2898,7 @@ void * picoquic_setup_test_aead_context(int is_encrypt, const uint8_t * secret, 
      * rely on some other test having initialized them first. */
     picoquic_tls_api_init();
 
-    cipher = picoquic_get_aes128gcm_sha256();
+    cipher = picoquic_get_aes128gcm_sha256(1);
 
     (void)picoquic_set_aead_from_secret(&v_aead, cipher, is_encrypt, secret, prefix_label);
 
@@ -2873,7 +2911,7 @@ static int picoquic_setup_ticket_key_aead_contexts(picoquic_quic_t* quic,
 {
     int ret = 0;
     uint8_t temp_secret[256]; /* secret_max */
-    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256();
+    ptls_cipher_suite_t *cipher = picoquic_get_aes128gcm_sha256(0);
     picoquic_ticket_key_state_t new_key = { 0 };
     uint8_t key_slot = 0;
 
@@ -3554,7 +3592,7 @@ int picoquic_cid_get_under_mask_ctx(void ** v_cid_enc, const void *secret, const
 {
     uint8_t cidkey[PTLS_MAX_SECRET_SIZE];
     uint8_t long_secret[PTLS_MAX_DIGEST_SIZE];
-    ptls_cipher_suite_t * cipher = picoquic_get_aes128gcm_sha256();
+    ptls_cipher_suite_t * cipher = picoquic_get_aes128gcm_sha256(1);
     int ret;
 
     picoquic_cid_free_under_mask_ctx(*v_cid_enc);
