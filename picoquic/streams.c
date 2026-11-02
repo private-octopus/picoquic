@@ -60,6 +60,9 @@ void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data)
 
 void picoquic_stream_data_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)picoquic_stream_data_node_value(node);
 
     picoquic_stream_data_node_recycle(stream_data);
@@ -137,6 +140,9 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
 
 static void picoquic_stream_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_stream_head_t* stream = picoquic_stream_node_value(node);
 
     /* Not in picoquic_clear_stream, which also clears the uncounted crypto streams */
@@ -226,8 +232,7 @@ int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
         if (is_active) {
             /* The call only fails if the stream was closed or reset */
             if (!stream->fin_requested &&
-                (!stream->reset_requested || !picoquic_reliable_prefix_is_acked(stream)) &&
-                cnx->callback_fn != NULL) {
+                (!stream->reset_requested || !picoquic_reliable_prefix_is_acked(stream))) {
                 if (do_update_ctx) {
                     stream->app_stream_ctx = app_stream_ctx;
                 }

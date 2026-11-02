@@ -20,7 +20,7 @@ RUN git clone https://github.com/h2o/picotls.git && \
     cd picotls && \
     git submodule init && \
     git submodule update && \
-    cmake . && \
+    cmake -DWITH_BROTLI=OFF . && \
     make && \
     make check
 

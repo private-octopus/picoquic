@@ -203,6 +203,9 @@
     <ClInclude Include="picoquic_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="picoquic_picotls.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="picosocks.h">
       <Filter>Header Files</Filter>
     </ClInclude>

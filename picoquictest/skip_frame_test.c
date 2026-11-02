@@ -1215,7 +1215,7 @@ int parse_frame_test(void)
     const uint8_t extra_bytes[4] = { 0, 0, 0, 0 };
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     uint64_t random_context = 0x12345678;
@@ -1443,7 +1443,7 @@ int frames_repeat_test(void)
     int ret = 0;
     uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1645,7 +1645,7 @@ int frames_ackack_error_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1717,7 +1717,7 @@ int frames_ackof_error_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1782,7 +1782,7 @@ int reset_stream_at_needs_repeat_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1856,7 +1856,7 @@ int process_ack_of_reset_stream_at_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1907,7 +1907,7 @@ int stop_sending_needs_repeat_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -1982,7 +1982,7 @@ int crypto_hs_is_last_test(void)
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr = { 0 };
     const uint8_t crypto_frame[] = { picoquic_frame_type_crypto_hs, 0, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -2091,7 +2091,7 @@ int stream_invalid_id_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2149,7 +2149,7 @@ int stream_never_called_apis_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2208,7 +2208,7 @@ int queue_multipath_blocked_frames_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2276,7 +2276,7 @@ int quicctx_never_called_apis_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2464,7 +2464,7 @@ int frames_format_test(void)
     picoquic_stream_head_t* stream = NULL;
     size_t test_max;
     uint64_t simulated_time = 0;
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2570,7 +2570,7 @@ int flow_control_check_stream_offset_test(void)
     int ret = 0;
     uint64_t simulated_time = 0;
     uint8_t data[] = { 0xaa, 0xaa };
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2672,15 +2672,15 @@ static int signal_stream_reset_test_cb(picoquic_cnx_t* UNUSED(cnx), uint64_t UNU
     return ret;
 }
 
-/* picoquic_signal_stream_reset has branches no other test reaches: no callback registered, a
- * redundant second signal on an already-signalled stream, offset_received not exceeding the
- * unconsumed delta, and the callback returning an error -- exercise all four directly. */
+/* picoquic_signal_stream_reset has branches no other test reaches: a redundant second signal
+ * on an already-signalled stream, offset_received not exceeding the unconsumed delta, and the
+ * callback returning an error -- exercise all three directly. */
 int signal_stream_reset_test(void)
 {
     int ret = 0;
     uint64_t simulated_time = 0;
     uint8_t data[] = { 0xaa, 0xaa, 0xaa, 0xaa };
-    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     struct sockaddr_in saddr = { 0 };
@@ -2725,25 +2725,6 @@ int signal_stream_reset_test(void)
     }
 
     if (ret == 0) {
-        /* Nothing happens at all if the connection has no callback registered. */
-        picoquic_add_to_stream(cnx, 4, data, sizeof(data), 0);
-        stream = picoquic_find_stream(cnx, 4);
-        if (stream == NULL) {
-            ret = -1;
-        }
-        else {
-            picoquic_stream_data_cb_fn saved_cb = cnx->callback_fn;
-            cnx->callback_fn = NULL;
-            signal_stream_reset_test_nb_reset_calls = 0;
-            picoquic_signal_stream_reset(cnx, stream);
-            cnx->callback_fn = saved_cb;
-            if (stream->reset_signalled || signal_stream_reset_test_nb_reset_calls != 0) {
-                ret = -1;
-            }
-        }
-    }
-
-    if (ret == 0) {
         /* offset_received not greater than the unconsumed delta: it must be left unchanged. */
         picoquic_add_to_stream(cnx, 8, data, sizeof(data), 0);
         stream = picoquic_find_stream(cnx, 8);
@@ -2784,6 +2765,88 @@ int signal_stream_reset_test(void)
 
     if (qclient != NULL) {
         picoquic_free(qclient);
+    }
+
+    return ret;
+}
+
+/* Passing a NULL callback at quic creation, client cnx creation, or in the setters must never store NULL. */
+int null_callback_setters_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_in saddr = { 0 };
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(4443);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else if (picoquic_get_default_callback_function(quic) == NULL) {
+        DBG_PRINTF("%s", "picoquic_create stored a NULL default callback");
+        ret = -1;
+    }
+    else {
+        cnx = picoquic_create_client_cnx(quic, (struct sockaddr*)&saddr, simulated_time, 0,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, NULL, NULL);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_get_callback_function(cnx) == NULL) {
+            DBG_PRINTF("%s", "picoquic_create_client_cnx stored a NULL callback");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_set_callback(cnx, signal_stream_reset_test_cb, NULL);
+        picoquic_set_callback(cnx, NULL, NULL);
+        if (picoquic_get_callback_function(cnx) == NULL ||
+            picoquic_get_callback_function(cnx) == signal_stream_reset_test_cb) {
+            DBG_PRINTF("%s", "picoquic_set_callback did not replace NULL with the dummy callback");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_set_default_callback(quic, signal_stream_reset_test_cb, NULL);
+        picoquic_set_default_callback(quic, NULL, NULL);
+        if (picoquic_get_default_callback_function(quic) == NULL ||
+            picoquic_get_default_callback_function(quic) == signal_stream_reset_test_cb) {
+            DBG_PRINTF("%s", "picoquic_set_default_callback did not replace NULL with the dummy callback");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* A client cnx created with a NULL callback inherits the default callback */
+        picoquic_cnx_t* cnx2;
+        picoquic_set_default_callback(quic, signal_stream_reset_test_cb, NULL);
+        cnx2 = picoquic_create_client_cnx(quic, (struct sockaddr*)&saddr, simulated_time, 0,
+            PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, NULL, NULL);
+        if (cnx2 == NULL) {
+            ret = -1;
+        }
+        else {
+            if (picoquic_get_callback_function(cnx2) != signal_stream_reset_test_cb) {
+                DBG_PRINTF("%s", "picoquic_create_client_cnx did not inherit the default callback");
+                ret = -1;
+            }
+            picoquic_delete_cnx(cnx2);
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_delete_cnx(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
     }
 
     return ret;
@@ -3158,7 +3221,7 @@ int logger_test(void)
     uint64_t simulated_time = 123456789;
     uint64_t running_sum = 0;
 
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -3472,7 +3535,7 @@ int binlog_test(void)
     int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref), picoquic_solution_dir, QLOG_TEST_REF);
 
     uint64_t simulated_time = 0;
-    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -3669,7 +3732,7 @@ int unified_log_multi_backend_test(void)
     memset(&saddr, 0, sizeof(saddr));
     saddr.sin_family = AF_INET;
 
-    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -3757,7 +3820,7 @@ int cnxid_stash_test(void)
     int ret = 0;
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -3841,7 +3904,7 @@ int new_cnxid_test(void)
     int ret = 0;
     uint64_t simulated_time = 0;
     struct sockaddr_in saddr;
-    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t * qclient = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     picoquic_cnx_t * cnx = NULL;
@@ -4205,7 +4268,7 @@ int test_copy_for_retransmit(void)
     memset(&saddr, 0, sizeof(struct sockaddr_in));
 
     /* Initialize the connection context */
-    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     if (qtest == NULL) {
@@ -4646,7 +4709,7 @@ int dataqueue_packet_test(void)
 
     /* Initialize the connection context */
     if (ret == 0) {
-        qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        qtest = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
             NULL, NULL, NULL, NULL, simulated_time,
             &simulated_time, NULL, NULL, 0);
         if (qtest == NULL) {
@@ -4738,7 +4801,7 @@ int dataqueue_order_test(void)
 
     memset(&saddr, 0, sizeof(struct sockaddr_in));
 
-    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    qtest = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     if (qtest == NULL) {
@@ -4838,7 +4901,7 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
     uint8_t buf[1024];
     uint8_t bytes[1024];
     uint64_t simulated_time = 0;
-    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
     picoquic_cnx_t * cnx = NULL;
@@ -4970,7 +5033,7 @@ int queue_network_input_test(void)
     int ret = 0;
 
     uint64_t simulated_time = 0;
-    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -5089,7 +5152,7 @@ int app_message_overflow_test(void)
     char qlog_test_ref[512];
     int ret_qlog = picoquic_get_input_path(qlog_test_ref, sizeof(qlog_test_ref),
         picoquic_solution_dir, QLOG_OVERFLOW_REF);
-    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 
@@ -5238,7 +5301,7 @@ int stream_ack_test(void)
     uint64_t simulated_time = 0;
     picoquic_cnx_t* cnx = NULL;
     struct sockaddr_storage addr;
-    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, simulated_time,
         &simulated_time, NULL, NULL, 0);
 

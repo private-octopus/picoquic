@@ -130,7 +130,7 @@ int picoquic_delete_stream_if_closed(picoquic_cnx_t* cnx, picoquic_stream_head_t
          * per-stream app context tied to this stream_id can be freed.
          * Fired only if the app took ownership (non-NULL ctx). Return
          * value ignored: stream is about to be deleted regardless. */
-        if (stream->app_stream_ctx != NULL && cnx->callback_fn != NULL) {
+        if (stream->app_stream_ctx != NULL) {
             (void)cnx->callback_fn(cnx, stream->stream_id, NULL, 0,
                 picoquic_callback_stream_released,
                 cnx->callback_ctx, stream->app_stream_ctx);
@@ -282,7 +282,7 @@ void picoquic_signal_stream_reset(picoquic_cnx_t* cnx, picoquic_stream_head_t* s
 {
     picoquic_update_max_stream_ID_local(cnx, stream);
 
-    if (cnx->callback_fn != NULL && !stream->reset_signalled) {
+    if (!stream->reset_signalled) {
         /* Once the FIN was delivered, the stream is in the terminal "Data Read" state (RFC 9000 3.2): do not signal the reset. */
         if (!stream->is_discarded && !stream->fin_signalled) {
             /* Update the flow control data to reflect that buffers are now discarded */
@@ -1128,7 +1128,7 @@ const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uin
         stream->stop_sending_received = 1;
         stream->remote_stop_error = error_code;
 
-        if (cnx->callback_fn != NULL && !stream->stop_sending_signalled) {
+        if (!stream->stop_sending_signalled) {
             if (!stream->is_discarded) {
                 if (cnx->callback_fn(cnx, stream->stream_id, NULL, 0, picoquic_callback_stop_sending, cnx->callback_ctx, stream->app_stream_ctx) != 0) {
                     picoquic_log_app_message(cnx, "Stop sending callback on stream %" PRIu64 " returns error 0x%x",
@@ -1463,7 +1463,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 /* Account for the bytes passed to the application, not the offset gap. */
                 cnx->data_received += length;
             }
-        } else if (stream->consumed_offset >= offset &&  cnx->callback_fn != NULL){
+        } else if (stream->consumed_offset >= offset){
             if (new_fin_offset >= stream->consumed_offset) {
                 /* Arrival of in sequence bytes */
                 uint64_t delivered_index = stream->consumed_offset - offset;
@@ -1493,7 +1493,7 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 cnx->latest_receive_time = current_time;
             }
 
-            if (ret == 0 && should_notify != 0 && cnx->callback_fn != NULL) {
+            if (ret == 0 && should_notify != 0) {
                 /* check how much data there is to send */
                 picoquic_stream_data_callback(cnx, stream);
             }
@@ -3077,6 +3077,7 @@ void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoqu
 
         if (!packet_data->path_ack[path_i].is_set) {
             packet_data->path_ack[path_i].largest_sent_time = acked_packet->send_time;
+            packet_data->path_ack[path_i].ack_delay = packet_data->last_ack_delay;
             packet_data->path_ack[path_i].delivered_prior = acked_packet->delivered_prior;
             packet_data->path_ack[path_i].delivered_time_prior = acked_packet->delivered_time_prior;
             packet_data->path_ack[path_i].delivered_sent_prior = acked_packet->delivered_sent_prior;
@@ -3106,7 +3107,7 @@ void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t * path_x,
         uint64_t nb_bytes_newly_lost = 0;
 
         picoquic_update_path_rtt(cnx, packet_data->path_ack[i].acked_path, epoch,
-            packet_data->path_ack[i].largest_sent_time, current_time, packet_data->last_ack_delay,
+            packet_data->path_ack[i].largest_sent_time, current_time, packet_data->path_ack[i].ack_delay,
             packet_data->last_time_stamp_received);
 
         picoquic_estimate_path_bandwidth(cnx, packet_data->path_ack[i].acked_path, packet_data->path_ack[i].largest_sent_time,
@@ -3723,24 +3724,22 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                 break;
             default:
                 if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
+                    uint8_t frame_id;
+                    uint64_t content_length;
+                    uint8_t* content_bytes;
+
                     if (p->send_path != NULL && p->send_time > p->send_path->last_time_acked_data_frame_sent) {
                         p->send_path->last_time_acked_data_frame_sent = p->send_time;
                     }
-                    if (cnx->callback_fn != NULL) {
-                        uint8_t frame_id;
-                        uint64_t content_length;
-                        uint8_t* content_bytes;
+                    /* Parse and skip type and length */
+                    content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
+                        &frame_id, &content_length);
 
-                        /* Parse and skip type and length */
-                        content_bytes = picoquic_decode_datagram_frame_header(&p->bytes[byte_index], &p->bytes[p->length],
-                            &frame_id, &content_length);
-
-                        /* Do the callback but ignore its return code, because we always want to process
-                        * the frames that remain in the packet */
-                        (void)(cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
-                            (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
-                            cnx->callback_ctx, NULL);
-                    }
+                    /* Do the callback but ignore its return code, because we always want to process
+                    * the frames that remain in the packet */
+                    (void)(cnx->callback_fn)(cnx, p->send_time, content_bytes, (size_t)content_length,
+                        (is_spurious) ? picoquic_callback_datagram_spurious : picoquic_callback_datagram_acked,
+                        cnx->callback_ctx, NULL);
                     ret = picoquic_skip_frame(&p->bytes[byte_index],
                         p->length - byte_index, &frame_length, &frame_is_pure_ack);
                     byte_index += frame_length;
@@ -3928,6 +3927,10 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                 if (packet_data != NULL) {
                     packet_data->last_ack_delay = ack_delay;
                 }
+            }
+            else if (packet_data != NULL) {
+                /* The ack delay only applies to the largest packet, do not use it for lower ones. */
+                packet_data->last_ack_delay = 0;
             }
 
             do {
@@ -4374,7 +4377,7 @@ const uint8_t* picoquic_decode_connection_close_frame(picoquic_cnx_t* cnx, const
         picoquic_state_enum old_state = cnx->cnx_state;
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start || cnx->crypto_context[picoquic_epoch_1rtt].aead_decrypt == NULL) ? picoquic_state_disconnected : picoquic_state_closing_received;
 
-        if (cnx->callback_fn != NULL && cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
+        if (cnx->cnx_state != old_state && cnx->cnx_state == picoquic_state_disconnected) {
             (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
         }
     }
@@ -4423,9 +4426,7 @@ const uint8_t* picoquic_decode_application_close_frame(picoquic_cnx_t* cnx, cons
     }
     else {
         cnx->cnx_state = (cnx->cnx_state < picoquic_state_client_ready_start) ? picoquic_state_disconnected : picoquic_state_closing_received;
-        if (cnx->callback_fn) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx, NULL);
-        }
+        (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_application_close, cnx->callback_ctx, NULL);
     }
 
     return bytes;
@@ -5008,7 +5009,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
                     }
                     picoquic_reset_path_mtu(path_x);
                 }
-                if (cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL &&
+                if (cnx->are_path_callbacks_enabled &&
                     cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_available,
                         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
                     picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
@@ -5221,7 +5222,7 @@ const uint8_t* picoquic_decode_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
         }
     }
 
-    if (bytes != NULL && cnx->callback_fn != NULL) {
+    if (bytes != NULL) {
         /* submit the data to the app */
         if (cnx->callback_fn(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)bytes,
             (size_t)length, picoquic_callback_datagram, cnx->callback_ctx, NULL) != 0) {
@@ -5447,7 +5448,7 @@ uint8_t* picoquic_format_ready_datagram_frame(picoquic_cnx_t* cnx, picoquic_path
         datagram_data_context.is_old_api = 0;
         datagram_data_context.was_called = 0;
 
-        if (cnx->callback_fn != NULL && (cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
+        if ((cnx->callback_fn)(cnx, (cnx->are_path_callbacks_enabled)?path_x->unique_path_id:0, (uint8_t*)&datagram_data_context, allowed_space,
             picoquic_callback_prepare_datagram, cnx->callback_ctx, NULL) != 0) {
             /* something went wrong */
             picoquic_log_app_message(cnx, "Prepare datagram returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
@@ -5592,6 +5593,9 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
  */
 const uint8_t* picoquic_skip_immediate_ack_frame(const uint8_t* bytes, const uint8_t* UNUSED(bytes_max))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(bytes_max);
+#endif
     /* This code assumes that the frame type is already skipped */
     return bytes;
 }
@@ -6387,9 +6391,7 @@ const uint8_t* picoquic_decode_observed_address_frame(picoquic_cnx_t* cnx, const
             memcpy(&o_addr->sin6_addr, addr, 16);
             o_addr->sin6_port = htons(port);
         }
-        if (cnx->callback_fn != NULL) {
-            (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
-        }
+        (void)cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_address_observed, cnx->callback_ctx, path_x->app_path_ctx);
     }
     return bytes;
 }
@@ -6452,6 +6454,9 @@ const uint8_t* picoquic_parse_bdp_frame(const uint8_t* bytes, const uint8_t* byt
 const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t current_time, struct sockaddr* UNUSED(addr_from), picoquic_path_t* path_x)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_from);
+#endif
     uint64_t lifetime;
     uint64_t recon_bytes_in_flight;
     uint64_t recon_min_rtt;
