@@ -55,10 +55,9 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
-#pragma warning(disable:4100)
 #pragma warning(disable:4204)
 #endif
-#include "picotls.h"
+#include "picoquic_picotls.h"
 #include "picoquic_internal.h"
 #ifndef PTLS_WITHOUT_OPENSSL
 #include "picotls/openssl.h"
@@ -1139,6 +1138,7 @@ int picoquic_tls_collect_extensions_cb(ptls_t* UNUSED(tls), struct st_ptls_hands
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tls);
     UNREFERENCED_PARAMETER(properties);
+    UNREFERENCED_PARAMETER(type);
 #endif
     /* Find the context from the TLS context */
     picoquic_tls_ctx_t* ctx =

@@ -2402,6 +2402,9 @@ static void picoquic_bbr_notify(
     picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     picoquic_bbr_state_t* bbr_state = (picoquic_bbr_state_t*)path_x->congestion_alg_state;
 
     if (bbr_state != NULL) {

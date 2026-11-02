@@ -263,6 +263,9 @@ void CALLBACK picoquic_sendmsg_complete_cb(
     IN DWORD dwFlags
 )
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(dwFlags);
+#endif
     picoquic_sendmsg_ctx_t* send_ctx = (picoquic_sendmsg_ctx_t*)
         (((uint8_t*)lpOverlapped) - offsetof(struct st_picoquic_sendmsg_ctx_t, overlap));
     send_ctx->bytes_sent = (int)cbTransferred;
@@ -404,6 +407,9 @@ int picoquic_packet_loop_win(picoquic_quic_t* quic,
     picoquic_packet_loop_cb_fn loop_callback,
     void* loop_callback_ctx)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(dest_if);
+#endif
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(quic);
     int64_t delay_max = 10000000;

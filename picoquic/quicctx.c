@@ -402,6 +402,9 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
 
 static uint64_t picoquic_issued_ticket_hash(const void* key, const uint8_t* UNUSED(hash_seed))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(hash_seed);
+#endif
     const picoquic_issued_ticket_t* ticket_key = (const picoquic_issued_ticket_t*)key;
 
     return ticket_key->ticket_id;
@@ -564,6 +567,9 @@ static void* picoquic_registered_token_value(picosplay_node_t* node)
 
 static void picoquic_registered_token_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_registered_token_t* rt = (picoquic_registered_token_t*)picoquic_registered_token_value(node);
     free(rt);
 }
