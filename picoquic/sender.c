@@ -222,10 +222,9 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     }
 
     if (packet != NULL) {
-        /* It might be sufficient to zero the metadata, but zeroing everything
-         * appears safer, and does not confuse checkers like valgrind.
-         */
-        memset(packet, 0, sizeof(picoquic_packet_t));
+        /* Formatters initialize payload bytes through packet->length, including
+         * explicit padding. Reused payload storage does not need clearing. */
+        memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
     }
 
     return packet;
