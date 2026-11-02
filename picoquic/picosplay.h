@@ -43,13 +43,19 @@ typedef void* (*picosplay_node_value)(picosplay_node_t * node);
 
 typedef struct st_picosplay_tree_t {
     picosplay_node_t *root;
-    picosplay_comparator comp;
+    union {
+        picosplay_comparator comp;
+        size_t key_offset;
+    };
     picosplay_create create; 
     picosplay_delete_node delete_node;
-    picosplay_node_value node_value;
+    union {
+        picosplay_node_value node_value;
+        size_t node_offset;
+    };
     int size;
-    size_t key_offset;
-    size_t node_offset;
+    /* Selects offsets instead of callbacks; fits the original 64-bit padding. */
+    uint32_t is_uint64;
 } picosplay_tree_t;
 
 
@@ -59,7 +65,8 @@ void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, pico
  * The create callback must return that embedded node. Keys must remain unchanged
  * while linked. Search/delete arguments use the same value layout. Unaligned
  * keys are supported. Creation, deletion, duplicate ordering and splaying follow
- * the generic API; comp and node_value are NULL in this mode.
+ * the generic API. In this mode, key_offset and node_offset replace the comp
+ * and node_value callbacks in the unions; those callbacks must not be read.
  */
 void picosplay_init_tree_uint64(picosplay_tree_t* tree, size_t key_offset, size_t node_offset,
     picosplay_create create, picosplay_delete_node delete_node);

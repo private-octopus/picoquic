@@ -42,7 +42,7 @@ static void* picosplay_uint64_value(picosplay_tree_t* tree, picosplay_node_t* no
 
 static int64_t picosplay_compare(picosplay_tree_t* tree, void* value, picosplay_node_t* node)
 {
-    if (tree->comp != NULL) {
+    if (!tree->is_uint64) {
         return tree->comp(value, tree->node_value(node));
     }
     else {
@@ -111,8 +111,7 @@ void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, pico
     tree->node_value = node_value;
     tree->root = NULL;
     tree->size = 0;
-    tree->key_offset = 0;
-    tree->node_offset = 0;
+    tree->is_uint64 = 0;
 }
 
 void picosplay_init_tree_uint64(picosplay_tree_t* tree, size_t key_offset, size_t node_offset,
@@ -121,6 +120,7 @@ void picosplay_init_tree_uint64(picosplay_tree_t* tree, size_t key_offset, size_
     picosplay_init_tree(tree, NULL, create, delete_node, NULL);
     tree->key_offset = key_offset;
     tree->node_offset = node_offset;
+    tree->is_uint64 = 1;
 }
 
 /* Return an empty tree, storing the picosplay_comparator. */
@@ -151,7 +151,7 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
             int left = 0;
             while (curr != NULL) {
                 parent = curr;
-                void* new_value = (tree->comp == NULL) ?
+                void* new_value = tree->is_uint64 ?
                     picosplay_uint64_value(tree, new) : tree->node_value(new);
                 if (picosplay_compare(tree, new_value, curr) < 0) {
                     left = 1;
