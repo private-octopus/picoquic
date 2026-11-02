@@ -607,6 +607,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(null_callback_setters)
+        {
+            int ret = null_callback_setters_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();

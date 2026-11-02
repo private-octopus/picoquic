@@ -402,6 +402,9 @@ picoquic_packet_context_enum picoquic_context_from_epoch(int epoch)
 
 static uint64_t picoquic_issued_ticket_hash(const void* key, const uint8_t* UNUSED(hash_seed))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(hash_seed);
+#endif
     const picoquic_issued_ticket_t* ticket_key = (const picoquic_issued_ticket_t*)key;
 
     return ticket_key->ticket_id;
@@ -564,6 +567,9 @@ static void* picoquic_registered_token_value(picosplay_node_t* node)
 
 static void picoquic_registered_token_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_registered_token_t* rt = (picoquic_registered_token_t*)picoquic_registered_token_value(node);
     free(rt);
 }
@@ -640,6 +646,22 @@ uint32_t picoquic_current_number_connections(picoquic_quic_t * quic)
 /* Forward reference */
 static void picoquic_wake_list_init(picoquic_quic_t* quic);
 
+/* Callback used when none is specified: any event is treated as an error */
+static int null_callback_function(picoquic_cnx_t* cnx,
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t fin_or_event, void* UNUSED(callback_ctx), void* UNUSED(stream_ctx))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(stream_id);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(callback_ctx);
+    UNREFERENCED_PARAMETER(stream_ctx);
+#endif
+    picoquic_log_app_message(cnx, "No application callback, event %d rejected", (int)fin_or_event);
+    return -1;
+}
+
 /* QUIC context create and dispose */
 picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
     char const* cert_file_name,
@@ -665,7 +687,7 @@ picoquic_quic_t* picoquic_create(uint32_t max_nb_connections,
         /* TODO: open UDP sockets - maybe */
         memset(quic, 0, sizeof(picoquic_quic_t));
 
-        quic->default_callback_fn = default_callback_fn;
+        quic->default_callback_fn = (default_callback_fn == NULL)? null_callback_function: default_callback_fn;
         quic->default_callback_ctx = default_callback_ctx;
         quic->default_congestion_alg = PICOQUIC_DEFAULT_CONGESTION_ALGORITHM;
         quic->default_alpn = picoquic_string_duplicate(default_alpn);
@@ -2029,7 +2051,7 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
     }
 
     /* Signal to the application */
-    if (cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL &&
+    if (cnx->are_path_callbacks_enabled &&
         cnx->callback_fn(cnx, path_x->unique_path_id, NULL, 0, picoquic_callback_path_deleted,
         cnx->callback_ctx, path_x->app_path_ctx) != 0) {
         picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0, "Path deleted callback failed.");
@@ -2261,7 +2283,7 @@ void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t curr
         /* Reset the path challenge */
         cnx->path[path_id]->first_tuple->challenge_required = 1;
         picoquic_set_tuple_challenge(cnx->path[path_id]->first_tuple, current_time, cnx->quic->use_constant_challenges);
-        if (cnx->path[path_id]->first_tuple->challenge_verified && cnx->are_path_callbacks_enabled && cnx->callback_fn != NULL) {
+        if (cnx->path[path_id]->first_tuple->challenge_verified && cnx->are_path_callbacks_enabled) {
             if (cnx->callback_fn(cnx, cnx->path[path_id]->unique_path_id, NULL, 0, picoquic_callback_path_suspended,
                 cnx->callback_ctx, cnx->path[path_id]->app_path_ctx) != 0) {
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, picoquic_frame_type_path_challenge);
@@ -2510,9 +2532,7 @@ void picoquic_test_and_signal_new_path_allowed(picoquic_cnx_t* cnx)
     {
         if (picoquic_check_new_path_allowed(cnx, 0) == 0) {
             cnx->is_notified_that_path_is_allowed = 1;
-            if (cnx->callback_fn != NULL) {
-                (void)cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_next_path_allowed, cnx->callback_ctx, NULL);
-            }
+            (void)cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_next_path_allowed, cnx->callback_ctx, NULL);
         }
     }
 }
@@ -3871,6 +3891,8 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         picoquic_local_cnxid_t* cnxid0;
 
         memset(cnx, 0, sizeof(picoquic_cnx_t));
+        /* Placeholder until the default callback is set, in case creation fails before that */
+        cnx->callback_fn = null_callback_function;
         cnx->start_time = start_time;
         cnx->phase_delay = INT64_MAX;
         cnx->retired_local_cnxid_check_time = UINT64_MAX;
@@ -4182,10 +4204,14 @@ picoquic_cnx_t* picoquic_create_client_cnx(picoquic_quic_t* quic,
     if (cnx != NULL) {
         int ret;
 
-        if (callback_fn != NULL)
+        if (callback_fn != NULL) {
             cnx->callback_fn = callback_fn;
-        if (callback_ctx != NULL)
             cnx->callback_ctx = callback_ctx;
+        }
+        else {
+            cnx->callback_fn = quic->default_callback_fn;
+            cnx->callback_ctx = quic->default_callback_ctx;
+        }
         ret = picoquic_start_client_cnx(cnx);
         if (ret != 0) {
             /* Cannot just do partial initialization! */
@@ -4579,7 +4605,7 @@ void picoquic_set_default_callback(picoquic_quic_t* quic,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
     PICOQUIC_THREAD_CHECK(quic);
-    quic->default_callback_fn = callback_fn;
+    quic->default_callback_fn = (callback_fn == NULL)?null_callback_function:callback_fn;
     quic->default_callback_ctx = callback_ctx;
 }
 
@@ -4594,7 +4620,7 @@ void picoquic_set_callback(picoquic_cnx_t* cnx,
     picoquic_stream_data_cb_fn callback_fn, void* callback_ctx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    cnx->callback_fn = callback_fn;
+    cnx->callback_fn = (callback_fn == NULL) ? null_callback_function : callback_fn;
     cnx->callback_ctx = callback_ctx;
 }
 
@@ -4855,9 +4881,7 @@ void picoquic_connection_disconnect(picoquic_cnx_t* cnx)
 {
     if (cnx->cnx_state != picoquic_state_disconnected) {
         cnx->cnx_state = picoquic_state_disconnected;
-        if (cnx->callback_fn) {
-            (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
-        }
+        (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_close, cnx->callback_ctx, NULL);
     }
 }
 

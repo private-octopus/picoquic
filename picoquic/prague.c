@@ -191,6 +191,9 @@ static void picoquic_prague_init_reno(picoquic_prague_state_t* pr_state, picoqui
 
 void picoquic_prague_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     /* Initialize the state of the congestion control algorithm */
     picoquic_prague_state_t* pr_state = (picoquic_prague_state_t*)malloc(sizeof(picoquic_prague_state_t));
 #ifdef _WINDOWS

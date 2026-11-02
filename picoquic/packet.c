@@ -981,7 +981,7 @@ int picoquic_incoming_version_negotiation(
             }
             else {
                 /* Signal VN to the application */
-                if (cnx->callback_fn && length > ph->offset) {
+                if (length > ph->offset) {
                     (void)(cnx->callback_fn)(cnx, 0, bytes + ph->offset, length - ph->offset,
                         picoquic_callback_version_negotiation, cnx->callback_ctx, NULL);
                 }
@@ -1831,9 +1831,7 @@ int picoquic_incoming_stateless_reset(
     if (cnx->cnx_state <= picoquic_state_ready) {
         cnx->remote_error = PICOQUIC_ERROR_STATELESS_RESET;
     }
-    if (cnx->callback_fn) {
-        (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx, NULL);
-    }
+    (void)(cnx->callback_fn)(cnx, 0, NULL, 0, picoquic_callback_stateless_reset, cnx->callback_ctx, NULL);
     picoquic_connection_disconnect(cnx);
 
     return PICOQUIC_ERROR_AEAD_CHECK;

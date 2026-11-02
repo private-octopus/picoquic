@@ -20,15 +20,33 @@
 */
 
 #include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+
+/* Test callback that accepts every event, for tests that do not exercise the application API */
+int picoquic_test_permissive_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t UNUSED(fin_or_event), void* UNUSED(callback_ctx), void* UNUSED(stream_ctx))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(stream_id);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(fin_or_event);
+    UNREFERENCED_PARAMETER(callback_ctx);
+    UNREFERENCED_PARAMETER(stream_ctx);
+#endif
+    return 0;
+}
 
 /* Utility function to set minimal quic and cnx contexts
  */
 int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t * simulated_time)
 {
     *cnx = NULL;
-    *quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    *quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, 0, simulated_time, NULL, NULL, 0);
     if (*quic != NULL) {
         *cnx = picoquic_create_cnx(*quic,
