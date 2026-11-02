@@ -15051,9 +15051,6 @@ int get_tls_errors_test(void)
         ret = -1;
     }
     if (ret == 0) {
-
-    }
-    if (ret == 0) {
         /* Unload the TLS API to force internal errors. */
         picoquic_cnx_t* cnx;
         picoquic_tls_api_unload();
