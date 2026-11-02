@@ -1177,12 +1177,12 @@ void picoquic_free(picoquic_quic_t* quic)
     }
 }
 
-int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int UNUSED(low_memory_mode))
+int picoquic_set_low_memory_mode(picoquic_quic_t* UNUSED(quic), int UNUSED(low_memory_mode))
 {
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
     UNREFERENCED_PARAMETER(low_memory_mode);
 #endif
-    PICOQUIC_THREAD_CHECK(quic);
     return 0;
 }
 
