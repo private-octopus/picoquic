@@ -420,6 +420,8 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
 
 uint64_t picoquic_sqrt_for_tests(uint64_t y);
 
+int picoquic_test_permissive_callback(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
 int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
 int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t* simulated_time);
 int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx);

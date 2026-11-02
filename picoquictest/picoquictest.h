@@ -78,6 +78,7 @@ int ackfrq_short_test(void);
 int tls_api_connect_test(void);
 #endif
 int tls_api_test(void);
+int tls_api_certificate_compression_disabled_test(void);
 int tls_handshake_pool_exhausted_test(void);
 int tls_api_inject_hs_ack_test(void);
 int tls_exporter_test(void);
@@ -244,6 +245,7 @@ int quicctx_never_called_apis_test(void);
 int frames_format_test(void);
 int flow_control_check_stream_offset_test(void);
 int signal_stream_reset_test(void);
+int null_callback_setters_test(void);
 int stress_test(void);
 int cnx_stress_unit_test(void);
 int cnx_stress_do_test(uint64_t duration, int nb_clients, int do_report);

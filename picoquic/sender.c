@@ -222,10 +222,9 @@ picoquic_packet_t* picoquic_create_packet(picoquic_quic_t * quic)
     }
 
     if (packet != NULL) {
-        /* It might be sufficient to zero the metadata, but zeroing everything
-         * appears safer, and does not confuse checkers like valgrind.
-         */
-        memset(packet, 0, sizeof(picoquic_packet_t));
+        /* Formatters initialize payload bytes through packet->length, including
+         * explicit padding. Reused payload storage does not need clearing. */
+        memset(packet, 0, offsetof(struct st_picoquic_packet_t, bytes));
     }
 
     return packet;
@@ -1842,11 +1841,9 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                                 cnx->tls_stream[2].send_queue == NULL) {
                                 cnx->cnx_state = picoquic_state_client_ready_start;
                                 /* Signal the application, because data can now be sent. */
-                                if (cnx->callback_fn != NULL) {
-                                    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                                        picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-                                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-                                    }
+                                if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
+                                    picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                                    picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                                 }
                             }
                             break;
@@ -1978,11 +1975,9 @@ int picoquic_prepare_packet_server_init(picoquic_cnx_t* cnx, picoquic_path_t * p
                 if (epoch == picoquic_epoch_handshake && picoquic_tls_client_authentication_activated(cnx->quic) == 0) {
                     picoquic_false_start_transition(cnx, current_time);
 
-                    if (cnx->callback_fn != NULL) {
-                        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
-                            picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-                            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-                        }
+                    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
+                        picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+                        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
                     }
                 }
                 else {
@@ -2430,11 +2425,9 @@ void picoquic_ready_state_transition(picoquic_cnx_t* cnx, uint64_t current_time)
     }
 
     /* Notify the application */
-    if (cnx->callback_fn != NULL) {
-        if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
-            picoquic_log_app_message(cnx, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
-            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
-        }
+    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
+        picoquic_log_app_message(cnx, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
+        picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
     }
 
     /* Ask for ACK frequency update, or initialize variables if not available */
@@ -3534,10 +3527,8 @@ int picoquic_handle_app_wake_time(picoquic_cnx_t* cnx, uint64_t current_time)
     int ret = 0;
     while (cnx->app_wake_time != 0 && cnx->app_wake_time <= current_time){
         cnx->app_wake_time = 0;
-        if (cnx->callback_fn != NULL) {
-            ret = cnx->callback_fn(cnx, current_time, NULL, 0, picoquic_callback_app_wakeup,
-                cnx->callback_ctx, NULL);
-        }
+        ret = cnx->callback_fn(cnx, current_time, NULL, 0, picoquic_callback_app_wakeup,
+            cnx->callback_ctx, NULL);
     }
     return ret;
 }

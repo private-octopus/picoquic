@@ -110,8 +110,7 @@ static void picoquic_report_pacing_update(picoquic_pacing_t* pacing, picoquic_pa
 {
     picoquic_cnx_t* cnx = path_x->cnx;
 
-    if (cnx->is_pacing_update_requested && path_x == cnx->path[0] &&
-        cnx->callback_fn != NULL) {
+    if (cnx->is_pacing_update_requested && path_x == cnx->path[0]) {
         if ((pacing->rate > cnx->pacing_rate_signalled &&
             (pacing->rate - cnx->pacing_rate_signalled >= cnx->pacing_increase_threshold)) ||
             (pacing->rate < cnx->pacing_rate_signalled &&
@@ -120,8 +119,7 @@ static void picoquic_report_pacing_update(picoquic_pacing_t* pacing, picoquic_pa
             cnx->pacing_rate_signalled = pacing->rate;
         }
     }
-    if (cnx->is_path_quality_update_requested &&
-        cnx->callback_fn != NULL) {
+    if (cnx->is_path_quality_update_requested) {
         /* TODO: add a function "export path quality" */
         /* TODO: remember previous signalled value for change tests */
         if (path_x->smoothed_rtt < path_x->rtt_threshold_low ||

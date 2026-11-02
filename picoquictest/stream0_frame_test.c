@@ -130,6 +130,33 @@ static size_t const nb_test_cases = sizeof(test_case) / sizeof(struct test_case_
 
 #define FAIL(test, fmt, ...) DBG_PRINTF("Test %s failed: " fmt, (test)->name, __VA_ARGS__)
 
+/* Collects the in-order data delivered to the application */
+static uint8_t stream0_received[64];
+static size_t stream0_received_length = 0;
+
+static int stream0_frame_test_cb(picoquic_cnx_t* UNUSED(cnx), uint64_t UNUSED(stream_id),
+    uint8_t* bytes, size_t length, picoquic_call_back_event_t fin_or_event,
+    void* UNUSED(callback_ctx), void* UNUSED(stream_ctx))
+{
+    int ret = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(stream_id);
+    UNREFERENCED_PARAMETER(callback_ctx);
+    UNREFERENCED_PARAMETER(stream_ctx);
+#endif
+    if (fin_or_event == picoquic_callback_stream_data || fin_or_event == picoquic_callback_stream_fin) {
+        if (stream0_received_length + length > sizeof(stream0_received)) {
+            ret = -1;
+        }
+        else if (length > 0) {
+            memcpy(stream0_received + stream0_received_length, bytes, length);
+            stream0_received_length += length;
+        }
+    }
+    return ret;
+}
+
 static int StreamZeroFrameOneTest(struct test_case_st* test)
 {
     int ret = 0;
@@ -162,6 +189,8 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
         }
         else {
             cnx->client_mode = 0;
+            stream0_received_length = 0;
+            picoquic_set_callback(cnx, stream0_frame_test_cb, NULL);
 
             for (size_t i = 0; ret == 0 && i < test->list_size; i++) {
                 if (NULL == picoquic_decode_stream_frame(cnx, test->list[i].packet,
@@ -182,11 +211,19 @@ static int StreamZeroFrameOneTest(struct test_case_st* test)
             }
 
             if (ret == 0) {
-                /* Check the content of all the data in the context */
+                /* Check the data delivered in order, then any data left in the context */
                 picoquic_stream_data_node_t* data = (picoquic_stream_data_node_t*)picosplay_first(&picoquic_first_stream(cnx)->stream_data_tree);
                 size_t data_rank = 0;
 
-                while (data != NULL) {
+                for (size_t i = 0; ret == 0 && i < stream0_received_length; i++) {
+                    data_rank++;
+                    if (stream0_received[i] != data_rank) {
+                        FAIL(test, "delivered byte %" PRIst " is %u instead of %" PRIst, i, stream0_received[i], data_rank);
+                        ret = -1;
+                    }
+                }
+
+                while (ret == 0 && data != NULL) {
                     if (data->bytes == NULL) {
                         FAIL(test, "%s", "No data bytes");
                         ret = -1;
