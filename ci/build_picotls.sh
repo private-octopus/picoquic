@@ -2,7 +2,7 @@
 # build last picotls master (for Travis)
 
 # Build at a known-good commit
-COMMIT_ID=f06553b877ada93c860dd1db9002eabf7365292d
+COMMIT_ID=e446233b4100ebcdec60901c05bfb7f4cd369c5d
 
 cd .. || exit
 # git clone --branch master --single-branch --shallow-submodules --recurse-submodules \
@@ -15,7 +15,7 @@ git submodule update
 # shellcheck disable=SC2154
 echo "Using options:  $PTLS_CMAKE_OPTS"
 # shellcheck disable=SC2086
-cmake $PTLS_CMAKE_OPTS .
+cmake $PTLS_CMAKE_OPTS -DWITH_BROTLI=OFF . || exit
 # shellcheck disable=SC2046
 make -j$(nproc) all
 cd .. || exit

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define PICOQUIC_VERSION "1.1.53.0"
+#define PICOQUIC_VERSION "1.1.54.0"
 #define PICOQUIC_ERROR_CLASS 0x400
 #define PICOQUIC_ERROR_DUPLICATE (PICOQUIC_ERROR_CLASS + 1)
 #define PICOQUIC_ERROR_AEAD_CHECK (PICOQUIC_ERROR_CLASS + 3)
@@ -1805,6 +1805,11 @@ uint64_t picoquic_get_remote_error(picoquic_cnx_t* cnx);
 
 /* Returns the application error after application close */
 uint64_t picoquic_get_application_error(picoquic_cnx_t* cnx);
+
+/* Returns the reason phrase of the peer's close, or NULL. The text is chosen by
+ * the peer application and not checked by the stack: it may have any encoding
+ * or content. It is meant for debugging. */
+char const* picoquic_get_remote_error_reason(picoquic_cnx_t* cnx);
 
 /* Returns the remote error for the given stream. */
 uint64_t picoquic_get_remote_stream_error(picoquic_cnx_t* cnx, uint64_t stream_id);

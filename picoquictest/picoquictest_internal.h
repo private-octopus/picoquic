@@ -304,6 +304,8 @@ typedef struct st_test_vary_link_spec_t {
     uint64_t microsec_latency;
 } test_vary_link_spec_t;
 
+uint64_t test_vary_link(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t transition_time, test_vary_link_spec_t* link_state);
+
 
 
 #define TEST_CLIENT_READY (test_ctx->cnx_client->cnx_state == picoquic_state_ready || test_ctx->cnx_client->cnx_state == picoquic_state_client_ready_start)
@@ -418,6 +420,8 @@ void qlog_trace_cid_fn(picoquic_quic_t* quic, picoquic_connection_id_t cnx_id_lo
 
 uint64_t picoquic_sqrt_for_tests(uint64_t y);
 
+int picoquic_test_permissive_callback(picoquic_cnx_t* cnx, uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* stream_ctx);
 int picoquic_test_set_minimal_cnx(picoquic_quic_t** quic, picoquic_cnx_t** cnx);
 int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t* simulated_time);
 int picoquic_test_reset_minimal_cnx(picoquic_quic_t* quic, picoquic_cnx_t** cnx);

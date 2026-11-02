@@ -1580,6 +1580,9 @@ int picoquic_packet_loop_wait(
     picoquic_packet_loop_action_enum* action,
     int* socket_rank)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(dest_if);
+#endif
     int bytes_recv = 0;
     HANDLE events[WSA_MAXIMUM_WAIT_EVENTS];
     int w_event_ptr[WSA_MAXIMUM_WAIT_EVENTS];
@@ -2617,6 +2620,10 @@ int picoquic_packet_loop_do_tcp_read(
     uint8_t* qmux_buffer,
     size_t qmux_buffer_size)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(qmux_buffer);
+    UNREFERENCED_PARAMETER(qmux_buffer_size);
+#endif
     /* assume that a global read buffer is available, and fill it */
     int ret = 0;
     uint8_t* buf;

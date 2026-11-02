@@ -226,6 +226,9 @@ void picoquic_log_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, int recei
 void picoquic_log_dropped_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struct st_picoquic_packet_header_t* ph, size_t packet_size,
     int err, uint8_t* UNUSED(raw_data), uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(raw_data);
+#endif
     PICOQUIC_THREAD_CHECK(cnx->quic);
     for (int i = 0; i < PICOQUIC_MAX_LOG_FUNCTIONS; i++) {
         if (picoquic_cnx_is_still_logging(cnx)) {

@@ -607,6 +607,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(null_callback_setters)
+        {
+            int ret = null_callback_setters_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_logger)
         {
             int ret = logger_test();
@@ -767,6 +774,20 @@ namespace UnitTest1
         TEST_METHOD(sack_list_horizon_backward)
         {
             int ret = sack_list_horizon_backward_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ack_loss_since_sent)
+        {
+            int ret = ack_loss_since_sent_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ack_delay_per_path)
+        {
+            int ret = ack_delay_per_path_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3458,6 +3479,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(l4s_prague_shallow)
+        {
+            int ret = l4s_prague_shallow_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(l4s_prague_long_rtt)
+        {
+            int ret = l4s_prague_long_rtt_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(l4s_c4)
         {
             int ret = l4s_c4_test();
@@ -4407,6 +4442,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_cid_retire) {
             int ret = multipath_cid_retire_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_ack_delay) {
+            int ret = multipath_ack_delay_test();
 
             Assert::AreEqual(ret, 0);
         }

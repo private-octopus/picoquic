@@ -30,7 +30,7 @@
 #ifdef _WINDOWS
 #pragma warning(disable:4204)
 #endif
-#include "picotls.h"
+#include "picoquic_picotls.h"
 
 typedef struct st_qlog_fns_path_context_t {
     struct st_qlog_fns_path_context_t* next;

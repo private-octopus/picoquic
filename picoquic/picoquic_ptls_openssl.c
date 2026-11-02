@@ -27,10 +27,9 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
-#pragma warning(disable:4100)
 #pragma warning(disable:4204)
 #endif
-#include "picotls.h"
+#include "picoquic_picotls.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
 

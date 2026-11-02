@@ -27,7 +27,7 @@
 #include "wincompat.h"
 #pragma warning(disable:4204)
 #endif
-#include <picotls.h>
+#include "picoquic_picotls.h"
 #ifdef _WINDOWS
 #include <picotls\pembase64.h>
 #include <picotls\minicrypto.h>
@@ -245,6 +245,10 @@ ptls_aead_context_t* ech_opener_callback(ptls_ech_create_opener_t * cb,
     ptls_hpke_kem_t** p_kem, ptls_hpke_cipher_suite_t** cipher, ptls_t* UNUSED(tls), 
     uint8_t UNUSED(config_id), ptls_hpke_cipher_suite_id_t cipher_id, ptls_iovec_t enc, ptls_iovec_t info_prefix)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tls);
+    UNREFERENCED_PARAMETER(config_id);
+#endif
     ptls_aead_context_t* aead = NULL;
     ptls_buffer_t infobuf;
     int ret = 0;
