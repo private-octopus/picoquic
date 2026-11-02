@@ -335,7 +335,7 @@ int pn_ctr_test(void)
 
     picoquic_tls_api_init();
 
-    ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v(0);
+    ptls_aead_algorithm_t* aead = (ptls_aead_algorithm_t*)picoquic_get_aes128gcm_v();
     ptls_cipher_context_t *pn_enc = (aead == NULL)?NULL:ptls_cipher_new(aead->ctr_cipher, 1, key);
 
     if (pn_enc == NULL) {
@@ -924,7 +924,7 @@ int draft17_vector_test(void)
     /* The cipher suites are only registered when the TLS API is initialized.
      * Do it here, so the test does not depend on a previous test having done it. */
     picoquic_tls_api_init();
-    cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v(0);
+    cipher = (ptls_cipher_suite_t*)picoquic_get_aes128gcm_sha256_v();
 
     if (cipher == NULL) {
         DBG_PRINTF("%s", "Could not find the default cipher suite.");
@@ -1090,9 +1090,9 @@ int key_rotation_vector_test(void)
         NULL, NULL, NULL, NULL };
     uint8_t new_secret[PTLS_MAX_DIGEST_SIZE];
 
-    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_256_GCM_SHA384, 0);
-    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0);
-    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_CHACHA20_POLY1305_SHA256, 0);
+    key_rotation_test_suites[0] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_256_GCM_SHA384);
+    key_rotation_test_suites[1] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256);
+    key_rotation_test_suites[2] = (ptls_cipher_suite_t*)picoquic_get_cipher_suite_by_id_v(PICOQUIC_CHACHA20_POLY1305_SHA256);
     key_rotation_test_suites[3] = NULL;
 
     memcpy(new_secret, key_rotation_test_init, PTLS_MAX_DIGEST_SIZE);

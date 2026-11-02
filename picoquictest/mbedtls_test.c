@@ -54,7 +54,7 @@
 #endif
 /* Mbedtls test:
  * Use the "flag" option of tls_api_init to only load specified
- * providers -- specifically, do not load openssl, nor "fusion".
+ * providers -- specifically, do not load openssl.
  * Then, run a basic connection test, to check that negotiation
  * succeeds.
  * Then, unload the tls api provider and reset the control flag
@@ -1588,8 +1588,7 @@ int mbedtls_ecdsa_verify_test(void)
 int mbedtls_configure_test(void)
 {
     int ret = 0;
-    int cipher_suite_match_low = 0;
-    int cipher_suite_match_high = 0;
+    int cipher_suite_match = 0;
     int key_exchange_max = 0;
     ptls_cipher_suite_t* targets[3] = {
         &ptls_mbedtls_aes128gcmsha256,
@@ -1605,20 +1604,17 @@ int mbedtls_configure_test(void)
     /* Verify that the negotiated parameters have the expected value */
     for (int i = 0; i < PICOQUIC_CIPHER_SUITES_NB_MAX; i++) {
         for (int j = 0; j < 3; j++) {
-            if (targets[j] == picoquic_cipher_suites[i].high_memory_suite) {
-                cipher_suite_match_high |= (1 << j);
-            }
-            if (targets[j] == picoquic_cipher_suites[i].low_memory_suite) {
-                cipher_suite_match_low |= (1 << j);
+            if (targets[j] == picoquic_cipher_suites[i]) {
+                cipher_suite_match |= (1 << j);
             }
         }
-        if (cipher_suite_match_low == 0x7 && cipher_suite_match_high == 0x7) {
+        if (cipher_suite_match == 0x7) {
             break;
         }
     }
-    if (cipher_suite_match_low != 0x7 || cipher_suite_match_high != 0x7) {
-        DBG_PRINTF("Suites registration test fails, expected 0x%x, 0x%x, got 0x%x, 0x%x",
-            7, 7, cipher_suite_match_low, cipher_suite_match_high);
+    if (cipher_suite_match != 0x7) {
+        DBG_PRINTF("Suites registration test fails, expected 0x%x, got 0x%x",
+            7, cipher_suite_match);
         ret = -1;
     }
 

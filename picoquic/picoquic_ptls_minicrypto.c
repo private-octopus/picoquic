@@ -67,12 +67,12 @@ void picoquic_ptls_minicrypto_load(int unload)
         (void)aegis_init();
 #endif
 
-        picoquic_register_ciphersuite(&ptls_minicrypto_aes128gcmsha256, 1);
-        picoquic_register_ciphersuite(&ptls_minicrypto_aes256gcmsha384, 1);
-        picoquic_register_ciphersuite(&ptls_minicrypto_chacha20poly1305sha256, 1);
+        picoquic_register_ciphersuite(&ptls_minicrypto_aes128gcmsha256);
+        picoquic_register_ciphersuite(&ptls_minicrypto_aes256gcmsha384);
+        picoquic_register_ciphersuite(&ptls_minicrypto_chacha20poly1305sha256);
 #ifdef PTLS_HAVE_AEGIS
-        picoquic_register_ciphersuite(&ptls_minicrypto_aegis256sha512, 1);
-        picoquic_register_ciphersuite(&ptls_minicrypto_aegis128lsha256, 1);
+        picoquic_register_ciphersuite(&ptls_minicrypto_aegis256sha512);
+        picoquic_register_ciphersuite(&ptls_minicrypto_aegis128lsha256);
 #endif
         picoquic_register_key_exchange_algorithm(&ptls_minicrypto_secp256r1);
         picoquic_register_key_exchange_algorithm(&ptls_minicrypto_x25519);
