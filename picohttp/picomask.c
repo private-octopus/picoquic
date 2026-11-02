@@ -182,6 +182,9 @@ static void picomask_udp_free(picomask_udp_ctx_t* udp_ctx)
 
 static void picomask_udp_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picomask_udp_ctx_t* udp_ctx = picomask_udp_node_value(node);
     picomask_udp_free(udp_ctx);
 }
@@ -532,6 +535,12 @@ int picomask_intercept(picoquic_quic_t* quic, struct st_picomask_ctx_t* picomask
     uint8_t* send_buffer, size_t* send_length, size_t* UNUSED(send_msg_size),
     struct sockaddr_storage* p_addr_to, struct sockaddr_storage* UNUSED(p_addr_from), int* UNUSED(if_index))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+    UNREFERENCED_PARAMETER(send_msg_size);
+    UNREFERENCED_PARAMETER(if_index);
+    UNREFERENCED_PARAMETER(p_addr_from);
+#endif
     int ret = 0;
     picomask_udp_ctx_t* udp_ctx;
 

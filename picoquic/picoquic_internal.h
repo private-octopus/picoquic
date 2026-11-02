@@ -22,10 +22,6 @@
 #ifndef PICOQUIC_INTERNAL_H
 #define PICOQUIC_INTERNAL_H
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4100) // unreferenced formal parameter
-#endif
-
 #include "picohash.h"
 #include "picosplay.h"
 #include "picoquic.h"
@@ -529,6 +525,7 @@ typedef struct st_picoquic_ticket_key_state_t {
 
 typedef struct st_picoquic_quic_t {
     void* tls_master_ctx;
+    const struct st_ptls_key_exchange_algorithm_t* key_exchange_selected[2]; /* for picoquic_set_key_exchange */
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     struct st_picomask_ctx_t* picomask_ctx;
@@ -616,7 +613,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_last;
     struct st_picoquic_cnx_t* cnx_wake_ready_first;
     struct st_picoquic_cnx_t* cnx_wake_ready_last;
-    picosplay_tree_t cnx_wake_tree;
+    picosplay64u_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 

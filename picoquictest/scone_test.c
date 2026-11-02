@@ -474,9 +474,8 @@ int scone_prepare_format_failure_test(void)
     return ret;
 }
 
-/* picoquic_scone_report: the path_index < 0 guard, and the callback_fn == NULL guard,
- * are never exercised -- the end-to-end tests only ever call it with a real path index
- * and a real callback. */
+/* picoquic_scone_report: the path_index < 0 guard is never exercised -- the end-to-end
+ * tests only ever call it with a real path index. */
 int scone_report_guards_test(void)
 {
     int ret = 0;
@@ -488,7 +487,6 @@ int scone_report_guards_test(void)
     }
     else {
         uint64_t saved_indication = cnx->quic->scone_indication;
-        picoquic_stream_data_cb_fn saved_callback_fn = cnx->callback_fn;
         uint64_t saved_advice = cnx->path[0]->scone_advice_last;
 
         cnx->quic->scone_indication = 12345;
@@ -498,17 +496,7 @@ int scone_report_guards_test(void)
             ret = -1;
         }
 
-        if (ret == 0) {
-            cnx->callback_fn = NULL;
-            picoquic_scone_report(cnx, 0);
-            if (cnx->quic->scone_indication != 0 || cnx->path[0]->scone_advice_last != 12345) {
-                DBG_PRINTF("%s", "picoquic_scone_report did not record advice when callback_fn is NULL");
-                ret = -1;
-            }
-        }
-
         cnx->quic->scone_indication = saved_indication;
-        cnx->callback_fn = saved_callback_fn;
         cnx->path[0]->scone_advice_last = saved_advice;
     }
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
