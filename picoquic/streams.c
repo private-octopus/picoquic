@@ -226,8 +226,7 @@ int picoquic_mark_active_stream_internal(picoquic_cnx_t* cnx,
         if (is_active) {
             /* The call only fails if the stream was closed or reset */
             if (!stream->fin_requested &&
-                (!stream->reset_requested || !picoquic_reliable_prefix_is_acked(stream)) &&
-                cnx->callback_fn != NULL) {
+                (!stream->reset_requested || !picoquic_reliable_prefix_is_acked(stream))) {
                 if (do_update_ctx) {
                     stream->app_stream_ctx = app_stream_ctx;
                 }

@@ -106,8 +106,7 @@ void picoqmux_update_state_to_ready(picoquic_cnx_t* cnx)
 {
 
     cnx->cnx_state = picoquic_state_ready;
-    if (cnx->callback_fn != NULL &&
-        cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
+    if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_ready, cnx->callback_ctx, NULL) != 0) {
         picoquic_log_app_message(cnx, "Callback ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
         picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
     }
@@ -127,8 +126,7 @@ void picoqmux_update_state_on_tp_sent(picoquic_cnx_t* cnx)
             else {
                 cnx->cnx_state = picoquic_state_server_almost_ready;
             }
-            if (cnx->callback_fn != NULL && 
-                cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
+            if (cnx->callback_fn(cnx, 0, NULL, 0, picoquic_callback_almost_ready, cnx->callback_ctx, NULL) != 0) {
                 picoquic_log_app_message(cnx, "Callback almost ready returns error 0x%x", PICOQUIC_TRANSPORT_INTERNAL_ERROR);
                 picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0);
             }
@@ -565,18 +563,16 @@ void picoqmux_auto_ack(picoquic_cnx_t* cnx, uint8_t * packet, size_t length, uin
             break;
         default:
             if (PICOQUIC_IN_RANGE(ftype, picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
-                if (cnx->callback_fn != NULL) {
-                    uint8_t frame_id;
-                    uint64_t content_length;
-                    uint8_t* content_bytes;
+                uint8_t frame_id;
+                uint64_t content_length;
+                uint8_t* content_bytes;
 
-                    /* Parse and skip type and length */
-                    content_bytes = picoquic_decode_datagram_frame_header(&packet[byte_index], &packet[length],
-                        &frame_id, &content_length);
+                /* Parse and skip type and length */
+                content_bytes = picoquic_decode_datagram_frame_header(&packet[byte_index], &packet[length],
+                    &frame_id, &content_length);
 
-                    ret = (cnx->callback_fn)(cnx, current_time, content_bytes, (size_t)content_length,
-                        picoquic_callback_datagram_acked, cnx->callback_ctx, NULL);
-                }
+                ret = (cnx->callback_fn)(cnx, current_time, content_bytes, (size_t)content_length,
+                    picoquic_callback_datagram_acked, cnx->callback_ctx, NULL);
             }
 
             ret = picoquic_skip_frame(&packet[byte_index],
@@ -1210,7 +1206,7 @@ int picoqmux_start_client_cnx(picoquic_cnx_t* cnx)
         tls_ctx->handshake_properties.client.negotiated_protocols.count = 1;
         tls_ctx->handshake_properties.client.negotiated_protocols.list = tls_ctx->alpn_vec;
     }
-    else if (cnx->callback_fn != NULL) {
+    else {
         /* Get the default ALPN list for the callback function */
         ret = cnx->callback_fn(cnx, 0, (uint8_t*)tls_ctx, 0, picoquic_callback_request_alpn_list, cnx->callback_ctx, NULL);
 
