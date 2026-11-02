@@ -112,7 +112,7 @@ int picoquic_setup_initial_secrets(
 
 int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx);
 
-int picoquic_get_initial_aead_context(picoquic_quic_t* quic, int version_index, picoquic_connection_id_t* initial_cnxid,
+int picoquic_get_initial_aead_context(int version_index, picoquic_connection_id_t* initial_cnxid,
     int is_client, int is_enc, void** aead_ctx, void** pn_enc_ctx);
 
 uint8_t * picoquic_get_app_secret(picoquic_cnx_t* cnx, int is_enc);

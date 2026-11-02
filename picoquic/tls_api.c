@@ -1709,7 +1709,7 @@ int picoquic_setup_initial_secrets(
     return ret;
 }
 
-static int picoquic_compute_initial_secrets(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+static int picoquic_compute_initial_secrets(int version_index, picoquic_connection_id_t *initial_cnxid,
     ptls_cipher_suite_t * *cipher, uint8_t *client_secret, uint8_t *server_secret)
 {
     int ret = 0;
@@ -1740,7 +1740,7 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
     uint8_t server_secret[256];
     uint8_t *secret1, *secret2;
 
-    ret = picoquic_compute_initial_secrets(cnx->quic, cnx->version_index, &cnx->initial_cnxid, &cipher, client_secret, server_secret);
+    ret = picoquic_compute_initial_secrets(cnx->version_index, &cnx->initial_cnxid, &cipher, client_secret, server_secret);
 
     /* derive the initial keys */
     if (ret == 0) {
@@ -1762,7 +1762,7 @@ int picoquic_setup_initial_traffic_keys(picoquic_cnx_t* cnx)
     return ret;
 }
 
-int picoquic_get_initial_aead_context(picoquic_quic_t * quic, int version_index, picoquic_connection_id_t *initial_cnxid,
+int picoquic_get_initial_aead_context(int version_index, picoquic_connection_id_t *initial_cnxid,
     int is_client, int is_enc, void** aead_ctx, void ** pn_enc_ctx)
 {
     int ret = 0;
@@ -1774,7 +1774,7 @@ int picoquic_get_initial_aead_context(picoquic_quic_t * quic, int version_index,
     *aead_ctx = NULL;
     *pn_enc_ctx = NULL;
 
-    ret = picoquic_compute_initial_secrets(quic, version_index, initial_cnxid, &cipher, client_secret, server_secret);
+    ret = picoquic_compute_initial_secrets(version_index, initial_cnxid, &cipher, client_secret, server_secret);
 
     if (ret == 0) {
         uint8_t* selected_secret;

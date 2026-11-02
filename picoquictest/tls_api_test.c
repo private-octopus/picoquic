@@ -12895,7 +12895,7 @@ int aegis_initial_aes_test(void)
     }
 
     if (ret == 0) {
-        ret = picoquic_get_initial_aead_context(test_ctx->qclient, 0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
+        ret = picoquic_get_initial_aead_context(0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
     }
 
     if (ret == 0) {
@@ -14022,7 +14022,7 @@ int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buff
     }
     if (ret == 0) {
         /* create an encryption context */
-        if ((ret = picoquic_get_initial_aead_context(quic, 0, &icid,
+        if ((ret = picoquic_get_initial_aead_context(0, &icid,
             1 /* is_client=1 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx)) == 0) {
             /* encrypt the payload. */
             size_t send_length = picoquic_aead_encrypt_generic(buffer + /* header_length */ header_length,

@@ -4114,7 +4114,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         if (initial_aead_dec != NULL && initial_pn_dec != NULL) {
             cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = initial_aead_dec;
             cnx->crypto_context[picoquic_epoch_initial].pn_dec = initial_pn_dec;
-            if (picoquic_get_initial_aead_context(quic, cnx->version_index, &cnx->initial_cnxid,
+            if (picoquic_get_initial_aead_context(cnx->version_index, &cnx->initial_cnxid,
                 cnx->client_mode, 1 /* encoding mode */,
                 &cnx->crypto_context[picoquic_epoch_initial].aead_encrypt,
                 &cnx->crypto_context[picoquic_epoch_initial].pn_enc) != 0) {
