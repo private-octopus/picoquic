@@ -12521,8 +12521,8 @@ static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx)
 
 static int aegis_is_available(void)
 {
-    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256, 0) != NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512, 0) != NULL;
+    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256) != NULL &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512) != NULL;
 }
 
 #ifdef PICOQUIC_WITH_AEGIS
@@ -15037,7 +15037,7 @@ int get_tls_errors_test(void)
     if (ret == 0 && picoquic_ecb_create_by_name(0, data, invalid_stuff) != NULL) {
         ret = -1;
     }
-    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id, 0) != NULL) {
+    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id) != NULL) {
         ret = -1;
     }
     if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qserver, invalid_id) == 0) {
@@ -15047,12 +15047,7 @@ int get_tls_errors_test(void)
         ret = -1;
     }
     if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 1) == NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0) == NULL) {
-        ret = -1;
-    }
-    if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(invalid_id, 1) != NULL) {
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256) == NULL) {
         ret = -1;
     }
     if (ret == 0) {

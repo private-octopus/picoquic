@@ -1177,11 +1177,13 @@ void picoquic_free(picoquic_quic_t* quic)
     }
 }
 
-int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
+int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int UNUSED(low_memory_mode))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(low_memory_mode);
+#endif
     PICOQUIC_THREAD_CHECK(quic);
-    quic->use_low_memory = (low_memory_mode == 0) ? 0 : 1;
-    return picoquic_set_cipher_suite(quic, 0);
+    return 0;
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {

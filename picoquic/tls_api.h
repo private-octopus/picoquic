@@ -186,12 +186,12 @@ size_t picoquic_encode_retry_protection(void * integrity_aead, uint8_t * bytes, 
 int picoquic_verify_retry_protection(void * integrity_aead, uint8_t * bytes, size_t * length, size_t byte_index, const picoquic_connection_id_t * odcid);
 
 /* Exportable definition of ciphersuites */
-void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id, int use_low_memory);
+void* picoquic_get_cipher_suite_by_id_v(int cipher_suite_id);
 
 /* Exportable version of ciphersuite definition for AES128GCM SHA256 ciphersuite */
-void* picoquic_get_aes128gcm_sha256_v(int use_low_memory);
+void* picoquic_get_aes128gcm_sha256_v(void);
 
-void* picoquic_get_aes128gcm_v(int use_low_memory);
+void* picoquic_get_aes128gcm_v(void);
 
 /* AES ECB function used for CID encryption */
 void* picoquic_ecb_create_by_name(int is_enc, const void* ecb_key, char const * alg_name);
