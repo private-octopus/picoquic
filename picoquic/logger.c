@@ -29,10 +29,9 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
-#pragma warning(disable:4100)
 #pragma warning(disable:4204)
 #endif
-#include <picotls.h>
+#include "picoquic_picotls.h"
 #include "picoquic_internal.h"
 #include "bytestream.h"
 #include "tls_api.h"
@@ -2260,6 +2259,10 @@ static void textlog_pdu_ex(picoquic_cnx_t* cnx, void* log_ctx, int receiving, ui
 static void textlog_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x), int receiving, uint64_t UNUSED(current_time),
     picoquic_packet_header* ph, const uint8_t* bytes, size_t bytes_max)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+    UNREFERENCED_PARAMETER(path_x);
+#endif
     if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_decrypted_segment((FILE*)log_ctx, 1,
             cnx, receiving, ph, bytes, bytes_max, 0);
@@ -2269,6 +2272,10 @@ static void textlog_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* 
 static void textlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x), picoquic_packet_header* ph,
     size_t packet_size, int ret, uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(path_x);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = (FILE*)log_ctx;
 
@@ -2294,6 +2301,9 @@ static void textlog_dropped_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_
 static void textlog_buffered_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* UNUSED(path_x),
     picoquic_packet_type_enum ptype, uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(path_x);
+#endif
     if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         FILE* F = (FILE*) log_ctx;
 
@@ -2307,6 +2317,10 @@ static void textlog_outgoing_packet(picoquic_cnx_t* cnx, void * log_ctx, picoqui
     uint8_t* bytes, uint64_t sequence_number, size_t pn_length, size_t length,
     uint8_t* send_buffer, size_t send_length, uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(path_x);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     if (log_ctx != NULL && picoquic_cnx_is_still_logging(cnx)) {
         textlog_outgoing_segment((FILE*)log_ctx, 1,
             cnx, bytes, sequence_number, length, send_buffer, send_length, pn_length);

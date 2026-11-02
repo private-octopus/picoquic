@@ -25,7 +25,6 @@
 #ifdef _WINDOWS
 #include "wincompat.h"
 #include "ws2ipdef.h"
-#pragma warning(disable:4100)
 #endif
 #include "picoquic_internal.h"
 #include "h3zero.h"

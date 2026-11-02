@@ -219,6 +219,7 @@
     <ClInclude Include="picoquic_config.h" />
     <ClInclude Include="picoquic_crypto_provider_api.h" />
     <ClInclude Include="picoquic_internal.h" />
+    <ClInclude Include="picoquic_picotls.h" />
     <ClInclude Include="picoquic_logger.h" />
     <ClInclude Include="picoquic_packet_loop.h" />
     <ClInclude Include="picoquic_af_xdp.h" />

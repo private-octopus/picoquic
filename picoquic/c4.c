@@ -649,6 +649,9 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
 
 void c4_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     /* Initialize the state of the congestion control algorithm */
     c4_state_t* c4_state = path_x->congestion_alg_state;
     
@@ -1252,6 +1255,9 @@ void c4_notify(
     picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
 
