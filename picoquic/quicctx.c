@@ -1494,14 +1494,6 @@ static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
     return (cnx_wake_node == NULL)?NULL:(void*)((char*)cnx_wake_node - offsetof(struct st_picoquic_cnx_t, cnx_wake_node));
 }
 
-static int64_t picoquic_wake_list_compare(void* l, void* r) {
-    const uint64_t ltime = ((picoquic_cnx_t*)l)->next_wake_time;
-    const uint64_t rtime = ((picoquic_cnx_t*)r)->next_wake_time;
-    if (ltime < rtime) return -1;
-    if (ltime > rtime) return 1;
-    return 0;
-}
-
 static picosplay_node_t* picoquic_wake_list_create_node(void* v_cnx)
 {
     return &((picoquic_cnx_t*)v_cnx)->cnx_wake_node;
@@ -1517,8 +1509,9 @@ static void picoquic_wake_list_delete_node(void* UNUSED(tree), picosplay_node_t*
 
 static void picoquic_wake_list_init(picoquic_quic_t * quic)
 {
-    picosplay_init_tree(&quic->cnx_wake_tree, picoquic_wake_list_compare,
-        picoquic_wake_list_create_node, picoquic_wake_list_delete_node, picoquic_wake_list_node_value);
+    picosplay_init_tree_uint64(&quic->cnx_wake_tree,
+        offsetof(picoquic_cnx_t, next_wake_time), offsetof(picoquic_cnx_t, cnx_wake_node),
+        picoquic_wake_list_create_node, picoquic_wake_list_delete_node);
 }
 
 static void picoquic_insert_cnx_in_wake_ready_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)

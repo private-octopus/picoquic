@@ -24,7 +24,33 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include "picosplay.h"
+
+/* memcpy permits a key at any byte offset without alignment or aliasing UB. */
+static uint64_t picosplay_uint64_key(picosplay_tree_t* tree, const void* value)
+{
+    uint64_t key;
+    memcpy(&key, (const char*)value + tree->key_offset, sizeof(key));
+    return key;
+}
+
+static void* picosplay_uint64_value(picosplay_tree_t* tree, picosplay_node_t* node)
+{
+    return (char*)node - tree->node_offset;
+}
+
+static int64_t picosplay_compare(picosplay_tree_t* tree, void* value, picosplay_node_t* node)
+{
+    if (tree->comp != NULL) {
+        return tree->comp(value, tree->node_value(node));
+    }
+    else {
+        uint64_t left = picosplay_uint64_key(tree, value);
+        uint64_t right = picosplay_uint64_key(tree, picosplay_uint64_value(tree, node));
+        return (left > right) - (left < right);
+    }
+}
 
 /* The single most important utility function. */
 static void rotate(picosplay_node_t *child);
@@ -85,6 +111,16 @@ void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, pico
     tree->node_value = node_value;
     tree->root = NULL;
     tree->size = 0;
+    tree->key_offset = 0;
+    tree->node_offset = 0;
+}
+
+void picosplay_init_tree_uint64(picosplay_tree_t* tree, size_t key_offset, size_t node_offset,
+    picosplay_create create, picosplay_delete_node delete_node)
+{
+    picosplay_init_tree(tree, NULL, create, delete_node, NULL);
+    tree->key_offset = key_offset;
+    tree->node_offset = node_offset;
 }
 
 /* Return an empty tree, storing the picosplay_comparator. */
@@ -115,7 +151,9 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
             int left = 0;
             while (curr != NULL) {
                 parent = curr;
-                if (tree->comp(tree->node_value(new), tree->node_value(curr)) < 0) {
+                void* new_value = (tree->comp == NULL) ?
+                    picosplay_uint64_value(tree, new) : tree->node_value(new);
+                if (picosplay_compare(tree, new_value, curr) < 0) {
                     left = 1;
                     curr = curr->left;
                 }
@@ -143,7 +181,7 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value)
     picosplay_node_t *curr = tree->root;
     int found = 0;
     while(curr != NULL && !found) {
-        int64_t relation = tree->comp(value, tree->node_value(curr));
+        int64_t relation = picosplay_compare(tree, value, curr);
         if(relation == 0) {
             found = 1;
         } else if(relation < 0) {
@@ -168,7 +206,7 @@ picosplay_node_t* picosplay_find_previous(picosplay_tree_t* tree, void* value)
     picosplay_node_t* previous = NULL;
     int found = 0;
     while (curr != NULL && !found) {
-        int64_t relation = tree->comp(value, tree->node_value(curr));
+        int64_t relation = picosplay_compare(tree, value, curr);
         if (relation == 0) {
             found = 1;
             previous = curr;

@@ -26,6 +26,7 @@
 #define PICOSPLAY_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,10 +48,21 @@ typedef struct st_picosplay_tree_t {
     picosplay_delete_node delete_node;
     picosplay_node_value node_value;
     int size;
+    size_t key_offset;
+    size_t node_offset;
 } picosplay_tree_t;
 
 
 void picosplay_init_tree(picosplay_tree_t* tree, picosplay_comparator comp, picosplay_create create, picosplay_delete_node delete_node, picosplay_node_value node_value);
+/* Optional unsigned-64-bit ordering. Both offsets are relative to the value
+ * object: key_offset locates its uint64_t key, node_offset its embedded node.
+ * The create callback must return that embedded node. Keys must remain unchanged
+ * while linked. Search/delete arguments use the same value layout. Unaligned
+ * keys are supported. Creation, deletion, duplicate ordering and splaying follow
+ * the generic API; comp and node_value are NULL in this mode.
+ */
+void picosplay_init_tree_uint64(picosplay_tree_t* tree, size_t key_offset, size_t node_offset,
+    picosplay_create create, picosplay_delete_node delete_node);
 picosplay_tree_t* picosplay_new_tree(picosplay_comparator comp, picosplay_create create, picosplay_delete_node delete_node, picosplay_node_value node_value);
 picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value);
 picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value);
