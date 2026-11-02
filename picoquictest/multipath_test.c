@@ -2674,6 +2674,55 @@ int multipath_cid_retire_test(void)
     return(ret);
 }
 
+/* The PATH_ACK ack delay is the time since the largest packet was received on that path. */
+int multipath_ack_delay_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    uint8_t bytes[256];
+    uint8_t* bytes_next = NULL;
+    int more_data = 0;
+    uint64_t num_block = 0;
+    uint64_t path_id = UINT64_MAX;
+    uint64_t largest = 0;
+    uint64_t ack_delay = 0;
+    size_t consumed = 0;
+    const uint64_t largest_time = 20000;
+    const uint64_t expected_delay = 5000;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        cnx->is_multipath_enabled = 1;
+        for (uint64_t pn = 0; ret == 0 && pn < 4; pn++) {
+            ret = picoquic_record_pn_received(cnx, picoquic_packet_context_application, NULL, pn,
+                (pn < 3) ? 10000 : largest_time);
+        }
+        if (ret == 0) {
+            bytes_next = picoquic_format_ack_frame(cnx, bytes, bytes + sizeof(bytes), &more_data,
+                largest_time + expected_delay, picoquic_packet_context_application, 0);
+            if (bytes_next == NULL || bytes_next == bytes || bytes[0] != picoquic_frame_type_path_ack) {
+                DBG_PRINTF("%s", "No PATH_ACK frame formatted");
+                ret = -1;
+            }
+            else if (picoquic_parse_ack_header(bytes, bytes_next - bytes, &num_block, &path_id, &largest,
+                &ack_delay, &consumed, cnx->local_parameters.ack_delay_exponent) != 0) {
+                DBG_PRINTF("%s", "Cannot parse PATH_ACK frame");
+                ret = -1;
+            }
+            else if (path_id != 0 || largest != 3 || ack_delay != expected_delay) {
+                DBG_PRINTF("PATH_ACK path %" PRIu64 ", largest %" PRIu64 ", ack delay %" PRIu64 ", expected 0, 3, %" PRIu64,
+                    path_id, largest, ack_delay, expected_delay);
+                ret = -1;
+            }
+        }
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* CID rotation after idle periods, with two paths. After each idle period, the client
  * rotates its CIDs, and the server renews its own CID for each path, retiring the old one.
  * Path 0 becomes much slower just after the idle period, as a radio waking up would, so the

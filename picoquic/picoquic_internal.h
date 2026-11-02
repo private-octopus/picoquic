@@ -22,10 +22,6 @@
 #ifndef PICOQUIC_INTERNAL_H
 #define PICOQUIC_INTERNAL_H
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4100) // unreferenced formal parameter
-#endif
-
 #include "picohash.h"
 #include "picosplay.h"
 #include "picoquic.h"
@@ -529,6 +525,7 @@ typedef struct st_picoquic_ticket_key_state_t {
 
 typedef struct st_picoquic_quic_t {
     void* tls_master_ctx;
+    const struct st_ptls_key_exchange_algorithm_t* key_exchange_selected[2]; /* for picoquic_set_key_exchange */
     picoquic_stream_data_cb_fn default_callback_fn;
     void* default_callback_ctx;
     struct st_picomask_ctx_t* picomask_ctx;
@@ -1570,11 +1567,12 @@ typedef struct st_picoquic_cnx_t {
 
 typedef struct st_picoquic_packet_data_t {
     uint64_t last_time_stamp_received;
-    uint64_t last_ack_delay; /* ACK Delay in ACK frame */
+    uint64_t last_ack_delay; /* ACK Delay in the ACK frame being decoded, 0 if its largest was already acked */
     int nb_path_ack;
     struct {
         picoquic_path_t* acked_path; /* path for which ACK was received */
         uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
+        uint64_t ack_delay; /* ACK Delay of the frame that acked that packet */
         uint64_t delivered_prior; /* Amount delivered prior to that packet */
         uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
         uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
@@ -1912,6 +1910,8 @@ void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_s
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
 void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
+void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    int epoch, int pc, uint64_t current_time, picoquic_packet_data_t* packet_data);
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_context_enum pc);
 

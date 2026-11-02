@@ -585,6 +585,8 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec, FILE* err_fd
         }
         else {
             picoquic_set_default_pmtud_policy(cc_ctx->q_ctx[1], picoquic_pmtud_delayed);
+            /* Classic client groups only, so PQ capable servers do not send HRR */
+            ret = picoquic_set_key_exchange(cc_ctx->q_ctx[1], PICOQUIC_GROUP_SECP256R1);
         }
         if (spec->qlog_dir != NULL) {
             for (int i = 0; ret == 0 && i < 2; i++) {
@@ -682,8 +684,11 @@ int picoquic_ns_prepare_packet(picoquic_ns_ctx_t* cc_ctx, int node_id, int* is_a
             if (packet->addr_from.ss_family == 0) {
                 picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&cc_ctx->addr[node_id]);
             }
-            packet->ecn_mark = (cc_ctx->q_ctx[node_id]->default_congestion_alg == NULL) ?
-                0 : cc_ctx->q_ctx[node_id]->default_congestion_alg->ecn_mark;
+            /* Each connection marks its packets with the ECN codepoint of its own
+             * congestion control algorithm, e.g., ECT(1) for Prague. */
+            picoquic_congestion_algorithm_t const* cc_alg = (last_cnx != NULL && last_cnx->congestion_alg != NULL) ?
+                last_cnx->congestion_alg : cc_ctx->q_ctx[node_id]->default_congestion_alg;
+            packet->ecn_mark = (cc_alg == NULL) ? 0 : cc_alg->ecn_mark;
             picoquictest_sim_link_submit(cc_ctx->link[link_id], packet, cc_ctx->simulated_time);
             *is_active = 1;
         }

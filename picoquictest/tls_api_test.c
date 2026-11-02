@@ -1193,6 +1193,8 @@ int tls_api_init_ctx_ex2(picoquic_test_tls_api_ctx_t** pctx, uint32_t proposed_v
                 /* Do not use randomization by default during tests */
                 picoquic_set_random_initial(test_ctx->qclient, 0);
                 picoquic_set_random_initial(test_ctx->qserver, 0);
+                /* Match the client's first key share, so PQ capable servers do not send HRR */
+                ret = picoquic_set_key_exchange(test_ctx->qserver, PICOQUIC_GROUP_SECP256R1);
             }
 
             /* register the links */
@@ -2963,12 +2965,24 @@ int test_version_negotiation_spoof(void)
  * This will start a connection with version 1, and verify that it gets established with version 2,
  * or to version 2 draft.
  */
-int vn_compat_test_one(uint32_t current, uint32_t target)
+int vn_compat_test_one(uint32_t current, uint32_t target, uint8_t t_id)
 {
     uint64_t simulated_time = 0;
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
-    int ret = tls_api_init_ctx(&test_ctx, current, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0);
+    picoquic_connection_id_t initial_cid = { {0x5e, 0xa5, 0x10, 0xc0, 0, 0, 0, 0}, 8 };
+    int ret;
 
+    initial_cid.id[4] = t_id;
+
+    ret = tls_api_init_ctx_ex(&test_ctx, current,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 1, 0, &initial_cid);
+
+    if (ret == 0) {
+        picoquic_set_qlog(test_ctx->qserver, ".");
+        test_ctx->qserver->use_long_log = 1;
+        picoquic_set_qlog(test_ctx->qclient, ".");
+        test_ctx->qclient->use_long_log = 1;
+    }
 
     if (ret == 0) {
         /* Set the desired version */
@@ -2986,9 +3000,13 @@ int vn_compat_test_one(uint32_t current, uint32_t target)
         (void)tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
     }
 
-
     if (ret == 0) {
-        if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
+        if (!TEST_CLIENT_READY || test_ctx->cnx_server == NULL || !TEST_SERVER_READY) {
+            DBG_PRINTF("Connection failed, client state: %d",
+                test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+        else if (picoquic_supported_versions[test_ctx->cnx_client->version_index].version != target) {
             DBG_PRINTF("Client remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
@@ -2997,6 +3015,10 @@ int vn_compat_test_one(uint32_t current, uint32_t target)
             DBG_PRINTF("Server remained to version 0x%08x",
                 picoquic_supported_versions[test_ctx->cnx_client->version_index].version);
             ret = -1;
+        }
+        else if ((ret = wait_client_connection_ready(test_ctx, &simulated_time)) != 0) {
+            DBG_PRINTF("Client connection not ready, state: %d",
+                test_ctx->cnx_client->cnx_state);
         }
     }
 
@@ -3012,13 +3034,13 @@ int vn_compat_test(void)
 {
     int ret = 0;
 
-    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION) != 0) {
+    if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION, 1) != 0) {
         ret = -1;
     }
-    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT) != 0) {
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_V2_VERSION_DRAFT, 2) != 0) {
         ret = -1;
     }
-    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1) == 0) {
+    else if (vn_compat_test_one(PICOQUIC_V1_VERSION, PICOQUIC_INTERNAL_TEST_VERSION_1, 3) == 0) {
         ret = -1;
     }
 
@@ -13440,8 +13462,14 @@ int integrity_limit_test(void)
     }
 
     /* Perform a data sending loop for a few rounds after the ready state */
-    while (ret == 0 && nb_initial_loop < 64) {
-        if (test_ctx->cnx_server != NULL && 
+    for (int nb_rounds = 0; ret == 0 && nb_initial_loop < 64; nb_rounds++) {
+        if (nb_rounds >= 1024) {
+            /* Do not loop forever if the 1-RTT keys never get ready */
+            DBG_PRINTF("Only %d of %d rounds had 1-RTT keys", nb_initial_loop, nb_rounds);
+            ret = -1;
+            break;
+        }
+        if (test_ctx->cnx_server != NULL &&
             test_ctx->cnx_server->crypto_context[picoquic_epoch_1rtt].aead_decrypt != NULL) {
             nb_initial_loop++;
         }
@@ -14038,9 +14066,13 @@ int bad_chello_test(void)
     }
     else {
         picoquic_sort_key_exchange_algorithms(bad_hello_key_exchanges, nb_bad_hello_key_exchanges);
+        /* The canned client hello needs a server that accepts every group */
+        ret = picoquic_set_key_exchange(test_ctx->qserver, 0);
         picoquic_set_qlog(test_ctx->qserver, ".");
         /* Create an initial packet with a bad chello */
-        ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
+        if (ret == 0) {
+            ret = bad_chello_fill_initial(test_ctx->qserver, buffer, PICOQUIC_ENFORCED_INITIAL_MTU, chello_malformed, sizeof(chello_malformed));
+        }
     }
 
     /* Submit the packet to the server context */
@@ -14534,6 +14566,17 @@ int error_reason_test(void)
             }
             else {
                 nb_inactive++;
+            }
+        }
+        if (ret == 0 && test_ctx->cnx_server == NULL) {
+            DBG_PRINTF("%s", "Server connection context is NULL");
+            ret = -1;
+        }
+        if (ret == 0) {
+            char const* reason = picoquic_get_remote_error_reason(test_ctx->cnx_server);
+            if (reason == NULL || strcmp(reason, "error reason test") != 0) {
+                DBG_PRINTF("Remote error reason: %s", (reason == NULL) ? "NULL" : reason);
+                ret = -1;
             }
         }
     }
@@ -15167,6 +15210,11 @@ int tls_key_exchange_test_one(uint16_t key_exchange_id)
     }
 
     if (ret == 0) {
+        /* The server must accept every group, including PQ ones */
+        ret = picoquic_set_key_exchange(test_ctx->qserver, 0);
+    }
+
+    if (ret == 0) {
         test_ctx->cnx_client = picoquic_create_cnx(test_ctx->qclient, icid,
             picoquic_null_connection_id,
             (struct sockaddr*)&test_ctx->server_addr, 0, 0,
@@ -15210,6 +15258,26 @@ int tls_x25519mlkem_test(void)
 ptls_verify_certificate_t* picoquic_get_certificate_verifier(char const* cert_root_file_name,
     unsigned int* is_cert_store_not_empty, picoquic_free_verify_certificate_ctx* p_free_certificate_verifier_fn);
 void picoquic_dispose_certificate_verifier(ptls_verify_certificate_t* verifier);
+
+int tls_api_certificate_compression_disabled_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, 0, NULL, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        ptls_context_t* ctx = (ptls_context_t*)quic->tls_master_ctx;
+        if (ctx == NULL || ctx->decompress_certificate != NULL || ctx->emit_certificate != NULL) {
+            DBG_PRINTF("%s", "Default TLS context enables certificate compression");
+            ret = -1;
+        }
+        picoquic_free(quic);
+    }
+    return ret;
+}
 
 /* picoquic_dispose_certificate_verifier is a public wrapper with no callers anywhere in the
  * codebase -- picoquic itself disposes a verify_certificate callback by invoking the captured

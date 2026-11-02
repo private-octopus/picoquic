@@ -106,6 +106,7 @@ typedef struct st_c4_state_t {
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
     uint64_t recent_maximum_rate;
+    uint64_t previous_maximum_rate;
     int recent_congestions;
 
     int probe_level; /* Rate of probing, from 3.125% to 25% */
@@ -648,6 +649,9 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
 
 void c4_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     /* Initialize the state of the congestion control algorithm */
     c4_state_t* c4_state = path_x->congestion_alg_state;
     
@@ -727,6 +731,7 @@ static void c4_exit_recovery(
             c4_state->probe_level++;
         }
         c4_state->recent_congestions = 0;
+        c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
     }
     else {
         /* TODO: this is obsolete, we should remove the cascade code. */
@@ -745,15 +750,21 @@ static void c4_exit_recovery(
                 c4_state->nominal_rate = c4_state->recent_maximum_rate;
                 c4_state->recent_congestions = 0;
             }
+            c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
         }
         else {
             c4_state->recent_congestions = 0;
-            if (c4_state->nominal_rate > c4_state->recent_maximum_rate &&
-                c4_state->push_was_not_limited &&
-                path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
-                c4_state->nominal_rate = (c4_state->nominal_rate + c4_state->recent_maximum_rate) / 2;
+            if (c4_state->push_was_not_limited) {
+                uint64_t max_of_2_rates = (c4_state->recent_maximum_rate > c4_state->previous_maximum_rate) ?
+                    c4_state->recent_maximum_rate : c4_state->previous_maximum_rate;
+                if (c4_state->nominal_rate > max_of_2_rates &&
+                    path_x->smoothed_rtt > C4_MAX_RTT_MIN) {
+                    c4_state->nominal_rate = max_of_2_rates;
+                }
+                c4_state->previous_maximum_rate = c4_state->recent_maximum_rate;
             }
         }
+
     }
     c4_state->nb_era_resuming = 0;
     c4_state->recent_maximum_rate = 0;
@@ -1244,6 +1255,9 @@ void c4_notify(
     picoquic_per_ack_state_t * ack_state,
     uint64_t current_time)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     path_x->is_cc_data_updated = 1;
 

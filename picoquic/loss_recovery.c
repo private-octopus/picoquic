@@ -741,8 +741,7 @@ int picoquic_copy_before_retransmit(picoquic_packet_t * old_p,
 
             /* Keep track of datagram frames that are possibly lost */
             if (ret == 0 &&
-                PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l) &&
-                cnx->callback_fn != NULL) {
+                PICOQUIC_IN_RANGE(old_p->bytes[byte_index], picoquic_frame_type_datagram, picoquic_frame_type_datagram_l)) {
                 uint8_t frame_id;
                 uint64_t content_length;
                 uint8_t* content_bytes = &old_p->bytes[byte_index];
