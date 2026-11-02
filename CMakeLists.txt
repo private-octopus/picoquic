@@ -173,6 +173,7 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_l3tx.h
     picoquic/picoquic_logger.h
     picoquic/picoquic_neigh.h
+    picoquic/picoquic_picotls.h
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
