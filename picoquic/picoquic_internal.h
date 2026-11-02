@@ -617,7 +617,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_last;
     struct st_picoquic_cnx_t* cnx_wake_ready_first;
     struct st_picoquic_cnx_t* cnx_wake_ready_last;
-    picosplay_tree_t cnx_wake_tree;
+    picosplay64u_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 
