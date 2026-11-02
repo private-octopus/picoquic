@@ -585,6 +585,8 @@ picoquic_ns_ctx_t* picoquic_ns_create_ctx(picoquic_ns_spec_t* spec, FILE* err_fd
         }
         else {
             picoquic_set_default_pmtud_policy(cc_ctx->q_ctx[1], picoquic_pmtud_delayed);
+            /* Classic client groups only, so PQ capable servers do not send HRR */
+            ret = picoquic_set_key_exchange(cc_ctx->q_ctx[1], PICOQUIC_GROUP_SECP256R1);
         }
         if (spec->qlog_dir != NULL) {
             for (int i = 0; ret == 0 && i < 2; i++) {
