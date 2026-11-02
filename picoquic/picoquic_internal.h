@@ -22,10 +22,6 @@
 #ifndef PICOQUIC_INTERNAL_H
 #define PICOQUIC_INTERNAL_H
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4100) // unreferenced formal parameter
-#endif
-
 #include "picohash.h"
 #include "picosplay.h"
 #include "picoquic.h"

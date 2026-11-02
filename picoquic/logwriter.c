@@ -31,7 +31,7 @@
 #pragma warning(disable:4204)
 #endif
 #include "tls_api.h"
-#include "picotls.h"
+#include "picoquic_picotls.h"
 #include "picoquic_unified_log.h"
 #include "picoquic_binlog.h"
 

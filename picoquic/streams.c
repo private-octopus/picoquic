@@ -60,6 +60,9 @@ void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data)
 
 void picoquic_stream_data_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_stream_data_node_t* stream_data = (picoquic_stream_data_node_t*)picoquic_stream_data_node_value(node);
 
     picoquic_stream_data_node_recycle(stream_data);
@@ -137,6 +140,9 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
 
 static void picoquic_stream_node_delete(void* UNUSED(tree), picosplay_node_t* node)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
     picoquic_stream_head_t* stream = picoquic_stream_node_value(node);
 
     /* Not in picoquic_clear_stream, which also clears the uncounted crypto streams */

@@ -26,7 +26,7 @@
 #ifdef _WINDOWS
 #pragma warning(disable:4204)
 #endif
-#include <picotls.h>
+#include "picoquic_picotls.h"
 #include "picoquic_crypto_provider_api.h"
 #include <stdlib.h>
 #include <string.h>
@@ -365,6 +365,9 @@ const uint8_t* picoquic_decode_qx_ping_frame(picoquic_cnx_t* cnx,
     const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t frame_type, uint64_t UNUSED(current_time))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     uint64_t sequence = 0;
 
     /* This code assumes that the frame type is already skipped */

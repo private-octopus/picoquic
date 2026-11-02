@@ -5597,6 +5597,9 @@ uint8_t* picoquic_format_ack_frequency_frame(picoquic_cnx_t* cnx, uint8_t* bytes
  */
 const uint8_t* picoquic_skip_immediate_ack_frame(const uint8_t* bytes, const uint8_t* UNUSED(bytes_max))
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(bytes_max);
+#endif
     /* This code assumes that the frame type is already skipped */
     return bytes;
 }
@@ -6457,6 +6460,9 @@ const uint8_t* picoquic_parse_bdp_frame(const uint8_t* bytes, const uint8_t* byt
 const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
     uint64_t current_time, struct sockaddr* UNUSED(addr_from), picoquic_path_t* path_x)
 {
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(addr_from);
+#endif
     uint64_t lifetime;
     uint64_t recon_bytes_in_flight;
     uint64_t recon_min_rtt;
