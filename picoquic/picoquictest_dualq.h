@@ -70,7 +70,7 @@ extern "C" {
         double pprime_L; /* the p'_L coefficient in RFC9332, mark rate of L4S queue computed from L4S queue length, before coupling */
         double p_L; /* actual mark rate of L4S queue, after combining with "p_CL" */
         double p_CL; /* Coupled L4S prob = base prob pprime_L * coupling factor k */
-        double p_C; /* Nominal drop rate of classic queue, equal to pprime_L^2 */
+        double p_C; /* Nominal drop rate of classic queue, equal to pprime^2 */
         /* Picoquic NS data */
         uint64_t last_input_time;
     } dualq_state_t;

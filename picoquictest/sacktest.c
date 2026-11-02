@@ -20,15 +20,33 @@
 */
 
 #include "picoquic_internal.h"
+#include "picoquictest_internal.h"
 #include <stdlib.h>
 #include <string.h>
+
+/* Test callback that accepts every event, for tests that do not exercise the application API */
+int picoquic_test_permissive_callback(picoquic_cnx_t* UNUSED(cnx),
+    uint64_t UNUSED(stream_id), uint8_t* UNUSED(bytes), size_t UNUSED(length),
+    picoquic_call_back_event_t UNUSED(fin_or_event), void* UNUSED(callback_ctx), void* UNUSED(stream_ctx))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(stream_id);
+    UNREFERENCED_PARAMETER(bytes);
+    UNREFERENCED_PARAMETER(length);
+    UNREFERENCED_PARAMETER(fin_or_event);
+    UNREFERENCED_PARAMETER(callback_ctx);
+    UNREFERENCED_PARAMETER(stream_ctx);
+#endif
+    return 0;
+}
 
 /* Utility function to set minimal quic and cnx contexts
  */
 int picoquic_test_set_minimal_cnx_with_time(picoquic_quic_t** quic, picoquic_cnx_t** cnx, uint64_t * simulated_time)
 {
     *cnx = NULL;
-    *quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+    *quic = picoquic_create(8, NULL, NULL, NULL, NULL, picoquic_test_permissive_callback,
         NULL, NULL, NULL, NULL, 0, simulated_time, NULL, NULL, 0);
     if (*quic != NULL) {
         *cnx = picoquic_create_cnx(*quic,
@@ -1054,5 +1072,167 @@ int sack_list_horizon_backward_test(void)
 
     picoquic_sack_list_free(&sack0);
 
+    return ret;
+}
+
+/* Stub CC algorithm recording the last acknowledgement notification. */
+static picoquic_per_ack_state_t ack_loss_test_state;
+static picoquic_path_t* ack_loss_test_path;
+static int ack_loss_test_nb_notify;
+
+static void ack_loss_test_notify(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification, picoquic_per_ack_state_t* ack_state, uint64_t UNUSED(current_time))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
+    if (notification == picoquic_congestion_notification_acknowledgement && ack_state != NULL) {
+        ack_loss_test_state = *ack_state;
+        ack_loss_test_path = path_x;
+        ack_loss_test_nb_notify++;
+    }
+}
+
+static picoquic_congestion_algorithm_t ack_loss_test_alg = {
+    "ack_loss_test", 0xff, 0, NULL, ack_loss_test_notify, NULL, NULL
+};
+
+/* Process one ACK of a packet sent on acked_path, received on path_x, and check the CC sample. */
+static int ack_loss_since_sent_test_one(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_path_t* acked_path,
+    uint64_t lost_prior, uint64_t delivered_prior, uint64_t expected_lost, uint64_t expected_delivered)
+{
+    int ret = 0;
+    picoquic_packet_data_t packet_data;
+    uint64_t current_time = 1000000;
+
+    memset(&packet_data, 0, sizeof(packet_data));
+    packet_data.nb_path_ack = 1;
+    packet_data.path_ack[0].acked_path = acked_path;
+    packet_data.path_ack[0].largest_sent_time = current_time - 20000;
+    packet_data.path_ack[0].delivered_sent_prior = current_time - 40000;
+    packet_data.path_ack[0].lost_prior = lost_prior;
+    packet_data.path_ack[0].delivered_prior = delivered_prior;
+    packet_data.path_ack[0].data_acked = 1200;
+    packet_data.path_ack[0].is_set = 1;
+    memset(&ack_loss_test_state, 0, sizeof(ack_loss_test_state));
+    ack_loss_test_path = NULL;
+    ack_loss_test_nb_notify = 0;
+
+    process_decoded_packet_data(cnx, path_x, picoquic_epoch_1rtt, picoquic_packet_context_application,
+        current_time, &packet_data);
+
+    if (ack_loss_test_nb_notify != 1 || ack_loss_test_path != acked_path) {
+        DBG_PRINTF("Expected one notification on the acked path, got %d", ack_loss_test_nb_notify);
+        ret = -1;
+    }
+    else if (ack_loss_test_state.nb_bytes_lost_since_packet_sent != expected_lost) {
+        DBG_PRINTF("Lost since sent: expected %" PRIu64 ", got %" PRIu64,
+            expected_lost, ack_loss_test_state.nb_bytes_lost_since_packet_sent);
+        ret = -1;
+    }
+    else if (ack_loss_test_state.nb_bytes_delivered_since_packet_sent != expected_delivered) {
+        DBG_PRINTF("Delivered since sent: expected %" PRIu64 ", got %" PRIu64,
+            expected_delivered, ack_loss_test_state.nb_bytes_delivered_since_packet_sent);
+        ret = -1;
+    }
+    return ret;
+}
+
+/* Loss and delivery since sent must come from the acked path, and never wrap below zero. */
+int ack_loss_since_sent_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_path_t* other_path = (picoquic_path_t*)calloc(1, sizeof(picoquic_path_t));
+
+    if (other_path == NULL || picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_congestion_algorithm_t const* saved_alg = cnx->congestion_alg;
+        picoquic_path_t* sent_path = cnx->path[0];
+
+        cnx->congestion_alg = &ack_loss_test_alg;
+        cnx->cnx_state = picoquic_state_ready;
+        sent_path->total_bytes_lost = 3000;
+        sent_path->delivered = 10000;
+        /* The path receiving the ACK has unrelated, larger counters. */
+        other_path->total_bytes_lost = 500000;
+        other_path->delivered = 900000;
+
+        /* ACK received on a different path than the one the packet was sent on. */
+        ret = ack_loss_since_sent_test_one(cnx, other_path, sent_path, 1000, 4000, 2000, 6000);
+
+        if (ret == 0) {
+            /* Spurious loss correction lowered total_bytes_lost below lost_prior. */
+            sent_path->total_bytes_lost = 1000;
+            ret = ack_loss_since_sent_test_one(cnx, sent_path, sent_path, 2500, 4000, 0, 6000);
+        }
+        cnx->congestion_alg = saved_alg;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    if (other_path != NULL) {
+        free(other_path);
+    }
+    return ret;
+}
+
+/* One packet acks two paths with different ack delays: each RTT sample must use the delay of its own frame. */
+int ack_delay_per_path_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t current_time = 1000000;
+    uint64_t ack_delay[2] = { 0, 2000 };
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_path_t* other_path = (picoquic_path_t*)calloc(1, sizeof(picoquic_path_t));
+    picoquic_packet_t* acked_packet = (picoquic_packet_t*)calloc(1, sizeof(picoquic_packet_t));
+
+    if (other_path == NULL || acked_packet == NULL ||
+        picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_congestion_algorithm_t const* saved_alg = cnx->congestion_alg;
+        picoquic_path_t* paths[2] = { cnx->path[0], other_path };
+        picoquic_packet_data_t packet_data;
+
+        cnx->congestion_alg = &ack_loss_test_alg;
+        cnx->cnx_state = picoquic_state_ready;
+        memset(&packet_data, 0, sizeof(packet_data));
+        for (int i = 0; i < 2; i++) {
+            paths[i]->rtt_is_initialized = 1;
+            paths[i]->rtt_min = 20000;
+            paths[i]->smoothed_rtt = 20000;
+            /* Decoding the PATH_ACK frame sets the ack delay, then records the acked packets. */
+            packet_data.last_ack_delay = ack_delay[i];
+            acked_packet->send_path = paths[i];
+            acked_packet->send_time = current_time - 30000;
+            acked_packet->length = 1200;
+            picoquic_record_ack_packet_data(&packet_data, acked_packet);
+        }
+        process_decoded_packet_data(cnx, cnx->path[0], picoquic_epoch_1rtt, picoquic_packet_context_application,
+            current_time, &packet_data);
+        for (int i = 0; ret == 0 && i < 2; i++) {
+            if (paths[i]->rtt_sample != 30000 - ack_delay[i]) {
+                DBG_PRINTF("Path %d: RTT sample %" PRIu64 ", expected %" PRIu64, i, paths[i]->rtt_sample, 30000 - ack_delay[i]);
+                ret = -1;
+            }
+        }
+        cnx->congestion_alg = saved_alg;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    if (other_path != NULL) {
+        free(other_path);
+    }
+    if (acked_packet != NULL) {
+        free(acked_packet);
+    }
     return ret;
 }
