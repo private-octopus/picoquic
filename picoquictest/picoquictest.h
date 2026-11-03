@@ -204,6 +204,7 @@ int tls_quant_params_test(void);
 int set_certificate_and_key_test(void);
 int vn_tp_test(void);
 int vn_compat_test(void);
+int vn_upgrade_test(void);
 int transport_param_default_test(void);
 int request_client_authentication_test(void);
 int request_client_authentication_25519_test(void);

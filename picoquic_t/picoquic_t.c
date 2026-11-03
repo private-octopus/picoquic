@@ -292,6 +292,7 @@ static const picoquic_test_def_t test_table[] = {
     { "connection_drop", connection_drop_test },
     { "vn_tp", vn_tp_test },
     { "vn_compat", vn_compat_test },
+    { "vn_upgrade", vn_upgrade_test },
     { "transport_param_default", transport_param_default_test },
     { "stream_rank", stream_rank_test },
     { "stream_id_limit", stream_id_limit_test },
