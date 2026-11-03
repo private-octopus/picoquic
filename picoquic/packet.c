@@ -2147,6 +2147,14 @@ int picoquic_incoming_segment(
         }
         else {
             path_id = 0;
+            /* check */
+            if (cnx->client_mode &&
+                cnx->path[0]->first_tuple != NULL &&
+                cnx->path[0]->first_tuple->peer_addr.ss_family != AF_UNSPEC &&
+                picoquic_compare_addr((struct sockaddr*)&cnx->path[0]->first_tuple->peer_addr,
+                    addr_from) != 0) {
+                ret = PICOQUIC_ERROR_WRONG_SOURCE_ADDRESS;
+            }
         }
     }
 
@@ -2156,7 +2164,6 @@ int picoquic_incoming_segment(
         *previous_dest_id = ph.dest_cnx_id;
         is_first_segment = 1;
         *first_cnx = cnx;
-
 
         /* if needed, log that the packet is received */
         if (cnx != NULL) {
