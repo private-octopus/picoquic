@@ -3047,6 +3047,38 @@ int vn_compat_test(void)
     return ret;
 }
 
+/* Test that version upgrade checks return, including for an old version not listed in upgrade_from. */
+int vn_upgrade_test(void)
+{
+    int ret = 0;
+    int v1_index = picoquic_get_version_index(PICOQUIC_V1_VERSION);
+    int v2_index = picoquic_get_version_index(PICOQUIC_V2_VERSION);
+    int interop_index = picoquic_get_version_index(PICOQUIC_TWENTIETH_INTEROP_VERSION);
+
+    if (v1_index < 0 || v2_index < 0 || interop_index < 0) {
+        DBG_PRINTF("Missing version index: %d, %d, %d", v1_index, v2_index, interop_index);
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, interop_index, v2_index) == 0) {
+        DBG_PRINTF("%s", "Upgrade from interop version to V2 should fail");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v1_index, v2_index) != 0) {
+        DBG_PRINTF("%s", "Upgrade from V1 to V2 should succeed");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v2_index, v1_index) == 0) {
+        DBG_PRINTF("%s", "Upgrade from V2 to V1 should fail");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v2_index, v2_index) != 0) {
+        DBG_PRINTF("%s", "Same version should succeed");
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /* Test setting the SNI
  */
 

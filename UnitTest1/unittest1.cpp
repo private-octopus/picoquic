@@ -1183,6 +1183,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(vn_upgrade)
+        {
+            int ret = vn_upgrade_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(transport_param_default) {
             int ret = transport_param_default_test();
 

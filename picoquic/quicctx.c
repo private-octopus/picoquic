@@ -5473,6 +5473,7 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
                     break;
                 }
             }
+            i++;
         }
     }
     return ret;
