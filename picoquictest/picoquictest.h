@@ -433,6 +433,8 @@ int reset_stream_at_loss_test(void);
 int stream_data_nodes_test(void);
 int stream_data_nodes_attack_test(void);
 int stream_data_nodes_window_test(void);
+int stream_data_nodes_limit_test(void);
+int direct_receive_duplicate_test(void);
 int direct_receive_flow_control_test(void);
 int stream_state_local_reuse_test(void);
 int add_to_stream_fin_only_wakes_cnx_test(void);
