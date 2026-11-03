@@ -2674,6 +2674,102 @@ int multipath_cid_retire_test(void)
     return(ret);
 }
 
+/* Verify that the CID and CID stash is freed after abandoning a path, and will not
+* be recreated by a NeW CID arriving after the abandon. */
+#define MULTIPATH_ABANDON_STASH_ROUNDS 100
+
+static int multipath_abandon_stash_frame(picoquic_cnx_t* cnx, int is_abandon, uint64_t path_id, uint64_t current_time)
+{
+    int ret = 0;
+    uint8_t frame[64];
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + sizeof(frame);
+    const uint8_t* decoded = NULL;
+
+    if (is_abandon) {
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, path_id)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) == NULL) {
+            ret = -1;
+        }
+        else {
+            decoded = picoquic_decode_path_abandon_frame(frame, bytes, cnx, current_time);
+        }
+    }
+    else if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_path_new_connection_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, path_id)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) == NULL ||
+        bytes + 1 + 8 + PICOQUIC_RESET_SECRET_SIZE > bytes_max) {
+        ret = -1;
+    }
+    else {
+        *bytes++ = 8;
+        memset(bytes, 0, 8 + PICOQUIC_RESET_SECRET_SIZE);
+        picoformat_64(bytes, path_id + 1);
+        picoformat_64(bytes + 8, path_id + 1);
+        bytes += 8 + PICOQUIC_RESET_SECRET_SIZE;
+        decoded = picoquic_decode_new_connection_id_frame(cnx, frame, bytes, current_time, 1);
+    }
+    if (ret == 0 && (decoded != bytes || cnx->local_error != 0)) {
+        DBG_PRINTF("%s on path %" PRIu64 " failed, error 0x%" PRIx64, (is_abandon) ? "Abandon" : "New CID", path_id, cnx->local_error);
+        ret = -1;
+    }
+    return ret;
+}
+
+int multipath_abandon_stash_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t nb_stashes = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        cnx->is_multipath_enabled = 1;
+        cnx->local_parameters.initial_max_path_id = 2;
+        cnx->max_path_id_local = 2;
+        cnx->max_path_id_remote = 1000;
+        /* The peer must not use null length CIDs, or PATH_NEW_CONNECTION_ID is a protocol violation. */
+        cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len = 8;
+    }
+    /* Each round, the local CID lists are refilled and the newest unused path ID is abandoned. */
+    for (int i = 0; ret == 0 && i < MULTIPATH_ABANDON_STASH_ROUNDS; i++) {
+        uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+        uint64_t next_wake_time = UINT64_MAX;
+        int more_data = 0;
+        int is_pure_ack = 1;
+
+        simulated_time += 1000;
+        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
+            &next_wake_time, &more_data, &is_pure_ack);
+        ret = multipath_abandon_stash_frame(cnx, 1, cnx->next_path_id_in_lists - 1, simulated_time);
+    }
+    if (ret == 0 && cnx->max_path_id_local < MULTIPATH_ABANDON_STASH_ROUNDS) {
+        DBG_PRINTF("Max path ID only grew to %" PRIu64, cnx->max_path_id_local);
+        ret = -1;
+    }
+    for (uint64_t path_id = 1; ret == 0 && path_id <= cnx->max_path_id_local; path_id++) {
+        ret = multipath_abandon_stash_frame(cnx, 0, path_id, simulated_time);
+    }
+    if (ret == 0) {
+        picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash;
+        while (stash != NULL) {
+            nb_stashes++;
+            stash = stash->next_stash;
+        }
+        if (nb_stashes > cnx->local_parameters.initial_max_path_id + 1) {
+            DBG_PRINTF("%" PRIu64 " stashes for max path ID %" PRIu64, nb_stashes, cnx->max_path_id_local);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* The PATH_ACK ack delay is the time since the largest packet was received on that path. */
 int multipath_ack_delay_test(void)
 {

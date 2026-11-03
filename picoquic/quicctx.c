@@ -2026,6 +2026,7 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
+    uint64_t unique_path_id = path_x->unique_path_id;
     picoquic_packet_t* p = NULL;
     picoquic_stream_head_t* stream = NULL;
 
@@ -2073,6 +2074,14 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
     /* Free the data and free the path context. */
     picoquic_clear_path_data(cnx, path_x);
+
+    if (cnx->is_multipath_enabled) {
+        /* Delete the peer CID stash of the path, which may have been refilled after the path was demoted */
+        picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, unique_path_id, 0);
+        if (remote_cnxid_stash != NULL) {
+            picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
+        }
+    }
 
     /* Compact the path table  */
     for (int i = path_index + 1; i < cnx->nb_paths; i++) {
