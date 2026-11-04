@@ -96,9 +96,6 @@
     <ClCompile Include="picoquic_lb_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picoquic_ptls_fusion_test.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="satellite_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>

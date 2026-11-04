@@ -111,7 +111,6 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/performance_log.c
     picoquic/picohash.c
     picoquic/picoquic_lb.c
-    picoquic/picoquic_ptls_fusion.c
     picoquic/picoquic_ptls_minicrypto.c
     picoquic/picoquic_ptls_openssl.c
     picoquic/picoquic_mbedtls.c
@@ -237,7 +236,6 @@ set(PICOQUIC_TEST_LIBRARY_FILES
     picoquictest/performance_log_test.c
     picoquictest/picolog_test.c
     picoquictest/picoquic_lb_test.c
-    picoquictest/picoquic_ptls_fusion_test.c
     picoquictest/pn2pn64test.c
     picoquictest/qlog_frame_test.c
     picoquictest/qlog_test.c
@@ -333,6 +331,9 @@ if(PICOQUIC_FETCH_PTLS)
     # shared libraries even when Brotli development packages are installed.
     set(WITH_BROTLI OFF CACHE BOOL "Build picotls with Brotli certificate compression" FORCE)
     set(WITH_BROTLI OFF)
+    # Picoquic does not use the picotls Fusion AES-GCM engine.
+    set(WITH_FUSION OFF CACHE BOOL "Build picotls with Fusion AES-GCM engine" FORCE)
+    set(WITH_FUSION OFF)
     if(WITH_AEGIS)
         FetchContent_Declare(picotls
             GIT_REPOSITORY      https://github.com/h2o/picotls.git
@@ -399,20 +400,6 @@ int main(void)
     list(APPEND PICOQUIC_CRYPTO_EXTRA_INCLUDE_DIRS ${AEGIS_INCLUDE_DIR})
     list(APPEND PICOQUIC_CRYPTO_EXTRA_LIBRARIES ${AEGIS_LIBRARIES})
 endif()
-
-# Fusion's do_encrypt_v and the streaming do_encrypt_init/update/final are still unimplemented
-# stubs (assert(!"FIXME")) in the vendored picotls Fusion backend, and picotls's own record-layer
-# code (e.g. NewSessionTicket) calls do_encrypt_v -- so enabling Fusion crashes real connections.
-# Default it OFF everywhere until that is fixed upstream; explicitly pass -DPTLS_WITH_FUSION=ON
-# to override for local experimentation.
-OPTION(PTLS_WITH_FUSION "build 'fusion' AES-GCM engine" OFF)
-if(PTLS_WITH_FUSION)
-    message(STATUS "PTLS Fusion is enabled")
-else()
-    message(STATUS "PTLS compiled without support for Fusion")
-    list(APPEND PICOQUIC_COMPILE_DEFINITIONS PTLS_WITHOUT_FUSION)
-endif()
-
 
 OPTION(PQC_RECOMMENDED_ONLY "only support recommended post quantum algorithms" ON)
 if(PQC_RECOMMENDED_ONLY)

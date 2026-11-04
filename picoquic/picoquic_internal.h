@@ -585,7 +585,6 @@ typedef struct st_picoquic_quic_t {
     unsigned int random_initial : 2; /* Randomize the initial PN number */
     unsigned int packet_train_mode : 1; /* Tune pacing for sending packet trains */
     unsigned int use_constant_challenges : 1; /* Use predictable challenges when producing constant logs. */
-    unsigned int use_low_memory : 1; /* if possible, use low memory alternatives, e.g. for AES */
     unsigned int is_preemptive_repeat_enabled : 1; /* enable premptive repeat on new connections */
     unsigned int default_send_receive_bdp_frame : 1; /* enable sending and receiving BDP frame */
     unsigned int enforce_client_only : 1; /* Do not authorize incoming connections */
@@ -614,7 +613,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_last;
     struct st_picoquic_cnx_t* cnx_wake_ready_first;
     struct st_picoquic_cnx_t* cnx_wake_ready_last;
-    picosplay_tree_t cnx_wake_tree;
+    picosplay64u_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 

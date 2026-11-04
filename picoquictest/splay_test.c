@@ -25,6 +25,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 #include "picoquic_utils.h"
 #include "picosplay.h"
 
@@ -101,6 +103,392 @@ static int check_node_sanity(picosplay_node_t *x, void *floor, void *ceil, picos
     }
 
     return count;
+}
+
+/* Test both legal member orders. The leading byte makes the key offset non-zero. */
+typedef struct st_splay_u64_node_first_t {
+    picosplay_node_t node;
+    uint64_t key;
+    unsigned int serial;
+} splay_u64_node_first_t;
+
+typedef struct st_splay_u64_key_first_t {
+    unsigned char tag;
+    unsigned char key_bytes[sizeof(uint64_t)];
+    unsigned int serial;
+    picosplay_node_t node;
+} splay_u64_key_first_t;
+
+typedef struct st_splay_u64_key_zero_t {
+    uint64_t key;
+    picosplay_node_t node;
+    unsigned int serial;
+} splay_u64_key_zero_t;
+
+typedef struct st_splay_u64_layout_t {
+    size_t key_offset;
+    size_t node_offset;
+    size_t serial_offset;
+    void* (*new_value)(uint64_t, unsigned int);
+    picosplay_node_t* (*create)(void*);
+    void* (*value)(picosplay_node_t*);
+    picosplay_delete_node delete_node;
+} splay_u64_layout_t;
+
+static picosplay_node_t* splay_u64_deleted;
+
+static void* splay_u64_node_first_new(uint64_t key, unsigned int serial)
+{
+    splay_u64_node_first_t* value = (splay_u64_node_first_t*)malloc(sizeof(*value));
+    if (value != NULL) { value->key = key; value->serial = serial; }
+    return value;
+}
+
+static picosplay_node_t* splay_u64_node_first_create(void* value) { return &((splay_u64_node_first_t*)value)->node; }
+static picosplay_node_t* splay_u64_create_fail(void* UNUSED(value)) { return NULL; }
+static void* splay_u64_node_first_value(picosplay_node_t* node) { return (char*)node - offsetof(splay_u64_node_first_t, node); }
+static void splay_u64_node_first_delete(void* UNUSED(tree), picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    splay_u64_deleted = node;
+    free(splay_u64_node_first_value(node));
+}
+
+static void* splay_u64_key_first_new(uint64_t key, unsigned int serial)
+{
+    splay_u64_key_first_t* value = (splay_u64_key_first_t*)malloc(sizeof(*value));
+    if (value != NULL) { value->tag = 0; memcpy(value->key_bytes, &key, sizeof(key)); value->serial = serial; }
+    return value;
+}
+
+static picosplay_node_t* splay_u64_key_first_create(void* value) { return &((splay_u64_key_first_t*)value)->node; }
+static void* splay_u64_key_first_value(picosplay_node_t* node) { return (char*)node - offsetof(splay_u64_key_first_t, node); }
+static void splay_u64_key_first_delete(void* UNUSED(tree), picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    splay_u64_deleted = node;
+    free(splay_u64_key_first_value(node));
+}
+
+static void* splay_u64_key_zero_new(uint64_t key, unsigned int serial)
+{
+    splay_u64_key_zero_t* value = (splay_u64_key_zero_t*)malloc(sizeof(*value));
+    if (value != NULL) { value->key = key; value->serial = serial; }
+    return value;
+}
+
+static picosplay_node_t* splay_u64_key_zero_create(void* value) { return &((splay_u64_key_zero_t*)value)->node; }
+static void* splay_u64_key_zero_value(picosplay_node_t* node) { return (char*)node - offsetof(splay_u64_key_zero_t, node); }
+static void splay_u64_key_zero_delete(void* UNUSED(tree), picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    splay_u64_deleted = node;
+    free(splay_u64_key_zero_value(node));
+}
+
+static uint64_t splay_u64_key(const splay_u64_layout_t* layout, const void* value)
+{
+    uint64_t key;
+    memcpy(&key, (const char*)value + layout->key_offset, sizeof(key));
+    return key;
+}
+
+static unsigned int splay_u64_serial(const splay_u64_layout_t* layout, const void* value)
+{
+    unsigned int serial;
+    memcpy(&serial, (const char*)value + layout->serial_offset, sizeof(serial));
+    return serial;
+}
+
+static int splay_u64_check_node(picosplay_node_t* node, picosplay_node_t* parent, const splay_u64_layout_t* layout,
+    uint64_t* last_key, unsigned int* last_serial, int* have_last)
+{
+    int count, right_count;
+    void* value;
+    uint64_t key;
+    unsigned int serial;
+    if (node == NULL) return 0;
+    if (node->parent != parent) return -1;
+    count = splay_u64_check_node(node->left, node, layout, last_key, last_serial, have_last);
+    if (count < 0) return -1;
+    value = layout->value(node);
+    key = splay_u64_key(layout, value);
+    serial = splay_u64_serial(layout, value);
+    if (*have_last && (key < *last_key || (key == *last_key && serial < *last_serial))) return -1;
+    *last_key = key; *last_serial = serial; *have_last = 1;
+    right_count = splay_u64_check_node(node->right, node, layout, last_key, last_serial, have_last);
+    return right_count < 0 ? -1 : count + right_count + 1;
+}
+
+static int splay_u64_check(picosplay_tree_t* tree, const splay_u64_layout_t* layout, int expected)
+{
+    uint64_t last_key = 0;
+    unsigned int last_serial = 0;
+    int have_last = 0;
+    int count = 0;
+    picosplay_node_t* node;
+    if (splay_u64_check_node(tree->root, NULL, layout, &last_key, &last_serial, &have_last) != expected || tree->size != expected) return -1;
+    for (node = picosplay_first(tree); node != NULL; node = picosplay_next(node)) count++;
+    if (count != expected) return -1;
+    count = 0;
+    for (node = picosplay_last(tree); node != NULL; node = picosplay_previous(node)) count++;
+    return count == expected ? 0 : -1;
+}
+
+static int splay64_u64_check(picosplay64u_tree_t* tree, const splay_u64_layout_t* layout, int expected)
+{
+    uint64_t last_key = 0;
+    unsigned int last_serial = 0;
+    int have_last = 0;
+    int count = 0;
+    picosplay_node_t* node;
+    if (splay_u64_check_node(tree->root, NULL, layout, &last_key, &last_serial, &have_last) != expected || tree->size != expected) return -1;
+    for (node = picosplay64u_first(tree); node != NULL; node = picosplay_next(node)) count++;
+    if (count != expected) return -1;
+    count = 0;
+    for (node = picosplay64u_last(tree); node != NULL; node = picosplay_previous(node)) count++;
+    return count == expected ? 0 : -1;
+}
+
+static int splay_u64_record_index(picosplay_node_t* node, picosplay_node_t** records, size_t count)
+{
+    size_t i;
+    for (i = 0; i < count; i++) if (records[i] == node) return (int)i;
+    return -1;
+}
+
+static int splay_u64_layout_test(const splay_u64_layout_t* layout, picosplay_comparator comp)
+{
+    static const uint64_t keys[] = { UINT64_MAX, 0, UINT64_C(1) << 63, 7, UINT64_MAX, 7, 0, 42, UINT64_C(1) << 63, 3, 9, 1 };
+    picosplay_tree_t tree;
+    picosplay_node_t* records[sizeof(keys) / sizeof(keys[0])] = { 0 };
+    size_t i;
+    int count = 0, ret = 0;
+    uint64_t key;
+    void* probe = layout->new_value(0, 0);
+
+    if (probe == NULL) return -1;
+
+    picosplay_init_tree(&tree, comp, layout->create, layout->delete_node, layout->value);
+    if (picosplay_find(&tree, probe) != NULL || picosplay_find_previous(&tree, probe) != NULL ||
+        picosplay_first(&tree) != NULL || picosplay_last(&tree) != NULL) { free(probe); return -1; }
+    picosplay_delete(&tree, probe);
+    picosplay_delete_hint(&tree, NULL);
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]) && ret == 0; i++) {
+        void* value = layout->new_value(keys[i], (unsigned int)i);
+        records[i] = value == NULL ? NULL : picosplay_insert(&tree, value);
+        if (records[i] == NULL || tree.root != records[i] || splay_u64_check(&tree, layout, ++count) != 0) ret = -1;
+        if (i == 0 && (picosplay_find_previous(&tree, probe) != NULL ||
+            picosplay_find(&tree, probe) != NULL || tree.root != records[i])) ret = -1;
+    }
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]) && ret == 0; i++) {
+        picosplay_node_t* found;
+        picosplay_node_t* previous;
+        memcpy((char*)probe + layout->key_offset, &keys[i], sizeof(keys[i]));
+        found = picosplay_find(&tree, probe);
+        previous = picosplay_find_previous(&tree, probe);
+        if (found == NULL || tree.root != found || splay_u64_key(layout, layout->value(found)) != keys[i] || previous == NULL ||
+            splay_u64_key(layout, layout->value(previous)) != keys[i] || splay_u64_check(&tree, layout, count) != 0) ret = -1;
+    }
+    if (ret == 0) {
+        picosplay_node_t* root = tree.root;
+        picosplay_node_t* previous;
+        key = 6;
+        memcpy((char*)probe + layout->key_offset, &key, sizeof(key));
+        previous = picosplay_find_previous(&tree, probe);
+        if (picosplay_find(&tree, probe) != NULL || previous == NULL || tree.root != root ||
+            splay_u64_key(layout, layout->value(previous)) != 3) ret = -1;
+        else {
+            picosplay_delete(&tree, probe);
+            if (splay_u64_check(&tree, layout, count) != 0) ret = -1;
+        }
+    }
+    if (ret == 0) {
+        int index;
+        splay_u64_deleted = NULL;
+        key = 7;
+        memcpy((char*)probe + layout->key_offset, &key, sizeof(key));
+        picosplay_delete(&tree, probe);
+        index = splay_u64_record_index(splay_u64_deleted, records, sizeof(records) / sizeof(records[0]));
+        if (index < 0 || splay_u64_check(&tree, layout, --count) != 0) ret = -1;
+        else records[index] = NULL;
+    }
+    if (ret == 0) {
+        splay_u64_deleted = NULL;
+        picosplay_delete_hint(&tree, records[0]);
+        if (splay_u64_deleted != records[0] || splay_u64_check(&tree, layout, --count) != 0) ret = -1;
+        records[0] = NULL;
+    }
+    /* Deterministic deletion order rechecks every remaining parent/order link. */
+    for (i = 0; i < sizeof(records) / sizeof(records[0]) && ret == 0; i++) if (records[(i * 5 + 1) % (sizeof(records) / sizeof(records[0]))] != NULL) {
+        size_t j = (i * 5 + 1) % (sizeof(records) / sizeof(records[0]));
+        picosplay_delete_hint(&tree, records[j]); records[j] = NULL;
+        if (splay_u64_check(&tree, layout, --count) != 0) ret = -1;
+    }
+    free(probe);
+    picosplay_empty_tree(&tree);
+    picosplay_delete_hint(&tree, NULL);
+    return ret == 0 && tree.root == NULL && tree.size == 0 ? 0 : -1;
+}
+
+static int splay64_u64_layout_test(const splay_u64_layout_t* layout)
+{
+    static const uint64_t keys[] = { UINT64_MAX, 0, UINT64_C(1) << 63, 7, UINT64_MAX, 7, 0, 42, UINT64_C(1) << 63, 3, 9, 1 };
+    picosplay64u_tree_t tree;
+    picosplay_node_t* records[sizeof(keys) / sizeof(keys[0])] = { 0 };
+    size_t i;
+    int count = 0, ret = 0;
+
+    picosplay64u_init_tree(&tree, layout->key_offset, layout->node_offset, layout->create, layout->delete_node);
+    if (picosplay64u_find(&tree, 0) != NULL || picosplay64u_find_previous(&tree, UINT64_MAX) != NULL ||
+        picosplay64u_first(&tree) != NULL || picosplay64u_last(&tree) != NULL) return -1;
+    picosplay64u_delete(&tree, 0);
+    picosplay64u_delete_hint(&tree, NULL);
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]) && ret == 0; i++) {
+        void* value = layout->new_value(keys[i], (unsigned int)i);
+        records[i] = value == NULL ? NULL : picosplay64u_insert(&tree, value);
+        if (records[i] == NULL || tree.root != records[i] || splay64_u64_check(&tree, layout, ++count) != 0) ret = -1;
+        if (i == 0 && (picosplay64u_find_previous(&tree, UINT64_MAX - 1) != NULL ||
+            picosplay64u_find(&tree, 0) != NULL || tree.root != records[i])) ret = -1;
+    }
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]) && ret == 0; i++) {
+        picosplay_node_t* found = picosplay64u_find(&tree, keys[i]);
+        picosplay_node_t* previous = picosplay64u_find_previous(&tree, keys[i]);
+        if (found == NULL || tree.root != found || splay_u64_key(layout, layout->value(found)) != keys[i] || previous == NULL ||
+            splay_u64_key(layout, layout->value(previous)) != keys[i] || splay64_u64_check(&tree, layout, count) != 0) ret = -1;
+    }
+    if (ret == 0) {
+        picosplay_node_t* root = tree.root;
+        picosplay_node_t* previous = picosplay64u_find_previous(&tree, 6);
+        if (picosplay64u_find(&tree, 6) != NULL || previous == NULL || tree.root != root ||
+            splay_u64_key(layout, layout->value(previous)) != 3) ret = -1;
+        else {
+            picosplay64u_delete(&tree, 6);
+            if (splay64_u64_check(&tree, layout, count) != 0) ret = -1;
+        }
+    }
+    if (ret == 0) {
+        int index;
+        splay_u64_deleted = NULL;
+        picosplay64u_delete(&tree, 7);
+        index = splay_u64_record_index(splay_u64_deleted, records, sizeof(records) / sizeof(records[0]));
+        if (index < 0 || splay64_u64_check(&tree, layout, --count) != 0) ret = -1;
+        else records[index] = NULL;
+    }
+    if (ret == 0) {
+        splay_u64_deleted = NULL;
+        picosplay64u_delete_hint(&tree, records[0]);
+        if (splay_u64_deleted != records[0] || splay64_u64_check(&tree, layout, --count) != 0) ret = -1;
+        records[0] = NULL;
+    }
+    /* Deterministic deletion order rechecks every remaining parent/order link. */
+    for (i = 0; i < sizeof(records) / sizeof(records[0]) && ret == 0; i++) if (records[(i * 5 + 1) % (sizeof(records) / sizeof(records[0]))] != NULL) {
+        size_t j = (i * 5 + 1) % (sizeof(records) / sizeof(records[0]));
+        picosplay64u_delete_hint(&tree, records[j]); records[j] = NULL;
+        if (splay64_u64_check(&tree, layout, --count) != 0) ret = -1;
+    }
+    picosplay64u_empty_tree(&tree);
+    picosplay64u_delete_hint(&tree, NULL);
+    return ret == 0 && tree.root == NULL && tree.size == 0 ? 0 : -1;
+}
+
+static int64_t splay_u64_generic_compare(void* left, void* right)
+{
+    uint64_t l = ((splay_u64_node_first_t*)left)->key, r = ((splay_u64_node_first_t*)right)->key;
+    return l < r ? -1 : l > r;
+}
+
+static int64_t splay_u64_key_first_compare(void* left, void* right)
+{
+    uint64_t l, r;
+    memcpy(&l, ((splay_u64_key_first_t*)left)->key_bytes, sizeof(l));
+    memcpy(&r, ((splay_u64_key_first_t*)right)->key_bytes, sizeof(r));
+    return l < r ? -1 : l > r;
+}
+
+static int64_t splay_u64_key_zero_compare(void* left, void* right)
+{
+    uint64_t l = ((splay_u64_key_zero_t*)left)->key, r = ((splay_u64_key_zero_t*)right)->key;
+    return l < r ? -1 : l > r;
+}
+
+static int splay_uint64_test(void)
+{
+    splay_u64_layout_t node_first = { offsetof(splay_u64_node_first_t, key), offsetof(splay_u64_node_first_t, node), offsetof(splay_u64_node_first_t, serial), splay_u64_node_first_new, splay_u64_node_first_create, splay_u64_node_first_value, splay_u64_node_first_delete };
+    splay_u64_layout_t key_first = { offsetof(splay_u64_key_first_t, key_bytes), offsetof(splay_u64_key_first_t, node), offsetof(splay_u64_key_first_t, serial), splay_u64_key_first_new, splay_u64_key_first_create, splay_u64_key_first_value, splay_u64_key_first_delete };
+    splay_u64_layout_t key_zero = { offsetof(splay_u64_key_zero_t, key), offsetof(splay_u64_key_zero_t, node), offsetof(splay_u64_key_zero_t, serial), splay_u64_key_zero_new, splay_u64_key_zero_create, splay_u64_key_zero_value, splay_u64_key_zero_delete };
+    picosplay_tree_t failed_create;
+    void* value = node_first.new_value(0, 0);
+
+    if (value == NULL) return -1;
+    picosplay_init_tree(&failed_create, splay_u64_generic_compare, splay_u64_create_fail, node_first.delete_node, node_first.value);
+    if (picosplay_insert(&failed_create, value) != NULL || failed_create.root != NULL || failed_create.size != 0) { free(value); return -1; }
+    free(value);
+    return splay_u64_layout_test(&node_first, splay_u64_generic_compare) ||
+        splay_u64_layout_test(&key_first, splay_u64_key_first_compare) ||
+        splay_u64_layout_test(&key_zero, splay_u64_key_zero_compare);
+}
+
+static int splay64_uint64_test(void)
+{
+    splay_u64_layout_t node_first = { offsetof(splay_u64_node_first_t, key), offsetof(splay_u64_node_first_t, node), offsetof(splay_u64_node_first_t, serial), splay_u64_node_first_new, splay_u64_node_first_create, splay_u64_node_first_value, splay_u64_node_first_delete };
+    /* key_bytes starts at odd offset one; the node remains naturally aligned. */
+    splay_u64_layout_t key_first = { offsetof(splay_u64_key_first_t, key_bytes), offsetof(splay_u64_key_first_t, node), offsetof(splay_u64_key_first_t, serial), splay_u64_key_first_new, splay_u64_key_first_create, splay_u64_key_first_value, splay_u64_key_first_delete };
+    splay_u64_layout_t key_zero = { offsetof(splay_u64_key_zero_t, key), offsetof(splay_u64_key_zero_t, node), offsetof(splay_u64_key_zero_t, serial), splay_u64_key_zero_new, splay_u64_key_zero_create, splay_u64_key_zero_value, splay_u64_key_zero_delete };
+    static const uint64_t keys[] = { 0, UINT64_C(1) << 63, UINT64_MAX };
+    picosplay_tree_t generic;
+    picosplay64u_tree_t direct, failed_create;
+    splay_u64_node_first_t probe = { { 0 }, 0, 0 };
+    size_t i;
+    void* value;
+
+    /* A rejected create callback leaves the tree empty and does not take ownership. */
+    picosplay64u_init_tree(&failed_create, node_first.key_offset, node_first.node_offset, splay_u64_create_fail, node_first.delete_node);
+    value = node_first.new_value(0, 0);
+    if (value == NULL) return -1;
+    if (picosplay64u_insert(&failed_create, value) != NULL || failed_create.root != NULL || failed_create.size != 0) { free(value); return -1; }
+    free(value);
+    picosplay64u_empty_tree(NULL);
+
+    /* Generic and direct trees agree at the unsigned boundaries. */
+    picosplay_init_tree(&generic, splay_u64_generic_compare, node_first.create, node_first.delete_node, node_first.value);
+    picosplay64u_init_tree(&direct, node_first.key_offset, node_first.node_offset, node_first.create, node_first.delete_node);
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+        void* generic_value = node_first.new_value(keys[i], (unsigned int)i);
+        void* direct_value = node_first.new_value(keys[i], (unsigned int)i);
+        if (generic_value == NULL || direct_value == NULL) {
+            free(generic_value); free(direct_value); picosplay_empty_tree(&generic); picosplay64u_empty_tree(&direct); return -1;
+        }
+        if (picosplay_insert(&generic, generic_value) == NULL) {
+            free(generic_value); free(direct_value); picosplay_empty_tree(&generic); picosplay64u_empty_tree(&direct); return -1;
+        }
+        if (picosplay64u_insert(&direct, direct_value) == NULL) {
+            free(direct_value); picosplay_empty_tree(&generic); picosplay64u_empty_tree(&direct); return -1;
+        }
+        if (splay_u64_key(&node_first, node_first.value(generic.root)) != keys[i] || splay_u64_key(&node_first, node_first.value(direct.root)) != keys[i]) {
+            picosplay_empty_tree(&generic); picosplay64u_empty_tree(&direct); return -1;
+        }
+    }
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+        picosplay_node_t* generic_found;
+        picosplay_node_t* direct_found;
+        probe.key = keys[i];
+        generic_found = picosplay_find(&generic, &probe);
+        direct_found = picosplay64u_find(&direct, keys[i]);
+        if (generic_found == NULL || direct_found == NULL || generic.root != generic_found || direct.root != direct_found ||
+            splay_u64_key(&node_first, node_first.value(generic_found)) != splay_u64_key(&node_first, node_first.value(direct_found))) {
+            picosplay_empty_tree(&generic); picosplay64u_empty_tree(&direct); return -1;
+        }
+    }
+    picosplay_empty_tree(&generic);
+    picosplay64u_empty_tree(&direct);
+    return splay64_u64_layout_test(&node_first) || splay64_u64_layout_test(&key_first) || splay64_u64_layout_test(&key_zero);
 }
 
 int splay_test(void) {
@@ -249,5 +637,11 @@ int splay_test(void) {
         tree = NULL;
     }
 
+    if (ret == 0) {
+        ret = splay_uint64_test();
+    }
+    if (ret == 0) {
+        ret = splay64_uint64_test();
+    }
     return ret;
 }
