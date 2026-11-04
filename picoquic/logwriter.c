@@ -680,17 +680,21 @@ static void binlog_compose_frames(bytestream* msg, const uint8_t* bytes, size_t 
 
 void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 {
-    /* Each frame is logged as at most its own bytes plus a length, so a frame
-     * of 1 byte takes 2 bytes in the log. */
+    /* The log of a frame takes at most 2 times the size of the frame. Most
+     * frames are logged as a length and a copy of their bytes. Stream and
+     * datagram frames only log their header and at most 8 bytes of data. */
     size_t buffer_size = 2 * length + 64;
-    uint8_t* buffer = (uint8_t*)calloc(1, buffer_size);
+    uint8_t* buffer = (uint8_t*)malloc(buffer_size);
 
     if (buffer != NULL) {
-        bytestream stream_msg;
-        bytestream* msg = bytestream_ref_init(&stream_msg, buffer, buffer_size);
+        /* Not bytestream_ref_init: it takes a const pointer, and GCC then
+         * warns that the new buffer may be used uninitialized. */
+        bytestream stream_msg = { 0 };
+        stream_msg.data = buffer;
+        stream_msg.size = buffer_size;
 
-        binlog_compose_frames(msg, bytes, length);
-        (void)fwrite(bytestream_data(msg), bytestream_length(msg), 1, f);
+        binlog_compose_frames(&stream_msg, bytes, length);
+        (void)fwrite(bytestream_data(&stream_msg), bytestream_length(&stream_msg), 1, f);
         free(buffer);
     }
 }
@@ -794,21 +798,25 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_i
      * binlog_pdu does. Seeking back to write the size would flush the file buffer,
      * and cost write calls for every packet. */
     bytestream_buf stream_msg;
-    bytestream large_msg;
+    bytestream large_msg = { 0 };
     uint8_t* large_buffer = NULL;
     bytestream* msg = bytestream_buf_init(&stream_msg, BYTESTREAM_MAX_BUFFER_SIZE);
 
-    binlog_compose_packet(msg, cid, path_id, receiving, current_time, ph, bytes, bytes_max);
+    if (msg != NULL) {
+        binlog_compose_packet(msg, cid, path_id, receiving, current_time, ph, bytes, bytes_max);
+    }
 
-    if (bytestream_remain(msg) == 0) {
+    if (msg == NULL || bytestream_remain(msg) == 0) {
         /* The chunk may not fit, e.g., if the packet has many 1-byte frames.
          * Each frame takes at most 2 times its size in the log. */
         size_t large_size = 2 * bytes_max + BYTESTREAM_MAX_BUFFER_SIZE;
 
-        if ((large_buffer = (uint8_t*)calloc(1, large_size)) == NULL) {
+        if ((large_buffer = (uint8_t*)malloc(large_size)) == NULL) {
             return;
         }
-        msg = bytestream_ref_init(&large_msg, large_buffer, large_size);
+        large_msg.data = large_buffer;
+        large_msg.size = large_size;
+        msg = &large_msg;
         binlog_compose_packet(msg, cid, path_id, receiving, current_time, ph, bytes, bytes_max);
     }
 
