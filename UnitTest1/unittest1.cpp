@@ -904,13 +904,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(picoquic_ptls_fusion)
-        {
-            int ret = picoquic_ptls_fusion_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();
@@ -1169,6 +1162,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wrong_source_addr_initial)
+        {
+            int ret = wrong_source_addr_initial_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wrong_source_addr_vn)
+        {
+            int ret = wrong_source_addr_vn_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wrong_source_addr_retry)
+        {
+            int ret = wrong_source_addr_retry_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();
@@ -1179,6 +1193,13 @@ namespace UnitTest1
         TEST_METHOD(vn_compat)
         {
             int ret = vn_compat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(vn_upgrade)
+        {
+            int ret = vn_upgrade_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3083,6 +3104,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_data_nodes_limit) {
+            int ret = stream_data_nodes_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(direct_receive_duplicate) {
+            int ret = direct_receive_duplicate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(direct_receive_flow_control) {
             int ret = direct_receive_flow_control_test();
 
@@ -3440,6 +3473,13 @@ namespace UnitTest1
         TEST_METHOD(bbr_asym400)
         {
             int ret = bbr_asym400_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_lost_feedback_ack_only)
+        {
+            int ret = cc_lost_feedback_ack_only_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -8,7 +8,7 @@ of the functions that we want, and potential alternatives.
 Function | Usage | Alternatives 
 ---------|-------|--------------
 SHA256  | Key derivation | minicrypto. Could also use mbed or bcrypt on some platforms.
-aes128gcm | local secrets |  Minicrypto, but it is painfully slow. On x86/64, ptls_fusion works great. Bcrypt on Windows. MbedTLS on ARM.
+aes128gcm | local secrets |  Minicrypto, but it is painfully slow. Bcrypt on Windows. MbedTLS on ARM.
 aes128gcmsha256 | Cipher suite used in initial packets, required for interop | Same issue as AES_GCM_128
 aes256gcmsha384 | Used for higher security | Pretty much same issue as AES_GCM_128. Not clear whether there is support in MbedTLS
 chacha20poly1305sha256 | Better performance than aes128gcm if hardware support is not available. | Minicrypto, but the performance is limited. Maybe MbedTLS.
@@ -35,7 +35,7 @@ in which the parameter `unload` is set to 0 for an initialization call, and 1 fo
 
 When called, the provider uses on or all of the following registration functions:
 ```
-void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
+void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite);
 void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
 void picoquic_register_tls_key_provider_fn(
     picoquic_set_private_key_from_file_t set_private_key_from_file_fn,
@@ -52,8 +52,7 @@ void picoquic_register_explain_crypto_error_fn(picoquic_explain_crypto_error_t e
 void picoquic_register_crypto_random_provider_fn(picoquic_crypto_random_provider_t random_provider);
 ```
 These functions and their arguments are defined in `picoquic_crypto_provider_api.h`. The code includes
-examples of using these functions in `picoquic_ptls_minicrypto.c`, `picoquic_ptls_openssl.c` and
-`picoquic_ptls_fusion.c`.
+examples of using these functions in `picoquic_ptls_minicrypto.c` and `picoquic_ptls_openssl.c`.
 
 # Compiling without OpenSSL
 
@@ -63,8 +62,8 @@ be compiled with the flag `PTLS_WITHOUT_OPENSSL`.
 
 # Progressive development
 
-This is still work in progress. The current code has options for three cryptographic providers defined in picotls:
-minicrypto, OpenSSL and Fusion. When operating without OpenSSL, it falls back to minicrypto, which is inferior
+This is still work in progress. The current code has options for two cryptographic providers defined in picotls:
+minicrypto and OpenSSL. When operating without OpenSSL, it falls back to minicrypto, which is inferior
 in many respects:
 
 * the implementation of AES-GCM in minicrypto is very slow,
@@ -72,9 +71,10 @@ in many respects:
 * minicrypto will only support local keys and certificates of type `secp256r1sha256`,
 * minicrypto does not include code to verify certificate chains.
 
-The AES-GCM issue is alleviated if the system supports the AES "Fusion" module, such
-as 64 bits x86 systems running Linux (but not Windows, because of compiler issues.)
-The issues could be alleviated on Windows by using the `bcrypt` functions, but this
+Picoquic does not use the picotls "Fusion" AES-GCM module: it is not much faster than
+OpenSSL, it allocates several KB per AEAD context, and it does not support the vectored
+encryption used by the TLS record layer (QMUX over TLS).
+The AES-GCM issue could be alleviated on Windows by using the `bcrypt` functions, but this
 requires changes in the declaration of dependencies in the Visual Studio project.
 
 We could in theory develop a Certificate Verifier that would be independent of OpenSSL,

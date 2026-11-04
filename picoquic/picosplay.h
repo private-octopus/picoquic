@@ -26,6 +26,7 @@
 #define PICOSPLAY_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,6 +68,35 @@ void* picosplay_contents(picosplay_tree_t *tree);
 void picosplay_delete(picosplay_tree_t *tree, void *value);
 void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node);
 void picosplay_empty_tree(picosplay_tree_t *tree);
+
+/* Unsigned integer keys, with no comparison or node-value callback. Both
+ * offsets are relative to the value object; create returns its embedded node.
+ * Keys must remain unchanged while linked. Unaligned keys are supported.
+ * Equal keys retain insertion order in an in-order traversal.
+ * Find/delete take the key itself. Find splays a matching node; find_previous
+ * returns the greatest key <= the query without splaying. Creation/deletion
+ * callbacks follow the generic API and receive this tree on deletion.
+ * Nodes share picosplay_previous/picosplay_next with the generic tree.
+ */
+typedef struct st_picosplay64u_tree_t {
+    picosplay_node_t* root;
+    picosplay_create create;
+    picosplay_delete_node delete_node;
+    size_t key_offset;
+    size_t node_offset;
+    int size;
+} picosplay64u_tree_t;
+
+void picosplay64u_init_tree(picosplay64u_tree_t* tree, size_t key_offset, size_t node_offset,
+    picosplay_create create, picosplay_delete_node delete_node);
+picosplay_node_t* picosplay64u_insert(picosplay64u_tree_t* tree, void* value);
+picosplay_node_t* picosplay64u_find(picosplay64u_tree_t* tree, uint64_t key);
+picosplay_node_t* picosplay64u_find_previous(picosplay64u_tree_t* tree, uint64_t key);
+picosplay_node_t* picosplay64u_first(picosplay64u_tree_t* tree);
+picosplay_node_t* picosplay64u_last(picosplay64u_tree_t* tree);
+void picosplay64u_delete(picosplay64u_tree_t* tree, uint64_t key);
+void picosplay64u_delete_hint(picosplay64u_tree_t* tree, picosplay_node_t* node);
+void picosplay64u_empty_tree(picosplay64u_tree_t* tree);
 
 #ifdef __cplusplus
 }

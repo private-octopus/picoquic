@@ -3047,6 +3047,38 @@ int vn_compat_test(void)
     return ret;
 }
 
+/* Test that version upgrade checks return, including for an old version not listed in upgrade_from. */
+int vn_upgrade_test(void)
+{
+    int ret = 0;
+    int v1_index = picoquic_get_version_index(PICOQUIC_V1_VERSION);
+    int v2_index = picoquic_get_version_index(PICOQUIC_V2_VERSION);
+    int interop_index = picoquic_get_version_index(PICOQUIC_TWENTIETH_INTEROP_VERSION);
+
+    if (v1_index < 0 || v2_index < 0 || interop_index < 0) {
+        DBG_PRINTF("Missing version index: %d, %d, %d", v1_index, v2_index, interop_index);
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, interop_index, v2_index) == 0) {
+        DBG_PRINTF("%s", "Upgrade from interop version to V2 should fail");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v1_index, v2_index) != 0) {
+        DBG_PRINTF("%s", "Upgrade from V1 to V2 should succeed");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v2_index, v1_index) == 0) {
+        DBG_PRINTF("%s", "Upgrade from V2 to V1 should fail");
+        ret = -1;
+    }
+    else if (picoquic_process_version_upgrade(NULL, v2_index, v2_index) != 0) {
+        DBG_PRINTF("%s", "Same version should succeed");
+        ret = -1;
+    }
+
+    return ret;
+}
+
 /* Test setting the SNI
  */
 
@@ -12523,8 +12555,8 @@ static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx)
 
 static int aegis_is_available(void)
 {
-    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256, 0) != NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512, 0) != NULL;
+    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256) != NULL &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512) != NULL;
 }
 
 #ifdef PICOQUIC_WITH_AEGIS
@@ -12897,7 +12929,7 @@ int aegis_initial_aes_test(void)
     }
 
     if (ret == 0) {
-        ret = picoquic_get_initial_aead_context(test_ctx->qclient, 0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
+        ret = picoquic_get_initial_aead_context(0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
     }
 
     if (ret == 0) {
@@ -14024,7 +14056,7 @@ int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buff
     }
     if (ret == 0) {
         /* create an encryption context */
-        if ((ret = picoquic_get_initial_aead_context(quic, 0, &icid,
+        if ((ret = picoquic_get_initial_aead_context(0, &icid,
             1 /* is_client=1 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx)) == 0) {
             /* encrypt the payload. */
             size_t send_length = picoquic_aead_encrypt_generic(buffer + /* header_length */ header_length,
@@ -15043,7 +15075,7 @@ int get_tls_errors_test(void)
     if (ret == 0 && picoquic_ecb_create_by_name(0, data, invalid_stuff) != NULL) {
         ret = -1;
     }
-    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id, 0) != NULL) {
+    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id) != NULL) {
         ret = -1;
     }
     if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qserver, invalid_id) == 0) {
@@ -15053,16 +15085,8 @@ int get_tls_errors_test(void)
         ret = -1;
     }
     if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 1) == NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0) == NULL) {
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256) == NULL) {
         ret = -1;
-    }
-    if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(invalid_id, 1) != NULL) {
-        ret = -1;
-    }
-    if (ret == 0) {
-
     }
     if (ret == 0) {
         /* Unload the TLS API to force internal errors. */
@@ -15524,4 +15548,199 @@ int tls_api_verify_retry_protection_short_test(void)
     }
 
     return ret;
+}
+
+/* Issue #2320: the client must ignore Initial, VN or Retry packets that do not come
+ * from the server address. Each test injects a forged packet after the client sends
+ * its first Initial, verifies that it is ignored, and that the handshake completes.
+ * The same packet sent from the server address is used as a control: it must be
+ * accepted, which proves that the forged packet would otherwise disrupt the handshake.
+ */
+typedef enum {
+    wrong_addr_initial = 0,
+    wrong_addr_vn,
+    wrong_addr_retry
+} wrong_addr_ptype_enum;
+
+static size_t wrong_addr_fill_initial(picoquic_cnx_t* cnx, picoquic_connection_id_t* scid, uint8_t* buffer, size_t buffer_size)
+{
+    size_t send_length = 0;
+    size_t header_length = 0;
+    size_t pn_offset = 0;
+    size_t pn_length = 0;
+    size_t length = buffer_size - 16;
+    void* aead_ctx = NULL;
+    void* pn_enc_ctx = NULL;
+
+    header_length = picoquic_create_long_header(picoquic_packet_initial,
+        &cnx->path[0]->first_tuple->p_local_cnxid->cnx_id, scid, 0,
+        picoquic_supported_versions[cnx->version_index].version, cnx->version_index,
+        0, 0, NULL, buffer, &pn_offset, &pn_length);
+    /* Payload is a single PING frame followed by padding */
+    memset(buffer + header_length, 0, length - header_length);
+    buffer[header_length] = picoquic_frame_type_ping;
+    picoquic_update_payload_length(buffer, pn_offset, header_length - pn_length, buffer_size);
+    /* Encrypt with the server side Initial keys derived from the initial CID */
+    if (picoquic_get_initial_aead_context(cnx->version_index, &cnx->initial_cnxid,
+        0 /* is_client=0 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx) == 0) {
+        send_length = picoquic_aead_encrypt_generic(buffer + header_length,
+            buffer + header_length, length - header_length,
+            0, buffer, header_length, aead_ctx);
+        send_length += header_length;
+        picoquic_protect_packet_header(buffer, pn_offset, 0x0f, pn_enc_ctx);
+    }
+    if (aead_ctx != NULL) {
+        picoquic_aead_free(aead_ctx);
+    }
+    if (pn_enc_ctx != NULL) {
+        picoquic_cipher_free(pn_enc_ctx);
+    }
+
+    return send_length;
+}
+
+static size_t wrong_addr_fill_retry(picoquic_quic_t* qserver, picoquic_cnx_t* cnx, picoquic_connection_id_t* scid, uint8_t* buffer, size_t buffer_size)
+{
+    size_t byte_index = 0;
+    size_t pn_offset = 0;
+    size_t pn_length = 0;
+    uint8_t token[32];
+    void* integrity_aead = picoquic_find_retry_protection_context(qserver, cnx->version_index, 1);
+
+    if (integrity_aead != NULL) {
+        memset(token, 0x2e, sizeof(token));
+        byte_index = picoquic_create_long_header(picoquic_packet_retry,
+            &cnx->path[0]->first_tuple->p_local_cnxid->cnx_id, scid, 0,
+            picoquic_supported_versions[cnx->version_index].version, cnx->version_index,
+            0, sizeof(token), token, buffer, &pn_offset, &pn_length);
+        memcpy(buffer + byte_index, token, sizeof(token));
+        byte_index += sizeof(token);
+        byte_index = picoquic_encode_retry_protection(integrity_aead, buffer, buffer_size, byte_index, &cnx->initial_cnxid);
+    }
+
+    return byte_index;
+}
+
+/* Returns 1 if the client state shows no trace of the forged packet */
+static int wrong_addr_client_unchanged(picoquic_cnx_t* cnx, picoquic_connection_id_t* icid)
+{
+    return (cnx->cnx_state == picoquic_state_client_init_sent &&
+        picoquic_is_connection_id_null(&cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id) &&
+        cnx->original_cnxid.id_len == 0 && cnx->retry_token_length == 0 &&
+        picoquic_compare_connection_id(&cnx->initial_cnxid, icid) == 0);
+}
+
+static int wrong_source_addr_test_one(wrong_addr_ptype_enum ptype, int from_server_addr)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t fake_scid = { { 0xfa, 0xce, 0x23, 0x20, 0xfa, 0xce, 0x23, 0x20 }, 8 };
+    picoquic_connection_id_t icid = picoquic_null_connection_id;
+    struct sockaddr_in fake_addr;
+    uint8_t packet[PICOQUIC_ENFORCED_INITIAL_MTU];
+    size_t packet_length = 0;
+    int was_active = 0;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* One simulation round, so the client sends its first Initial */
+    if (ret == 0) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_client_init_sent) {
+        DBG_PRINTF("After one round, client state = %d", (int)test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        icid = test_ctx->cnx_client->initial_cnxid;
+        switch (ptype) {
+        case wrong_addr_initial:
+            packet_length = wrong_addr_fill_initial(test_ctx->cnx_client, &fake_scid, packet, sizeof(packet));
+            break;
+        case wrong_addr_vn:
+            packet_length = test_version_negotiation_get_spoofed(test_ctx->cnx_client, 0, packet, sizeof(packet));
+            break;
+        case wrong_addr_retry:
+        default:
+            packet_length = wrong_addr_fill_retry(test_ctx->qserver, test_ctx->cnx_client, &fake_scid, packet, sizeof(packet));
+            break;
+        }
+        if (packet_length == 0) {
+            DBG_PRINTF("Cannot build packet type %d", (int)ptype);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Same address family and port as the server, different IP address */
+        fake_addr = test_ctx->server_addr;
+        fake_addr.sin_addr.s_addr ^= 0x01000000;
+        ret = picoquic_incoming_packet(test_ctx->qclient, packet, packet_length,
+            (from_server_addr) ? (struct sockaddr*)&test_ctx->server_addr : (struct sockaddr*)&fake_addr,
+            (struct sockaddr*)&test_ctx->client_addr, 0, 0, simulated_time);
+    }
+
+    if (ret == 0) {
+        int is_unchanged = wrong_addr_client_unchanged(test_ctx->cnx_client, &icid);
+        if (from_server_addr) {
+            if (is_unchanged) {
+                DBG_PRINTF("Packet type %d from server address was ignored", (int)ptype);
+                ret = -1;
+            }
+        }
+        else if (!is_unchanged) {
+            DBG_PRINTF("Packet type %d from wrong address changed client, state = %d",
+                (int)ptype, (int)test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0 && !from_server_addr) {
+        /* The handshake shall complete with the real server */
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+        if (ret == 0) {
+            ret = wait_client_connection_ready(test_ctx, &simulated_time);
+        }
+        if (ret == 0 && (!TEST_CLIENT_READY || test_ctx->cnx_server == NULL || !TEST_SERVER_READY)) {
+            DBG_PRINTF("Connection failed, client state: %d", (int)test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+        if (ret == 0 && (test_ctx->cnx_client->original_cnxid.id_len != 0 ||
+            picoquic_compare_connection_id(&test_ctx->cnx_client->path[0]->first_tuple->p_remote_cnxid->cnx_id, &fake_scid) == 0)) {
+            DBG_PRINTF("Client kept state from packet type %d", (int)ptype);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+static int wrong_source_addr_test(wrong_addr_ptype_enum ptype)
+{
+    int ret = wrong_source_addr_test_one(ptype, 1);
+
+    if (ret == 0) {
+        ret = wrong_source_addr_test_one(ptype, 0);
+    }
+
+    return ret;
+}
+
+int wrong_source_addr_initial_test(void)
+{
+    return wrong_source_addr_test(wrong_addr_initial);
+}
+
+int wrong_source_addr_vn_test(void)
+{
+    return wrong_source_addr_test(wrong_addr_vn);
+}
+
+int wrong_source_addr_retry_test(void)
+{
+    return wrong_source_addr_test(wrong_addr_retry);
 }

@@ -126,9 +126,6 @@
     <ClCompile Include="timing.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="picoquic_ptls_fusion.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="picoquic_ptls_openssl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
