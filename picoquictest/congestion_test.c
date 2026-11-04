@@ -1669,3 +1669,77 @@ int cc_common_slow_start_increase_test(void)
 
     return ret;
 }
+
+/* Issue 2337: pending ACK only packets must not arm the lost feedback timer,
+ * only the oldest pending ACK eliciting packet does. */
+static picoquic_packet_t* cc_lost_feedback_queue(picoquic_cnx_t* cnx, int is_ack_eliciting, uint64_t send_time)
+{
+    picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+
+    if (packet != NULL) {
+        packet->ptype = picoquic_packet_1rtt_protected;
+        packet->pc = picoquic_packet_context_application;
+        packet->length = 40;
+        packet->send_time = send_time;
+        packet->send_path = cnx->path[0];
+        packet->is_evaluated = 1;
+        packet->is_ack_eliciting = is_ack_eliciting;
+        picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, packet->length, send_time);
+    }
+    return packet;
+}
+
+int cc_lost_feedback_ack_only_test(void)
+{
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    uint64_t next_wake_time = UINT64_MAX;
+    uint64_t current_time = 100000;
+    uint64_t expected_time = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    if (ret == 0) {
+        picoquic_set_congestion_algorithm(cnx, picoquic_bbr_algorithm);
+        cnx->is_lost_feedback_notification_required = 1;
+        cnx->ack_frequency_delay_local = 1000;
+        cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged_time = 10000;
+        cnx->path[0]->last_time_acked_data_frame_sent = 9000;
+        for (int i = 0; ret == 0 && i < 3; i++) {
+            if (cc_lost_feedback_queue(cnx, 0, 10000 + 1000 * (uint64_t)i) == NULL) {
+                ret = -1;
+            }
+        }
+    }
+    /* Only ACK only packets are pending: no notification and no timer, even long after they were sent. */
+    if (ret == 0 && (ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, current_time)) == 0 &&
+        (cnx->path[0]->is_lost_feedback_notified || next_wake_time != UINT64_MAX)) {
+        DBG_PRINTF("ACK only packets: notified %d, wake time %" PRIu64, cnx->path[0]->is_lost_feedback_notified, next_wake_time);
+        ret = -1;
+    }
+    /* An ACK eliciting packet queued behind them arms the timer from its own send time. */
+    if (ret == 0 && cc_lost_feedback_queue(cnx, 1, current_time) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        expected_time = 10000 + (current_time - 9000) + 2 * cnx->ack_frequency_delay_local;
+        if ((ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, current_time)) == 0 &&
+            (cnx->path[0]->is_lost_feedback_notified || next_wake_time != expected_time)) {
+            DBG_PRINTF("ACK eliciting packet: notified %d, wake time %" PRIu64 ", expected %" PRIu64,
+                cnx->path[0]->is_lost_feedback_notified, next_wake_time, expected_time);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        next_wake_time = UINT64_MAX;
+        if ((ret = picoquic_check_cc_feedback_timer(cnx, &next_wake_time, expected_time)) == 0 &&
+            !cnx->path[0]->is_lost_feedback_notified) {
+            DBG_PRINTF("%s", "No notification at the lost feedback time");
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}

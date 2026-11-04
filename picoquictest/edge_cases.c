@@ -2826,6 +2826,184 @@ int stream_data_nodes_window_test(void)
     return ret;
 }
 
+/* Duplicate frames on a direct receive stream must not push data_received past the flow control
+ * offsets, which would wrap the connection wide fragment check and disable it. */
+int direct_receive_duplicate_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t nb_trigger = 0;
+    size_t callback_bytes = 0;
+    int is_closed = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0 && (cnx = test_ctx->cnx_server) == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_callback(cnx, stream_data_nodes_noop_callback, NULL);
+        if (stream_data_nodes_decode_chunk(cnx, 4, 0, 1000, simulated_time) != 0 ||
+            picoquic_mark_direct_receive_stream(cnx, 4, stream_data_nodes_counted_direct_receive, &callback_bytes) != 0) {
+            DBG_PRINTF("%s", "Cannot set up direct receive on stream 4");
+            ret = -1;
+        }
+    }
+    /* Resend the same 1000 bytes until twice the connection window has been passed to the application. */
+    for (uint64_t i = 0; ret == 0 && i < (2 * cnx->maxdata_local) / 1000; i++) {
+        if (stream_data_nodes_decode_chunk(cnx, 4, 0, 1000, simulated_time) != 0 || cnx->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Error on duplicate %" PRIu64, i);
+            ret = -1;
+        }
+    }
+    if (ret == 0 && (cnx->data_received > cnx->offset_received || cnx->data_received > cnx->maxdata_local)) {
+        DBG_PRINTF("data_received %" PRIu64 ", offset_received %" PRIu64 ", maxdata_local %" PRIu64,
+            cnx->data_received, cnx->offset_received, cnx->maxdata_local);
+        ret = -1;
+    }
+    if (ret == 0) {
+        nb_trigger = ((cnx->maxdata_local - cnx->data_received) * 6) / 1536 + 1;
+        if (nb_trigger < 129) {
+            nb_trigger = 129;
+        }
+    }
+
+    /* One byte fragments spread over many streams, 200 per stream, must still trip the connection check. */
+    for (uint64_t stream_id = 8; ret == 0 && !is_closed && stream_id < 8 + 4 * 100; stream_id += 4) {
+        for (uint64_t offset = 1; ret == 0 && !is_closed && offset < 400; offset += 2) {
+            (void)stream_data_nodes_decode_byte(cnx, stream_id, offset, simulated_time);
+            if (cnx->cnx_state > picoquic_state_ready) {
+                is_closed = 1;
+            }
+            else if (cnx->nb_stream_data_nodes >= nb_trigger) {
+                DBG_PRINTF("Connection not closed with %" PRIu64 " nodes, limit %" PRIu64,
+                    cnx->nb_stream_data_nodes, nb_trigger);
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0 && (!is_closed || cnx->nb_stream_data_nodes != nb_trigger)) {
+        DBG_PRINTF("Closed %d with %" PRIu64 " nodes, expected %" PRIu64, is_closed, cnx->nb_stream_data_nodes, nb_trigger);
+        ret = -1;
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+/* Issue 2333: in order data grows the stream window far past the max_data limit, then one byte
+ * fragments at odd offsets. The connection wide check must still close the connection once the
+ * node count exceeds 6 times the connection window, which the limit bounds. */
+#define STREAM_DATA_NODES_LIMIT 0x40000
+
+int stream_data_nodes_limit_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t offset = 0;
+    uint64_t nb_trigger = 0;
+    uint64_t stream_trigger = 0;
+    int is_closed = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_stream_head_t* stream = NULL;
+    int ret = tls_api_init_ctx(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        picoquic_set_max_data_control(test_ctx->qserver, STREAM_DATA_NODES_LIMIT);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0 && (cnx = test_ctx->cnx_server) == NULL) {
+        ret = -1;
+    }
+    /* MAX_DATA and MAX_STREAM_DATA are only sent in the ready state. */
+    for (int i = 0; ret == 0 && cnx->cnx_state != picoquic_state_ready; i++) {
+        int was_active = 0;
+        if (i >= 100) {
+            DBG_PRINTF("Server not ready, state %d", cnx->cnx_state);
+            ret = -1;
+        }
+        else {
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        }
+    }
+    if (ret == 0) {
+        picoquic_set_callback(cnx, stream_data_nodes_noop_callback, NULL);
+    }
+
+    /* Deliver in order data on stream 0, letting the server send MAX_DATA and MAX_STREAM_DATA. */
+    for (int i = 0; ret == 0 && (stream == NULL || stream->maxdata_local < 8 * STREAM_DATA_NODES_LIMIT); i++) {
+        if (i >= 4096) {
+            DBG_PRINTF("Stream window only grew to %" PRIu64, (stream == NULL) ? 0 : stream->maxdata_local);
+            ret = -1;
+        }
+        else if (stream_data_nodes_decode_chunk(cnx, 0, offset, 1000, simulated_time) != 0 ||
+            cnx->cnx_state > picoquic_state_ready) {
+            DBG_PRINTF("Error delivering stream 0 at offset %" PRIu64, offset);
+            ret = -1;
+        }
+        else {
+            offset += 1000;
+            stream = picoquic_find_stream(cnx, 0);
+            if ((i % 16) == 15) {
+                ret = stream_data_nodes_prepare(cnx, 1, &simulated_time);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        nb_trigger = ((cnx->maxdata_local - cnx->data_received) * 6) / 1536 + 1;
+        if (nb_trigger < 129) {
+            nb_trigger = 129;
+        }
+        stream_trigger = ((stream->maxdata_local - stream->consumed_offset) * 6) / 1536 + 1;
+        if (nb_trigger > (STREAM_DATA_NODES_LIMIT * 6) / 1536 + 1 || stream_trigger <= nb_trigger) {
+            DBG_PRINTF("Connection trigger %" PRIu64 ", stream trigger %" PRIu64, nb_trigger, stream_trigger);
+            ret = -1;
+        }
+    }
+
+    for (uint64_t i = 0; ret == 0 && !is_closed && i < 2 * nb_trigger; i++) {
+        (void)stream_data_nodes_decode_byte(cnx, 0, offset + 1 + 2 * i, simulated_time);
+        if (cnx->cnx_state > picoquic_state_ready) {
+            is_closed = 1;
+        }
+        else if (cnx->nb_stream_data_nodes >= nb_trigger) {
+            DBG_PRINTF("Connection not closed with %" PRIu64 " nodes, limit %" PRIu64,
+                cnx->nb_stream_data_nodes, nb_trigger);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        if (!is_closed) {
+            DBG_PRINTF("Connection not closed after %" PRIu64 " nodes", cnx->nb_stream_data_nodes);
+            ret = -1;
+        }
+        else if (cnx->nb_stream_data_nodes != nb_trigger) {
+            DBG_PRINTF("Connection closed with %" PRIu64 " nodes, expected %" PRIu64,
+                cnx->nb_stream_data_nodes, nb_trigger);
+            ret = -1;
+        }
+        else if (cnx->local_error != PICOQUIC_TRANSPORT_INTERNAL_ERROR) {
+            DBG_PRINTF("Connection closed with error 0x%" PRIx64, cnx->local_error);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
 /* Receiver side of a reset after FIN: once the FIN was delivered to the application, the stream is
  * in the terminal "Data Read" state (RFC 9000 3.2), and a later RESET_STREAM must not be signalled. */
 typedef struct st_reset_after_fin_ctx_t {

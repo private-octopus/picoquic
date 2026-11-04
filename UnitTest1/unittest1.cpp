@@ -904,13 +904,6 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(picoquic_ptls_fusion)
-        {
-            int ret = picoquic_ptls_fusion_test();
-
-            Assert::AreEqual(ret, 0);
-        }
-
 		TEST_METHOD(test_tls_api)
 		{
 			int ret = tls_api_test();
@@ -3111,6 +3104,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(stream_data_nodes_limit) {
+            int ret = stream_data_nodes_limit_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(direct_receive_duplicate) {
+            int ret = direct_receive_duplicate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(direct_receive_flow_control) {
             int ret = direct_receive_flow_control_test();
 
@@ -3468,6 +3473,13 @@ namespace UnitTest1
         TEST_METHOD(bbr_asym400)
         {
             int ret = bbr_asym400_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_lost_feedback_ack_only)
+        {
+            int ret = cc_lost_feedback_ack_only_test();
 
             Assert::AreEqual(ret, 0);
         }

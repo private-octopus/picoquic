@@ -3469,8 +3469,11 @@ static void picoquic_set_path_addresses_from_tuple(picoquic_tuple_t* tuple,
     }
 }
 
+/* Max number of pending packets examined to find the oldest ACK eliciting one */
+#define PICOQUIC_LOST_FEEDBACK_SCAN_MAX 16
+
 /* manage the CC timer, if any */
-static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
+int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time)
 {
     int ret = 0;
 
@@ -3480,9 +3483,20 @@ static int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_
             if (!path_x->is_lost_feedback_notified){
                 picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled)?
                     &path_x->pkt_ctx:&cnx->pkt_ctx[picoquic_packet_context_application];
-                if (pkt_ctx->pending_first != NULL) {
-                    uint64_t delta_sent = (pkt_ctx->pending_first->send_time <= path_x->last_time_acked_data_frame_sent) ? 0 :
-                        (pkt_ctx->pending_first->send_time - path_x->last_time_acked_data_frame_sent);
+                /* The peer may delay ACKs of non ACK eliciting packets, so only an ACK eliciting packet arms the timer */
+                picoquic_packet_t* first_eliciting = pkt_ctx->pending_first;
+                int nb_scanned = 0;
+                while (first_eliciting != NULL && nb_scanned < PICOQUIC_LOST_FEEDBACK_SCAN_MAX &&
+                    !picoquic_is_packet_ack_eliciting(first_eliciting)) {
+                    first_eliciting = first_eliciting->packet_next;
+                    nb_scanned++;
+                }
+                if (nb_scanned >= PICOQUIC_LOST_FEEDBACK_SCAN_MAX) {
+                    first_eliciting = NULL;
+                }
+                if (first_eliciting != NULL) {
+                    uint64_t delta_sent = (first_eliciting->send_time <= path_x->last_time_acked_data_frame_sent) ? 0 :
+                        (first_eliciting->send_time - path_x->last_time_acked_data_frame_sent);
                     uint64_t lost_feedback_time = pkt_ctx->highest_acknowledged_time + delta_sent + 2 * cnx->ack_frequency_delay_local;
                             
                     if (lost_feedback_time <= current_time) {

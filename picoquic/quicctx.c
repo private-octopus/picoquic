@@ -1199,11 +1199,13 @@ void picoquic_free(picoquic_quic_t* quic)
     }
 }
 
-int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
+int picoquic_set_low_memory_mode(picoquic_quic_t* UNUSED(quic), int UNUSED(low_memory_mode))
 {
-    PICOQUIC_THREAD_CHECK(quic);
-    quic->use_low_memory = (low_memory_mode == 0) ? 0 : 1;
-    return picoquic_set_cipher_suite(quic, 0);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+    UNREFERENCED_PARAMETER(low_memory_mode);
+#endif
+    return 0;
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
@@ -4157,7 +4159,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         if (initial_aead_dec != NULL && initial_pn_dec != NULL) {
             cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = initial_aead_dec;
             cnx->crypto_context[picoquic_epoch_initial].pn_dec = initial_pn_dec;
-            if (picoquic_get_initial_aead_context(quic, cnx->version_index, &cnx->initial_cnxid,
+            if (picoquic_get_initial_aead_context(cnx->version_index, &cnx->initial_cnxid,
                 cnx->client_mode, 1 /* encoding mode */,
                 &cnx->crypto_context[picoquic_epoch_initial].aead_encrypt,
                 &cnx->crypto_context[picoquic_epoch_initial].pn_enc) != 0) {

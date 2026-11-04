@@ -244,7 +244,6 @@ static const picoquic_test_def_t test_table[] = {
     { "pacing", pacing_test },
     { "pacing_repeat", pacing_repeat_test },
     { "packet_names", packet_names_test },
-    { "picoquic_ptls_fusion", picoquic_ptls_fusion_test },
 #if 0
     /* The TLS API connect test is only useful when debugging issues step by step */
     { "tls_api_connect", tls_api_connect_test },
@@ -573,6 +572,8 @@ static const picoquic_test_def_t test_table[] = {
     { "stream_data_nodes", stream_data_nodes_test },
     { "stream_data_nodes_attack", stream_data_nodes_attack_test },
     { "stream_data_nodes_window", stream_data_nodes_window_test },
+    { "stream_data_nodes_limit", stream_data_nodes_limit_test },
+    { "direct_receive_duplicate", direct_receive_duplicate_test },
     { "direct_receive_flow_control", direct_receive_flow_control_test },
     { "stream_state_local_reuse", stream_state_local_reuse_test },
     { "add_to_stream_fin_only_wakes_cnx", add_to_stream_fin_only_wakes_cnx_test },
@@ -605,6 +606,7 @@ static const picoquic_test_def_t test_table[] = {
     { "bbr_asym100", bbr_asym100_test },
     { "bbr_asym100_nodelay", bbr_asym100_nodelay_test },
     { "bbr_asym400", bbr_asym400_test },
+    { "cc_lost_feedback_ack_only", cc_lost_feedback_ack_only_test },
     { "bbr1", bbr1_test },
     { "bbr1_long", bbr1_long_test },
     { "l4s_reno", l4s_reno_test },
