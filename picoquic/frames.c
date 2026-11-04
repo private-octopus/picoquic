@@ -1460,8 +1460,11 @@ static int picoquic_stream_network_input(picoquic_cnx_t* cnx, uint64_t stream_id
                 ret = picoquic_connection_error(cnx, err, 0);
             }
             if (ret == 0) {
-                /* Account for the bytes passed to the application, not the offset gap. */
+                /* Count bytes passed to the application, capped by flow control offsets so duplicates cannot inflate it. */
                 cnx->data_received += length;
+                if (cnx->data_received > cnx->offset_received) {
+                    cnx->data_received = cnx->offset_received;
+                }
             }
         } else if (stream->consumed_offset >= offset){
             if (new_fin_offset >= stream->consumed_offset) {

@@ -1199,11 +1199,13 @@ void picoquic_free(picoquic_quic_t* quic)
     }
 }
 
-int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode)
+int picoquic_set_low_memory_mode(picoquic_quic_t* UNUSED(quic), int UNUSED(low_memory_mode))
 {
-    PICOQUIC_THREAD_CHECK(quic);
-    quic->use_low_memory = (low_memory_mode == 0) ? 0 : 1;
-    return picoquic_set_cipher_suite(quic, 0);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(quic);
+    UNREFERENCED_PARAMETER(low_memory_mode);
+#endif
+    return 0;
 }
 
 void picoquic_set_null_verifier(picoquic_quic_t* quic) {
@@ -1516,14 +1518,6 @@ static void* picoquic_wake_list_node_value(picosplay_node_t* cnx_wake_node)
     return (cnx_wake_node == NULL)?NULL:(void*)((char*)cnx_wake_node - offsetof(struct st_picoquic_cnx_t, cnx_wake_node));
 }
 
-static int64_t picoquic_wake_list_compare(void* l, void* r) {
-    const uint64_t ltime = ((picoquic_cnx_t*)l)->next_wake_time;
-    const uint64_t rtime = ((picoquic_cnx_t*)r)->next_wake_time;
-    if (ltime < rtime) return -1;
-    if (ltime > rtime) return 1;
-    return 0;
-}
-
 static picosplay_node_t* picoquic_wake_list_create_node(void* v_cnx)
 {
     return &((picoquic_cnx_t*)v_cnx)->cnx_wake_node;
@@ -1539,8 +1533,9 @@ static void picoquic_wake_list_delete_node(void* UNUSED(tree), picosplay_node_t*
 
 static void picoquic_wake_list_init(picoquic_quic_t * quic)
 {
-    picosplay_init_tree(&quic->cnx_wake_tree, picoquic_wake_list_compare,
-        picoquic_wake_list_create_node, picoquic_wake_list_delete_node, picoquic_wake_list_node_value);
+    picosplay64u_init_tree(&quic->cnx_wake_tree,
+        offsetof(picoquic_cnx_t, next_wake_time), offsetof(picoquic_cnx_t, cnx_wake_node),
+        picoquic_wake_list_create_node, picoquic_wake_list_delete_node);
 }
 
 static void picoquic_insert_cnx_in_wake_ready_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
@@ -1586,13 +1581,13 @@ static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
     }
     else if (cnx->is_wake_tree) {
         cnx->is_wake_tree = 0;
-        picosplay_delete_hint(&cnx->quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picosplay64u_delete_hint(&cnx->quic->cnx_wake_tree, &cnx->cnx_wake_node);
     }
 }
 
 static void picoquic_insert_cnx_in_wake_tree(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    picosplay_insert(&quic->cnx_wake_tree, cnx);
+    picosplay64u_insert(&quic->cnx_wake_tree, cnx);
     cnx->is_wake_tree = 1;
 }
 
@@ -1624,12 +1619,12 @@ static void picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max
     uint64_t due_time = (max_wake_time == 0) ? picoquic_get_quic_time(quic) : max_wake_time;
 
     for (;;) {
-        picoquic_cnx_t* cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay_first(&quic->cnx_wake_tree));
+        picoquic_cnx_t* cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay64u_first(&quic->cnx_wake_tree));
         if (cnx == NULL || cnx->next_wake_time > due_time) {
             break;
         }
         cnx->is_wake_tree = 0;
-        picosplay_delete_hint(&quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picosplay64u_delete_hint(&quic->cnx_wake_tree, &cnx->cnx_wake_node);
         picoquic_insert_cnx_in_wake_ready_list(quic, cnx);
     }
 }
@@ -1645,7 +1640,7 @@ picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_
         cnx = cnx->cnx_wake_next;
     }
     if (cnx == NULL) {
-        cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay_first(&quic->cnx_wake_tree));
+        cnx = (picoquic_cnx_t*)picoquic_wake_list_node_value(picosplay64u_first(&quic->cnx_wake_tree));
     }
     if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
     {
@@ -1668,7 +1663,7 @@ uint64_t picoquic_get_next_wake_time(picoquic_quic_t* quic, uint64_t current_tim
     }
     else {
         picoquic_cnx_t* cnx_wake_first = (picoquic_cnx_t*)picoquic_wake_list_node_value(
-            picosplay_first(&quic->cnx_wake_tree));
+            picosplay64u_first(&quic->cnx_wake_tree));
 
         if (cnx_wake_first != NULL) {
             wake_time = cnx_wake_first->next_wake_time;
@@ -4134,7 +4129,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
         if (initial_aead_dec != NULL && initial_pn_dec != NULL) {
             cnx->crypto_context[picoquic_epoch_initial].aead_decrypt = initial_aead_dec;
             cnx->crypto_context[picoquic_epoch_initial].pn_dec = initial_pn_dec;
-            if (picoquic_get_initial_aead_context(quic, cnx->version_index, &cnx->initial_cnxid,
+            if (picoquic_get_initial_aead_context(cnx->version_index, &cnx->initial_cnxid,
                 cnx->client_mode, 1 /* encoding mode */,
                 &cnx->crypto_context[picoquic_epoch_initial].aead_encrypt,
                 &cnx->crypto_context[picoquic_epoch_initial].pn_enc) != 0) {
@@ -5480,6 +5475,7 @@ int picoquic_process_version_upgrade(picoquic_cnx_t* cnx, int old_version_index,
                     break;
                 }
             }
+            i++;
         }
     }
     return ret;
