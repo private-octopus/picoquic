@@ -680,9 +680,11 @@ static void binlog_compose_frames(bytestream* msg, const uint8_t* bytes, size_t 
 
 void picoquic_binlog_frames(FILE * f, const uint8_t* bytes, size_t length)
 {
-    /* The log of a frame takes at most 2 times the size of the frame. Most
-     * frames are logged as a length and a copy of their bytes. Stream and
-     * datagram frames only log their header and at most 8 bytes of data. */
+    /* A valid frame takes at most 2 times its size in the log. Most frames
+     * are logged as a length and a copy of their bytes. Stream frames log
+     * their header and at most 8 bytes of data. Crypto and datagram frames
+     * log only their header. A run of padding or ping frames logs as 1 frame.
+     * A malformed frame stops the loop, and the 64 extra bytes cover its log. */
     size_t buffer_size = 2 * length + 64;
     uint8_t* buffer = (uint8_t*)malloc(buffer_size);
 
@@ -808,7 +810,7 @@ void binlog_packet(FILE* f, const picoquic_connection_id_t* cid, uint64_t path_i
 
     if (msg == NULL || bytestream_remain(msg) == 0) {
         /* The chunk may not fit, e.g., if the packet has many 1-byte frames.
-         * Each frame takes at most 2 times its size in the log. */
+         * A valid frame takes at most 2 times its size in the log. */
         size_t large_size = 2 * bytes_max + BYTESTREAM_MAX_BUFFER_SIZE;
 
         if ((large_buffer = (uint8_t*)malloc(large_size)) == NULL) {
