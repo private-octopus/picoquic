@@ -67,6 +67,8 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_qlog.h"
+#include "picoquic_binlog.h"
+#include "picoquic_logger.h"
 #include "h3zero.h"
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
@@ -320,6 +322,14 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
 
         if (ret == 0 && config->qlog_dir != NULL) {
             picoquic_set_qlog(qserver, config->qlog_dir);
+        }
+
+        if (ret == 0 && config->bin_dir != NULL) {
+            picoquic_set_binlog(qserver, config->bin_dir);
+        }
+
+        if (ret == 0 && config->log_file != NULL) {
+            picoquic_set_textlog(qserver, config->log_file);
         }
 
         if (ret == 0) {
@@ -879,6 +889,16 @@ int quic_client(const char* ip_address_text, int server_port,
                 if (config->qlog_dir != NULL)
                 {
                     picoquic_set_qlog(qclient, config->qlog_dir);
+                }
+
+                if (config->bin_dir != NULL)
+                {
+                    picoquic_set_binlog(qclient, config->bin_dir);
+                }
+
+                if (config->log_file != NULL)
+                {
+                    picoquic_set_textlog(qclient, config->log_file);
                 }
 
                 if (config->performance_log != NULL)
