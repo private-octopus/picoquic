@@ -3477,6 +3477,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_lost_feedback_ack_only)
+        {
+            int ret = cc_lost_feedback_ack_only_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr1)
         {
             int ret = bbr1_test();
