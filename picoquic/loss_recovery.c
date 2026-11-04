@@ -165,7 +165,6 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
     picoquic_packet_t* packet, size_t send_buffer_max,
     size_t* length, int* packet_is_pure_ack, size_t * header_length);
 
-static int picoquic_is_packet_ack_eliciting(picoquic_packet_t* packet);
 
 static void picoquic_set_wake_up_from_packet_retransmit(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, uint64_t current_time, uint64_t* next_wake_time);
@@ -955,7 +954,7 @@ static void picoquic_count_and_notify_loss(
     }
 }
 
-static int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
+int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
 {
     /* check if this is an ACK eliciting packet */
     int is_ack_eliciting = 0;

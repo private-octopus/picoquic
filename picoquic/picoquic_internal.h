@@ -1686,6 +1686,8 @@ int picoquic_renew_path_connection_id(picoquic_cnx_t* cnx, picoquic_path_t* path
 /* handling of retransmission queue */
 void picoquic_queue_for_retransmit(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_packet_t* packet,
     size_t length, uint64_t current_time);
+int picoquic_is_packet_ack_eliciting(picoquic_packet_t* packet);
+int picoquic_check_cc_feedback_timer(picoquic_cnx_t* cnx, uint64_t* next_wake_time, uint64_t current_time);
 picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx,
     picoquic_packet_t* p, int should_free,
     int add_to_data_repeat_queue);
