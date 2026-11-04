@@ -117,6 +117,11 @@ char const* picoquic_error_name(uint64_t error_code)
     case PICOQUIC_ERROR_PATH_LIMIT_EXCEEDED: e_name = "path limit exceeded"; break;
     case PICOQUIC_ERROR_REDIRECTED: e_name = "redirected to proxy (not an error)"; break; /* Not an error: the packet was captured by a proxy, no further processing needed */
     case PICOQUIC_ERROR_PADDING_PACKET: e_name = "padding_packet"; break; /* Random bytes at end of datagram */
+    case PICOQUIC_ERROR_PACKET_TOO_BIG: e_name = "packet too big"; break;
+    case PICOQUIC_ERROR_OFFSET_TOO_BIG: e_name = "offset too big"; break;
+    case PICOQUIC_NO_ERROR_SCONE_ADVICE: e_name = "scone advice"; break; /* Not an error */
+    case PICOQUIC_ERROR_PATH_LAST_REMAINING: e_name = "last remaining path"; break;
+    case PICOQUIC_ERROR_WRONG_SOURCE_ADDRESS: e_name = "wrong source address"; break;
     default:
         if (error_code > 0x100 && error_code < 0x200) {
             /* Protocol errors defined in the QUIC spec */

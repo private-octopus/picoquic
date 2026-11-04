@@ -29,10 +29,10 @@ extern "C" {
 
 #define TLS_API_INIT_FLAGS_NO_OPENSSL 1
 #define TLS_API_INIT_FLAGS_NO_MINICRYPTO 2
-#define TLS_API_INIT_FLAGS_NO_FUSION 4
+#define TLS_API_INIT_FLAGS_NO_FUSION 4 /* Fusion is no longer supported: this flag has no effect */
 #define TLS_API_INIT_FLAGS_NO_MBEDTLS 8
 
-    void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite, int is_low_memory);
+    void picoquic_register_ciphersuite(ptls_cipher_suite_t* suite);
     void picoquic_register_key_exchange_algorithm(ptls_key_exchange_algorithm_t* key_exchange);
     void picoquic_register_hpke_cipher_suite(ptls_hpke_cipher_suite_t* hpke_cipher_suite);
     void picoquic_register_hpke_kem(ptls_hpke_kem_t* hpke_kem);
@@ -76,12 +76,7 @@ extern "C" {
 
 #define PICOQUIC_CIPHER_SUITES_NB_MAX 8
 #define PICOQUIC_SELECTED_CIPHER_SUITES_NB_MAX PICOQUIC_CIPHER_SUITES_NB_MAX
-    struct st_picoquic_cipher_suites_t {
-        ptls_cipher_suite_t* high_memory_suite;
-        ptls_cipher_suite_t* low_memory_suite;
-    };
-
-    extern struct st_picoquic_cipher_suites_t picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
+    extern ptls_cipher_suite_t* picoquic_cipher_suites[PICOQUIC_CIPHER_SUITES_NB_MAX + 1];
 
 #define PICOQUIC_KEY_EXCHANGES_NB_MAX 8
     extern ptls_key_exchange_algorithm_t* picoquic_key_exchanges[PICOQUIC_KEY_EXCHANGES_NB_MAX + 1];

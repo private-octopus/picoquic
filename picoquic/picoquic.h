@@ -116,6 +116,7 @@ extern "C" {
 #define PICOQUIC_ERROR_OFFSET_TOO_BIG (PICOQUIC_ERROR_CLASS + 72)
 #define PICOQUIC_NO_ERROR_SCONE_ADVICE (PICOQUIC_ERROR_CLASS + 73)
 #define PICOQUIC_ERROR_PATH_LAST_REMAINING (PICOQUIC_ERROR_CLASS + 74)
+#define PICOQUIC_ERROR_WRONG_SOURCE_ADDRESS (PICOQUIC_ERROR_CLASS + 75)
 /*
  * Protocol errors defined in the QUIC spec
  */
@@ -737,11 +738,7 @@ void picoquic_free(picoquic_quic_t* quic);
 int picoquic_set_ticket_key(picoquic_quic_t* quic,
     const uint8_t* ticket_key, size_t ticket_key_length);
 
-/* Preference for low memory options.
- * setting this flag instructs picoquic to chose implementations of algorithms 
- * that use less memory while maintaining reasonable performance. For example,
- * choose the openssl implementation of AES instead of the fusion implementation,
- * which is a bit faster but requires an additional 7KB of data per connection */
+/* Deprecated: picoquic no longer has low memory variants of its algorithms, so this call has no effect. */
 int picoquic_set_low_memory_mode(picoquic_quic_t* quic, int low_memory_mode);
 
 /* management of retry policy.

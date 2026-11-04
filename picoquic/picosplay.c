@@ -24,6 +24,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include "picosplay.h"
 
 /* The single most important utility function. */
@@ -37,11 +38,11 @@ static picosplay_node_t* rightmost(picosplay_node_t *node);
 static void zig(picosplay_node_t *x);
 static void zigzig(picosplay_node_t *x, picosplay_node_t *p);
 static void zigzag(picosplay_node_t *x);
-static void splay(picosplay_tree_t *tree, picosplay_node_t *x) {
+static void splay(picosplay_node_t **root, picosplay_node_t *x) {
     while(1) {
         picosplay_node_t *p = x->parent;
         if(p == NULL) {
-            tree->root = x;
+            *root = x;
             return;
         }
         picosplay_node_t *g = p->parent;
@@ -130,7 +131,7 @@ picosplay_node_t* picosplay_insert(picosplay_tree_t *tree, void *value) {
             else
                 parent->right = new;
         }
-        splay(tree, new);
+        splay(&tree->root, new);
         tree->size++;
     }
 
@@ -157,7 +158,7 @@ picosplay_node_t* picosplay_find(picosplay_tree_t *tree, void *value)
      * The Wikipedia example omits it, but this code keeps it. We should
      * perform measurements with and without it and keep the best alternative. */
     if(curr != NULL)
-        splay(tree, curr);
+        splay(&tree->root, curr);
     return curr;
 }
 
@@ -192,17 +193,16 @@ void picosplay_delete(picosplay_tree_t *tree, void *value) {
 }
 
 /* Remove the node given by the pointer, splaying the tree. */
-void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
-    if(node == NULL)
-        return;
-    splay(tree, node); /* Now node is tree's root. */
+static void picosplay_unlink(picosplay_node_t** root, picosplay_node_t* node)
+{
+    splay(root, node); /* Now node is the root. */
     if(node->left == NULL) {
-        tree->root = node->right;
-        if(tree->root != NULL)
-            tree->root->parent = NULL;
+        *root = node->right;
+        if((*root) != NULL)
+            (*root)->parent = NULL;
     } else if(node->right == NULL) {
-        tree->root = node->left;
-        tree->root->parent = NULL;
+        *root = node->left;
+        (*root)->parent = NULL;
     } else {
         picosplay_node_t *x = leftmost(node->right);
         if(x->parent != node) {
@@ -212,13 +212,19 @@ void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
             x->right = node->right;
             x->right->parent = x;
         }
-        tree->root = x;
+        *root = x;
         x->parent = NULL;
         x->left = node->left;
         x->left->parent = x;
     }
-    tree->delete_node(tree, node);
-    tree->size--;
+}
+
+void picosplay_delete_hint(picosplay_tree_t *tree, picosplay_node_t *node) {
+    if (node != NULL) {
+        picosplay_unlink(&tree->root, node);
+        tree->delete_node(tree, node);
+        tree->size--;
+    }
 }
 
 void picosplay_empty_tree(picosplay_tree_t * tree)
@@ -333,5 +339,112 @@ static picosplay_node_t* rightmost(picosplay_node_t *node) {
         node = node->right;
     }
     return parent;
+}
+/* memcpy supports arbitrary key alignment and is inlined to a load. */
+static inline uint64_t picosplay64u_key(const picosplay64u_tree_t* tree, const picosplay_node_t* node)
+{
+    uint64_t key;
+    memcpy(&key, (const char*)node - tree->node_offset + tree->key_offset, sizeof(key));
+    return key;
+}
+
+void picosplay64u_init_tree(picosplay64u_tree_t* tree, size_t key_offset, size_t node_offset,
+    picosplay_create create, picosplay_delete_node delete_node)
+{
+    tree->root = NULL;
+    tree->create = create;
+    tree->delete_node = delete_node;
+    tree->key_offset = key_offset;
+    tree->node_offset = node_offset;
+    tree->size = 0;
+}
+
+picosplay_node_t* picosplay64u_insert(picosplay64u_tree_t* tree, void* value)
+{
+    picosplay_node_t* node = tree->create(value);
+    if (node != NULL) {
+        picosplay_node_t* parent = NULL;
+        picosplay_node_t** link = &tree->root;
+        uint64_t key = picosplay64u_key(tree, node);
+        while (*link != NULL) {
+            parent = *link;
+            link = key < picosplay64u_key(tree, parent) ? &parent->left : &parent->right;
+        }
+        node->parent = parent;
+        node->left = NULL;
+        node->right = NULL;
+        *link = node;
+        splay(&tree->root, node);
+        tree->size++;
+    }
+    return node;
+}
+
+picosplay_node_t* picosplay64u_find(picosplay64u_tree_t* tree, uint64_t key)
+{
+    picosplay_node_t* node = tree->root;
+    while (node != NULL) {
+        uint64_t node_key = picosplay64u_key(tree, node);
+        if (key == node_key) {
+            splay(&tree->root, node);
+            break;
+        }
+        node = key < node_key ? node->left : node->right;
+    }
+    return node;
+}
+
+picosplay_node_t* picosplay64u_find_previous(picosplay64u_tree_t* tree, uint64_t key)
+{
+    picosplay_node_t* node = tree->root;
+    picosplay_node_t* previous = NULL;
+    while (node != NULL) {
+        uint64_t node_key = picosplay64u_key(tree, node);
+        if (key == node_key) {
+            previous = node;
+            break;
+        }
+        if (key < node_key) {
+            node = node->left;
+        }
+        else {
+            previous = node;
+            node = node->right;
+        }
+    }
+    return previous;
+}
+
+picosplay_node_t* picosplay64u_first(picosplay64u_tree_t* tree)
+{
+    return leftmost(tree->root);
+}
+
+picosplay_node_t* picosplay64u_last(picosplay64u_tree_t* tree)
+{
+    return rightmost(tree->root);
+}
+
+void picosplay64u_delete(picosplay64u_tree_t* tree, uint64_t key)
+{
+    picosplay64u_delete_hint(tree, picosplay64u_find(tree, key));
+}
+
+void picosplay64u_delete_hint(picosplay64u_tree_t* tree, picosplay_node_t* node)
+{
+    if (node != NULL) {
+        picosplay_unlink(&tree->root, node);
+        tree->delete_node(tree, node);
+        tree->size--;
+    }
+}
+
+void picosplay64u_empty_tree(picosplay64u_tree_t* tree)
+{
+    if (tree != NULL) {
+        while (tree->root != NULL) {
+            picosplay64u_delete_hint(tree, tree->root);
+        }
+    }
 }
 
