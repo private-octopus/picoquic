@@ -52,8 +52,22 @@ const uint8_t * qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8
         bytes = NULL;
     }
     else {
+        /* Convert in a local buffer: a call to fprintf for each byte costs
+         * much more than the conversion itself. */
+        static const char hex_digits[] = "0123456789abcdef";
+        char hex_buffer[256];
+        size_t hex_length = 0;
+
         for (uint64_t x = 0; x < l; x++) {
-            fprintf(f, "%02x", bytes[x]);
+            if (hex_length + 2 > sizeof(hex_buffer)) {
+                (void)fwrite(hex_buffer, 1, hex_length, f);
+                hex_length = 0;
+            }
+            hex_buffer[hex_length++] = hex_digits[bytes[x] >> 4];
+            hex_buffer[hex_length++] = hex_digits[bytes[x] & 0x0f];
+        }
+        if (hex_length > 0) {
+            (void)fwrite(hex_buffer, 1, hex_length, f);
         }
         bytes += l;
     }
