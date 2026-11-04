@@ -12555,8 +12555,8 @@ static uint16_t tls_api_selected_cipher_suite_id(picoquic_cnx_t* cnx)
 
 static int aegis_is_available(void)
 {
-    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256, 0) != NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512, 0) != NULL;
+    return picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_128L_SHA256) != NULL &&
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AEGIS_256_SHA512) != NULL;
 }
 
 #ifdef PICOQUIC_WITH_AEGIS
@@ -12929,7 +12929,7 @@ int aegis_initial_aes_test(void)
     }
 
     if (ret == 0) {
-        ret = picoquic_get_initial_aead_context(test_ctx->qclient, 0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
+        ret = picoquic_get_initial_aead_context(0, &icid, 1, 1, &aead_ctx, &pn_enc_ctx);
     }
 
     if (ret == 0) {
@@ -14056,7 +14056,7 @@ int bad_chello_fill_initial(picoquic_quic_t * quic, uint8_t *buffer, size_t buff
     }
     if (ret == 0) {
         /* create an encryption context */
-        if ((ret = picoquic_get_initial_aead_context(quic, 0, &icid,
+        if ((ret = picoquic_get_initial_aead_context(0, &icid,
             1 /* is_client=1 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx)) == 0) {
             /* encrypt the payload. */
             size_t send_length = picoquic_aead_encrypt_generic(buffer + /* header_length */ header_length,
@@ -15075,7 +15075,7 @@ int get_tls_errors_test(void)
     if (ret == 0 && picoquic_ecb_create_by_name(0, data, invalid_stuff) != NULL) {
         ret = -1;
     }
-    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id, 0) != NULL) {
+    if (ret == 0 && picoquic_get_cipher_suite_by_id_v(invalid_id) != NULL) {
         ret = -1;
     }
     if (ret == 0 && picoquic_set_cipher_suite(test_ctx->qserver, invalid_id) == 0) {
@@ -15085,16 +15085,8 @@ int get_tls_errors_test(void)
         ret = -1;
     }
     if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 1) == NULL &&
-        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256, 0) == NULL) {
+        picoquic_get_cipher_suite_by_id_v(PICOQUIC_AES_128_GCM_SHA256) == NULL) {
         ret = -1;
-    }
-    if (ret == 0 &&
-        picoquic_get_cipher_suite_by_id_v(invalid_id, 1) != NULL) {
-        ret = -1;
-    }
-    if (ret == 0) {
-
     }
     if (ret == 0) {
         /* Unload the TLS API to force internal errors. */

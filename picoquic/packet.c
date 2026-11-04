@@ -123,7 +123,7 @@ int picoquic_screen_initial_packet(
         /* This code assumes that *pcnx is always null when screen initial is called. */
         /* Verify the AEAD checkum */
 
-        if (picoquic_get_initial_aead_context(quic, ph->version_index, &ph->dest_cnx_id,
+        if (picoquic_get_initial_aead_context(ph->version_index, &ph->dest_cnx_id,
             0 /* is_client=0 */, 0 /* is_enc = 0 */, &aead_ctx, &pn_dec_ctx) == 0) {
             ret = picoquic_remove_header_protection_inner((uint8_t *)bytes, ph->offset + ph->payload_length,
                 decrypted_data->data, ph, pn_dec_ctx, 0 /* is_loss_bit_enabled_incoming */, 0 /* sack_list_last*/);
@@ -1290,7 +1290,7 @@ int picoquic_queue_busy_packet(
             &pn_length);
 
         /* Apply AEAD */
-        if (picoquic_get_initial_aead_context(quic, ph->version_index, &ph->dest_cnx_id,
+        if (picoquic_get_initial_aead_context(ph->version_index, &ph->dest_cnx_id,
             0 /* is_client=0 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx) == 0) {
             /* Make sure that the payload length is encoded in the header */
             /* Using encryption, the "payload" length also includes the encrypted packet length */
