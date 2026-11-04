@@ -610,6 +610,7 @@ int gbps_performance_test(void);
 int bbr_asym100_test(void);
 int bbr_asym100_nodelay_test(void);
 int bbr_asym400_test(void);
+int cc_lost_feedback_ack_only_test(void);
 int l4s_reno_test(void);
 int l4s_prague_test(void);
 int l4s_prague_updown_test(void);

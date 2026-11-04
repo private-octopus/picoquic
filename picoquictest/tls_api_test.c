@@ -15581,7 +15581,7 @@ static size_t wrong_addr_fill_initial(picoquic_cnx_t* cnx, picoquic_connection_i
     buffer[header_length] = picoquic_frame_type_ping;
     picoquic_update_payload_length(buffer, pn_offset, header_length - pn_length, buffer_size);
     /* Encrypt with the server side Initial keys derived from the initial CID */
-    if (picoquic_get_initial_aead_context(cnx->quic, cnx->version_index, &cnx->initial_cnxid,
+    if (picoquic_get_initial_aead_context(cnx->version_index, &cnx->initial_cnxid,
         0 /* is_client=0 */, 1 /* is_enc = 1 */, &aead_ctx, &pn_enc_ctx) == 0) {
         send_length = picoquic_aead_encrypt_generic(buffer + header_length,
             buffer + header_length, length - header_length,
