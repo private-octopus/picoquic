@@ -1311,9 +1311,9 @@ int picoquic_server_encrypt_ticket_call_back(ptls_encrypt_ticket_t* encrypt_tick
     param_bytes += 8;
     picoformat_64(param_bytes, quic->default_tp.initial_max_stream_data_uni);
     param_bytes += 8;
-    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_id_bidir);
+    picoformat_64(param_bytes, quic->default_tp.initial_max_streams_bidi);
     param_bytes += 8;
-    picoformat_64(param_bytes, quic->default_tp.initial_max_stream_id_unidir);
+    picoformat_64(param_bytes, quic->default_tp.initial_max_streams_uni);
 
     if (is_encrypt != 0) {
         picoquic_ticket_key_state_t* key = &quic->ticket_key_state[quic->ticket_key_state_active_slot];
@@ -2738,8 +2738,8 @@ int picoquic_initialize_tls_stream(picoquic_cnx_t* cnx, uint64_t current_time)
             cnx->remote_parameters.initial_max_stream_data_bidi_local = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local];
             cnx->remote_parameters.initial_max_stream_data_bidi_remote = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote];
             cnx->remote_parameters.initial_max_stream_data_uni = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
-            cnx->remote_parameters.initial_max_stream_id_bidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
-            cnx->remote_parameters.initial_max_stream_id_unidir = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
+            cnx->remote_parameters.initial_max_streams_bidi = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
+            cnx->remote_parameters.initial_max_streams_uni = stored_ticket->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
 
             if (stored_ticket->time_valid_until > current_time) {
                 /* Seed connection with remembered data */

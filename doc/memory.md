@@ -69,38 +69,6 @@ void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 The cap will apply to all the connection managed in the specified QUIC context,
 because all these connections share the same memory pool.
 
-### Memory used for managing streams
-
-The retransmission buffers discussed above are the main consumers of sender-side
-memory, but the code also allocates memory for stream management. The stream
-header itself is only a few hundred bytes, but some applications allocate more memory
-for stream management.
-
-We see an example of "application level" per stream allocation with the
-default HTTP3 server, "h3zero". It reads the size of the incoming frame from
-the stream, and allocates has many bytes of memory to store it. The
-maximum supported frame size is 64KB, and that memry will be freed once
-the frame is parsed. That seems logical, but there is a potential
-attack. An adversary could open lots of streams, send a few bytes on each
-stream to announce a 64KB length, cause a 64KB allocation, and never complete
-the stransmission of the frame. That will force the server to hold on
-64KB of data for each stream.
-
-That attack can be mitigated by limiting the number of streams that the
-pear can open, using the `max_streams_bidir` and `max_streams_bidir`
-transport pararameters during the connection setup. Limit it to 1000,
-and the attacker can cause at most the allocation of 64MB per
-connection. Limit it to 64, and the attacker can only force
-allocation of 4MB of memory.
-
-Of course, limiting the number of streams has its downside. Some Web Transport
-applications may well require supporting a large number of parallel stream,
-and a limit of 64 streams may prove constraining. It is also only a
-partial solution: the attacker could just resort to opening many
-connections.
-
-
-
 ## Receiver side memory management
 
 In normal circumstances, a QUIC receiver only need a small amount of memory
@@ -185,4 +153,40 @@ monitor the total number of packets allocated across all connections,
 lower the cap if the packets queue are too large, and progressively lift
 it when conditions stabilize. But in practice this will require some work...
 
+## Stream opening attacks
 
+The reordering buffers discussed above are the main consumers of sender-side
+memory, but the code also allocates memory for stream management. The stream
+header itself is only a few hundred bytes, but some applications allocate
+more memory for processing the stream.
+
+We see an example of "application level" per stream allocation with the
+default HTTP3 server, "h3zero". It reads the size of the incoming frame from
+the stream, and allocates has many bytes of memory to store it. The
+maximum supported frame size is 64KB, and that memry will be freed once
+the frame is parsed. That seems logical, but there is a potential
+attack. An adversary could open lots of streams, send a few bytes on each
+stream to announce a 64KB length, cause a 64KB allocation, and never complete
+the stransmission of the frame. That will force the server to hold on
+64KB of data for each stream.
+
+That attack can be mitigated by limiting the number of streams that the
+pear can open, using the `initial_max_streams_bidi` and `tp_initial_max_streams_uni`
+transport pararameters during the connection setup. Limit it to 1000,
+and the attacker can cause at most the allocation of 64MB per
+connection. Limit it to 64, and the attacker can only force
+allocation of 4MB of memory.
+
+Of course, limiting the number of streams has its downside. Some Web Transport
+applications may well require supporting a large number of parallel stream,
+and a limit of 64 streams may prove constraining. It is also only a
+partial solution: the attacker could just resort to opening many
+connections.
+
+Thanks. I read #2342 against the code, and the description of the attack is right: h3zero_parse_header_frame() allocates the declared length when the first content byte arrives, capped at 64 KiB. A few comments on the text:
+
+    max_streams_bidir appears twice, and neither is a transport parameter name. The receiver section uses initial_max_stream_id_bidir. It may help to name the API too: picoquic_set_default_tp_value(quic, picoquic_tp_initial_max_streams_bidi, n).
+    "Limit it to 1000" reads as a reduction, but the default is 512. Stating the default and its bound, about 32 MiB per connection, would make the numbers clearer.
+    64 is below the 100 request streams that RFC 9114 section 6.1 asks for, so the downside applies to HTTP/3 as well as Web Transport. 100 streams gives about 6.4 MB.
+    The section sits under "Sender side", but this is memory held by the receiver of the request. It may fit better under "Receiver side memory management", and the point about many connections could refer to "No global limit yet".
+    Typos: "allocates has many", "memry", "stransmission", "pear", "pararameters", "parallel stream".

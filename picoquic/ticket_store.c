@@ -86,8 +86,8 @@ picoquic_stored_ticket_t* picoquic_format_ticket(uint64_t time_valid_until,
             stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local] = tp->initial_max_stream_data_bidi_local;
             stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote] = tp->initial_max_stream_data_bidi_remote;
             stored->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni] = tp->initial_max_stream_data_uni;
-            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir] = tp->initial_max_stream_id_bidir;
-            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir] = tp->initial_max_stream_id_unidir;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir] = tp->initial_max_streams_bidi;
+            stored->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir] = tp->initial_max_streams_uni;
         }
 
         stored->ticket = (uint8_t*)next_p;
@@ -372,8 +372,8 @@ int picoquic_get_ticket_and_version(picoquic_quic_t * quic,
             tp->initial_max_stream_data_bidi_local = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_local];
             tp->initial_max_stream_data_bidi_remote = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_bidi_remote];
             tp->initial_max_stream_data_uni = next->tp_0rtt[picoquic_tp_0rtt_max_stream_data_uni];
-            tp->initial_max_stream_id_bidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
-            tp->initial_max_stream_id_unidir = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
+            tp->initial_max_streams_bidi = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_bidir];
+            tp->initial_max_streams_uni = next->tp_0rtt[picoquic_tp_0rtt_max_streams_id_unidir];
             *ticket_version = next->version;
         }
         *ticket = next->ticket;

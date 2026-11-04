@@ -79,11 +79,11 @@ static void picowt_set_transport_parameters_values(const picoquic_tp_t* tp_curre
     if (tp_new->initial_max_stream_data_uni < 0x3FFF) {
         tp_new->initial_max_stream_data_uni = 0x3FFF;
     }
-    if (tp_new->initial_max_stream_id_bidir < 0x3F) {
-        tp_new->initial_max_stream_id_bidir = 0x3F;
+    if (tp_new->initial_max_streams_bidi < 0x3F) {
+        tp_new->initial_max_streams_bidi = 0x3F;
     }
-    if (tp_new->initial_max_stream_id_unidir < 0x3F) {
-        tp_new->initial_max_stream_id_unidir = 0x3F;
+    if (tp_new->initial_max_streams_uni < 0x3F) {
+        tp_new->initial_max_streams_uni = 0x3F;
     }
     if (tp_new->max_datagram_frame_size == 0) {
         tp_new->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;

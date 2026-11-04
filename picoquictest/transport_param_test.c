@@ -539,14 +539,14 @@ static int transport_param_compare(picoquic_tp_t* param, picoquic_tp_t* ref) {
             param->initial_max_data, ref->initial_max_data);
         ret = -1;
     }
-    else if (param->initial_max_stream_id_bidir != ref->initial_max_stream_id_bidir) {
-        DBG_PRINTF("initial_max_stream_id_bidir: got %d, expected %d\n",
-            param->initial_max_stream_id_bidir, ref->initial_max_stream_id_bidir);
+    else if (param->initial_max_streams_bidi != ref->initial_max_streams_bidi) {
+        DBG_PRINTF("initial_max_streams_bidi: got %d, expected %d\n",
+            param->initial_max_streams_bidi, ref->initial_max_streams_bidi);
         ret = -1;
     }
-    else if (param->initial_max_stream_id_unidir != ref->initial_max_stream_id_unidir) {
-        DBG_PRINTF("initial_max_stream_id_unidir: got %d, expected %d\n",
-            param->initial_max_stream_id_unidir, ref->initial_max_stream_id_unidir);
+    else if (param->initial_max_streams_uni != ref->initial_max_streams_uni) {
+        DBG_PRINTF("initial_max_streams_uni: got %d, expected %d\n",
+            param->initial_max_streams_uni, ref->initial_max_streams_uni);
         ret = -1;
     }
     else if (param->max_idle_timeout != ref->max_idle_timeout) {
@@ -1462,12 +1462,12 @@ int tp_value_check(picoquic_quic_t * quic, uint64_t tp_type, uint64_t tp_value)
         }
         break;
     case picoquic_tp_initial_max_streams_bidi:
-        if (quic->default_tp.initial_max_stream_id_bidir != tp_value) {
+        if (quic->default_tp.initial_max_streams_bidi != tp_value) {
             ret = -1;
         }
         break;
     case picoquic_tp_initial_max_streams_uni:
-        if (quic->default_tp.initial_max_stream_id_unidir != tp_value) {
+        if (quic->default_tp.initial_max_streams_uni != tp_value) {
             ret = -1;
         }break;
     case picoquic_tp_ack_delay_exponent:

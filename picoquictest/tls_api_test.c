@@ -4690,7 +4690,7 @@ int zero_rtt_test_one(zero_rtt_test_t * zrt)
 
             if (ret == 0 && i > 0 && zrt->change_params) {
                 test_ctx->qserver->default_tp.initial_max_data -= 1;
-                test_ctx->qserver->default_tp.initial_max_stream_id_bidir += 1;
+                test_ctx->qserver->default_tp.initial_max_streams_bidi += 1;
             }
 
             if (ret == 0 && zrt->propose_ech) {
@@ -6363,7 +6363,7 @@ int tls_different_params_test(void)
 
     picoquic_init_transport_parameters(&test_parameters);
 
-    test_parameters.initial_max_stream_id_bidir = 0;
+    test_parameters.initial_max_streams_bidi = 0;
 
     return tls_api_one_scenario_test(test_scenario_very_long, sizeof(test_scenario_very_long), 0, 0, 0, 0, 0, 3510000, &test_parameters, NULL);
 }
@@ -6377,8 +6377,8 @@ int tls_quant_params_test(void)
     picoquic_init_transport_parameters(&test_parameters);
 
     test_parameters.initial_max_data = 0x4000;
-    test_parameters.initial_max_stream_id_bidir = 0;
-    test_parameters.initial_max_stream_id_unidir = 16384;
+    test_parameters.initial_max_streams_bidi = 0;
+    test_parameters.initial_max_streams_uni = 16384;
     test_parameters.initial_max_stream_data_bidi_local = 0x2000;
     test_parameters.initial_max_stream_data_bidi_remote = 0x2000;
     test_parameters.initial_max_stream_data_uni = 0x2000;
@@ -10118,7 +10118,7 @@ int stream_id_max_test(void)
     memset(&test_parameters, 0, sizeof(picoquic_tp_t));
 
     picoquic_init_transport_parameters(&test_parameters);
-    test_parameters.initial_max_stream_id_bidir = 4;
+    test_parameters.initial_max_streams_bidi = 4;
 
     return tls_api_one_scenario_test(test_scenario_many_streams, sizeof(test_scenario_many_streams), 0, 0, 0, 0, 0, 250000, NULL, &test_parameters);
 }

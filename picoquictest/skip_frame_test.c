@@ -4927,18 +4927,18 @@ int send_stream_blocked_test_one(const struct st_stream_blocked_test_t * test)
             cnx->client_mode = 0;
         }
         if (test->is_id_blocked) {
-            cnx->remote_parameters.initial_max_stream_id_bidir = 1;
-            cnx->remote_parameters.initial_max_stream_id_unidir = 0;
+            cnx->remote_parameters.initial_max_streams_bidi = 1;
+            cnx->remote_parameters.initial_max_streams_uni = 0;
         }
         else {
-            cnx->remote_parameters.initial_max_stream_id_bidir = 64;
-            cnx->remote_parameters.initial_max_stream_id_unidir = 64;
+            cnx->remote_parameters.initial_max_streams_bidi = 64;
+            cnx->remote_parameters.initial_max_streams_uni = 64;
         }
 
         cnx->max_streams_bidir_remote = 
-            cnx->remote_parameters.initial_max_stream_id_bidir;
+            cnx->remote_parameters.initial_max_streams_bidi;
         cnx->max_streams_unidir_remote = 
-            cnx->remote_parameters.initial_max_stream_id_unidir;
+            cnx->remote_parameters.initial_max_streams_uni;
 
         if (test->is_data_blocked) {
             cnx->remote_parameters.initial_max_stream_data_bidi_local = 0;

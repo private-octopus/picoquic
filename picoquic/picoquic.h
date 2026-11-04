@@ -454,8 +454,8 @@ typedef struct st_picoquic_tp_t {
     uint64_t initial_max_stream_data_bidi_remote;
     uint64_t initial_max_stream_data_uni;
     uint64_t initial_max_data;
-    uint64_t initial_max_stream_id_bidir;
-    uint64_t initial_max_stream_id_unidir;
+    uint64_t initial_max_streams_bidi;
+    uint64_t initial_max_streams_uni;
     uint64_t max_idle_timeout;
     uint32_t max_packet_size;
     uint32_t max_ack_delay; /* stored in in microseconds for convenience */
