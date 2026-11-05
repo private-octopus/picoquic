@@ -548,6 +548,87 @@ int qlog_tp_extension_test(FILE* F)
 	return ret;
 }
 
+#define QLOG_FNS_FORMAT_FILE "qlog_fns_format_test.txt"
+const uint8_t* qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l);
+void qlog_fns_text_uint(FILE* f, const char* text, uint64_t value);
+void qlog_fns_text_int(FILE* f, const char* text, int64_t value);
+
+/* qlog_fns_text_uint, qlog_fns_text_int and qlog_frame_hex_string format
+ * numbers and hex bytes without fprintf. Check the output against snprintf.
+ * Use numbers at the limits of their type, and a hex string that is longer
+ * than the local buffer of qlog_frame_hex_string. */
+int qlog_fns_format_test(void)
+{
+    static const uint64_t values[] = {
+        0, 1, 9, 10, 99, 100, 1234567890, (uint64_t)INT64_MAX, (uint64_t)INT64_MAX + 1, UINT64_MAX
+    };
+    static const int64_t signed_values[] = { -1, -9, -10, -1234567890, INT64_MIN + 1, INT64_MIN };
+    /* The helper writes the text with fputs if the text, a sign and the digits
+     * do not fit in its 128-byte buffer. For UINT64_MAX and INT64_MIN, the longest
+     * texts kept in the buffer have 107 and 108 characters. Test the text lengths
+     * around these limits. */
+    char long_text[111];
+    uint8_t hex_bytes[300];
+    char expected[4096];
+    char actual[4096];
+    size_t expected_length = 0;
+    size_t actual_length = 0;
+    int ret = 0;
+    FILE* F = picoquic_file_open(QLOG_FNS_FORMAT_FILE, "w");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
+            qlog_fns_text_uint(F, ", u=", values[i]);
+            qlog_fns_text_int(F, ", i=", (int64_t)values[i]);
+            expected_length += (size_t)snprintf(expected + expected_length, sizeof(expected) - expected_length,
+                ", u=%" PRIu64 ", i=%" PRId64, values[i], (int64_t)values[i]);
+        }
+        for (size_t i = 0; i < sizeof(signed_values) / sizeof(signed_values[0]); i++) {
+            qlog_fns_text_int(F, ", i=", signed_values[i]);
+            expected_length += (size_t)snprintf(expected + expected_length, sizeof(expected) - expected_length,
+                ", i=%" PRId64, signed_values[i]);
+        }
+        for (size_t text_length = 106; text_length < sizeof(long_text); text_length++) {
+            memset(long_text, 'x', text_length);
+            long_text[text_length] = 0;
+            qlog_fns_text_uint(F, long_text, UINT64_MAX);
+            qlog_fns_text_int(F, long_text, INT64_MIN);
+            expected_length += (size_t)snprintf(expected + expected_length, sizeof(expected) - expected_length,
+                "%s%" PRIu64 "%s%" PRId64, long_text, UINT64_MAX, long_text, INT64_MIN);
+        }
+        for (size_t i = 0; i < sizeof(hex_bytes); i++) {
+            hex_bytes[i] = (uint8_t)(i * 7 + 3);
+        }
+        (void)qlog_frame_hex_string(F, hex_bytes, hex_bytes + sizeof(hex_bytes), sizeof(hex_bytes));
+        expected[expected_length++] = '"';
+        for (size_t i = 0; i < sizeof(hex_bytes); i++) {
+            expected_length += (size_t)snprintf(expected + expected_length, sizeof(expected) - expected_length,
+                "%02x", hex_bytes[i]);
+        }
+        expected[expected_length++] = '"';
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        if ((F = picoquic_file_open(QLOG_FNS_FORMAT_FILE, "rb")) == NULL) {
+            ret = -1;
+        }
+        else {
+            actual_length = fread(actual, 1, sizeof(actual), F);
+            F = picoquic_file_close(F);
+            if (actual_length != expected_length || memcmp(actual, expected, expected_length) != 0) {
+                DBG_PRINTF("Unexpected qlog format output, %zu bytes instead of %zu", actual_length, expected_length);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -588,6 +669,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_json_escape_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_fns_format_test();
 	}
 
 	return ret;
