@@ -60,7 +60,7 @@ jobs:
             cd build
             make picoquic_ct
             QUICRESULT=0
-            ./picoquic_ct -S .. mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
+            ./picoquic_ct -S .. tls_api multipath_basic qmux_loop mbedtls_crypto mbedtls_load_key mbedtls_load_key_fail \
                           mbedtls_retrieve_pubkey mbedtls_sign_verify mbedtls_ecdsa_der mbedtls_ecdsa_verify \
                           cert_verify_bad_cert cert_verify_bad_sni cert_verify_invalid \
                           cert_verify_null cert_verify_null_sni cert_verify_rsa \
