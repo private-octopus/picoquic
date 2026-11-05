@@ -228,5 +228,7 @@
     "frame_type": "bdp"}},
 { "test": "bad_frame_id", "frame": { 
     "frame_type": "unknown", "unknown_frame_type": 1073741823}, { 
-    "frame_type": "stream", "id": 2, "offset": 0, "length": 9, "fin": false , "has_length": false, "begins_with": "048fffffff010203"}}
+    "frame_type": "stream", "id": 2, "offset": 0, "length": 9, "fin": false , "has_length": false, "begins_with": "048fffffff010203"}},
+{ "test": "time_stamp_overflow", "frame": { 
+    "frame_type": "time_stamp", "time_stamp": 4611686018427387903}}
 ]

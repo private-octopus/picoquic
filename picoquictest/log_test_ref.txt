@@ -121,6 +121,7 @@
     Malformed bdp_frame frame: 8000ebd901020405...
     Malformed bdp_frame frame: 8000ebd90802048f...
     Unknown frame, type: 1073741823 (0xbfffffff0802048f... + 7 bytes)
+    time_stamp: 4611686018427387903
 
 0b0c0d0e0f101112: ticket time = 1548462100832, kx = 17, suite = 1302, 61 ticket, 48 secret.
 0b0c0d0e0f101112: lifetime = 7200, age_add = 3fc0960b, 8 nonce, 32 ticket, 8 extensions.

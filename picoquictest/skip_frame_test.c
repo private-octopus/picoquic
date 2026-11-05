@@ -668,6 +668,11 @@ static uint8_t test_frame_type_bad_ack_first_range[] = {
     0x02, 0x02, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00
 };
 
+static uint8_t test_frame_type_time_stamp_overflow[] = {
+    (uint8_t)(0x40 | (picoquic_frame_type_time_stamp >> 8)), (uint8_t)(picoquic_frame_type_time_stamp & 0xFF),
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
 #define ERR_F PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR
 #define ERR_P PICOQUIC_TRANSPORT_PROTOCOL_VIOLATION
 #define ERR_S PICOQUIC_TRANSPORT_STREAM_LIMIT_ERROR
@@ -705,7 +710,8 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp", test_frame_type_bdp_bad, 1, 0, 3, ERR_F, 0, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_addr", test_frame_type_bdp_bad_addr, 1, 0, 3, ERR_F, 0, 1),
     TEST_SKIP_ITEM_OLD_MPATH("bad_bdp_length", test_frame_type_bdp_bad_length, 1, 0, 3, ERR_F, 1, 1),
-    TEST_SKIP_ITEM_OLD("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_P, 1)
+    TEST_SKIP_ITEM_OLD("bad_frame_id", test_frame_type_bad_frame_id, 1, 0, 3, ERR_P, 1),
+    TEST_SKIP_ITEM_OLD("time_stamp_overflow", test_frame_type_time_stamp_overflow, 1, 0, 3, ERR_F, 0)
 };
 
 size_t nb_test_frame_error_list = sizeof(test_frame_error_list) / sizeof(test_skip_frames_t);
@@ -948,6 +954,8 @@ void parse_test_packet_cnx_fix(picoquic_cnx_t* cnx, uint64_t simulated_time, int
 
     /* enable time stamp so it can be used in test */
     cnx->is_time_stamp_enabled = 1;
+    /* Use the default exponent, so the time stamp overflow test can trigger. */
+    cnx->remote_parameters.ack_delay_exponent = 3;
 
     /* Set datagram max size to pass verification */
     cnx->local_parameters.max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;

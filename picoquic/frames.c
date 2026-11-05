@@ -5647,6 +5647,12 @@ const uint8_t* picoquic_decode_time_stamp_frame(const uint8_t* bytes, const uint
                 picoquic_frame_type_time_stamp);
             bytes = NULL;
         }
+        else if (time_stamp > (UINT64_MAX >> cnx->remote_parameters.ack_delay_exponent)) {
+            /* Value up to 2^62-1, exponent up to 20: the shift would overflow. */
+            picoquic_connection_error(cnx, PICOQUIC_TRANSPORT_FRAME_FORMAT_ERROR,
+                picoquic_frame_type_time_stamp);
+            bytes = NULL;
+        }
         else {
             time_stamp <<= cnx->remote_parameters.ack_delay_exponent;
 
