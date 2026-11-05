@@ -548,62 +548,62 @@ static const size_t wt_interop_stream_sizes[] = { 100, 0, 25000, 300000 };
 
 int wt_interop_handshake_test(void)
 {
-    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0, 0, 0 };
+    wt_interop_test_spec_t spec = { "hs", "handshake", "handshake", 0, 1, 0, NULL, 0, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 1);
 }
 
 int wt_interop_uni_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
+    wt_interop_test_spec_t spec = { "ur", "transfer-unidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 2);
 }
 
 int wt_interop_uni_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
+    wt_interop_test_spec_t spec = { "us", "transfer", "transfer-unidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 3);
 }
 
 int wt_interop_bidi_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
+    wt_interop_test_spec_t spec = { "br", "transfer-bidirectional-receive", "transfer", 0, 0, 4, wt_interop_stream_sizes, 0, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 4);
 }
 
 int wt_interop_bidi_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0 };
+    wt_interop_test_spec_t spec = { "bs", "transfer", "transfer-bidirectional-send", 1, 0, 4, wt_interop_stream_sizes, 0, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 5);
 }
 
 int wt_interop_datagram_receive_test(void)
 {
-    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0, 0 };
+    wt_interop_test_spec_t spec = { "dr", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 6);
 }
 
 int wt_interop_datagram_send_test(void)
 {
-    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0, 0 };
+    wt_interop_test_spec_t spec = { "ds", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0, 0, 0, 0 };
     return wt_interop_test_one(&spec, 7);
 }
 
 /* HTTP/0.9 cannot signal a missing file, so a GET of it gets an empty file on every channel. */
 int wt_interop_missing_file_test(void)
 {
-    wt_interop_test_spec_t spec = { "mf", "transfer-bidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0 };
+    wt_interop_test_spec_t spec = { "mf", "transfer-bidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0, 0, 0 };
     return wt_interop_test_one(&spec, 8);
 }
 
 int wt_interop_uni_missing_file_test(void)
 {
-    wt_interop_test_spec_t spec = { "um", "transfer-unidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0 };
+    wt_interop_test_spec_t spec = { "um", "transfer-unidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0, 0, 0 };
     return wt_interop_test_one(&spec, 14);
 }
 
 int wt_interop_datagram_missing_file_test(void)
 {
-    wt_interop_test_spec_t spec = { "dm", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 1, 0 };
+    wt_interop_test_spec_t spec = { "dm", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 1, 0, 0, 0 };
     return wt_interop_test_one(&spec, 15);
 }
 
@@ -612,7 +612,7 @@ static const size_t wt_interop_download_fail_sizes[] = { 300000 };
 
 int wt_interop_download_fail_test(void)
 {
-    wt_interop_test_spec_t spec = { "df", "transfer-bidirectional-receive", "transfer", 0, 0, 1, wt_interop_download_fail_sizes, 0, 0, 1 };
+    wt_interop_test_spec_t spec = { "df", "transfer-bidirectional-receive", "transfer", 0, 0, 1, wt_interop_download_fail_sizes, 0, 0, 1, 0, 0 };
     return wt_interop_test_one(&spec, 9);
 }
 
@@ -649,7 +649,7 @@ int wt_interop_datagram_large_test(void)
         ret = -1;
     }
     else {
-        wt_interop_test_spec_t spec = { "dl", "transfer-datagram-receive", "transfer", 0, 0, 2, wt_interop_datagram_large_sizes, 0, 0, 0 };
+        wt_interop_test_spec_t spec = { "dl", "transfer-datagram-receive", "transfer", 0, 0, 2, wt_interop_datagram_large_sizes, 0, 0, 0, 0, 0 };
         ret = wt_interop_test_one(&spec, 10);
     }
     return ret;
