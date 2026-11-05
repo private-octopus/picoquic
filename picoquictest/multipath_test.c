@@ -1026,14 +1026,14 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 2 * test_ctx->s_to_c_link->microsec_latency, &simulated_time);
     }
     /* verify that multipath is negotiated on both sides */
-    if (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled) {
+    if (ret == 0 && (!test_ctx->cnx_client->is_multipath_enabled || !test_ctx->cnx_server->is_multipath_enabled)) {
         DBG_PRINTF("Multipath not fully negotiated (c=%d, s=%d)",
             test_ctx->cnx_client->is_multipath_enabled, test_ctx->cnx_server->is_multipath_enabled);
         ret = -1;
     }
     /* verify that both sides have the same vision of max path id*/
-    if (test_ctx->cnx_client->max_path_id_local != test_ctx->cnx_server->max_path_id_remote ||
-        test_ctx->cnx_client->max_path_id_remote != test_ctx->cnx_server->max_path_id_local) {
+    if (ret == 0 && (test_ctx->cnx_client->max_path_id_local != test_ctx->cnx_server->max_path_id_remote ||
+        test_ctx->cnx_client->max_path_id_remote != test_ctx->cnx_server->max_path_id_local)) {
         DBG_PRINTF("No agreement on max path if (c=%u/%u, s=%u/%u)",
             (uint32_t)test_ctx->cnx_client->max_path_id_local, (uint32_t)test_ctx->cnx_client->max_path_id_remote,
             (uint32_t)test_ctx->cnx_server->max_path_id_local, (uint32_t)test_ctx->cnx_server->max_path_id_remote);

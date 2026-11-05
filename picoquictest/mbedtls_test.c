@@ -227,8 +227,7 @@ int mbedtls_crypto_test(void)
             DBG_PRINTF("test key exchange returns: %d\n", ret);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return (ret == 0) ? 0 : -1;
 }
@@ -723,8 +722,7 @@ int mbedtls_load_key_test(void)
             ret = mbedtls_test_load_one_der_key(ASSET_ED25519_KEY);
         }
 #endif
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -768,8 +766,7 @@ int mbedtls_load_key_fail_test(void)
             ret = -1;
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -887,8 +884,7 @@ int mbedtls_retrieve_pubkey_test(void)
             ret = test_retrieve_pubkey_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -1191,8 +1187,7 @@ int mbedtls_sign_verify_test(void)
             ret = test_sign_verify_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT, ASSET_TEST_CA, ASSET_SECP256R1_PKCS8_NAME, 0, 0);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
@@ -1380,8 +1375,7 @@ int mbedtls_ecdsa_der_test(void)
                 PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, PSA_ALG_SHA_256, 32);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
@@ -1584,8 +1578,7 @@ int mbedtls_ecdsa_verify_test(void)
                 0, PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, PSA_ALG_SHA_512);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
