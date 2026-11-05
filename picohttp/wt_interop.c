@@ -846,6 +846,66 @@ static int wt_interop_queue_datagram(wt_interop_session_t* session, uint8_t cons
     return ret;
 }
 
+static int wt_interop_queue_get_datagram(wt_interop_session_t* session, char const* name)
+{
+    int ret = 0;
+    uint8_t line[WT_INTEROP_LINE_MAX];
+    size_t length = 0;
+
+    if (picoquic_sprintf((char*)line, sizeof(line), &length, "GET %s", name) != 0) {
+        ret = -1;
+    }
+    else {
+        ret = wt_interop_queue_datagram(session, line, length, NULL, 0);
+    }
+    return ret;
+}
+
+/* Datagram requests: wait after the last GET or response, then repeat the GET of missing files. */
+static void wt_interop_arm_retry(wt_interop_session_t* session)
+{
+    if (session->request_mode == wt_interop_mode_datagram && !session->is_done &&
+        session->nb_files_received < session->nb_files) {
+        session->retry_time = picoquic_get_quic_time(picoquic_get_quic_ctx(session->cnx)) + WT_INTEROP_RETRY_DELAY;
+        picoquic_set_app_wake_time(session->cnx, session->retry_time);
+    }
+    else {
+        session->retry_time = 0;
+    }
+}
+
+static int wt_interop_retry_requests(wt_interop_session_t* session)
+{
+    int ret = 0;
+    uint64_t current_time = picoquic_get_quic_time(picoquic_get_quic_ctx(session->cnx));
+
+    if (session->retry_time != 0 && current_time < session->retry_time) {
+        /* Woken up before the timer, which was pushed back by a response. */
+        picoquic_set_app_wake_time(session->cnx, session->retry_time);
+    }
+    else if (session->retry_time != 0) {
+        session->retry_time = 0;
+        if (!session->is_done && session->nb_files_received < session->nb_files) {
+            if (session->nb_retry_cycles >= WT_INTEROP_RETRY_CYCLES_MAX) {
+                picoquic_log_app_message(session->cnx, "WT interop: %zu files missing after %d retries",
+                    session->nb_files - session->nb_files_received, session->nb_retry_cycles);
+                session->nb_errors++;
+                ret = wt_interop_check_done(session);
+            }
+            else {
+                session->nb_retry_cycles++;
+                for (wt_interop_file_t* file = session->first_file; ret == 0 && file != NULL; file = file->next) {
+                    if (!file->is_received) {
+                        ret = wt_interop_queue_get_datagram(session, file->name);
+                        session->nb_get_repeated++;
+                    }
+                }
+            }
+        }
+    }
+    return ret;
+}
+
 static int wt_interop_start_requests(wt_interop_session_t* session)
 {
     int ret = 0;
@@ -858,17 +918,9 @@ static int wt_interop_start_requests(wt_interop_session_t* session)
         case wt_interop_mode_bidirectional:
             ret = wt_interop_request_on_stream(session, file->name, 1);
             break;
-        case wt_interop_mode_datagram: {
-            uint8_t line[WT_INTEROP_LINE_MAX];
-            size_t length = 0;
-            if (picoquic_sprintf((char*)line, sizeof(line), &length, "GET %s", file->name) != 0) {
-                ret = -1;
-            }
-            else {
-                ret = wt_interop_queue_datagram(session, line, length, NULL, 0);
-            }
+        case wt_interop_mode_datagram:
+            ret = wt_interop_queue_get_datagram(session, file->name);
             break;
-        }
         default:
             break;
         }
@@ -889,12 +941,8 @@ static int wt_interop_respond_on_stream(wt_interop_session_t* session, h3zero_st
     uint64_t size = 0;
     FILE* F = wt_interop_open_www(session, name, &size);
 
-    if (F == NULL) {
-        if (WT_INTEROP_IS_BIDIR(stream_ctx->stream_id)) {
-            ret = picowt_reset_stream(session->cnx, stream_ctx, WT_INTEROP_STREAM_ERR_NOT_FOUND);
-        }
-    }
-    else if (WT_INTEROP_IS_BIDIR(stream_ctx->stream_id)) {
+    /* HTTP/0.9 cannot signal a missing file, so it is sent as an empty file. */
+    if (WT_INTEROP_IS_BIDIR(stream_ctx->stream_id)) {
         stream->F_send = F;
         stream->send_remaining = size;
         stream->is_sending = 1;
@@ -931,13 +979,12 @@ static int wt_interop_respond_datagram(wt_interop_session_t* session, char const
     size_t length = 0;
     FILE* F = wt_interop_open_www(session, name, &size);
 
-    if (F != NULL) {
-        if (picoquic_sprintf((char*)line, sizeof(line), &length, "PUSH %s\n", name) != 0 ||
-            wt_interop_queue_datagram(session, line, length, F, size) != 0) {
-            session->nb_errors++;
-        }
-        (void)picoquic_file_close(F);
+    /* A missing file is sent as an empty file, as on streams. */
+    if (picoquic_sprintf((char*)line, sizeof(line), &length, "PUSH %s\n", name) != 0 ||
+        wt_interop_queue_datagram(session, line, length, F, size) != 0) {
+        session->nb_errors++;
     }
+    (void)picoquic_file_close(F);
     return ret;
 }
 
@@ -1190,6 +1237,10 @@ static int wt_interop_receive_datagram(wt_interop_session_t* session, const uint
             wt_interop_file_received(session, name);
             ret = wt_interop_check_done(session);
         }
+        if (session->retry_time != 0) {
+            /* Any response pushes back the retry timer. */
+            wt_interop_arm_retry(session);
+        }
     }
     else {
         picoquic_log_app_message(session->cnx, "Invalid WT interop datagram, %zu bytes", length);
@@ -1218,6 +1269,8 @@ static int wt_interop_provide_datagram(wt_interop_session_t* session, void* cont
             session->first_datagram = datagram->next;
             if (session->first_datagram == NULL) {
                 session->last_datagram = NULL;
+                /* The last queued GET is sent, start waiting for the responses. */
+                wt_interop_arm_retry(session);
             }
             free(datagram);
         }
@@ -1425,6 +1478,9 @@ int wt_interop_callback(picoquic_cnx_t* cnx,
         break;
     case picohttp_callback_deregister:
         wt_interop_deregister(cnx, stream_ctx, session);
+        break;
+    case picohttp_callback_app_wakeup:
+        ret = wt_interop_retry_requests(session);
         break;
     default:
         ret = -1;

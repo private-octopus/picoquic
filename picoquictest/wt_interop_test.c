@@ -48,6 +48,7 @@
 
 #define WT_INTEROP_TEST_ENDPOINT "wtep"
 #define WT_INTEROP_TEST_URL "https://test.example.com:4443/"
+#define WT_INTEROP_TEST_LOSS_MASK 0x8ull /* Drops the 4th packet after the handshake, which carries datagrams. */
 
 static void wt_interop_test_mkdir(char const* dir_path)
 {
@@ -272,8 +273,10 @@ typedef struct st_wt_interop_test_spec_t {
     size_t nb_files;
     size_t const* sizes;
     size_t size_base;
-    int add_missing;
+    int add_missing; /* Also request a missing file, expected as an empty file. */
     int block_download;
+    uint64_t c_to_s_loss; /* Loss masks applied once the handshake is complete. */
+    uint64_t s_to_c_loss;
 } wt_interop_test_spec_t;
 
 /* Build the request lists, create source files, and remove stale downloads. */
@@ -324,9 +327,27 @@ static int wt_interop_test_prepare_files(wt_interop_test_spec_t const* spec, cha
         }
     }
     if (ret == 0 && spec->add_missing) {
+        if (picoquic_sprintf(path, sizeof(path), NULL, "%s/%s/nofile.bin", destination, WT_INTEROP_TEST_ENDPOINT) == 0) {
+            (void)picoquic_file_delete(path, NULL);
+        }
         ret = picoquic_sprintf(client_requests + c_len, client_max - c_len, NULL, " %s%s/nofile.bin",
             WT_INTEROP_TEST_URL, WT_INTEROP_TEST_ENDPOINT);
     }
+    return ret;
+}
+
+static int wt_interop_test_check_empty(char const* destination)
+{
+    int ret = 0;
+    char path[512];
+    FILE* F = NULL;
+
+    if (picoquic_sprintf(path, sizeof(path), NULL, "%s/%s/nofile.bin", destination, WT_INTEROP_TEST_ENDPOINT) != 0 ||
+        (F = picoquic_file_open(path, "rb")) == NULL || fgetc(F) != EOF) {
+        DBG_PRINTF("%s is not an empty file", path);
+        ret = -1;
+    }
+    (void)picoquic_file_close(F);
     return ret;
 }
 
@@ -366,6 +387,8 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
+    uint64_t c_to_s_loss = spec->c_to_s_loss;
+    uint64_t s_to_c_loss = spec->s_to_c_loss;
     uint64_t time_out;
     int nb_trials = 0;
     int was_active = 0;
@@ -455,6 +478,10 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
     if (ret == 0) {
         ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
     }
+    if (ret == 0 && (c_to_s_loss != 0 || s_to_c_loss != 0)) {
+        test_ctx->c_to_s_link->loss_mask = &c_to_s_loss;
+        test_ctx->s_to_c_link->loss_mask = &s_to_c_loss;
+    }
 
     time_out = simulated_time + 30000000;
     while (ret == 0 && picoquic_get_cnx_state(test_ctx->cnx_client) != picoquic_state_disconnected) {
@@ -465,7 +492,7 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
         }
     }
 
-    if (ret == 0 && (spec->add_missing || spec->block_download)) {
+    if (ret == 0 && spec->block_download) {
         /* The failure must end the test promptly, not after an idle timeout. */
         if (wt_interop_client_is_success(session) || session->nb_errors == 0 || simulated_time > 2000000) {
             DBG_PRINTF("Failure not detected: errors %d, time %" PRIu64, session->nb_errors, simulated_time);
@@ -476,6 +503,15 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
         DBG_PRINTF("Client not successful: accepted %d, files %zu/%zu, errors %d",
             session->is_accepted, session->nb_files_received, session->nb_files, session->nb_errors);
         ret = -1;
+    }
+    else if (ret == 0 && (spec->c_to_s_loss != 0 || spec->s_to_c_loss != 0)) {
+        /* Losses must be repaired by repeating GET, well before the idle timeout. */
+        int must_repeat = !spec->is_send;
+        if (simulated_time > 2000000 || (must_repeat && session->nb_get_repeated == 0)) {
+            DBG_PRINTF("Loss not repaired as expected: GET repeated %zu, time %" PRIu64,
+                session->nb_get_repeated, simulated_time);
+            ret = -1;
+        }
     }
     if (ret == 0 && (test_ctx->cnx_client->remote_error != 0 || test_ctx->cnx_client->local_error != 0)) {
         DBG_PRINTF("Connection close error: remote 0x%" PRIx64 ", local 0x%" PRIx64,
@@ -488,8 +524,11 @@ static int wt_interop_test_one(wt_interop_test_spec_t const* spec, uint8_t test_
             ret = wt_interop_test_check_negotiated(dir_s_dl, "p2");
         }
     }
-    if (ret == 0 && !spec->add_missing && !spec->block_download) {
+    if (ret == 0 && !spec->block_download) {
         ret = wt_interop_test_check_files(spec, (spec->is_send) ? dir_c_www : dir_s_www, (spec->is_send) ? dir_s_dl : dir_c_dl);
+    }
+    if (ret == 0 && spec->add_missing) {
+        ret = wt_interop_test_check_empty(dir_c_dl);
     }
 
     if (h3_ctx != NULL) {
@@ -549,10 +588,23 @@ int wt_interop_datagram_send_test(void)
     return wt_interop_test_one(&spec, 7);
 }
 
+/* HTTP/0.9 cannot signal a missing file, so a GET of it gets an empty file on every channel. */
 int wt_interop_missing_file_test(void)
 {
     wt_interop_test_spec_t spec = { "mf", "transfer-bidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0 };
     return wt_interop_test_one(&spec, 8);
+}
+
+int wt_interop_uni_missing_file_test(void)
+{
+    wt_interop_test_spec_t spec = { "um", "transfer-unidirectional-receive", "transfer", 0, 0, 2, wt_interop_stream_sizes, 0, 1, 0 };
+    return wt_interop_test_one(&spec, 14);
+}
+
+int wt_interop_datagram_missing_file_test(void)
+{
+    wt_interop_test_spec_t spec = { "dm", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 1, 0 };
+    return wt_interop_test_one(&spec, 15);
 }
 
 /* A single large file, so the FIN arrives in a later callback than the failed open. */
@@ -562,6 +614,25 @@ int wt_interop_download_fail_test(void)
 {
     wt_interop_test_spec_t spec = { "df", "transfer-bidirectional-receive", "transfer", 0, 0, 1, wt_interop_download_fail_sizes, 0, 0, 1 };
     return wt_interop_test_one(&spec, 9);
+}
+
+/* One packet lost in either direction, repaired by repeating GET. */
+int wt_interop_datagram_loss_get_test(void)
+{
+    wt_interop_test_spec_t spec = { "lg", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0, 0, WT_INTEROP_TEST_LOSS_MASK, 0 };
+    return wt_interop_test_one(&spec, 11);
+}
+
+int wt_interop_datagram_loss_push_test(void)
+{
+    wt_interop_test_spec_t spec = { "lp", "transfer-datagram-receive", "transfer", 0, 0, 20, NULL, 600, 0, 0, 0, WT_INTEROP_TEST_LOSS_MASK };
+    return wt_interop_test_one(&spec, 12);
+}
+
+int wt_interop_datagram_loss_send_test(void)
+{
+    wt_interop_test_spec_t spec = { "ls", "transfer", "transfer-datagram-send", 1, 0, 20, NULL, 600, 0, 0, WT_INTEROP_TEST_LOSS_MASK, WT_INTEROP_TEST_LOSS_MASK };
+    return wt_interop_test_one(&spec, 13);
 }
 
 /* The largest payload, header "PUSH file1.bin\n" included. */

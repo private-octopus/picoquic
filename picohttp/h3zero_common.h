@@ -51,7 +51,8 @@ extern "C" {
         picohttp_callback_stop_sending, /* Peer asking to reset the stream. */
         picohttp_callback_deregister, /* Context has been deregistered */
         picohttp_callback_free,
-        picohttp_callback_drain /* Peer initiated graceful WebTransport drain. */
+        picohttp_callback_drain, /* Peer initiated graceful WebTransport drain. */
+        picohttp_callback_app_wakeup /* Wake up time set by the application has expired. */
     } picohttp_call_back_event_t;
 
     struct st_h3zero_callback_ctx_t;

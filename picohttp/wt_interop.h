@@ -47,11 +47,12 @@ extern "C" {
 #define WT_INTEROP_LINE_MAX (WT_INTEROP_NAME_MAX + 8)
 /* Fits in one packet at the minimum MTU, even with a 20 byte CID. */
 #define WT_INTEROP_DATAGRAM_MAX 1100
+#define WT_INTEROP_RETRY_DELAY 250000 /* Wait after the last GET datagram or response, in microseconds */
+#define WT_INTEROP_RETRY_CYCLES_MAX 2
 #define WT_INTEROP_NEGOTIATED_FILE "negotiated_protocol.txt"
 
 #define WT_INTEROP_SESSION_ERR_DONE 0
 #define WT_INTEROP_SESSION_ERR_PROTOCOL 1
-#define WT_INTEROP_STREAM_ERR_NOT_FOUND 1
 
     typedef enum {
         wt_interop_test_unknown = 0,
@@ -152,6 +153,9 @@ extern "C" {
         int is_done;
         int is_closed;
         int is_deregistered;
+        uint64_t retry_time; /* Datagram GET retry timer, 0 if not armed. */
+        int nb_retry_cycles;
+        size_t nb_get_repeated;
         char negotiated_protocol[WT_INTEROP_NAME_MAX];
     } wt_interop_session_t;
 

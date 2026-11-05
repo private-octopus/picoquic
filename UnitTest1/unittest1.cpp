@@ -5201,6 +5201,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(wt_interop_uni_missing_file) {
+            int ret = wt_interop_uni_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_missing_file) {
+            int ret = wt_interop_datagram_missing_file_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(wt_interop_download_fail) {
             int ret = wt_interop_download_fail_test();
 
@@ -5215,6 +5227,24 @@ namespace UnitTest1
 
         TEST_METHOD(wt_interop_wildcard_post) {
             int ret = wt_interop_wildcard_post_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_loss_get) {
+            int ret = wt_interop_datagram_loss_get_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_loss_push) {
+            int ret = wt_interop_datagram_loss_push_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(wt_interop_datagram_loss_send) {
+            int ret = wt_interop_datagram_loss_send_test();
 
             Assert::AreEqual(ret, 0);
         }
