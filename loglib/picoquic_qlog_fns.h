@@ -34,6 +34,10 @@ extern "C" {
 
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
+    /* Write a text and a number, with the same output as
+     * fprintf(f, "%s%" PRIu64, text, value) or fprintf(f, "%s%" PRId64, text, value). */
+    void qlog_fns_text_uint(FILE* f, const char* text, uint64_t value);
+    void qlog_fns_text_int(FILE* f, const char* text, int64_t value);
 
 #ifdef __cplusplus
 }
