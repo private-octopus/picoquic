@@ -980,17 +980,16 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
     memset(signer, 0, sizeof(ptls_mbedtls_sign_certificate_t));
     signer->attributes = psa_key_attributes_init();
 
-    if ((ret = ptls_mbedtls_load_file(pem_fname, &buf, &n)) != 0) {
-        return ret;
-    }
-    ret = ptls_mbedtls_get_der_key(&pem, &pk_type, buf, n, NULL, 0, NULL, NULL);
+    if ((ret = ptls_mbedtls_load_file(pem_fname, &buf, &n)) == 0) {
+        ret = ptls_mbedtls_get_der_key(&pem, &pk_type, buf, n, NULL, 0, NULL, NULL);
 
-    /* We cannot use the platform API:
-    mbedtls_zeroize_and_free(buf, n);
-    so we do our own thing.
-    */
-    memset(buf, 0, n);
-    free(buf);
+        /* We cannot use the platform API:
+        mbedtls_zeroize_and_free(buf, n);
+        so we do our own thing.
+        */
+        memset(buf, 0, n);
+        free(buf);
+    }
 
     if (ret == 0) {
         if (pk_type == MBEDTLS_PK_RSA) {
@@ -1060,6 +1059,7 @@ int ptls_mbedtls_load_private_key(char const *pem_fname, ptls_context_t *ctx)
     } else {
         /* Dispose of what we have allocated. */
         ptls_mbedtls_dispose_sign_certificate(&signer->super);
+        free(signer);
     }
     return ret;
 }

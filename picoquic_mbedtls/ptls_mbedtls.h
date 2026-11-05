@@ -80,6 +80,8 @@ typedef struct st_mbedtls_message_verify_ctx_t {
 } mbedtls_message_verify_ctx_t;
 
 int ptls_mbedtls_load_private_key(char const* pem_fname, ptls_context_t* ctx);
+/* Notice that ptls_mbedtls_dispose_sign_certificate frees the certificate
+* structure, but ptls_mbedtls_sign_certificate does not. */
 void ptls_mbedtls_dispose_sign_certificate(ptls_sign_certificate_t* _self);
 int ptls_mbedtls_sign_certificate(ptls_sign_certificate_t* _self, ptls_t* tls, ptls_async_job_t** async,
     uint16_t* selected_algorithm, ptls_buffer_t* outbuf, ptls_iovec_t input,

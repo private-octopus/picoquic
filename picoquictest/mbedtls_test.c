@@ -227,8 +227,7 @@ int mbedtls_crypto_test(void)
             DBG_PRINTF("test key exchange returns: %d\n", ret);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return (ret == 0) ? 0 : -1;
 }
@@ -677,6 +676,7 @@ static int mbedtls_test_load_one_der_key(char const* path_ref)
             }
             ptls_buffer_dispose(&outbuf);
             ptls_mbedtls_dispose_sign_certificate(&signer->super);
+            free(signer);
         }
     }
 
@@ -722,8 +722,7 @@ int mbedtls_load_key_test(void)
             ret = mbedtls_test_load_one_der_key(ASSET_ED25519_KEY);
         }
 #endif
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -767,8 +766,7 @@ int mbedtls_load_key_fail_test(void)
             ret = -1;
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -798,6 +796,9 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
     char cert_path[512];
     char key_path[512];
 
+    if (chain_head != NULL) {
+        mbedtls_x509_crt_init(chain_head);
+    }
     if ((ret = picoquic_get_input_path(cert_path, sizeof(cert_path), picoquic_solution_dir, cert_path_ref)) != 0 ||
         (ret = picoquic_get_input_path(key_path, sizeof(key_path), picoquic_solution_dir, key_path_ref)) != 0) {
         DBG_PRINTF("Cannot build path from %s or %s", cert_path_ref, key_path_ref);
@@ -807,12 +808,8 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
         if (chain_head == NULL) {
             ret = PTLS_ERROR_NO_MEMORY;
         }
-        if (ret == 0) {
-            mbedtls_x509_crt_init(chain_head);
-
-            if (mbedtls_x509_crt_parse_file(chain_head, cert_path) != 0) {
-                ret = -1;
-            }
+        if (ret == 0 && mbedtls_x509_crt_parse_file(chain_head, cert_path) != 0) {
+            ret = -1;
         }
         if (ret == 0) {
             ret = ptls_mbedtls_load_private_key(key_path, &ctx);
@@ -851,13 +848,15 @@ static int test_retrieve_pubkey_one(char const* key_path_ref, char const* cert_p
                 DBG_PRINTF("%s", "Fail");
             }
         }
-        /* Clean up */
-        if (ctx.sign_certificate != NULL) {
-            ptls_mbedtls_dispose_sign_certificate(ctx.sign_certificate);
-        }
-        if (chain_head != NULL) {
-            mbedtls_x509_crt_free(chain_head);
-        }
+    }
+    /* Clean up */
+    if (ctx.sign_certificate != NULL) {
+        ptls_mbedtls_dispose_sign_certificate(ctx.sign_certificate);
+        free(ctx.sign_certificate);
+    }
+    if (chain_head != NULL) {
+        mbedtls_x509_crt_free(chain_head);
+        free(chain_head);
     }
     return ret;
 }
@@ -885,8 +884,7 @@ int mbedtls_retrieve_pubkey_test(void)
             ret = test_retrieve_pubkey_one(ASSET_SECP521R1_KEY, ASSET_SECP521R1_CERT);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
 
     return ret;
@@ -970,6 +968,8 @@ static void test_sign_free_context(ptls_context_t* ctx, int config)
         switch (config) {
         case 0:
             ptls_mbedtls_dispose_sign_certificate(ctx->sign_certificate);
+            free(ctx->sign_certificate);
+            ctx->sign_certificate = NULL;
             break;
         case 1:
         default:
@@ -1187,8 +1187,7 @@ int mbedtls_sign_verify_test(void)
             ret = test_sign_verify_one(ASSET_SECP256R1_PKCS8_KEY, ASSET_SECP256R1_PKCS8_CERT, ASSET_TEST_CA, ASSET_SECP256R1_PKCS8_NAME, 0, 0);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
@@ -1343,6 +1342,7 @@ static int test_ecdsa_der_one(char const* key_path_ref, char const* cert_path_re
     mbedtls_x509_crt_free(&crt);
     if (ctx.sign_certificate != NULL) {
         ptls_mbedtls_dispose_sign_certificate(ctx.sign_certificate);
+        free(ctx.sign_certificate);
     }
     return ret;
 }
@@ -1375,8 +1375,7 @@ int mbedtls_ecdsa_der_test(void)
                 PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, MBEDTLS_MD_SHA256, PSA_ALG_SHA_256, 32);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
@@ -1579,8 +1578,7 @@ int mbedtls_ecdsa_verify_test(void)
                 0, PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, PSA_ALG_SHA_512);
         }
 
-        /* Deinitialize the PSA crypto library. */
-        ptls_mbedtls_free();
+        /* Keep PSA initialized, later tests in this process still use it. */
     }
     return ret;
 }
