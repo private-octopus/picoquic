@@ -214,6 +214,52 @@ void qlog_fns_chars(FILE* f, const uint8_t * s, uint64_t l)
 }
 
 
+/* Write the text and the digits with one call to fwrite. If the text is too
+ * long for the buffer, write it first with fputs. fprintf costs much more
+ * than the conversion itself. */
+static void qlog_fns_text_digits(FILE* f, const char* text, int is_negative, uint64_t magnitude)
+{
+    char buffer[128];
+    char digits[20];
+    size_t nb_digits = 0;
+    size_t length = strlen(text);
+
+    do {
+        digits[nb_digits++] = (char)('0' + (magnitude % 10));
+        magnitude /= 10;
+    } while (magnitude != 0);
+
+    if (length > sizeof(buffer) - 1 - nb_digits) {
+        (void)fputs(text, f);
+        length = 0;
+    }
+    else {
+        memcpy(buffer, text, length);
+    }
+    if (is_negative) {
+        buffer[length++] = '-';
+    }
+    while (nb_digits > 0) {
+        buffer[length++] = digits[--nb_digits];
+    }
+    (void)fwrite(buffer, 1, length, f);
+}
+
+void qlog_fns_text_uint(FILE* f, const char* text, uint64_t value)
+{
+    qlog_fns_text_digits(f, text, 0, value);
+}
+
+void qlog_fns_text_int(FILE* f, const char* text, int64_t value)
+{
+    if (value < 0) {
+        qlog_fns_text_digits(f, text, 1, ((uint64_t)0) - (uint64_t)value);
+    }
+    else {
+        qlog_fns_text_digits(f, text, 0, (uint64_t)value);
+    }
+}
+
 /* Helper: write the event header */
 
 void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
@@ -230,11 +276,15 @@ void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint
         fprintf(f, "\n");
     }
 
-    fprintf(f, "[%"PRId64", ", delta_time);
+    qlog_fns_text_int(f, "[", delta_time);
     if (ctx->trace_flow_id) {
-        fprintf(f, "%"PRId64", ", path_id);
+        qlog_fns_text_int(f, ", ", (int64_t)path_id);
     }
-    fprintf(f, "\"%s\", \"%s\", {", event_class, event_name);
+    (void)fputs(", \"", f);
+    (void)fputs(event_class, f);
+    (void)fputs("\", \"", f);
+    (void)fputs(event_name, f);
+    (void)fputs("\", {", f);
 
     ctx->event_count++;
 }
@@ -283,7 +333,7 @@ void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uin
     qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "transport",
         (receiving == 0) ? "datagram_sent" : "datagram_received");
 
-    fprintf(f, " \"byte_length\": %zu", packet_length);
+    qlog_fns_text_uint(f, " \"byte_length\": ", (uint64_t)packet_length);
 
     if (addr_peer->sa_family != 0 &&
         picoquic_compare_addr(addr_peer, (struct sockaddr*)&ctx->addr_peer) != 0) {
@@ -339,12 +389,13 @@ void qlog_fns_packet_start(qlog_fns_context_t* ctx,
 
     qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", (receiving == 0) ? "packet_sent" : "packet_received");
 
-    fprintf(f, " \"packet_type\": \"%s\", \"header\": { \"packet_size\": %zu", picoquic_packet_type_name(ph->ptype),
-        byte_length);
+    (void)fputs(" \"packet_type\": \"", f);
+    (void)fputs(picoquic_packet_type_name(ph->ptype), f);
+    qlog_fns_text_uint(f, "\", \"header\": { \"packet_size\": ", (uint64_t)byte_length);
 
     if (ph->ptype != picoquic_packet_version_negotiation &&
         ph->ptype != picoquic_packet_retry) {
-        fprintf(f, ", \"packet_number\": %"PRIu64, ph->pn64);
+        qlog_fns_text_uint(f, ", \"packet_number\": ", ph->pn64);
     }
 
     if (ph->ptype != picoquic_packet_1rtt_protected) {
@@ -368,7 +419,9 @@ void qlog_fns_packet_start(qlog_fns_context_t* ctx,
     if (ph->dest_cnx_id.id_len > 0) {
         char dcid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
         picoquic_print_connection_id_hexa(dcid_name, sizeof(dcid_name), &ph->dest_cnx_id);
-        fprintf(f, ", \"dcid\": \"%s\"", dcid_name);
+        (void)fputs(", \"dcid\": \"", f);
+        (void)fputs(dcid_name, f);
+        (void)fputs("\"", f);
     }
 
     if (ph->ptype == picoquic_packet_initial && ph->token_length > 0) {
@@ -841,7 +894,8 @@ void qlog_fns_cc_dump_path(picoquic_path_t* path,
         qlog_fns_event_start(ctx, path, 0, current_time, "recovery", "metrics_updated");
 
         if (path->cwin != path_ctx->cwin) {
-            fprintf(f, "%s\"cwnd\": %" PRIu64, comma, path->cwin);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"cwnd\": ", path->cwin);
             path_ctx->cwin = path->cwin;
             comma = ",";
         }
@@ -849,36 +903,42 @@ void qlog_fns_cc_dump_path(picoquic_path_t* path,
         if (path->pacing.packet_time_microsec != path_ctx->pacing_packet_time && path->pacing.packet_time_microsec > 0) {
             double bps = ((double)path->send_mtu * 8) * 1000000.0 / path->pacing.packet_time_microsec;
             uint64_t bits_per_second = (uint64_t)bps;
-            fprintf(f, "%s\"pacing_rate\": %" PRIu64, comma, bits_per_second);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"pacing_rate\": ", bits_per_second);
             path_ctx->pacing_packet_time = path->pacing.packet_time_microsec;
             comma = ",";
         }
 
         if (path->bytes_in_transit != path_ctx->bytes_in_transit) {
-            fprintf(f, "%s\"bytes_in_flight\": %" PRIu64, comma, path->bytes_in_transit);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"bytes_in_flight\": ", path->bytes_in_transit);
             path_ctx->bytes_in_transit = path->bytes_in_transit;
             comma = ",";
         }
 
         if (path->smoothed_rtt != path_ctx->smoothed_rtt) {
-            fprintf(f, "%s\"smoothed_rtt\": %" PRIu64, comma, path->smoothed_rtt);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"smoothed_rtt\": ", path->smoothed_rtt);
             comma = ",";
         }
 
         if (path->rtt_min != path_ctx->rtt_min) {
-            fprintf(f, "%s\"min_rtt\": %" PRIu64, comma, path->rtt_min);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"min_rtt\": ", path->rtt_min);
             path_ctx->rtt_min = path->rtt_min;
             comma = ",";
         }
 
         if (path->rtt_sample != path_ctx->rtt_sample) {
-            fprintf(f, "%s\"latest_rtt\": %" PRIu64, comma, path->rtt_sample);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"latest_rtt\": ", path->rtt_sample);
             path_ctx->rtt_sample = path->rtt_sample;
             comma = ",";
         }
 
         if (path->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited) {
-            fprintf(f, "%s\"app_limited\": %u", comma, path->last_bw_estimate_path_limited);
+            (void)fputs(comma, f);
+            qlog_fns_text_uint(f, "\"app_limited\": ", path->last_bw_estimate_path_limited);
             path_ctx->last_bw_estimate_path_limited = path->last_bw_estimate_path_limited;
             /* comma = ","; (not useful since last block of function) */
         }

@@ -29,7 +29,9 @@
 
 /* Helper: Write a JSON key-value pair for an integer */
 static void qlog_json_uint(FILE* f, const char* key, uint64_t value) {
-    fprintf(f, "\"%s\": %" PRIu64, key, value);
+    (void)fputc('"', f);
+    (void)fputs(key, f);
+    qlog_fns_text_uint(f, "\": ", value);
 }
 
 /* Helper: Write a JSON key-value pair for a string */
@@ -166,9 +168,9 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
         bytes += consumed;
         /* write the header part */
         if (has_path_id) {
-            fprintf(f, ", \"path_id\": %"PRIu64"", path_id);
+            qlog_fns_text_uint(f, ", \"path_id\": ", path_id);
         }
-        fprintf(f, ", \"ack_delay\": %"PRIu64"", ack_delay);
+        qlog_fns_text_uint(f, ", \"ack_delay\": ", ack_delay);
         fprintf(f, ", \"acked_ranges\": [");
         for (uint64_t i = 0; i <= num_block; i++) {
             uint64_t skip = 0;
@@ -193,7 +195,9 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
                 }
                 start_range = largest - range;
                 end_range = (int64_t)largest;
-                fprintf(f, "[%"PRId64", %"PRId64"]", start_range, end_range);
+                qlog_fns_text_int(f, "[", start_range);
+                qlog_fns_text_int(f, ", ", end_range);
+                (void)fputc(']', f);
                 largest -= range + 1;
             }
         }
@@ -204,7 +208,9 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
             for (int ecnx = 0; ecnx < 3; ecnx++) {
                 uint64_t ecn_v = 0;
                 if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &ecn_v)) != NULL) {
-                    fprintf(f, ", \"%s\": %"PRIu64, ecn_name[ecnx], ecn_v);
+                    (void)fputs(", \"", f);
+                    (void)fputs(ecn_name[ecnx], f);
+                    qlog_fns_text_uint(f, "\": ", ecn_v);
                 }
                 else {
                     break;
