@@ -2763,7 +2763,8 @@ int multipath_ack_delay_test(void)
     return ret;
 }
 
-/* A path is stalled if the peer is active but our oldest unacknowledged packet is older than 2 RTT plus ack delay. */
+/* A path is stalled if the peer is active but our oldest unacknowledged packet is older than 2 RTT plus ack delay.
+ * When pure ACKs are ignored, only an old ack-eliciting packet makes the path stalled. */
 int multipath_ack_path_stalled_test(void)
 {
     int ret = 0;
@@ -2782,8 +2783,11 @@ int multipath_ack_path_stalled_test(void)
             uint64_t sent_ago;
             uint64_t received_ago;
             int has_pending;
+            int is_ack_eliciting;
+            int ignore_pure_ack;
             int expected;
-        } cases[] = { { 0, 0, 0, 0 }, { 60000, 5000, 1, 0 }, { 70000, 5000, 1, 1 }, { 70000, 30000, 1, 0 } };
+        } cases[] = { { 0, 0, 0, 0, 0, 0 }, { 60000, 5000, 1, 0, 0, 0 }, { 70000, 5000, 1, 0, 0, 1 }, { 70000, 30000, 1, 0, 0, 0 },
+            { 70000, 5000, 1, 0, 1, 0 }, { 70000, 5000, 1, 1, 1, 1 } };
 
         cnx->is_multipath_enabled = 1;
         path_x->smoothed_rtt = 20000;
@@ -2792,9 +2796,11 @@ int multipath_ack_path_stalled_test(void)
         for (size_t i = 0; ret == 0 && i < sizeof(cases) / sizeof(cases[0]); i++) {
             int stalled;
             oldest->send_time = simulated_time - cases[i].sent_ago;
+            oldest->is_evaluated = 1;
+            oldest->is_ack_eliciting = cases[i].is_ack_eliciting;
             path_x->pkt_ctx.pending_first = (cases[i].has_pending) ? oldest : NULL;
             cnx->latest_receive_time = simulated_time - cases[i].received_ago;
-            stalled = picoquic_is_ack_path_stalled(cnx, path_x, simulated_time);
+            stalled = picoquic_is_ack_path_stalled(cnx, path_x, simulated_time, cases[i].ignore_pure_ack);
             if (stalled != cases[i].expected) {
                 DBG_PRINTF("Case %zu: stalled %d, expected %d (threshold %" PRIu64 ")", i, stalled, cases[i].expected, delay);
                 ret = -1;
@@ -2825,7 +2831,7 @@ static int multipath_nominal_ack_path_index(picoquic_cnx_t* cnx, uint64_t curren
 }
 
 /* The nominal ack path is sticky: it only changes if it stalls, or if a healthy path has a clearly lower RTT.
- * If the only available path stalls, ACKs go on a healthy backup path, which stays backup. */
+ * If the only available path stalls with an ack-eliciting packet, ACKs go on a healthy backup path, which stays backup. */
 int multipath_nominal_ack_path_test(void)
 {
     int ret = 0;
@@ -2892,8 +2898,23 @@ int multipath_nominal_ack_path_test(void)
             }
         }
         if (ret == 0) {
-            /* Only path 0 is available and it stalls: the ACK goes on backup path 1, which remains backup */
+            /* Only path 0 is available, and only an old pure ACK is pending: ACKs stay on path 0 */
             cnx->path[1]->path_is_backup = 1;
+            oldest->is_evaluated = 1;
+            oldest->is_ack_eliciting = 0;
+            cnx->path[0]->pkt_ctx.pending_first = oldest;
+            picoquic_set_ack_needed(cnx, simulated_time, picoquic_packet_context_application, cnx->path[0], 1);
+            nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path);
+            cnx->path[0]->pkt_ctx.pending_first = NULL;
+            if (nominal != 0 || next_path != cnx->path[0]) {
+                DBG_PRINTF("Pure ACK pending on path 0: nominal %d, selected path %d, expected 0, 0", nominal,
+                    (next_path == cnx->path[1]) ? 1 : 0);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            /* Only path 0 is available and it stalls: the ACK goes on backup path 1, which remains backup */
+            oldest->is_ack_eliciting = 1;
             cnx->path[0]->pkt_ctx.pending_first = oldest;
             picoquic_set_ack_needed(cnx, simulated_time, picoquic_packet_context_application, cnx->path[0], 1);
             nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path);

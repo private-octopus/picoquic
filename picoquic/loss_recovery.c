@@ -989,6 +989,19 @@ int picoquic_is_packet_ack_eliciting(picoquic_packet_t * packet)
     return is_ack_eliciting;
 }
 
+/* Oldest ACK eliciting pending packet among the first PICOQUIC_ACK_ELICITING_SCAN_MAX, or NULL; the peer may delay ACKs of other packets. */
+picoquic_packet_t* picoquic_first_ack_eliciting_packet(picoquic_packet_context_t* pkt_ctx)
+{
+    picoquic_packet_t* packet = pkt_ctx->pending_first;
+    int nb_scanned = 0;
+
+    while (packet != NULL && !picoquic_is_packet_ack_eliciting(packet)) {
+        nb_scanned++;
+        packet = (nb_scanned >= PICOQUIC_ACK_ELICITING_SCAN_MAX) ? NULL : packet->packet_next;
+    }
+    return packet;
+}
+
 /* In multipath operation, schedule all packets queued on a path for retransmission
  */
 static void picoquic_retransmit_path_packet_queue(picoquic_cnx_t* cnx,

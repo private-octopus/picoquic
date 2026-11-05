@@ -364,10 +364,11 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
     return tuple;
 }
 
-/* Path stalled: peer active within 1 RTT, but our oldest unacked packet is older than 2 RTT plus ack delay. */
-int picoquic_is_ack_path_stalled(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+/* Path stalled: peer active within 1 RTT, but our oldest unacked packet is older than 2 RTT plus ack delay.
+ * With ignore_pure_ack, only ack-eliciting packets count, since the peer may acknowledge pure ACKs late. */
+int picoquic_is_ack_path_stalled(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, int ignore_pure_ack)
 {
-    picoquic_packet_t* oldest = path_x->pkt_ctx.pending_first;
+    picoquic_packet_t* oldest = (ignore_pure_ack) ? picoquic_first_ack_eliciting_packet(&path_x->pkt_ctx) : path_x->pkt_ctx.pending_first;
     uint64_t delay = 2 * path_x->smoothed_rtt + cnx->remote_parameters.max_ack_delay;
 
     return (cnx->is_multipath_enabled && oldest != NULL && oldest->send_time + delay < current_time &&
@@ -459,7 +460,7 @@ static int picoquic_update_nominal_ack_path(picoquic_cnx_t* cnx, uint64_t curren
         picoquic_path_t* path_x = cnx->path[path_index];
         path_x->is_nominal_ack_path = 0;
         if (picoquic_is_path_candidate(path_x, min_retransmit, next_stream)) {
-            int is_stalled = picoquic_is_ack_path_stalled(cnx, path_x, current_time);
+            int is_stalled = picoquic_is_ack_path_stalled(cnx, path_x, current_time, 0);
             nb_candidates++;
             if (path_x->unique_path_id == cnx->nominal_ack_path_id) {
                 i_nominal = path_index;
@@ -630,13 +631,13 @@ void picoquic_select_next_path_tuple(picoquic_cnx_t* cnx, uint64_t current_time,
         if (*next_path == NULL) {
             *next_path = cnx->path[0];
         }
-        /* That path is the nominal ack path, unless stalled: then a healthy backup carries ACKs, without promotion. */
+        /* That path is the nominal ack path, unless stalled with ack-eliciting packets: then a healthy backup carries ACKs, without promotion. */
         picoquic_path_t* ack_path = *next_path;
-        if (cnx->is_multipath_enabled && cnx->nb_paths > 1 && picoquic_is_ack_path_stalled(cnx, *next_path, current_time)) {
+        if (cnx->is_multipath_enabled && cnx->nb_paths > 1 && picoquic_is_ack_path_stalled(cnx, *next_path, current_time, 1)) {
             for (int i = 0; ack_path == *next_path && i < cnx->nb_paths; i++) {
                 picoquic_path_t* path_x = cnx->path[i];
                 if (path_x != *next_path && path_x->path_is_backup && path_x->first_tuple->challenge_verified &&
-                    !path_x->path_is_demoted && !picoquic_is_ack_path_stalled(cnx, path_x, current_time)) {
+                    !path_x->path_is_demoted && !picoquic_is_ack_path_stalled(cnx, path_x, current_time, 1)) {
                     ack_path = path_x;
                 }
             }
