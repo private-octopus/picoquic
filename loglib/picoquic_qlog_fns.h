@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PICOQUIC_QLOG_FNS_H
-#define PICOQUIC_QLOG_FNS_H
+#ifndef LOGLIB_PICOQUIC_QLOG_FNS_H
+#define LOGLIB_PICOQUIC_QLOG_FNS_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,4 +42,4 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-#endif /* PICOQUIC_QLOG_FNS_H */
+#endif /* LOGLIB_PICOQUIC_QLOG_FNS_H */
