@@ -161,7 +161,10 @@ Instead of building picotls separately, you can use an integrated option
 ~~~
 
 AEGIS support is experimental and opt-in: build with `-DWITH_AEGIS=ON`
-and compatible picotls/libaegis support to advertise and negotiate AEGIS suites.
+to advertise and negotiate AEGIS suites. When supplying these dependencies
+yourself, build picotls and picoquic against the same libaegis headers from
+0.10.5 or later. Earlier releases require stricter state alignment than
+picotls guarantees for its AEGIS contexts.
 
 Either way, you can verify that everything worked:
 

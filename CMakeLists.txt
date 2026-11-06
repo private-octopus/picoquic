@@ -309,7 +309,9 @@ OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for
 # Set to picotls build as of 2026-10-27, which supports WITH_BROTLI=OFF.
 set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "e446233b4100ebcdec60901c05bfb7f4cd369c5d")
 set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
-set(PICOQUIC_FETCH_AEGIS_TAG "0.10.1" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
+# 0.10.5 removed the state alignment requirement that exceeded malloc alignment
+# in the AEGIS contexts allocated by picotls.
+set(PICOQUIC_FETCH_AEGIS_TAG "0.10.5" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
 if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
     include(FetchContent)
 endif()
@@ -394,7 +396,7 @@ int main(void)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE ${PICOQUIC_SAVED_TRY_COMPILE_TARGET_TYPE})
     cmake_pop_check_state()
     if(NOT PICOQUIC_AEGIS_PICOTLS_API_COMPATIBLE)
-        message(FATAL_ERROR "WITH_AEGIS requires the libaegis 0.10.1-compatible incremental API used by current picotls. Use the latest upstream libaegis release or set AEGIS_PREFIX to a compatible install.")
+        message(FATAL_ERROR "WITH_AEGIS requires the libaegis incremental API used by picotls. Use libaegis 0.10.5 or later, or set AEGIS_PREFIX to a compatible install.")
     endif()
     message(STATUS "AEGIS include: ${AEGIS_INCLUDE_DIR}")
     message(STATUS "AEGIS library: ${AEGIS_LIBRARIES}")
