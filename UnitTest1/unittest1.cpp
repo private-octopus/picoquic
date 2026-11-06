@@ -3847,6 +3847,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(cubic_abe) {
+            int ret = cubic_abe_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cc_algo_reset) {
             int ret = cc_algo_reset_test();
 

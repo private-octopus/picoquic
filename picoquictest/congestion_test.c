@@ -1484,6 +1484,107 @@ int prague_ecn_recovery_test(void)
     return ret;
 }
 
+/* Alternative Backoff with ECN (ABE, RFC 8511) for Cubic.
+ * Put Cubic in congestion avoidance with a known window, then deliver
+ * either an ECN-CE notification or a series of losses, and check the
+ * multiplicative decrease that was applied for each option string:
+ *   NULL:  classic picoquic, 7/8 for both loss and ECN.
+ *   "R":   RFC 9438, beta = 0.7 for both loss and ECN.
+ *   "A":   ABE, beta_loss = 0.7, beta_ecn = 0.85.
+ *   "E80": ABE, beta_loss = 0.7, beta_ecn = 0.80.
+ * Also check that ABE is not applied during slow start (RFC 8511 section 4). */
+typedef enum {
+    cubic_abe_event_ecn = 0,
+    cubic_abe_event_loss,
+    cubic_abe_event_ecn_slow_start
+} cubic_abe_event_t;
+
+static int cubic_abe_test_one(char const* option_string, cubic_abe_event_t event, double expected_beta)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 10000000;
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+        uint64_t cwin_before;
+        double beta;
+
+        picoquic_set_congestion_algorithm_ex(cnx, picoquic_cubic_algorithm, option_string);
+        if (event != cubic_abe_event_ecn_slow_start) {
+            /* Seed the window, which moves Cubic to congestion avoidance
+             * with W_max = cwin, so fast convergence does not kick in. */
+            ack_state.nb_bytes_acknowledged = 100 * path_x->send_mtu;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_seed_cwin,
+                &ack_state, simulated_time);
+        }
+        cwin_before = path_x->cwin;
+        pkt_ctx->send_sequence = 1000;
+        simulated_time += 1000000;
+
+        if (event == cubic_abe_event_loss) {
+            /* Picoquic's Cubic only backs off after repeated losses */
+            for (uint64_t lost = 1; lost <= 3; lost++) {
+                ack_state.lost_packet_number = lost;
+                cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_repeat,
+                    &ack_state, simulated_time);
+            }
+        }
+        else {
+            ack_state.lost_packet_number = 1;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_ecn_ec,
+                &ack_state, simulated_time);
+            /* A second CE mark within the same RTT must not reduce the window again. */
+            ack_state.lost_packet_number = 2;
+            cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_ecn_ec,
+                &ack_state, simulated_time);
+        }
+
+        beta = (double)path_x->cwin / (double)cwin_before;
+        if (beta < expected_beta - 0.005 || beta > expected_beta + 0.005) {
+            DBG_PRINTF("Cubic option %s, event %d: cwin %" PRIu64 " -> %" PRIu64 ", beta %f instead of %f",
+                (option_string == NULL) ? "NULL" : option_string, (int)event, cwin_before, path_x->cwin,
+                beta, expected_beta);
+            ret = -1;
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+
+    return ret;
+}
+
+int cubic_abe_test(void)
+{
+    struct {
+        char const* option_string;
+        cubic_abe_event_t event;
+        double expected_beta;
+    } abe_cases[] = {
+        { NULL, cubic_abe_event_ecn, 7.0 / 8.0 },
+        { NULL, cubic_abe_event_loss, 7.0 / 8.0 },
+        { "R", cubic_abe_event_ecn, 0.7 },
+        { "R", cubic_abe_event_loss, 0.7 },
+        { "A", cubic_abe_event_ecn, 0.85 },
+        { "A", cubic_abe_event_loss, 0.7 },
+        { "A", cubic_abe_event_ecn_slow_start, 0.7 },
+        { "E80", cubic_abe_event_ecn, 0.8 },
+        { "E80", cubic_abe_event_loss, 0.7 }
+    };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(abe_cases) / sizeof(abe_cases[0]); i++) {
+        ret = cubic_abe_test_one(abe_cases[i].option_string, abe_cases[i].event, abe_cases[i].expected_beta);
+    }
+
+    return ret;
+}
+
 /* picoquic_congestion_notification_reset fires on path migration (RFC 9002): the new path's
  * characteristics are unknown, so a compliant algorithm must discard everything it learned and
  * restart as if the connection were brand new -- in particular path_x->cwin should return to

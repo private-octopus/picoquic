@@ -695,6 +695,7 @@ static const picoquic_test_def_t test_table[] = {
     { "c4_seed_resuming", c4_seed_resuming_test },
     { "prague_notify", prague_notify_test },
     { "prague_ecn_recovery", prague_ecn_recovery_test },
+    { "cubic_abe", cubic_abe_test },
     { "cc_algo_reset", cc_algo_reset_test },
     { "cc_common_slow_start_increase", cc_common_slow_start_increase_test },
     { "initial_race", initial_race_test },
