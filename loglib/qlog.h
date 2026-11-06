@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-int qlog_packet_start(uint64_t time, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr);
+int qlog_packet_start(uint64_t time, uint64_t path_id, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr);
 int qlog_packet_frame(bytestream * s, void * ptr);
 int qlog_packet_end(void * ptr);
 int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * cid, int client_mode,
