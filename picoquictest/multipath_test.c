@@ -2889,6 +2889,8 @@ int multipath_nominal_ack_path_test(void)
         if (ret == 0) {
             /* A stalled path is abandoned */
             oldest->send_time = simulated_time - 100000;
+            oldest->is_evaluated = 1;
+            oldest->is_ack_eliciting = 1;
             cnx->path[1]->pkt_ctx.pending_first = oldest;
             nominal = multipath_nominal_ack_path_index(cnx, simulated_time, &next_path);
             cnx->path[1]->pkt_ctx.pending_first = NULL;

@@ -460,7 +460,7 @@ static int picoquic_update_nominal_ack_path(picoquic_cnx_t* cnx, uint64_t curren
         picoquic_path_t* path_x = cnx->path[path_index];
         path_x->is_nominal_ack_path = 0;
         if (picoquic_is_path_candidate(path_x, min_retransmit, next_stream)) {
-            int is_stalled = picoquic_is_ack_path_stalled(cnx, path_x, current_time, 0);
+            int is_stalled = picoquic_is_ack_path_stalled(cnx, path_x, current_time, 1);
             nb_candidates++;
             if (path_x->unique_path_id == cnx->nominal_ack_path_id) {
                 i_nominal = path_index;
