@@ -4492,6 +4492,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_abandon_stash_reverse) {
+            int ret = multipath_abandon_stash_reverse_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_delete_path_stash) {
+            int ret = multipath_delete_path_stash_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_unique_path_id) {
+            int ret = multipath_unique_path_id_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_ack_delay) {
             int ret = multipath_ack_delay_test();
 

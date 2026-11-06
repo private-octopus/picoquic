@@ -1620,6 +1620,7 @@ void picoquic_set_first_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time,
     const struct sockaddr* local_addr, const struct sockaddr* peer_addr, int if_index,
     uint64_t unique_path_id);
+uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t requested_id);
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,

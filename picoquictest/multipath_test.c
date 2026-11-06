@@ -2717,6 +2717,38 @@ static int multipath_abandon_stash_frame(picoquic_cnx_t* cnx, int is_abandon, ui
     return ret;
 }
 
+static void multipath_abandon_stash_config(picoquic_cnx_t* cnx)
+{
+    cnx->is_multipath_enabled = 1;
+    cnx->local_parameters.initial_max_path_id = 2;
+    cnx->max_path_id_local = 2;
+    cnx->max_path_id_remote = 1000;
+    /* The peer must not use null length CIDs, or PATH_NEW_CONNECTION_ID is a protocol violation. */
+    cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len = 8;
+}
+
+/* Create the local CID lists for the next path IDs, as when preparing a packet. */
+static void multipath_abandon_stash_refill(picoquic_cnx_t* cnx, uint64_t current_time)
+{
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    uint64_t next_wake_time = UINT64_MAX;
+    int more_data = 0;
+    int is_pure_ack = 1;
+
+    (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), current_time,
+        &next_wake_time, &more_data, &is_pure_ack);
+}
+
+static uint64_t multipath_abandon_stash_count(picoquic_cnx_t* cnx)
+{
+    uint64_t nb_stashes = 0;
+
+    for (picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash; stash != NULL; stash = stash->next_stash) {
+        nb_stashes++;
+    }
+    return nb_stashes;
+}
+
 int multipath_abandon_stash_test(void)
 {
     uint64_t simulated_time = 0;
@@ -2726,23 +2758,13 @@ int multipath_abandon_stash_test(void)
     int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
 
     if (ret == 0) {
-        cnx->is_multipath_enabled = 1;
-        cnx->local_parameters.initial_max_path_id = 2;
-        cnx->max_path_id_local = 2;
-        cnx->max_path_id_remote = 1000;
-        /* The peer must not use null length CIDs, or PATH_NEW_CONNECTION_ID is a protocol violation. */
-        cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id.id_len = 8;
+        multipath_abandon_stash_config(cnx);
     }
+
     /* Each round, the local CID lists are refilled and the newest unused path ID is abandoned. */
     for (int i = 0; ret == 0 && i < MULTIPATH_ABANDON_STASH_ROUNDS; i++) {
-        uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
-        uint64_t next_wake_time = UINT64_MAX;
-        int more_data = 0;
-        int is_pure_ack = 1;
-
         simulated_time += 1000;
-        (void)picoquic_format_new_local_id_as_needed(cnx, buffer, buffer + sizeof(buffer), simulated_time,
-            &next_wake_time, &more_data, &is_pure_ack);
+        multipath_abandon_stash_refill(cnx, simulated_time);
         ret = multipath_abandon_stash_frame(cnx, 1, cnx->next_path_id_in_lists - 1, simulated_time);
     }
     if (ret == 0 && cnx->max_path_id_local < MULTIPATH_ABANDON_STASH_ROUNDS) {
@@ -2752,14 +2774,166 @@ int multipath_abandon_stash_test(void)
     for (uint64_t path_id = 1; ret == 0 && path_id <= cnx->max_path_id_local; path_id++) {
         ret = multipath_abandon_stash_frame(cnx, 0, path_id, simulated_time);
     }
+    if (ret == 0 && (nb_stashes = multipath_abandon_stash_count(cnx)) > cnx->local_parameters.initial_max_path_id + 1) {
+        DBG_PRINTF("%" PRIu64 " stashes for max path ID %" PRIu64, nb_stashes, cnx->max_path_id_local);
+        ret = -1;
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+/* A stash created before the abandon is deleted by it, and a later new CID does not recreate it. */
+int multipath_abandon_stash_reverse_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t nb_stashes = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
     if (ret == 0) {
-        picoquic_remote_cnxid_stash_t* stash = cnx->first_remote_cnxid_stash;
-        while (stash != NULL) {
-            nb_stashes++;
-            stash = stash->next_stash;
+        multipath_abandon_stash_config(cnx);
+    }
+
+    for (int i = 0; ret == 0 && i < MULTIPATH_ABANDON_STASH_ROUNDS; i++) {
+        uint64_t path_id = 0;
+
+        simulated_time += 1000;
+        multipath_abandon_stash_refill(cnx, simulated_time);
+        path_id = cnx->next_path_id_in_lists - 1;
+        if ((ret = multipath_abandon_stash_frame(cnx, 0, path_id, simulated_time)) == 0 &&
+            picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) == NULL) {
+            DBG_PRINTF("No stash created for path %" PRIu64, path_id);
+            ret = -1;
         }
-        if (nb_stashes > cnx->local_parameters.initial_max_path_id + 1) {
-            DBG_PRINTF("%" PRIu64 " stashes for max path ID %" PRIu64, nb_stashes, cnx->max_path_id_local);
+        if (ret == 0 && (ret = multipath_abandon_stash_frame(cnx, 1, path_id, simulated_time)) == 0 &&
+            picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) != NULL) {
+            DBG_PRINTF("Stash of path %" PRIu64 " not deleted by the abandon", path_id);
+            ret = -1;
+        }
+        if (ret == 0 && (ret = multipath_abandon_stash_frame(cnx, 0, path_id, simulated_time)) == 0 &&
+            picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) != NULL) {
+            DBG_PRINTF("Stash of path %" PRIu64 " recreated after the abandon", path_id);
+            ret = -1;
+        }
+    }
+    if (ret == 0 && (nb_stashes = multipath_abandon_stash_count(cnx)) > cnx->local_parameters.initial_max_path_id + 1) {
+        DBG_PRINTF("%" PRIu64 " stashes for max path ID %" PRIu64, nb_stashes, cnx->max_path_id_local);
+        ret = -1;
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+static void multipath_abandon_stash_addr(struct sockaddr_in* addr, uint16_t port)
+{
+    memset(addr, 0, sizeof(struct sockaddr_in));
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(port);
+}
+
+/* Deleting a path deletes the stash of its path ID, unless another path entry still uses that ID. */
+int multipath_delete_path_stash_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t path_id = 1;
+    int path_index = -1;
+    int twin_index = -1;
+    struct sockaddr_in addr_local;
+    struct sockaddr_in addr_peer;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        multipath_abandon_stash_config(cnx);
+    }
+
+    multipath_abandon_stash_addr(&addr_local, 1234);
+    multipath_abandon_stash_addr(&addr_peer, 4321);
+    if (ret == 0) {
+        multipath_abandon_stash_refill(cnx, simulated_time);
+        if ((path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local,
+            (struct sockaddr*)&addr_peer, 0, path_id)) < 0 ||
+            (twin_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local,
+            (struct sockaddr*)&addr_peer, 0, path_id)) < 0) {
+            DBG_PRINTF("Cannot create two paths with ID %" PRIu64, path_id);
+            ret = -1;
+        }
+    }
+    if (ret == 0 && (ret = multipath_abandon_stash_frame(cnx, 0, path_id, simulated_time)) == 0 &&
+        picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) == NULL) {
+        DBG_PRINTF("No stash created for path %" PRIu64, path_id);
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_dereference_stashed_cnxid(cnx, cnx->path[twin_index], 0);
+        picoquic_delete_path(cnx, twin_index);
+        if (picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) == NULL) {
+            DBG_PRINTF("Stash of path %" PRIu64 " deleted while still in use", path_id);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        picoquic_dereference_stashed_cnxid(cnx, cnx->path[path_index], 0);
+        picoquic_delete_path(cnx, path_index);
+        if (picoquic_find_or_create_remote_cnxid_stash(cnx, path_id, 0) != NULL) {
+            DBG_PRINTF("Stash of path %" PRIu64 " not deleted with the path", path_id);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+/* A new path never gets an ID already used by another path, even when no other ID is allowed. */
+int multipath_unique_path_id_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t unique_path_id = 0;
+    struct sockaddr_in addr_local;
+    struct sockaddr_in addr_peer;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        multipath_abandon_stash_config(cnx);
+    }
+
+    multipath_abandon_stash_addr(&addr_local, 1234);
+    multipath_abandon_stash_addr(&addr_peer, 4321);
+    if (ret == 0) {
+        /* Path IDs are only usable once their local CID list holds CIDs. */
+        cnx->remote_parameters.active_connection_id_limit = 2;
+        multipath_abandon_stash_refill(cnx, simulated_time);
+        /* Path ID 1 is taken, for example by a path the peer started, and the peer allows no higher ID. */
+        if (picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local, (struct sockaddr*)&addr_peer, 0, 1) < 0) {
+            DBG_PRINTF("%s", "Cannot create the path with ID 1");
+            ret = -1;
+        }
+        cnx->unique_path_id_next = 1;
+        cnx->max_path_id_remote = 1;
+    }
+    if (ret == 0 && (unique_path_id = picoquic_find_avalaible_unique_path_id(cnx, UINT64_MAX)) != UINT64_MAX) {
+        DBG_PRINTF("Path ID %" PRIu64 " returned, but all allowed IDs are in use", unique_path_id);
+        ret = -1;
+    }
+    if (ret == 0) {
+        /* Once the peer allows ID 2, it is the next one. */
+        cnx->max_path_id_remote = 2;
+        if ((unique_path_id = picoquic_find_avalaible_unique_path_id(cnx, UINT64_MAX)) != 2 ||
+            cnx->unique_path_id_next != 3) {
+            DBG_PRINTF("Path ID %" PRIu64 ", next %" PRIu64 ", expected 2 and 3", unique_path_id, cnx->unique_path_id_next);
             ret = -1;
         }
     }
