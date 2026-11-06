@@ -56,8 +56,8 @@ static uint64_t picorbtree_test_key(const picorbtree_test_item_t* item)
 
 static int picorbtree_test_compare(const void* left, const void* right)
 {
-    const picorbtree_test_item_t* left_item = *(const picorbtree_test_item_t* const*)left;
-    const picorbtree_test_item_t* right_item = *(const picorbtree_test_item_t* const*)right;
+    const picorbtree_test_item_t* left_item = *(picorbtree_test_item_t* const*)left;
+    const picorbtree_test_item_t* right_item = *(picorbtree_test_item_t* const*)right;
     uint64_t left_key = picorbtree_test_key(left_item);
     uint64_t right_key = picorbtree_test_key(right_item);
     int ret = 0;
@@ -83,7 +83,7 @@ static int picorbtree_test_unlinked(const picorbtree_node_t* node)
 }
 
 static int picorbtree_test_walk(picorbtree_node_t* node, picorbtree_node_t* parent,
-    const picorbtree_test_item_t* const* expected, size_t expected_count, size_t* seen)
+    picorbtree_test_item_t** expected, size_t expected_count, size_t* seen)
 {
     int black_height = 0;
 
@@ -107,7 +107,7 @@ static int picorbtree_test_walk(picorbtree_node_t* node, picorbtree_node_t* pare
 
 static int picorbtree_test_check(picorbtree_tree_t* tree, picorbtree_test_item_t* items, size_t operation)
 {
-    const picorbtree_test_item_t* expected[PICORBTREE_TEST_ITEM_COUNT];
+    picorbtree_test_item_t* expected[PICORBTREE_TEST_ITEM_COUNT];
     size_t expected_count = 0;
     size_t seen = 0;
     size_t i;
