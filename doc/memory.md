@@ -67,7 +67,7 @@ still be limited. The API to do that is:
 void picoquic_set_cwin_max(picoquic_quic_t* quic, uint64_t cwin_max);
 ~~~
 The cap will apply to all the connection managed in the specified QUIC context,
-because all these connections share the same memory pool. 
+because all these connections share the same memory pool.
 
 ## Receiver side memory management
 
@@ -153,4 +153,41 @@ monitor the total number of packets allocated across all connections,
 lower the cap if the packets queue are too large, and progressively lift
 it when conditions stabilize. But in practice this will require some work...
 
+## Stream opening attacks
 
+The reordering buffers discussed above are the main consumers of sender-side
+memory, but the code also allocates memory for stream management. The stream
+header itself is only a few hundred bytes, but some applications allocate
+more memory for processing the stream content.
+
+We see an example of "application level" per stream allocation with the
+default HTTP3 server, "h3zero". It reads the size of the incoming frame from
+the stream, and allocates as many bytes of memory to store it. The
+maximum supported frame size is 64KB, and that memory will be freed once
+the frame is parsed. That seems logical, but there is a potential
+attack. An adversary could open lots of streams, send a few bytes on each
+stream to announce a 64KB length, cause a 64KB allocation, and never complete
+the stransmission of the frame. That will force the server to hold on
+64KB of data for each stream, and that memory could be held until the
+server decides to close the connection.
+
+This attack can be mitigated by limiting the number of streams that the
+pear can open, using the `initial_max_streams_bidi` and `initial_max_streams_uni`
+transport pararameters during the connection setup. These two parameters
+are set by default to 512, and the attacker can cause at most the allocation of 32MB per
+connection. Limit it to 100, the lowest value authorized for HTTP/3 by
+[RFC9114](https://www.rfc-editor.org/rfc/rfc9114.html) and the attacker
+can only cause an allocation of 6.4MB of memory. This can be done
+by calling the `picoquic_set_default_tp_value` to configure the QUIC context,
+as in:
+
+```
+picoquic_set_default_tp_value(quic, picoquic_tp_initial_max_streams_bidi, 512);
+picoquic_set_default_tp_value(quic, picoquic_tp_initial_max_streams_uni, 512);
+```
+
+Of course, limiting the number of streams has its downside. Some Web Transport
+applications may well require supporting a large number of parallel streams,
+and a limit of 100 streams may prove too constraining. It is also only a
+partial solution: the attacker could just resort to opening many
+connections.

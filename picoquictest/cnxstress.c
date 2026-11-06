@@ -735,9 +735,9 @@ int cnx_stress_set_default_tp(picoquic_quic_t* quic)
         * a 64K-1 packet */
     tp.initial_max_stream_data_bidi_local = 0;
     tp.initial_max_stream_data_bidi_remote = 0;
-    tp.initial_max_stream_id_bidir = 0;
+    tp.initial_max_streams_bidi = 0;
     tp.initial_max_stream_data_uni = 0x20000;
-    tp.initial_max_stream_id_unidir = 64;
+    tp.initial_max_streams_uni = 64;
     tp.initial_max_data = 0x20000;
     tp.max_idle_timeout = 60000;
     tp.max_packet_size = PICOQUIC_MAX_PACKET_SIZE;

@@ -572,7 +572,7 @@ int stream_uni_blocked_test(void)
 	if (ret == 0) {
 		memset(&server_parameters, 0, sizeof(picoquic_tp_t));
 		picoquic_init_transport_parameters(&server_parameters);
-		server_parameters.initial_max_stream_id_unidir = 1;
+		server_parameters.initial_max_streams_uni = 1;
 		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
 		picoquic_set_qlog(test_ctx->qclient, ".");
@@ -752,10 +752,10 @@ static int stream_blocked_reset_one(int is_bidir)
 		memset(&server_parameters, 0, sizeof(picoquic_tp_t));
 		picoquic_init_transport_parameters(&server_parameters);
 		if (is_bidir) {
-			server_parameters.initial_max_stream_id_bidir = 1;
+			server_parameters.initial_max_streams_bidi = 1;
 		}
 		else {
-			server_parameters.initial_max_stream_id_unidir = 1;
+			server_parameters.initial_max_streams_uni = 1;
 		}
 		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
@@ -973,8 +973,8 @@ int stream_uni_reactivate_test(void)
 		picoquic_init_transport_parameters(&server_parameters);
 		server_parameters.initial_max_stream_data_bidi_local = 2097152;
 		server_parameters.initial_max_data = 31457280;
-		server_parameters.initial_max_stream_id_bidir = 5120;
-		server_parameters.initial_max_stream_id_unidir = 5120;
+		server_parameters.initial_max_streams_bidi = 5120;
+		server_parameters.initial_max_streams_uni = 5120;
 		server_parameters.initial_max_stream_data_bidi_remote = 65635;
 		server_parameters.initial_max_stream_data_uni = 65535;
 		picoquic_set_default_tp(test_ctx->qserver, &server_parameters);

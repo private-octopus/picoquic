@@ -1257,12 +1257,12 @@ void warptest_init_transport_parameters(picoquic_tp_t* tp, warptest_spec_t* spec
         tp->initial_max_stream_data_uni = spec->max_stream_data;
     }
     tp->initial_max_data = 0x100000;
-    tp->initial_max_stream_id_bidir = 512;
+    tp->initial_max_streams_bidi = 512;
     if (spec->max_streams_client == 0) {
-        tp->initial_max_stream_id_unidir = 16;
+        tp->initial_max_streams_uni = 16;
     }
     else {
-        tp->initial_max_stream_id_unidir = spec->max_streams_client;
+        tp->initial_max_streams_uni = spec->max_streams_client;
     }
     tp->max_idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;

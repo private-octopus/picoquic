@@ -1001,7 +1001,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
             fprintf(stdout, "Max streams bidir remote before start = %d (%d)\n",
                 (int)cnx_client->max_streams_bidir_remote,
-                (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
+                (int)cnx_client->remote_parameters.initial_max_streams_bidi);
 
             if (config->ech_target != NULL) {
                 picoquic_ech_configure_client(cnx_client, config->ech_target, config->ech_target_len);
@@ -1019,7 +1019,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                 fprintf(stdout, "Max streams bidir remote after start = %d (%d)\n",
                     (int)cnx_client->max_streams_bidir_remote,
-                    (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
+                    (int)cnx_client->remote_parameters.initial_max_streams_bidi);
             }
 
             if (ret == 0 && !is_quicperf) {
@@ -1028,7 +1028,7 @@ int quic_client(const char* ip_address_text, int server_port,
 
                     fprintf(stdout, "Max streams bidir remote after 0rtt = %d (%d)\n",
                         (int)cnx_client->max_streams_bidir_remote,
-                        (int)cnx_client->remote_parameters.initial_max_stream_id_bidir);
+                        (int)cnx_client->remote_parameters.initial_max_streams_bidi);
 
                     /* Queue a simple frame to perform 0-RTT test */
                     /* Start the download scenario */

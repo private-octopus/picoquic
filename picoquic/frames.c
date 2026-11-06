@@ -4638,9 +4638,9 @@ uint8_t * picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     uint8_t* bytes0 = bytes;
 
     if (2*cnx->max_streams_bidir_local_computed + 
-        cnx->local_parameters.initial_max_stream_id_bidir > 2*cnx->max_streams_bidir_local) {
+        cnx->local_parameters.initial_max_streams_bidi > 2*cnx->max_streams_bidir_local) {
         uint64_t new_bidir_local = cnx->max_streams_bidir_local +
-            cnx->local_parameters.initial_max_stream_id_bidir;
+            cnx->local_parameters.initial_max_streams_bidi;
         if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_max_streams_bidir)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, new_bidir_local)) != NULL) {
             cnx->max_streams_bidir_local = new_bidir_local;
@@ -4653,8 +4653,8 @@ uint8_t * picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx,
     }
     
     if (2*cnx->max_streams_unidir_local_computed +
-        cnx->local_parameters.initial_max_stream_id_unidir > 2*cnx->max_streams_unidir_local) {
-        uint64_t new_unidir_local = cnx->max_streams_unidir_local + cnx->local_parameters.initial_max_stream_id_unidir;
+        cnx->local_parameters.initial_max_streams_uni > 2*cnx->max_streams_unidir_local) {
+        uint64_t new_unidir_local = cnx->max_streams_unidir_local + cnx->local_parameters.initial_max_streams_uni;
 
         if ((bytes = picoquic_frames_uint8_encode(bytes, bytes_max, picoquic_frame_type_max_streams_unidir)) != NULL &&
             (bytes = picoquic_frames_varint_encode(bytes, bytes_max, new_unidir_local)) != NULL) {

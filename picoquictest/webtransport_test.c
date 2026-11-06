@@ -1413,11 +1413,11 @@ int picowt_tp_test(void)
         if (cnx->local_parameters.initial_max_stream_data_uni >= 0x3FFF) {
             cnx->local_parameters.initial_max_stream_data_uni = 0x1000;
         }
-        if (cnx->local_parameters.initial_max_stream_id_bidir >= 0x3F) {
-            cnx->local_parameters.initial_max_stream_id_bidir = 0;
+        if (cnx->local_parameters.initial_max_streams_bidi >= 0x3F) {
+            cnx->local_parameters.initial_max_streams_bidi = 0;
         }
-        if (cnx->local_parameters.initial_max_stream_id_unidir >= 0x3F) {
-            cnx->local_parameters.initial_max_stream_id_unidir = 0;
+        if (cnx->local_parameters.initial_max_streams_uni >= 0x3F) {
+            cnx->local_parameters.initial_max_streams_uni = 0;
         }
         if (cnx->local_parameters.max_datagram_frame_size > 0) {
             cnx->local_parameters.max_datagram_frame_size = 0;
@@ -1430,8 +1430,8 @@ int picowt_tp_test(void)
             cnx->local_parameters.initial_max_stream_data_bidi_local < 0x3FFF ||
             cnx->local_parameters.initial_max_stream_data_bidi_remote < 0x3FFF ||
             cnx->local_parameters.initial_max_stream_data_uni < 0x3FFF ||
-            cnx->local_parameters.initial_max_stream_id_bidir < 0x3F ||
-            cnx->local_parameters.initial_max_stream_id_unidir < 0x3F ||
+            cnx->local_parameters.initial_max_streams_bidi < 0x3F ||
+            cnx->local_parameters.initial_max_streams_uni < 0x3F ||
             cnx->local_parameters.max_datagram_frame_size == 0) {
             ret = -1;
         }
