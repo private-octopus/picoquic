@@ -1771,6 +1771,25 @@ void picoquic_create_local_cnx_id(picoquic_quic_t* quic, picoquic_connection_id_
     }
 }
 
+/* First path ID at or after unique_path_id_next that has a local CID list and no path, or UINT64_MAX */
+static uint64_t picoquic_next_unique_path_id(picoquic_cnx_t* cnx)
+{
+    uint64_t unique_path_id = UINT64_MAX;
+    uint64_t candidate_id = cnx->unique_path_id_next;
+
+    while (unique_path_id == UINT64_MAX &&
+        candidate_id <= cnx->max_path_id_remote &&
+        candidate_id <= cnx->max_path_id_local &&
+        candidate_id <= cnx->max_path_id_in_cnxid_lists) {
+        if (picoquic_find_or_create_local_cnxid_list(cnx, candidate_id, 0) != NULL &&
+            picoquic_find_path_by_unique_id(cnx, candidate_id) < 0) {
+            unique_path_id = candidate_id;
+        }
+        candidate_id++;
+    }
+    return unique_path_id;
+}
+
 uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t requested_id)
 {
     uint64_t unique_path_id = requested_id;
@@ -1787,20 +1806,11 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
         /* Unique path ID are allocated in sequence on the client. The server should
          * always use the number proposed by the client in incoming packets */
         if (requested_id == UINT64_MAX && (cnx->client_mode || cnx->nb_paths == 0)) {
-            while (cnx->unique_path_id_next <= cnx->max_path_id_remote &&
-                cnx->unique_path_id_next <= cnx->max_path_id_local &&
-                cnx->unique_path_id_next <= cnx->max_path_id_in_cnxid_lists) {
-                /* Find next non used CID */
-                unique_path_id = cnx->unique_path_id_next++;
-                /* There should be an available of CNX_ID for this path_id, 
-                * and that path_id should not be already created.
-                */
-                if (picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0) != NULL &&
-                    picoquic_find_path_by_unique_id(cnx, unique_path_id) < 0) {
-                    /* this CID was not already deleted */
-                    break;
-                }
-             }
+            /* Never return an ID that is in use or has no local CID list */
+            unique_path_id = picoquic_next_unique_path_id(cnx);
+            if (unique_path_id != UINT64_MAX) {
+                cnx->unique_path_id_next = unique_path_id + 1;
+            }
         }
     }
     return unique_path_id;
@@ -2028,6 +2038,7 @@ static void picoquic_clear_path_data(picoquic_cnx_t* cnx, picoquic_path_t * path
 void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 {
     picoquic_path_t * path_x = cnx->path[path_index];
+    uint64_t unique_path_id = path_x->unique_path_id;
     picoquic_packet_t* p = NULL;
     picoquic_stream_head_t* stream = NULL;
 
@@ -2075,6 +2086,22 @@ void picoquic_delete_path(picoquic_cnx_t* cnx, int path_index)
 
     /* Free the data and free the path context. */
     picoquic_clear_path_data(cnx, path_x);
+
+    if (cnx->is_multipath_enabled) {
+        /* Delete the peer CID stash of the path, unless another path entry still uses the same path ID */
+        int is_id_shared = 0;
+        for (int i = 0; i < cnx->nb_paths; i++) {
+            if (i != path_index && cnx->path[i]->unique_path_id == unique_path_id) {
+                is_id_shared = 1;
+            }
+        }
+        if (!is_id_shared) {
+            picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, unique_path_id, 0);
+            if (remote_cnxid_stash != NULL) {
+                picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
+            }
+        }
+    }
 
     /* Compact the path table  */
     for (int i = path_index + 1; i < cnx->nb_paths; i++) {
@@ -2478,9 +2505,10 @@ int picoquic_check_new_path_allowed(picoquic_cnx_t* cnx, int to_preferred_addres
          */
         uint64_t unique_path_id = 0;
         if (cnx->is_multipath_enabled) {
-            unique_path_id = cnx->unique_path_id_next;
+            /* Check the ID that picoquic_create_path would actually use */
+            unique_path_id = picoquic_next_unique_path_id(cnx);
         }
-        if (picoquic_obtain_stashed_cnxid(cnx, unique_path_id) == NULL) {
+        if (unique_path_id == UINT64_MAX || picoquic_obtain_stashed_cnxid(cnx, unique_path_id) == NULL) {
             if (cnx->unique_path_id_next > cnx->max_path_id_remote) {
                 ret = PICOQUIC_ERROR_PATH_ID_BLOCKED;
             }
@@ -3624,6 +3652,8 @@ picoquic_local_cnxid_t* picoquic_create_local_cnxid(picoquic_cnx_t* cnx,
                     local_cnxid_list->local_cnxid_oldest_created = current_time;
                     if (local_cnxid_list->unique_path_id > cnx->max_path_id_in_cnxid_lists) {
                         cnx->max_path_id_in_cnxid_lists = local_cnxid_list->unique_path_id;
+                        /* A new path ID is usable locally, which may allow the next path */
+                        picoquic_test_and_signal_new_path_allowed(cnx);
                     }
                 }
             }

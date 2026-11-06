@@ -680,6 +680,10 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
             (is_mp) ? picoquic_frame_type_path_new_connection_id : picoquic_frame_type_new_connection_id);
         bytes = NULL;
     }
+    else if (cnx->is_multipath_enabled && unique_path_id < cnx->next_path_id_in_lists &&
+        picoquic_find_or_create_local_cnxid_list(cnx, unique_path_id, 0) == NULL) {
+        /* Path ID already abandoned or skipped: ignore the frame, so no stash is created for it. */
+    }
     else {
         picoquic_remote_cnxid_stash_t* remote_cnxid_stash = picoquic_find_or_create_remote_cnxid_stash(cnx, unique_path_id, 1);
 
