@@ -773,6 +773,7 @@ typedef struct st_picoquic_stream_head_t {
     uint64_t remote_stop_error;
     uint64_t last_time_data_sent;
     picosplay_tree_t stream_data_tree; /* splay of received stream segments */
+    picoquic_stream_data_node_t* first_stream_data; /* Lowest-offset buffered application data, or NULL. Unused for TLS. */
     uint64_t sent_offset; /* Amount of data sent in the stream */
     uint64_t reliable_size; /* Length guaranteed when sending "reset at" */
     picoquic_stream_queue_node_t* send_queue; /* if the stream is not "active", list of data segments ready to send */
@@ -2137,6 +2138,7 @@ uint64_t picoquic_cc_increased_window(picoquic_cnx_t* cnx, uint64_t previous_win
 uint8_t* picoquic_format_max_streams_frame_if_needed(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t* bytes_max, int* more_data, int* is_pure_ack);
 void picoquic_stream_data_node_recycle(picoquic_stream_data_node_t* stream_data);
 picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic);
+void picoquic_remove_stream_data_node(picoquic_stream_head_t* stream, picoquic_stream_data_node_t* data);
 void picoquic_clear_stream(picoquic_stream_head_t* stream);
 void picoquic_delete_stream(picoquic_cnx_t * cnx, picoquic_stream_head_t * stream);
 picoquic_local_cnxid_list_t* picoquic_find_or_create_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);

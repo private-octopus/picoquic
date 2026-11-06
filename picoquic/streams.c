@@ -68,6 +68,16 @@ void picoquic_stream_data_node_delete(void* UNUSED(tree), picosplay_node_t* node
     picoquic_stream_data_node_recycle(stream_data);
 }
 
+void picoquic_remove_stream_data_node(picoquic_stream_head_t* stream, picoquic_stream_data_node_t* data)
+{
+    if (data == stream->first_stream_data) {
+        /* The delete callback can immediately recycle data. */
+        stream->first_stream_data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
+    }
+    picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
+    stream->cnx->nb_stream_data_nodes--;
+}
+
 picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic)
 {
     picoquic_stream_data_node_t* stream_data = quic->p_first_data_node;
@@ -133,6 +143,7 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
     if (stream->is_output_stream) {
         picoquic_remove_output_stream(stream->cnx, stream);
     }
+    stream->first_stream_data = NULL;
     picosplay_empty_tree(&stream->stream_data_tree);
     picoquic_sack_list_free(&stream->sack_list);
 }
@@ -984,7 +995,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
         stream->direct_receive_fn = direct_receive_fn;
         stream->direct_receive_ctx = direct_receive_ctx;
         /* If there is pending data, pass it. */
-        while ((data = (picoquic_stream_data_node_t*)picosplay_first(&stream->stream_data_tree)) != NULL) {
+        while ((data = stream->first_stream_data) != NULL) {
             size_t length = data->length;
             uint64_t offset = data->offset;
 
@@ -1006,8 +1017,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             if (ret == 0) {
                 /* Account only the queued bytes actually passed to the application. */
                 cnx->data_received += length;
-                picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
-                cnx->nb_stream_data_nodes--;
+                picoquic_remove_stream_data_node(stream, data);
             }
             else {
                 break;
