@@ -2013,6 +2013,22 @@ int h3zero_set_datagram_ready(picoquic_cnx_t* cnx, uint64_t stream_id)
 	return ret;
 }
 
+/* Forward the application wake up to each registered session. */
+static void h3zero_callback_app_wakeup(picoquic_cnx_t* cnx, h3zero_callback_ctx_t* ctx)
+{
+	h3zero_stream_prefix_t* prefix_ctx = ctx->stream_prefixes.first;
+
+	while (prefix_ctx != NULL) {
+		h3zero_stream_prefix_t* next = prefix_ctx->next;
+		h3zero_stream_ctx_t* stream_ctx = h3zero_find_stream(ctx, prefix_ctx->prefix);
+		if (prefix_ctx->function_call != NULL && stream_ctx != NULL) {
+			/* Sessions that do not use timers may reject the event, so the return code is ignored. */
+			(void)prefix_ctx->function_call(cnx, NULL, 0, picohttp_callback_app_wakeup, stream_ctx, prefix_ctx->function_ctx);
+		}
+		prefix_ctx = next;
+	}
+}
+
 /* Picoquic callback for H3 connections.
  */
 int h3zero_callback(picoquic_cnx_t* cnx,
@@ -2105,6 +2121,9 @@ int h3zero_callback(picoquic_cnx_t* cnx,
 			break;
 		case picoquic_callback_prepare_datagram: /* Prepare the next datagram */
 			ret = h3zero_callback_prepare_datagram(cnx, bytes, length, ctx);
+			break;
+		case picoquic_callback_app_wakeup:
+			h3zero_callback_app_wakeup(cnx, ctx);
 			break;
 		case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-frame received from peer */
 		case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */

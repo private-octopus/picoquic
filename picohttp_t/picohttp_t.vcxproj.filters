@@ -4,6 +4,9 @@
     <ClCompile Include="..\picohttp\wt_baton.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\picohttp\wt_interop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="picohttp_t.c">
       <Filter>Source Files</Filter>
     </ClCompile>

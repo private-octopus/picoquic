@@ -71,6 +71,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #include "h3zero_common.h"
 #include "pico_webtransport.h"
 #include "wt_baton.h"
+#include "wt_interop.h"
 #include "democlient.h"
 #include "demoserver.h"
 #include "quicperf.h"
@@ -280,7 +281,7 @@ picohttp_server_path_item_t path_item_list[2] =
     }
 };
 
-int quic_server(picoquic_quic_config_t * config, int just_once)
+int quic_server(picoquic_quic_config_t * config, int just_once, wt_interop_param_t* wt_interop_param)
 {
     /* Start: start the QUIC process with cert and key files */
     int ret = 0;
@@ -288,6 +289,7 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
     uint64_t current_time = 0;
     picohttp_server_parameters_t picoquic_file_param;
     server_loop_cb_t loop_cb_ctx;
+    picohttp_server_path_item_t wt_interop_item;
 
 
     if (config->nb_threads > 1) {
@@ -297,8 +299,16 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
 
     memset(&picoquic_file_param, 0, sizeof(picohttp_server_parameters_t));
     picoquic_file_param.web_folder = config->www_dir;
-    picoquic_file_param.path_table = path_item_list;
-    picoquic_file_param.path_table_nb = 2;
+    if (wt_interop_param == NULL) {
+        picoquic_file_param.path_table = path_item_list;
+        picoquic_file_param.path_table_nb = 2;
+    }
+    else {
+        /* The wildcard also captures GET and POST, so it is only installed in interop mode. */
+        wt_interop_set_path_item(&wt_interop_item, wt_interop_param);
+        picoquic_file_param.path_table = &wt_interop_item;
+        picoquic_file_param.path_table_nb = 1;
+    }
 
     memset(&loop_cb_ctx, 0, sizeof(server_loop_cb_t));
     loop_cb_ctx.just_once = just_once;
@@ -320,6 +330,10 @@ int quic_server(picoquic_quic_config_t * config, int just_once)
 
         if (ret == 0 && config->qlog_dir != NULL) {
             picoquic_set_qlog(qserver, config->qlog_dir);
+        }
+
+        if (ret == 0 && wt_interop_param != NULL) {
+            picowt_set_default_transport_parameters(qserver);
         }
 
         if (ret == 0) {
@@ -1334,6 +1348,11 @@ void usage(void)
     fprintf(stderr, "                        -f 3  test migration to new address.\n");
     fprintf(stderr, "  -u nb                 trigger key update after receiving <nb> packets on client\n");
     fprintf(stderr, "  -1                    Once: close the server after processing 1 connection.\n");
+    fprintf(stderr, "  --wt_interop_server   Run the web transport interop server, using the\n");
+    fprintf(stderr, "                        TESTCASE, REQUESTS and PROTOCOLS environment variables,\n");
+    fprintf(stderr, "                        serving files from -w and saving files to -o.\n");
+    fprintf(stderr, "  --wt_interop_client   Run the web transport interop client. The server is\n");
+    fprintf(stderr, "                        taken from the REQUESTS URLs, no server_name or port.\n");
 
     fprintf(stderr, "\nThe scenario argument specifies the set of files that should be retrieved,\n");
     fprintf(stderr, "and their order. The syntax is:\n");
@@ -1366,12 +1385,35 @@ int main(int argc, char** argv)
     int force_migration = 0;
     int just_once = 0;
     int is_client = 0;
+    int wt_interop_server = 0;
+    int wt_interop_client_mode = 0;
+    wt_interop_param_t wt_interop_param = { 0 };
     int ret;
 
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
+    /* Remove long options from argv, because getopt only handles letters. */
+    {
+        int nb_args = 1;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--wt_interop_server") == 0) {
+                wt_interop_server = 1;
+            }
+            else if (strcmp(argv[i], "--wt_interop_client") == 0) {
+                wt_interop_client_mode = 1;
+            }
+            else {
+                argv[nb_args++] = argv[i];
+            }
+        }
+        argc = nb_args;
+        if (wt_interop_server && wt_interop_client_mode) {
+            fprintf(stderr, "Cannot use both --wt_interop_server and --wt_interop_client\n");
+            usage();
+        }
+    }
     picoquic_register_all_congestion_control_algorithms();
     picoquic_config_init(&config);
     memcpy(option_string, "A:u:f:1", 7);
@@ -1432,7 +1474,25 @@ int main(int argc, char** argv)
         usage();
     }
 
-    if (is_client == 0) {
+    if (wt_interop_server && is_client) {
+        fprintf(stderr, "With --wt_interop_server, do not specify a server name\n");
+        usage();
+    }
+
+    if (wt_interop_client_mode) {
+        if (is_client) {
+            fprintf(stderr, "With --wt_interop_client, the server comes from the REQUESTS URLs\n");
+            usage();
+        }
+        ret = wt_interop_param_from_env(&wt_interop_param, 1, config.www_dir, config.out_dir);
+        if (ret == 0) {
+            printf("Starting web transport interop client (v%s), server = %s, port = %d\n",
+                PICOQUIC_VERSION, wt_interop_param.host, (int)wt_interop_param.port);
+            ret = wt_interop_client(&config, &wt_interop_param);
+        }
+        printf("Web transport interop client exit with code = %d\n", ret);
+    }
+    else if (is_client == 0) {
         if (config.server_port == 0) {
             config.server_port = server_port;
         }
@@ -1449,10 +1509,21 @@ int main(int argc, char** argv)
             picoquic_config_set_option(&config, picoquic_option_KEY, default_server_key_file);
         }
 
-        /* Run as server */
-        printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
-            PICOQUIC_VERSION, config.server_port, server_name, just_once, config.do_retry);
-        ret = quic_server(&config, just_once);
+        if (wt_interop_server) {
+            /* The interop server handles a single connection. */
+            just_once = 1;
+            ret = wt_interop_param_from_env(&wt_interop_param, 0, config.www_dir, config.out_dir);
+        }
+        else {
+            ret = 0;
+        }
+
+        if (ret == 0) {
+            /* Run as server */
+            printf("Starting Picoquic server (v%s) on port %d, server name = %s, just_once = %d, do_retry = %d\n",
+                PICOQUIC_VERSION, config.server_port, server_name, just_once, config.do_retry);
+            ret = quic_server(&config, just_once, (wt_interop_server) ? &wt_interop_param : NULL);
+        }
         printf("Server exit with code = %d\n", ret);
     }
     else {
@@ -1464,5 +1535,9 @@ int main(int argc, char** argv)
         printf("Client exit with code = %d\n", ret);
     }
 
+    wt_interop_param_clear(&wt_interop_param);
     picoquic_config_clear(&config);
+
+    /* Only the interop modes report failures in the exit code. */
+    return (ret != 0 && (wt_interop_server || wt_interop_client_mode)) ? 1 : 0;
 }
