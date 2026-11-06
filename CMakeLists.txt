@@ -115,6 +115,7 @@ set(PICOQUIC_LIBRARY_FILES
     picoquic/picoquic_ptls_openssl.c
     picoquic/picoquic_mbedtls.c
     picoquic/picosocks.c
+    picoquic/picorbtree.c
     picoquic/picosplay.c
     picoquic/port_blocking.c
     picoquic/prague.c
@@ -176,6 +177,7 @@ set(PICOQUIC_CORE_HEADERS_PRIVATE
     picoquic/picoquic_set_binlog.h
     picoquic/picoquic_set_textlog.h
     picoquic/picoquic_unified_log.h
+    picoquic/picorbtree.h
     picoquic/picosplay.h
     picoquic/tls_api.h
     picoquic/wincompat.h)

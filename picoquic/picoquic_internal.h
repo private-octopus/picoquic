@@ -23,6 +23,7 @@
 #define PICOQUIC_INTERNAL_H
 
 #include "picohash.h"
+#include "picorbtree.h"
 #include "picosplay.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
@@ -613,7 +614,7 @@ typedef struct st_picoquic_quic_t {
     struct st_picoquic_cnx_t* cnx_last;
     struct st_picoquic_cnx_t* cnx_wake_ready_first;
     struct st_picoquic_cnx_t* cnx_wake_ready_last;
-    picosplay64u_tree_t cnx_wake_tree;
+    picorbtree_tree_t cnx_wake_tree;
 
     struct st_picoquic_cnx_t* cnx_in_progress;
 
@@ -1378,7 +1379,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
-    picosplay_node_t cnx_wake_node;
+    picorbtree_node_t cnx_wake_node;
     struct st_picoquic_cnx_t* cnx_wake_next;
     struct st_picoquic_cnx_t* cnx_wake_previous;
     /* Wakeup time requested by the application */

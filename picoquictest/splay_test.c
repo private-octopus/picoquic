@@ -29,11 +29,194 @@
 #include <string.h>
 #include "picoquic_utils.h"
 #include "picosplay.h"
+#include "picorbtree.h"
 
 typedef struct st_int_node_t {
     int v;
     picosplay_node_t node;
 } int_node_t;
+
+typedef struct st_picorbtree_test_item_t {
+    unsigned char tag;
+    unsigned char key_bytes[sizeof(uint64_t)];
+    unsigned int serial;
+    int live;
+    picorbtree_node_t node;
+} picorbtree_test_item_t;
+
+static uint64_t picorbtree_test_key(const picorbtree_test_item_t* item)
+{
+    uint64_t key;
+    memcpy(&key, item->key_bytes, sizeof(key));
+    return key;
+}
+
+static picorbtree_test_item_t* picorbtree_test_value(picorbtree_node_t* node)
+{
+    return (picorbtree_test_item_t*)((char*)node - offsetof(picorbtree_test_item_t, node));
+}
+
+static int picorbtree_test_contains(picorbtree_node_t* root, const picorbtree_node_t* node)
+{
+    if (root == NULL) {
+        return 0;
+    }
+    return root == node || picorbtree_test_contains(root->left, node) ||
+        picorbtree_test_contains(root->right, node);
+}
+
+static int picorbtree_test_walk(picorbtree_node_t* node, picorbtree_node_t* parent,
+    uint64_t* last_key, unsigned int* last_serial, int* have_last, size_t* count)
+{
+    int left_black_height, right_black_height;
+    picorbtree_test_item_t* item;
+
+    if (node == NULL) {
+        return 1;
+    }
+    if (node->parent != parent ||
+        (node->color != 0 && node->color != 1) ||
+        (node->color != 0 && ((node->left != NULL && node->left->color != 0) ||
+            (node->right != NULL && node->right->color != 0)))) {
+        return 0;
+    }
+    left_black_height = picorbtree_test_walk(node->left, node, last_key, last_serial, have_last, count);
+    item = picorbtree_test_value(node);
+    if (left_black_height == 0 || (*have_last &&
+        (picorbtree_test_key(item) < *last_key ||
+            (picorbtree_test_key(item) == *last_key && item->serial < *last_serial)))) {
+        return 0;
+    }
+    *last_key = picorbtree_test_key(item);
+    *last_serial = item->serial;
+    *have_last = 1;
+    (*count)++;
+    right_black_height = picorbtree_test_walk(node->right, node, last_key, last_serial, have_last, count);
+    if (right_black_height != left_black_height) {
+        return 0;
+    }
+    return left_black_height + (node->color == 0);
+}
+
+static picorbtree_node_t* picorbtree_test_expected_first(picorbtree_test_item_t* items, size_t item_count)
+{
+    picorbtree_test_item_t* first = NULL;
+    size_t i;
+
+    for (i = 0; i < item_count; i++) {
+        uint64_t item_key;
+        uint64_t first_key;
+
+        if (!items[i].live) {
+            continue;
+        }
+        if (first == NULL) {
+            first = &items[i];
+            continue;
+        }
+        item_key = picorbtree_test_key(&items[i]);
+        first_key = picorbtree_test_key(first);
+        if (item_key < first_key || (item_key == first_key && items[i].serial < first->serial)) {
+            first = &items[i];
+        }
+    }
+    return first == NULL ? NULL : &first->node;
+}
+
+static int picorbtree_test_check(picorbtree_tree_t* tree, picorbtree_test_item_t* items, size_t item_count)
+{
+    uint64_t last_key = 0;
+    unsigned int last_serial = 0;
+    int have_last = 0;
+    size_t count = 0;
+    size_t model_count = 0;
+    size_t i;
+
+    if ((tree->root != NULL && (tree->root->parent != NULL || tree->root->color != 0)) ||
+        picorbtree_test_walk(tree->root, NULL, &last_key, &last_serial, &have_last, &count) == 0) {
+        return -1;
+    }
+    for (i = 0; i < item_count; i++) {
+        if (items[i].live) {
+            model_count++;
+        }
+        if (items[i].live != picorbtree_test_contains(tree->root, &items[i].node)) {
+            return -1;
+        }
+    }
+    if (count != model_count || tree->size != model_count ||
+        picorbtree_first(tree) != picorbtree_test_expected_first(items, item_count)) {
+        return -1;
+    }
+    return 0;
+}
+
+int rbtree_test(void)
+{
+    static const uint64_t keys[] = { UINT64_MAX, 0, UINT64_C(1) << 63, 7, UINT64_MAX, 7, 0, 42, UINT64_C(1) << 63, 3, 9, 1 };
+    picorbtree_test_item_t items[sizeof(keys) / sizeof(keys[0])];
+    picorbtree_tree_t tree;
+    const size_t item_count = sizeof(items) / sizeof(items[0]);
+    size_t i;
+    unsigned int serial = (unsigned int)item_count;
+
+    memset(items, 0, sizeof(items));
+    picorbtree_init(&tree, offsetof(picorbtree_test_item_t, key_bytes), offsetof(picorbtree_test_item_t, node));
+    for (i = 0; i < item_count; i++) {
+        memcpy(items[i].key_bytes, &keys[i], sizeof(keys[i]));
+        items[i].serial = (unsigned int)i;
+        items[i].live = 1;
+        if (picorbtree_insert(&tree, &items[i]) != &items[i].node ||
+            picorbtree_test_check(&tree, items, item_count) != 0) {
+            return -1;
+        }
+    }
+
+    /* Deleting the second node with key 7 must remove exactly that embedded node. */
+    picorbtree_delete_hint(&tree, &items[5].node);
+    items[5].live = 0;
+    if (items[5].node.parent != NULL || items[5].node.left != NULL || items[5].node.right != NULL ||
+        items[5].node.color != 0 || picorbtree_test_contains(tree.root, &items[5].node) ||
+        !picorbtree_test_contains(tree.root, &items[3].node) ||
+        picorbtree_test_check(&tree, items, item_count) != 0) {
+        return -1;
+    }
+
+    for (i = 0; i < 48; i++) {
+        size_t index = (i * 7 + 3) % item_count;
+
+        if (items[index].live) {
+            picorbtree_delete_hint(&tree, &items[index].node);
+            items[index].live = 0;
+            if (items[index].node.parent != NULL || items[index].node.left != NULL ||
+                items[index].node.right != NULL || items[index].node.color != 0) {
+                return -1;
+            }
+        }
+        else {
+            uint64_t key = keys[(i + i / item_count) % item_count];
+            memcpy(items[index].key_bytes, &key, sizeof(key));
+            items[index].serial = serial++;
+            items[index].live = 1;
+            if (picorbtree_insert(&tree, &items[index]) != &items[index].node) {
+                return -1;
+            }
+        }
+        if (picorbtree_test_check(&tree, items, item_count) != 0) {
+            return -1;
+        }
+    }
+    for (i = 0; i < item_count; i++) {
+        if (items[i].live) {
+            picorbtree_delete_hint(&tree, &items[i].node);
+            items[i].live = 0;
+            if (picorbtree_test_check(&tree, items, item_count) != 0) {
+                return -1;
+            }
+        }
+    }
+    return tree.root == NULL && tree.size == 0 ? 0 : -1;
+}
 
 static int_node_t * new_int_node(int x) {
     int_node_t * i_n = (int_node_t *)malloc(sizeof(int_node_t));

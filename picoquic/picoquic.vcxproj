@@ -171,6 +171,7 @@
     <ClCompile Include="picoquic_ptls_minicrypto.c" />
     <ClCompile Include="picoquic_ptls_openssl.c" />
     <ClCompile Include="picosocks.c" />
+    <ClCompile Include="picorbtree.c" />
     <ClCompile Include="picosplay.c" />
     <ClCompile Include="port_blocking.c" />
     <ClCompile Include="prague.c" />
@@ -228,6 +229,7 @@
     <ClInclude Include="picoquic_set_textlog.h" />
     <ClInclude Include="picoquic_unified_log.h" />
     <ClInclude Include="picosocks.h" />
+    <ClInclude Include="picorbtree.h" />
     <ClInclude Include="picosplay.h" />
     <ClInclude Include="picoquic.h" />
     <ClInclude Include="sockloop.h" />
