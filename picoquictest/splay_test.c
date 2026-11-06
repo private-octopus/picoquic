@@ -133,9 +133,6 @@ static int picorbtree_test_check(picorbtree_tree_t* tree, picorbtree_test_item_t
     if (reason == NULL && seen != expected_count) {
         reason = "tree membership count";
     }
-    if (reason == NULL && tree->size != expected_count) {
-        reason = "tree size";
-    }
     if (reason == NULL && picorbtree_first(tree) !=
         (expected_count == 0 ? NULL : &expected[0]->node)) {
         reason = "first node identity";
@@ -227,7 +224,7 @@ int rbtree_test(void)
             }
         }
     }
-    if (ret == 0 && (tree.root != NULL || tree.size != 0)) {
+    if (ret == 0 && tree.root != NULL) {
         fprintf(stderr, "rbtree_test final drain: tree is not empty\n");
         ret = -1;
     }

@@ -1235,6 +1235,15 @@ typedef struct st_picoquic_output_stream_t {
     picoquic_stream_head_t* last_output_stream;
 } picoquic_output_stream_t;
 
+/* A connection is either in the future wake tree or the due-now FIFO. */
+typedef union st_picoquic_wake_links_t {
+    picorbtree_node_t tree_node;
+    struct {
+        struct st_picoquic_cnx_t* next;
+        struct st_picoquic_cnx_t* previous;
+    } ready;
+} picoquic_wake_links_t;
+
 /*
 * Per connection context.
 */
@@ -1379,9 +1388,7 @@ typedef struct st_picoquic_cnx_t {
 
     /* Next time sending data is expected */
     uint64_t next_wake_time;
-    picorbtree_node_t cnx_wake_node;
-    struct st_picoquic_cnx_t* cnx_wake_next;
-    struct st_picoquic_cnx_t* cnx_wake_previous;
+    picoquic_wake_links_t cnx_wake_links;
     /* Wakeup time requested by the application */
     uint64_t app_wake_time;
     /* TLS context, TLS Send Buffer, streams, epochs */

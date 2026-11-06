@@ -46,9 +46,11 @@ static int wake_queue_equal_deadline_test(picoquic_quic_t* quic,
     if (cnx2->is_wake_ready || !cnx2->is_wake_tree ||
         quic->cnx_wake_ready_first != NULL ||
         picoquic_get_earliest_cnx_to_wake(quic, now + 999) != NULL ||
+        picoquic_get_earliest_cnx_to_wake(quic, 0) != cnx1 ||
         picoquic_get_earliest_cnx_to_wake(quic, now + 1000) != cnx1 ||
         quic->cnx_wake_ready_first != cnx1 || quic->cnx_wake_ready_last != cnx2 ||
-        cnx1->cnx_wake_next != cnx2 || cnx2->cnx_wake_previous != cnx1) {
+        cnx1->cnx_wake_links.ready.next != cnx2 ||
+        cnx2->cnx_wake_links.ready.previous != cnx1) {
         ret = -1;
     }
 

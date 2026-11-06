@@ -43,7 +43,6 @@ typedef struct st_picorbtree_node_t {
 
 typedef struct st_picorbtree_tree_t {
     picorbtree_node_t* root;
-    size_t size;
     size_t key_offset;
     size_t node_offset;
 } picorbtree_tree_t;

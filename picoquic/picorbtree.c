@@ -246,7 +246,6 @@ picorbtree_node_t* picorbtree_insert(picorbtree_tree_t* tree, void* value)
 
     node->parent = parent;
     *link = node;
-    tree->size++;
     picorbtree_insert_fix(tree, node);
 
     return node;
@@ -295,7 +294,6 @@ void picorbtree_delete_hint(picorbtree_tree_t* tree, picorbtree_node_t* node)
             successor->color = node->color;
         }
 
-        tree->size--;
         node->parent = NULL;
         node->left = NULL;
         node->right = NULL;

@@ -1516,22 +1516,22 @@ static void picoquic_remove_cnx_from_list(picoquic_cnx_t* cnx)
 static picoquic_cnx_t* picoquic_wake_tree_first(picoquic_quic_t* quic)
 {
     picorbtree_node_t* node = picorbtree_first(&quic->cnx_wake_tree);
-    return node == NULL ? NULL : (picoquic_cnx_t*)((char*)node - offsetof(picoquic_cnx_t, cnx_wake_node));
+    return node == NULL ? NULL : (picoquic_cnx_t*)((char*)node - offsetof(picoquic_cnx_t, cnx_wake_links.tree_node));
 }
 
 static void picoquic_wake_list_init(picoquic_quic_t* quic)
 {
     picorbtree_init(&quic->cnx_wake_tree,
-        offsetof(picoquic_cnx_t, next_wake_time), offsetof(picoquic_cnx_t, cnx_wake_node));
+        offsetof(picoquic_cnx_t, next_wake_time), offsetof(picoquic_cnx_t, cnx_wake_links.tree_node));
 }
 
 static void picoquic_insert_cnx_in_wake_ready_list(picoquic_quic_t* quic, picoquic_cnx_t* cnx)
 {
-    cnx->cnx_wake_previous = quic->cnx_wake_ready_last;
-    cnx->cnx_wake_next = NULL;
+    cnx->cnx_wake_links.ready.previous = quic->cnx_wake_ready_last;
+    cnx->cnx_wake_links.ready.next = NULL;
 
     if (quic->cnx_wake_ready_last != NULL) {
-        quic->cnx_wake_ready_last->cnx_wake_next = cnx;
+        quic->cnx_wake_ready_last->cnx_wake_links.ready.next = cnx;
     }
     else {
         quic->cnx_wake_ready_first = cnx;
@@ -1542,22 +1542,25 @@ static void picoquic_insert_cnx_in_wake_ready_list(picoquic_quic_t* quic, picoqu
 
 static void picoquic_remove_cnx_from_wake_ready_list(picoquic_cnx_t* cnx)
 {
-    if (cnx->cnx_wake_previous != NULL) {
-        cnx->cnx_wake_previous->cnx_wake_next = cnx->cnx_wake_next;
+    picoquic_cnx_t* previous = cnx->cnx_wake_links.ready.previous;
+    picoquic_cnx_t* next = cnx->cnx_wake_links.ready.next;
+
+    if (previous != NULL) {
+        previous->cnx_wake_links.ready.next = next;
     }
     else {
-        cnx->quic->cnx_wake_ready_first = cnx->cnx_wake_next;
+        cnx->quic->cnx_wake_ready_first = next;
     }
 
-    if (cnx->cnx_wake_next != NULL) {
-        cnx->cnx_wake_next->cnx_wake_previous = cnx->cnx_wake_previous;
+    if (next != NULL) {
+        next->cnx_wake_links.ready.previous = previous;
     }
     else {
-        cnx->quic->cnx_wake_ready_last = cnx->cnx_wake_previous;
+        cnx->quic->cnx_wake_ready_last = previous;
     }
 
-    cnx->cnx_wake_next = NULL;
-    cnx->cnx_wake_previous = NULL;
+    cnx->cnx_wake_links.ready.next = NULL;
+    cnx->cnx_wake_links.ready.previous = NULL;
     cnx->is_wake_ready = 0;
 }
 
@@ -1568,7 +1571,7 @@ static void picoquic_remove_cnx_from_wake_list(picoquic_cnx_t* cnx)
     }
     else if (cnx->is_wake_tree) {
         cnx->is_wake_tree = 0;
-        picorbtree_delete_hint(&cnx->quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picorbtree_delete_hint(&cnx->quic->cnx_wake_tree, &cnx->cnx_wake_links.tree_node);
     }
 }
 
@@ -1601,37 +1604,31 @@ void picoquic_reinsert_by_wake_time(picoquic_quic_t* quic, picoquic_cnx_t* cnx, 
     }
 }
 
-static void picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max_wake_time)
+static picoquic_cnx_t* picoquic_wake_list_promote_ready(picoquic_quic_t* quic, uint64_t max_wake_time)
 {
     uint64_t due_time = (max_wake_time == 0) ? picoquic_get_quic_time(quic) : max_wake_time;
 
     for (;;) {
         picoquic_cnx_t* cnx = picoquic_wake_tree_first(quic);
         if (cnx == NULL || cnx->next_wake_time > due_time) {
-            break;
+            return cnx;
         }
         cnx->is_wake_tree = 0;
-        picorbtree_delete_hint(&quic->cnx_wake_tree, &cnx->cnx_wake_node);
+        picorbtree_delete_hint(&quic->cnx_wake_tree, &cnx->cnx_wake_links.tree_node);
         picoquic_insert_cnx_in_wake_ready_list(quic, cnx);
     }
 }
 
 picoquic_cnx_t* picoquic_get_earliest_cnx_to_wake(picoquic_quic_t* quic, uint64_t max_wake_time)
 {
-    picoquic_cnx_t* cnx;
+    picoquic_cnx_t* next_future = picoquic_wake_list_promote_ready(quic, max_wake_time);
+    picoquic_cnx_t* cnx = quic->cnx_wake_ready_first;
 
-    picoquic_wake_list_promote_ready(quic, max_wake_time);
-
-    cnx = quic->cnx_wake_ready_first;
     while (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time) {
-        cnx = cnx->cnx_wake_next;
+        cnx = cnx->cnx_wake_links.ready.next;
     }
-    if (cnx == NULL) {
-        cnx = picoquic_wake_tree_first(quic);
-    }
-    if (cnx != NULL && max_wake_time != 0 && cnx->next_wake_time > max_wake_time)
-    {
-        cnx = NULL;
+    if (cnx == NULL && max_wake_time == 0) {
+        cnx = next_future;
     }
 
     return cnx;
