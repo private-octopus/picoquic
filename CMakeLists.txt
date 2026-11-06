@@ -309,8 +309,6 @@ OPTION(PICOQUIC_AEGIS_NATIVE_ARCH "Build fetched libaegis with -march=native for
 # Set to picotls build as of 2026-10-27, which supports WITH_BROTLI=OFF.
 set(PICOQUIC_FETCH_PTLS_DEFAULT_TAG "e446233b4100ebcdec60901c05bfb7f4cd369c5d")
 set(PICOQUIC_FETCH_PTLS_TAG "${PICOQUIC_FETCH_PTLS_DEFAULT_TAG}" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_PTLS is enabled")
-# 0.10.5 removed the state alignment requirement that exceeded malloc alignment
-# in the AEGIS contexts allocated by picotls.
 set(PICOQUIC_FETCH_AEGIS_TAG "0.10.5" CACHE STRING "Git tag or commit used when PICOQUIC_FETCH_AEGIS is enabled")
 if(PICOQUIC_FETCH_PTLS OR (WITH_AEGIS AND PICOQUIC_FETCH_AEGIS))
     include(FetchContent)
@@ -363,6 +361,8 @@ find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
+# WITH_AEGIS requires libaegis 0.10.5 or later so its state can be embedded
+# in the malloc-allocated contexts used by picotls.
 if(WITH_AEGIS)
     find_package(aegis REQUIRED)
     if(NOT EXISTS "${AEGIS_INCLUDE_DIR}/aegis.h")
