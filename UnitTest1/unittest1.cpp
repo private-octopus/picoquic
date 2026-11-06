@@ -404,6 +404,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(rbtree)
+        {
+            int ret = rbtree_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(create_cnx)
         {
             int ret = create_cnx_test();

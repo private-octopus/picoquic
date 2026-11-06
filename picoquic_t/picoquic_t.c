@@ -165,6 +165,7 @@ static const picoquic_test_def_t test_table[] = {
     { "sockloop_qmux_send_reset", sockloop_qmux_send_reset_test },
     { "sockloop_eintr", sockloop_eintr_test },
     { "splay", splay_test },
+    { "rbtree", rbtree_test },
     { "create_cnx", create_cnx_test },
     { "create_quic", create_quic_test },
     { "stateless_packet_queue_limit", stateless_packet_queue_limit_test },
