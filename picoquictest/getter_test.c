@@ -39,6 +39,8 @@
 static int wake_queue_equal_deadline_test(picoquic_quic_t* quic,
     picoquic_cnx_t* cnx1, picoquic_cnx_t* cnx2, uint64_t now)
 {
+    int ret = 0;
+
     /* cnx1 is in the future tree and cnx2 is the only ready connection. */
     picoquic_reinsert_by_wake_time(quic, cnx2, now + 1000);
     if (cnx2->is_wake_ready || !cnx2->is_wake_tree ||
@@ -47,26 +49,30 @@ static int wake_queue_equal_deadline_test(picoquic_quic_t* quic,
         picoquic_get_earliest_cnx_to_wake(quic, now + 1000) != cnx1 ||
         quic->cnx_wake_ready_first != cnx1 || quic->cnx_wake_ready_last != cnx2 ||
         cnx1->cnx_wake_next != cnx2 || cnx2->cnx_wake_previous != cnx1) {
-        return -1;
+        ret = -1;
     }
 
-    picoquic_reinsert_by_wake_time(quic, cnx1, now + 2000);
-    if (!cnx1->is_wake_tree || cnx1->is_wake_ready ||
-        quic->cnx_wake_ready_first != cnx2 || quic->cnx_wake_ready_last != cnx2 ||
-        picoquic_get_earliest_cnx_to_wake(quic, now + 1000) != cnx2) {
-        return -1;
+    if (ret == 0) {
+        picoquic_reinsert_by_wake_time(quic, cnx1, now + 2000);
+        if (!cnx1->is_wake_tree || cnx1->is_wake_ready ||
+            quic->cnx_wake_ready_first != cnx2 || quic->cnx_wake_ready_last != cnx2 ||
+            picoquic_get_earliest_cnx_to_wake(quic, now + 1000) != cnx2) {
+            ret = -1;
+        }
     }
 
-    picoquic_reinsert_by_wake_time(quic, cnx2, now + 2000);
-    /* Rescheduling cnx1 at the same future deadline puts it after cnx2. */
-    picoquic_reinsert_by_wake_time(quic, cnx1, now + 2000);
-    if (cnx2->is_wake_ready || !cnx2->is_wake_tree ||
-        quic->cnx_wake_ready_first != NULL ||
-        picoquic_get_earliest_cnx_to_wake(quic, now + 2000) != cnx2 ||
-        quic->cnx_wake_ready_first != cnx2 || quic->cnx_wake_ready_last != cnx1) {
-        return -1;
+    if (ret == 0) {
+        picoquic_reinsert_by_wake_time(quic, cnx2, now + 2000);
+        /* Rescheduling cnx1 at the same future deadline puts it after cnx2. */
+        picoquic_reinsert_by_wake_time(quic, cnx1, now + 2000);
+        if (cnx2->is_wake_ready || !cnx2->is_wake_tree ||
+            quic->cnx_wake_ready_first != NULL ||
+            picoquic_get_earliest_cnx_to_wake(quic, now + 2000) != cnx2 ||
+            quic->cnx_wake_ready_first != cnx2 || quic->cnx_wake_ready_last != cnx1) {
+            ret = -1;
+        }
     }
-    return 0;
+    return ret;
 }
 
 int getter_test(void)
