@@ -68,14 +68,14 @@ void picoquic_stream_data_node_delete(void* UNUSED(tree), picosplay_node_t* node
     picoquic_stream_data_node_recycle(stream_data);
 }
 
-void picoquic_remove_stream_data_node(picoquic_stream_head_t* stream, picoquic_stream_data_node_t* data)
+void picoquic_remove_stream_data_node(picoquic_cnx_t* cnx, picoquic_stream_head_t* stream, picoquic_stream_data_node_t* data)
 {
     if (data == stream->first_stream_data) {
         /* The delete callback can immediately recycle data. */
         stream->first_stream_data = (picoquic_stream_data_node_t*)picosplay_next(&data->stream_data_node);
     }
     picosplay_delete_hint(&stream->stream_data_tree, &data->stream_data_node);
-    stream->cnx->nb_stream_data_nodes--;
+    cnx->nb_stream_data_nodes--;
 }
 
 picoquic_stream_data_node_t* picoquic_stream_data_node_alloc(picoquic_quic_t* quic)
@@ -140,24 +140,20 @@ void picoquic_clear_stream(picoquic_stream_head_t* stream)
         free(next);
     }
     stream->send_queue = NULL;
-    if (stream->is_output_stream) {
-        picoquic_remove_output_stream(stream->cnx, stream);
-    }
     stream->first_stream_data = NULL;
     picosplay_empty_tree(&stream->stream_data_tree);
     picoquic_sack_list_free(&stream->sack_list);
 }
 
 
-static void picoquic_stream_node_delete(void* UNUSED(tree), picosplay_node_t* node)
+static void picoquic_stream_node_delete(void* tree, picosplay_node_t* node)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
+    picoquic_cnx_t* cnx = (picoquic_cnx_t*)((char*)tree - offsetof(picoquic_cnx_t, stream_tree));
     picoquic_stream_head_t* stream = picoquic_stream_node_value(node);
 
-    /* Not in picoquic_clear_stream, which also clears the uncounted crypto streams */
-    stream->cnx->nb_stream_data_nodes -= (uint64_t)stream->stream_data_tree.size;
+    /* Only application streams are counted and scheduled for output. */
+    cnx->nb_stream_data_nodes -= (uint64_t)stream->stream_data_tree.size;
+    picoquic_remove_output_stream(cnx, stream);
     picoquic_clear_stream(stream);
 
     free(stream);
@@ -915,7 +911,6 @@ picoquic_stream_head_t* picoquic_create_stream(picoquic_cnx_t* cnx, uint64_t str
     if (stream != NULL) {
         int is_output_stream = 0;
         stream->stream_id = stream_id;
-        stream->cnx = cnx;
 
         if (IS_LOCAL_STREAM_ID(stream_id, cnx->client_mode)) {
             if (IS_BIDIR_STREAM_ID(stream_id)) {
@@ -1017,7 +1012,7 @@ int picoquic_mark_direct_receive_stream(picoquic_cnx_t* cnx, uint64_t stream_id,
             if (ret == 0) {
                 /* Account only the queued bytes actually passed to the application. */
                 cnx->data_received += length;
-                picoquic_remove_stream_data_node(stream, data);
+                picoquic_remove_stream_data_node(cnx, stream, data);
             }
             else {
                 break;
