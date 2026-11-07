@@ -18,8 +18,8 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef PICOQUIC_QLOG_H
-#define PICOQUIC_QLOG_H
+#ifndef PICOQUIC_QLOG_CONVERT_H
+#define PICOQUIC_QLOG_CONVERT_H
 
 #include "picoquic_internal.h"
 #include "bytestream.h"
@@ -41,4 +41,4 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE * f_binlog, const cha
 }
 #endif
 
-#endif /* PICOQUIC_QLOG_H */
+#endif /* PICOQUIC_QLOG_CONVERT_H */
