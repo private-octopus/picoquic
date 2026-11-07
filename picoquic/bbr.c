@@ -599,6 +599,7 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 {
     memset(bbr_state, 0, sizeof(picoquic_bbr_state_t));
     bbr_state->option_string = option_string;
+    bbr_state->inflight_hi = UINT64_MAX;
 
     /* Support for the experimental options */
     BBRSetOptions(bbr_state);
