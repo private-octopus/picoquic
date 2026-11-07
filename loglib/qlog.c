@@ -30,6 +30,7 @@
 #include "logreader.h"
 #include "logconvert.h"
 #include "picoquic_qlog_fns.h"
+#include "qlog.h"
 
 typedef struct qlog_context_st {
 

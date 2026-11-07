@@ -194,16 +194,16 @@
 { "test": "bad_new_token_32", "frame": { 
     "frame_type": "new_token", "new_token": "... coding error!"}},
 { "test": "bad_ack_range", "frame": { 
-    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365][-1, -1]]}, { 
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-1, -1]]}, { 
     "frame_type": "stop_sending"}},
 { "test": "bad_ack_first_range", "frame": { 
     "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[-1, -1]]}, { 
     "frame_type": "padding"}},
 { "test": "bad_ack_gaps", "frame": { 
-    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365][-1, -1]]}, { 
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-1, -1]]}, { 
     "frame_type": "stop_sending"}},
 { "test": "bad_ack_blocks", "frame": { 
-    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351], [4328719334, 4328719334][-1, -1]]}},
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351], [4328719334, 4328719334], [-1, -1]]}},
 { "test": "bad_crypto_hs", "frame": { 
     "frame_type": "crypto", "offset": 0, "length": 268435455}},
 { "test": "bad_datagram", "frame": { 

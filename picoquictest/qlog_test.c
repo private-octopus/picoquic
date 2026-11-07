@@ -37,6 +37,7 @@
 #include "picoquic.h"
 #include "picoquic_binlog.h"
 #include "autoqlog.h"
+#include "picoquic_qlog_fns.h"
 
 /*
 * Unit tests of autoqlog functions that are not covered in end to end tests.
@@ -551,8 +552,6 @@ int qlog_tp_extension_test(FILE* F)
 #define QLOG_FNS_FORMAT_FILE "qlog_fns_format_test.txt"
 #define QLOG_FNS_FORMAT_REF "qlog_fns_format_ref.txt"
 const uint8_t* qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l);
-void qlog_fns_text_uint(FILE* f, const char* text, uint64_t value);
-void qlog_fns_text_int(FILE* f, const char* text, int64_t value);
 
 /* qlog_fns_text_uint, qlog_fns_text_int and qlog_frame_hex_string format
  * numbers and hex bytes without fprintf. Write the same output with fprintf
