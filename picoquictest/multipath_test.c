@@ -274,7 +274,7 @@ static test_api_stream_desc_t test_scenario_multipath_long[] = {
     { 40, 0, 257, 1000000 }
 };
 
-int migration_test_one(int mtu_drop)
+int migration_test_one(int mtu_drop, int is_new_ip)
 {
     uint64_t simulated_time = 0;
     uint64_t loss_mask = 0;
@@ -285,6 +285,9 @@ int migration_test_one(int mtu_drop)
 
     if (mtu_drop) {
         initial_cid.id[2] = 0xcd;
+    }
+    if (is_new_ip) {
+        initial_cid.id[2] = 0xe1;
     }
     
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
@@ -324,9 +327,14 @@ int migration_test_one(int mtu_drop)
         ret = wait_client_connection_ready(test_ctx, &simulated_time);
     }
 
-    /* Add the multipath links and initiate the migration */
+    /* Add the second links and initiate the migration */
     if (ret == 0) {
         ret = multipath_test_add_links(test_ctx, mtu_drop);
+    }
+
+    if (ret == 0 && is_new_ip) {
+        /* Change the IP address, not just the port, so that CC and RTT are reset */
+        ((uint8_t*)&test_ctx->client_addr_2.sin_addr)[3] ^= 0x10;
     }
 
     if (ret == 0) {
@@ -337,6 +345,16 @@ int migration_test_one(int mtu_drop)
     /* Check that the migration succeeds */
     if (ret == 0) {
         ret = wait_client_migration_done(test_ctx, &simulated_time);
+    }
+
+    /* A new IP address resets CC on both sides, a port change does not */
+    if (ret == 0) {
+        int client_reset = test_ctx->cnx_client->path[0]->cc_reset_pn != 0;
+        int server_reset = test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->cc_reset_pn != 0;
+        if (client_reset != is_new_ip || server_reset != is_new_ip) {
+            DBG_PRINTF("Expected CC reset %d, client %d, server %d", is_new_ip, client_reset, server_reset);
+            ret = -1;
+        }
     }
 
     /* Kill the old links, so nothing more can be sent there */
@@ -389,12 +407,17 @@ int migration_test_one(int mtu_drop)
 
 int migration_controlled_test(void)
 {
-    return migration_test_one(0);
+    return migration_test_one(0, 0);
 }
 
 int migration_mtu_drop_test(void)
 {
-    return migration_test_one(1);
+    return migration_test_one(1, 0);
+}
+
+int migration_new_ip_test(void)
+{
+    return migration_test_one(0, 1);
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client

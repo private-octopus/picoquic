@@ -1177,6 +1177,7 @@ typedef struct st_picoquic_path_t {
     uint64_t last_time_acked_data_frame_sent;
     void* congestion_alg_state;
     picoquic_pacing_t pacing;
+    uint64_t cc_reset_pn; /* Application packets numbered below this were sent before the last CC reset */
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
@@ -1573,25 +1574,28 @@ typedef struct st_picoquic_cnx_t {
     void* log_ctx[PICOQUIC_MAX_LOG_FUNCTIONS];
 } picoquic_cnx_t;
 
+/* Data collected while decoding a packet, used by the frames that follow. */
 typedef struct st_picoquic_packet_data_t {
     uint64_t last_time_stamp_received;
-    uint64_t last_ack_delay; /* ACK Delay in the ACK frame being decoded, 0 if its largest was already acked */
-    int nb_path_ack;
-    struct {
-        picoquic_path_t* acked_path; /* path for which ACK was received */
-        uint64_t largest_sent_time; /* Send time of ACKed packet (largest number acked) */
-        uint64_t ack_delay; /* ACK Delay of the frame that acked that packet */
-        uint64_t delivered_prior; /* Amount delivered prior to that packet */
-        uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
-        uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
-        uint64_t lost_prior; /* Value of nb_bytes_lost when packet was sent */
-        uint64_t inflight_prior; /* Value of bytes_in_flight when packet was sent */
-        unsigned int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
-        unsigned int rs_is_cwnd_limited;
-        unsigned int is_set;
-        uint64_t data_acked;
-    } path_ack[PICOQUIC_NB_PATH_TARGET];
 } picoquic_packet_data_t;
+
+/* Data collected while decoding one ACK frame, applied when the frame is fully decoded.
+ * An ACK frame acknowledges packets of a single path. */
+typedef struct st_picoquic_ack_frame_data_t {
+    picoquic_path_t* acked_path; /* Path whose packets the frame acknowledges */
+    uint64_t ack_delay; /* ACK Delay of the frame, 0 if its largest was already acked */
+    uint64_t largest_sent_time; /* Send time of the first packet acked, the largest number */
+    uint64_t delivered_prior; /* Amount delivered prior to that packet */
+    uint64_t delivered_time_prior; /* Time last delivery before acked packet sent */
+    uint64_t delivered_sent_prior; /* Time this last delivery packet was sent */
+    uint64_t lost_prior; /* Value of nb_bytes_lost when packet was sent */
+    uint64_t inflight_prior; /* Value of bytes_in_flight when packet was sent */
+    unsigned int rs_is_path_limited; /* Whether the path was app limited when packet was sent */
+    unsigned int rs_is_cwnd_limited;
+    unsigned int is_set; /* At least one packet sent after the last CC reset was acked */
+    unsigned int is_new_ack; /* The largest packet acked by the frame was not acked before */
+    uint64_t data_acked;
+} picoquic_ack_frame_data_t;
 
 /* Create a connection context without recomputing initial_aead_dec and
 * initial_pn_dec if they were already computed.
@@ -1666,6 +1670,9 @@ int picoquic_assign_peer_cnxid_to_tuple(picoquic_cnx_t* cnx, picoquic_path_t* pa
 int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple);
 //int picoquic_assign_peer_cnxid_to_path(picoquic_cnx_t* cnx, int path_id);
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
+void picoquic_init_path_rtt(picoquic_path_t* path_x);
+void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+int picoquic_is_packet_after_cc_reset(picoquic_packet_t* packet);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 
 picoquic_remote_cnxid_stash_t* picoquic_find_or_create_remote_cnxid_stash(picoquic_cnx_t* cnx, uint64_t unique_path_id, int do_create);
@@ -1923,9 +1930,9 @@ void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_s
 
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
-void picoquic_record_ack_packet_data(picoquic_packet_data_t* packet_data, picoquic_packet_t* acked_packet);
-void process_decoded_packet_data(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    int epoch, int pc, uint64_t current_time, picoquic_packet_data_t* packet_data);
+void picoquic_record_ack_packet_data(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* acked_packet);
+void picoquic_process_ack_frame_data(picoquic_cnx_t* cnx, int epoch, int pc, uint64_t current_time,
+    uint64_t time_stamp, picoquic_ack_frame_data_t* ack_data);
 
 void picoquic_init_packet_ctx(picoquic_cnx_t* cnx, picoquic_packet_context_t* pkt_ctx, picoquic_packet_context_enum pc);
 
