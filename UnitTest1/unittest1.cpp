@@ -799,6 +799,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ack_old_packets_loss)
+        {
+            int ret = ack_old_packets_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -3491,6 +3498,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_reset_gate)
+        {
+            int ret = cc_reset_gate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr1)
         {
             int ret = bbr1_test();
@@ -4214,6 +4228,12 @@ namespace UnitTest1
 
         TEST_METHOD(migration_mtu_drop) {
             int ret = migration_mtu_drop_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_new_ip) {
+            int ret = migration_new_ip_test();
 
             Assert::AreEqual(ret, 0);
         }
