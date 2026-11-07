@@ -9,7 +9,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 4, "packet_number": 1, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "reset_stream", "stream_id": 17, "error_code": 1, "final_size": 1}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 16, "packet_number": 2, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "connection_close", "error_space": "transport", "error_code": 53247, "trigger_frame_type": "padding", "reason": "123456789"}]}],
+    "frame_type": "connection_close", "error_space": "transport", "error_code": 53247, "reason": "123456789"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 3, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "connection_close", "error_space": "application", "error_code": 0}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 8, "packet_number": 4, "dcid": "01020304" }, "frames": [{ 
@@ -87,7 +87,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 4, "packet_number": 40, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "path_cid_blocked", "path_id": 7, "next_sequence_number": 1}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 41, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 3, "ip": "0a000001"}]}],
+    "frame_type": "bdp", "lifetime": 1, "recon_bytes_in_flight": 2, "recon_min_rtt": 3, "saved_ip": "10.0.0.1"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 42, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "observed_address_v4", "sequence": 1, "address": "1.2.3.4", "port": 4660}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 23, "packet_number": 43, "dcid": "01020304" }, "frames": [{ 
@@ -97,7 +97,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 21, "packet_number": 45, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [4328719358, 4328719358], [4328719339, 4328719351]], "ect0": 3, "ect1": 0, "ce": 1}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 6, "packet_number": 46, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 128}]}],
+    "frame_type": "reset_stream_at", "stream_id": 17, "error_code": 1, "final_size": 128, "reliable_size": 13}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 1, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 8, "packet_number": 5, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 6, "dcid": "01020304" }, "frames": []}],
@@ -134,7 +134,7 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 2, "packet_number": 39, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "paths_blocked"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 3, "packet_number": 40, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "path_cid_blocked", "path_id": 7}]}],
+    "frame_type": "path_cid_blocked"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 11, "packet_number": 41, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 10, "packet_number": 42, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 22, "packet_number": 43, "dcid": "01020304" }, "frames": []}],
@@ -166,12 +166,12 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 26, "packet_number": 15, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 12, "packet_number": 16, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 24, "packet_number": 17, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-4611686014098668545, -4611686014098668545], [-4611686014098668564, -4611686014098668552]]}]}],
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-1, -1]]}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 9, "packet_number": 18, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[-1, 2], [-3, -3]]}, { 
+    "frame_type": "ack", "ack_delay": 0, "acked_ranges": [[-1, -1]]}, { 
     "frame_type": "padding"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 24, "packet_number": 19, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-4611686014098668545, 4328719358], [-4611686014098668564, -4611686014098668552]]}]}],
+    "frame_type": "ack", "ack_delay": 1024, "acked_ranges": [[4328719360, 4328719365], [-1, -1]]}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 27, "packet_number": 20, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 22, "packet_number": 21, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "crypto", "offset": 0, "length": 268435455}]}],
@@ -188,10 +188,10 @@
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 5, "packet_number": 27, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 7, "packet_number": 28, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 13, "packet_number": 29, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "bdp", "lifetime": 1, "bytes_in_flight": 2, "min_rtt": 4, "ip": "0102030405"}]}],
+    "frame_type": "bdp"}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 30, "dcid": "01020304" }, "frames": []}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 15, "packet_number": 31, "dcid": "01020304" }, "frames": [{ 
-    "frame_type": "unknown","unknown_type": 1073741823,"begins_with": "bfffffff0802048f"}]}],
+    "frame_type": "unknown", "unknown_frame_type": 1073741823}]}],
 [0, "transport", "packet_sent", { "packet_type": "1RTT", "header": { "packet_size": 10, "packet_number": 32, "dcid": "01020304" }, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 4611686018427387903}]}],
 [0, "transport", "datagram_received", { "byte_length": 1200, "addr_from" : {"ip_v4": "48.48.48.48", "port_v4":20753}, "addr_to" : {"ip_v4": "49.49.49.49", "port_v4":20753}}],

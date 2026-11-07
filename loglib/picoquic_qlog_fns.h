@@ -34,6 +34,8 @@ extern "C" {
      * fprintf(f, "%s%" PRIu64, text, value) or fprintf(f, "%s%" PRId64, text, value). */
     void qlog_fns_text_uint(FILE* f, const char* text, uint64_t value);
     void qlog_fns_text_int(FILE* f, const char* text, int64_t value);
+    /* Write one frame record of a binary log as a qlog frame object. */
+    void qlog_binlog_frame(FILE* f, const uint8_t* record, const uint8_t* record_end, int* frame_count);
 
 #ifdef __cplusplus
 }
