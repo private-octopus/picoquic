@@ -183,7 +183,7 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
                 (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &range)) == NULL ||
                 largest < skip + range) {
                 /* error in encoding of range */
-                fprintf(f, "[-1, -1]");
+                fprintf(f, "%s[-1, -1]", (i != 0) ? ", " : "");
                 break;
             }
             else {
