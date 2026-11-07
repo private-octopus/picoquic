@@ -318,8 +318,6 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
 
     /* TODO: while packets are pure ACK, drop them from retransmit queue */
     picoquic_path_t* old_path = old_p->send_path; /* should be the path on which the packet was transmitted */
-    /* Evaluated now, because old_p may be freed when processed as lost */
-    int is_after_cc_reset = picoquic_is_packet_after_cc_reset(old_p);
 
     int is_probably_lost = 0;
     int is_timer_expired = 0;
@@ -456,10 +454,10 @@ static size_t picoquic_retransmit_needed_packet(picoquic_cnx_t* cnx, picoquic_pa
                 /* First, keep track of retransmissions per path, in order to
                 * manage scheduling in multipath setup */
 
-                if (old_path != NULL && path_x == old_path) {
-                    old_path->is_pto_required = 1;
-                }
-                if (old_path != NULL && is_after_cc_reset) {
+                if (old_path != NULL) {
+                    if (path_x == old_path) {
+                        old_path->is_pto_required = 1;
+                    }
                     old_path->nb_retransmit++;
                     old_path->last_loss_event_detected = current_time;
                     if (cnx->is_multipath_enabled && cnx->nb_paths > 1) {
@@ -884,7 +882,7 @@ static picoquic_packet_t* picoquic_process_lost_packet(picoquic_cnx_t* cnx, pico
 static void picoquic_check_path_mtu_on_losses(
     picoquic_cnx_t* cnx, picoquic_packet_t* old_p, int timer_based_retransmit)
 {
-    if (picoquic_is_packet_after_cc_reset(old_p) &&
+    if (old_p->send_path != NULL &&
         ((old_p->length + old_p->checksum_overhead) == old_p->send_path->send_mtu || timer_based_retransmit) &&
         cnx->cnx_state >= picoquic_state_ready) {
         old_p->send_path->nb_mtu_losses++;
@@ -915,7 +913,7 @@ static void picoquic_count_and_notify_loss(
         cnx->nb_retransmission_total++;
     }
 
-    if (picoquic_is_packet_after_cc_reset(old_p)) {
+    if (old_p->send_path != NULL) {
         old_p->send_path->nb_losses_found++;
         if (timer_based_retransmit == 0) {
             if (old_p->send_path->nb_loss_ranges_found == 0 ||

@@ -731,9 +731,9 @@ picoquic_packet_t* picoquic_dequeue_retransmit_packet(picoquic_cnx_t* cnx,
         p->is_queued_for_retransmit = 0;
     }
 
-    /* Account for bytes in transit, for congestion control; the CC reset already cleared older packets */
+    /* Account for bytes in transit, for congestion control */
 
-    if (picoquic_is_packet_after_cc_reset(p) && !p->is_ack_trap) {
+    if (p->send_path != NULL && !p->is_ack_trap) {
         if (p->send_path->bytes_in_transit > dequeued_length) {
             p->send_path->bytes_in_transit -= dequeued_length;
         }

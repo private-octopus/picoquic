@@ -1942,7 +1942,10 @@ int picoquic_create_path(picoquic_cnx_t* cnx, uint64_t start_time, const struct 
 
             if (tuple != NULL) {
                 /* Initialize per path time measurement */
-                picoquic_init_path_rtt(path_x);
+                path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
+                path_x->rtt_variant = 0;
+                path_x->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
+                path_x->rtt_min = 0;
 
                 /* Initialize per path congestion control state */
                 path_x->cwin = PICOQUIC_CWIN_INITIAL;
@@ -3057,63 +3060,6 @@ void picoquic_reset_path_mtu(picoquic_path_t* path_x)
     /* Reset the MTU discovery context */
     path_x->send_mtu_max_tried = 0;
     path_x->mtu_probe_sent = 0;
-}
-
-/* Set the path RTT estimator to its initial values */
-void picoquic_init_path_rtt(picoquic_path_t* path_x)
-{
-    path_x->smoothed_rtt = PICOQUIC_INITIAL_RTT;
-    path_x->rtt_variant = 0;
-    path_x->retransmit_timer = PICOQUIC_INITIAL_RETRANSMIT_TIMER;
-    path_x->rtt_min = 0;
-    path_x->rtt_max = 0;
-    path_x->rtt_sample = 0;
-    path_x->one_way_delay_sample = 0;
-    path_x->rtt_is_initialized = 0;
-    path_x->rtt_packet_previous_period = 0;
-    path_x->rtt_time_previous_period = 0;
-    path_x->nb_rtt_estimate_in_period = 0;
-    path_x->sum_rtt_estimate_in_period = 0;
-    path_x->max_rtt_estimate_in_period = 0;
-    path_x->min_rtt_estimate_in_period = 0;
-    path_x->max_spurious_rtt = 0;
-    path_x->max_reorder_delay = 0;
-    path_x->max_reorder_gap = 0;
-}
-
-/* Reset congestion control and RTT after migrating to a new address (RFC 9000, section 9.4) */
-void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
-{
-    picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
-        &path_x->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
-
-    path_x->cc_reset_pn = pkt_ctx->send_sequence;
-    picoquic_init_path_rtt(path_x);
-    path_x->nb_retransmit = 0;
-    path_x->bytes_in_transit = 0;
-    path_x->bandwidth_estimate = 0;
-    path_x->bandwidth_estimate_max = 0;
-    path_x->peak_bandwidth_estimate = 0;
-    path_x->max_sample_acked_time = 0;
-    path_x->max_sample_sent_time = 0;
-    path_x->max_sample_delivered = 0;
-    path_x->cwin = PICOQUIC_CWIN_INITIAL;
-    picoquic_pacing_init(&path_x->pacing, current_time);
-    if (cnx->congestion_alg != NULL) {
-        picoquic_per_ack_state_t ack_state = { 0 };
-        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
-            &ack_state, current_time);
-    }
-    picoquic_log_app_message(cnx, "Reset congestion control on path %" PRIu64 " after migration, from packet %" PRIu64,
-        path_x->unique_path_id, path_x->cc_reset_pn);
-}
-
-/* Packets sent before the last CC reset of their path do not count for congestion control or RTT */
-int picoquic_is_packet_after_cc_reset(picoquic_packet_t* packet)
-{
-    return packet->send_path != NULL &&
-        (packet->pc != picoquic_packet_context_application ||
-            packet->sequence_number >= packet->send_path->cc_reset_pn);
 }
 
 /* Manage ACK context and Packet context */
