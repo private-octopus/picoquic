@@ -281,7 +281,6 @@ static uint8_t qlog_pref_addr[] = {
 	/* 4 extra bytes */
 	16, 17, 18, 19
 };
-void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len);
 
 /* test proper rendering of preferred IPv4 address in qlog. */
 #define QLOG_FNS_PREFADDR_FILE "qlog_fns_preferred_address_test.txt"
@@ -353,6 +352,12 @@ int qlog_fns_pref_addr_test(void)
         free(min_bytes);
     }
 
+    /* The address ends after the IPv4 port: the IPv6 string must still be closed. */
+    if (ret == 0) {
+        ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, 6,
+            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"0\"}");
+    }
+
     /* Full TP, no extra bytes. */
     if (ret == 0) {
         ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes),
@@ -372,58 +377,12 @@ int qlog_fns_pref_addr_test(void)
     return ret;
 }
 
-int qlog_pref_addr_test(FILE* F)
-{
-	int ret = 0;
-	bytestream bs = { 0 };
-	size_t size_before = ftell(F);
-	size_t size_after = 0;
-	
-	bs.data = qlog_pref_addr;
-	bs.size = sizeof(qlog_pref_addr);
-
-	fprintf(F, "\n");
-	qlog_preferred_address(F, &bs, sizeof(qlog_pref_addr));
-
-	size_after = ftell(F);
-	if (size_after < size_before + 32) {
-		ret = -1;
-	}
-	return ret;
-}
-
 static uint8_t qlog_vnego_tp_input[] = {
 	0, 0, 0, 2,
 	0, 0, 0, 1,
 	1, 2, 3, 4,
 	5, 6, 7, 8
 };
-
-void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len);
-int qlog_pref_vnego_test(FILE* F)
-{
-	int ret = 0;
-	bytestream bs = { 0 };
-	size_t size_before = ftell(F);
-	size_t size_after = 0;
-	size_t test_len[7] = {
-		4, 8, 12, 16, 20, 0, 15
-	};
-
-	for (int i = 0; i < 7; i++) {
-		fprintf(F, "\n");
-		bs.data = qlog_vnego_tp_input;
-		bs.size = sizeof(qlog_vnego_tp_input);
-		bs.ptr = 0;
-		qlog_tp_version_negotiation(F, &bs, test_len[i]);
-	}
-
-	size_after = ftell(F);
-	if (size_after < size_before + 32) {
-		ret = -1;
-	}
-	return ret;
-}
 
 #define QLOG_FNS_VNEGO_FILE "qlog_fns_tp_version_negotiation_test.txt"
 void qlog_fns_tp_version_negotiation(FILE* f, const uint8_t* bytes, uint64_t len);
@@ -467,14 +426,24 @@ static int qlog_fns_vnego_check(const uint8_t* bytes, uint64_t len, char const* 
     return ret;
 }
 
-/* Render the same version-negotiation TP bytes used by qlog_pref_vnego_test through the
- * live-path sibling qlog_fns_tp_version_negotiation, checking both exact content and that
+/* Render version-negotiation TP bytes through qlog_fns_tp_version_negotiation,
+ * checking both exact content and that
  * the output is well-formed JSON -- qlog_fns_tp_version_negotiation used to omit its
  * opening "{", and its "bad_length" branch used to leave a string unterminated. */
 int qlog_fns_vnego_test(void)
 {
     int ret = qlog_fns_vnego_check(qlog_vnego_tp_input, sizeof(qlog_vnego_tp_input),
         "{\"chosen\": \"00000002\", \"others\": [\"00000001\",\"01020304\",\"05060708\"]}");
+
+    if (ret == 0) {
+        /* One version only: no "others" list. */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 4, "{\"chosen\": \"00000002\"}");
+    }
+
+    if (ret == 0) {
+        /* Two versions: one entry in "others". */
+        ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 8, "{\"chosen\": \"00000002\", \"others\": [\"00000001\"]}");
+    }
 
     if (ret == 0) {
         /* Length not a multiple of 4: exercises the "bad_length" branch. */
@@ -484,6 +453,46 @@ int qlog_fns_vnego_test(void)
     if (ret == 0) {
         /* Zero length is also treated as "bad_length". */
         ret = qlog_fns_vnego_check(qlog_vnego_tp_input, 0, "{\"bad_length\": \"0\"}");
+    }
+
+    return ret;
+}
+
+#define QLOG_FNS_TP_FILE "qlog_fns_transport_extensions_test.txt"
+void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
+
+/* picoquic encodes enable_time_stamp as a varint, and reset_stream_at as a
+ * flag with no value. Check that qlog writes a number and an empty string. */
+int qlog_fns_tp_types_test(void)
+{
+    static uint8_t tp[] = {
+        0x80, 0x00, 0x71, 0x58, 1, 3, /* enable_time_stamp = 3 */
+        picoquic_tp_reset_stream_at, 0
+    };
+    static char const* expected = ",\n    \"enable_time_stamp\" : 3,\n    \"reset_stream_at\" : \"\"";
+    int ret = 0;
+    char text[256];
+    size_t text_length = 0;
+    FILE* F = picoquic_file_open(QLOG_FNS_TP_FILE, "wb");
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        qlog_fns_transport_extensions(F, tp, sizeof(tp));
+        F = picoquic_file_close(F);
+        if ((F = picoquic_file_open(QLOG_FNS_TP_FILE, "rb")) == NULL) {
+            ret = -1;
+        }
+        else {
+            text_length = fread(text, 1, sizeof(text) - 1, F);
+            F = picoquic_file_close(F);
+            text[text_length] = 0;
+            if (strcmp(text, expected) != 0) {
+                DBG_PRINTF("Unexpected transport parameter rendering: <%s>", text);
+                ret = -1;
+            }
+        }
     }
 
     return ret;
@@ -629,16 +638,6 @@ int qlog_error_test(void)
 	}
 
 	if (ret == 0) {
-		ret = qlog_pref_addr_test(F);
-		fprintf(F, "\n");
-	}
-
-	if (ret == 0) {
-		ret = qlog_pref_vnego_test(F);
-		fprintf(F, "\n");
-	}
-
-	if (ret == 0) {
 		ret = qlog_tp_extension_test(F);
 		fprintf(F, "\n");
 	}
@@ -653,6 +652,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_fns_vnego_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_fns_tp_types_test();
 	}
 
 	if (ret == 0) {

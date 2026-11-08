@@ -36,6 +36,9 @@ extern "C" {
     void qlog_fns_text_int(FILE* f, const char* text, int64_t value);
     /* Write one frame record of a binary log as a qlog frame object. */
     void qlog_binlog_frame(FILE* f, const uint8_t* record, const uint8_t* record_end, int* frame_count);
+    /* Write each transport parameter as a field of the current event. The
+     * caller checks that tp holds tp_length bytes. */
+    void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
 
 #ifdef __cplusplus
 }

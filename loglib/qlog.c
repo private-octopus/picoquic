@@ -147,199 +147,20 @@ void qlog_event_header(FILE * f, qlog_context_t* ctx, int64_t delta_time, uint64
     fprintf(f, "\"%s\", \"%s\", {", event_class, event_name);
 }
 
-void qlog_vint_transport_extension(FILE* f, char const* ext_name, bytestream* s, uint64_t len)
-{
-    uint64_t val;
-    size_t current_ptr = s->ptr;
-    int ret = byteread_vint(s, &val);
-
-    fprintf(f, "\"%s\" : ", ext_name);
-    if (ret != 0 || current_ptr + (size_t)len != s->ptr) {
-        s->ptr = current_ptr;
-        qlog_string(f, s, len);
-    }
-    else {
-        fprintf(f, "%" PRIu64, val);
-    }
-}
-
-void qlog_boolean_transport_extension(FILE* f, char const* ext_name, bytestream* s, uint64_t len)
-{
-    fprintf(f, "\"%s\" : ", ext_name);
-    if (len != 0) {
-        qlog_string(f, s, len);
-    }
-    else {
-        fprintf(f, "\"\"");
-    }
-}
-
-void qlog_preferred_address(FILE* f, bytestream* s, uint64_t len)
-{
-    uint16_t port4 =0;
-    uint16_t port6 = 0;
-    uint8_t cid_len;
-    size_t old_size = s->size;
-
-    s->size = s->ptr + (size_t) len;
-
-    fprintf(f, "\"ip_v4\": \"");
-    for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-        fprintf(f, "%s%d", (i == 0) ? "" : ".", s->data[s->ptr]);
-    }
-    byteread_int16(s, &port4);
-    fprintf(f, "\", \"port_v4\":%d", port4);
-    fprintf(f, ", \"ip_v6\": \"");
-    for (int i = 0; i < 8; i++) {
-        uint16_t chunk = 0;
-        byteread_int16(s, &chunk);
-        fprintf(f, "%s%x", (i == 0) ? "" : ":", chunk);
-    }
-    byteread_int16(s, &port6);
-    fprintf(f, "\", \"port_v6\" : %d", port6);
-    byteread_int8(s, &cid_len);
-    fprintf(f, ", \"connection_id\": ");
-    qlog_string(f, s, cid_len);
-    fprintf(f, ", \"stateless_reset_token\": ");
-    qlog_string(f, s, 16);
-    if (s->ptr < s->size) {
-        fprintf(f, "\", \"extra_bytes\": ");
-        qlog_string(f, s, bytestream_remain(s));
-    }
-    s->size = old_size;
-}
-
-void qlog_tp_version_negotiation(FILE* f, bytestream* s, uint64_t len)
-{
-    size_t old_size = s->size;
-    size_t ptr_max = s->ptr + (size_t)len;
-
-    if (ptr_max > s->size) {
-        fprintf(f, ",\n    \"vnego_parameter_length\": %zu", (size_t)len);
-        fprintf(f, ",\n    \"bytes_available\": %zu", s->size - s->ptr);
-    }
-    else {
-        s->size = s->ptr + (size_t)len;
-        fprintf(f, "{ ");
-        if ((len & 3) != 0 || len == 0) {
-            fprintf(f, "\"bad_length\": \"%" PRIu64 "\"", len);
-        }
-        else {
-            fprintf(f, "\"chosen\": \"");
-            for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-                fprintf(f, "%02x", s->data[s->ptr]);
-            }
-            fprintf(f, "\"");
-            if (s->ptr < s->size) {
-                int is_first = 1;
-                fprintf(f, ", \"others\": [");
-                do {
-                    fprintf(f, "%s", (is_first) ? "\"" : ", \"");
-                    is_first = 0;
-                    for (int i = 0; i < 4 && s->ptr < s->size; i++, s->ptr++) {
-                        fprintf(f, "%02x", s->data[s->ptr]);
-                    }
-                    fprintf(f, "\"");
-                } while (s->ptr < s->size);
-                fprintf(f, "]");
-            }
-        }
-        fprintf(f, "}");
-        s->size = old_size;
-    }
-}
-
-
-int qlog_transport_extensions(FILE* f, bytestream* v, size_t tp_length)
+/* Write the transport parameters of a binary log record with the code of
+ * qlog_fns.c. If the record has less than tp_length bytes, write the two
+ * lengths instead. */
+int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
 {
     int ret = 0;
-    size_t ptr_max = v->ptr + tp_length;
 
-    if (ptr_max > v->size) {
+    if (tp_length > bytestream_remain(s)) {
         fprintf(f, ",\n    \"transport_parameter_length\": %zu", tp_length);
-        fprintf(f, ",\n    \"bytes_available\": %zu" PRIu64, v->size - v->ptr);
-    } else {
-        bytestream bs = { 0 };
-        bytestream* s = &bs;
-        bs.data = v->data;
-        bs.size = v->ptr + tp_length;
-        bs.ptr = v->ptr;
-        v->size += tp_length;
-
-        while (ret == 0 && s->ptr < ptr_max) {
-            uint64_t extension_type = UINT64_MAX;
-            uint64_t extension_length = 0;
-            size_t current_ptr = s->ptr;
-
-            ret |= byteread_vint(s, &extension_type);
-            ret |= byteread_vint(s, &extension_length);
-
-            fprintf(f, ",\n    ");
-
-            if (ret != 0 || bytestream_remain(s) < extension_length) {
-                size_t len = 0;
-                ret = -1;
-                s->ptr = current_ptr;
-                len = bytestream_remain(s);
-                /* Print invalid parameter there */
-                fprintf(f, "\"Parameter_coding_error\": ");
-                qlog_string(f, s, len);
-                break;
-            }
-            else {
-                switch ((picoquic_tp_enum)extension_type) {
-                case picoquic_tp_initial_max_stream_data_bidi_local:
-                case picoquic_tp_initial_max_stream_data_bidi_remote:
-                case picoquic_tp_initial_max_stream_data_uni:
-                case picoquic_tp_initial_max_data:
-                case picoquic_tp_initial_max_streams_bidi:
-                case picoquic_tp_idle_timeout:
-                case picoquic_tp_max_packet_size:
-                case picoquic_tp_ack_delay_exponent:
-                case picoquic_tp_initial_max_streams_uni:
-                case picoquic_tp_max_ack_delay:
-                case picoquic_tp_active_connection_id_limit:
-                case picoquic_tp_max_datagram_frame_size:
-                case picoquic_tp_enable_loss_bit:
-                case picoquic_tp_min_ack_delay:
-                case picoquic_tp_enable_bdp_frame:
-                case picoquic_tp_initial_max_path_id:
-                case picoquic_tp_address_discovery:
-                case picoquic_tp_reset_stream_at_old:
-                case picoquic_tp_reset_stream_at:
-                    qlog_vint_transport_extension(f, picoquic_tp_name(extension_type), s, extension_length);
-                    break;
-
-                case picoquic_tp_stateless_reset_token:
-                case picoquic_tp_original_connection_id:
-                case picoquic_tp_retry_connection_id:
-                case picoquic_tp_handshake_connection_id:
-                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
-                    qlog_string(f, s, extension_length);
-                    break;
-                case picoquic_tp_server_preferred_address: 
-                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
-                    qlog_preferred_address(f, s, extension_length);
-                    fprintf(f, "}");
-                    break;
-                case picoquic_tp_disable_migration:
-                case picoquic_tp_enable_time_stamp:
-                case picoquic_tp_grease_quic_bit:
-                case picoquic_tp_is_scone_supported:
-                    qlog_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), s, extension_length);
-                    break;
-                case picoquic_tp_version_negotiation:
-                    fprintf(f, "\"%s\": ", picoquic_tp_name(extension_type));
-                    qlog_tp_version_negotiation(f, s, extension_length);
-                    break;
-                default:
-                    /* dump unknown extensions */
-                    fprintf(f, "\"%" PRIx64 "\": ", extension_type);
-                    qlog_string(f, s, extension_length);
-                    break;
-                }
-            }
-        }
+        fprintf(f, ",\n    \"bytes_available\": %zu", bytestream_remain(s));
+        ret = -1;
+    }
+    else {
+        qlog_fns_transport_extensions(f, s->data + s->ptr, tp_length);
     }
 
     return ret;

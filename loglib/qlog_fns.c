@@ -687,10 +687,11 @@ void qlog_fns_preferred_address(FILE* f, const uint8_t* bytes, uint64_t len)
             bytes = picoquic_frames_uint16_decode(bytes, end_bytes, &chunk);
             fprintf(f, "%s%x", (i == 0) ? "" : ":", chunk);
         }
+        fprintf(f, "\"");
     }
     if (bytes != NULL) {
         bytes = picoquic_frames_uint16_decode(bytes, end_bytes, &port6);
-        fprintf(f, "\", \"port_v6\" : %d", port6);
+        fprintf(f, ", \"port_v6\" : %d", port6);
     }
     if (bytes != NULL) {
         fprintf(f, ", \"connection_id\": ");
@@ -779,8 +780,7 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
             case picoquic_tp_enable_bdp_frame:
             case picoquic_tp_initial_max_path_id:
             case picoquic_tp_address_discovery:
-            case picoquic_tp_reset_stream_at_old:
-            case picoquic_tp_reset_stream_at:
+            case picoquic_tp_enable_time_stamp:
                 qlog_fns_vint_transport_extension(f, picoquic_tp_name(extension_type), bytes, extension_length);
                 break;
             case picoquic_tp_stateless_reset_token:
@@ -795,9 +795,10 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
                 qlog_fns_preferred_address(f, bytes, extension_length);
                 break;
             case picoquic_tp_disable_migration:
-            case picoquic_tp_enable_time_stamp:
             case picoquic_tp_grease_quic_bit:
             case picoquic_tp_is_scone_supported:
+            case picoquic_tp_reset_stream_at_old:
+            case picoquic_tp_reset_stream_at:
                 qlog_fns_boolean_transport_extension(f, picoquic_tp_name((picoquic_tp_enum)extension_type), bytes, extension_length);
                 break;
             case picoquic_tp_version_negotiation:
