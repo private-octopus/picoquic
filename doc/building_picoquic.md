@@ -40,7 +40,7 @@ All of these targets are built when the `make .` or `cmake --build .` commands a
 
 ## (Re)Building a Single Target
 
-Targets defined in the `CMakeLists.txt`, listed above for convenience, can be build individually using cmake's `--target` option. The command `cmake --build . --target <target_name>` can be used to build a specific target and all it's dependcies. For example `cmake --build . --target picoquic_sample` will build the sample file transfer application in [sample/](../sample/README.md) as defined in the `CMakeLists.txt`. All the required components will also be built. This works if the command is issued in the top-level directory of the repository. This is useful for recompiling test programs and programs like `picoquic_sample` and `picoquicdemo` if they have been modified. Therefore reducing build times when making small changes.
+Targets defined in the `CMakeLists.txt`, listed above for convenience, can be build individually using cmake's `--target` option. The command `cmake --build . --target <target_name>` can be used to build a specific target and all it's dependencies. For example `cmake --build . --target picoquic_sample` will build the sample file transfer application in [sample/](../sample/README.md) as defined in the `CMakeLists.txt`. All the required components will also be built. This works if the command is issued in the top-level directory of the repository. This is useful for recompiling test programs and programs like `picoquic_sample` and `picoquicdemo` if they have been modified. Therefore reducing build times when making small changes.
 
 This also works if `picoquic` has not been built as a whole before.
 
@@ -51,7 +51,7 @@ This also works if `picoquic` has not been built as a whole before.
 
 These two options can be set when configuring cmake.
 
-- adress sanitation `ASAN`
+- address sanitation `ASAN`
 - undefined behaviour sanitation `UBSAN`
 
 `ASAN` and `UBSAN` are C/C++ compiler features and can be set by setting compiler flags when using the `cmake`.

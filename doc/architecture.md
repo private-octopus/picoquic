@@ -23,7 +23,7 @@ The main objects in the transport library are the QUIC context and the QUIC conn
 The QUIC context provides the data common to all connections and holds the tables
 necessary to route packets to specific connections. Connections are created within
 a QUIC context. Each connection context holds path contexts enabling the management
-of connection migration to different addresses, or simulataneous use of multiple
+of connection migration to different addresses, or simultaneous use of multiple
 paths if multipath extensions are enabled. The connection context also maintains a list
 of streams opened by the application or by the peer, and generally all the structures
 required to enable transmission of data according to the QUIC protocol.
@@ -93,7 +93,7 @@ picoquic will be organized around the networking API:
    server process needs to close.
 6. Close the QUIC context
 
-The defaut "socket loop"{{socket_loop.md}} provides an implementation of
+The default "socket loop"{{socket_loop.md}} provides an implementation of
 this logic. Applications may opt to use that, but may also develop their own
 code, for example because they implement multiple protocols and need to manage
 multiple sockets, or because they want to integrate with a specific
@@ -163,7 +163,7 @@ The arguments are:
   connection context, such as for example stateless retry packets.
 
 The call will normally return zero. A non zero value indicates that a processing error
-occured.
+occurred.
 
 ## Error Notify API
 

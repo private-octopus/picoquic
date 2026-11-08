@@ -9,7 +9,7 @@ with the application allocating hundreds of megabytes to ongoing connections
 when doing connections at gigabit per seconds, which is a problem if the
 supporting device has limited resource. The memory allocation on the
 sender is largely a function of the bandwidth-delay product (BDP), but
-occurence of packet losses can increase the requirements. The situation is
+occurrence of packet losses can increase the requirements. The situation is
 different on senders and receivers. The current version provides 2 APIs
 to manage memory usage per connection at the sender and the receiver:
 `picoquic_set_cwin_max` and `picoquic_set_max_data_control`.
@@ -48,7 +48,7 @@ goes through a series of steps:
   packet memory is released.
 
 If the packet loss rate is small, the bulk of the memory is dedicated to
-the list of packets that have benn sent and are neither acknowledged or
+the list of packets that have been sent and are neither acknowledged or
 declared lost. These packets are considered "in transit", and the size of
 the data in transit is limited by the congestion window.
 
