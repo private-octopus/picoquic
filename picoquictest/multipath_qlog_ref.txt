@@ -28,7 +28,7 @@
     "handshake_connection_id": "0908070605040302",
     "enable_loss_bit" : 1,
     "min_ack_delay" : 1000,
-    "enable_time_stamp" : "03",
+    "enable_time_stamp" : 3,
     "initial_max_path_id" : 2}],
 [0, 0, "transport", "parameters_set", {
     "owner": "local",
@@ -47,7 +47,7 @@
     "stateless_reset_token": "c42ae0c5504960c189c5a9b441341c2d",
     "enable_loss_bit" : 1,
     "min_ack_delay" : 1000,
-    "enable_time_stamp" : "03",
+    "enable_time_stamp" : 3,
     "initial_max_path_id" : 2}],
 [0, 0, "transport", "packet_dropped", {
     "packet_size" : 914,

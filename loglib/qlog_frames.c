@@ -105,6 +105,33 @@ const uint8_t* qlog_frame_two_params(FILE* f, const uint8_t* bytes, const uint8_
     return bytes;
 }
 
+/* Write the fields of a STREAM frame. sample points to the first
+ * sample_length bytes of the stream data. */
+static void qlog_frame_stream_fields(FILE* f, uint64_t stream_id, uint64_t offset, uint64_t length,
+    int fin, int has_length, const uint8_t* sample, size_t sample_length)
+{
+    fprintf(f, ", ");
+    qlog_json_uint(f, "id", stream_id);
+    fprintf(f, ", ");
+    qlog_json_uint(f, "offset", offset);
+    fprintf(f, ", ");
+    qlog_json_uint(f, "length", length);
+    fprintf(f, ", ");
+    qlog_json_boolean(f, "fin", fin);
+#if 1
+    /* Bug compatibility with old version */
+    fprintf(f, " ");
+#endif
+
+    if (!has_length) {
+        fprintf(f, ", \"has_length\": false");
+    }
+    if (sample_length > 0) {
+        fprintf(f, ", \"begins_with\": ");
+        qlog_frame_hex_string(f, sample, sample + sample_length, sample_length);
+    }
+}
+
 const uint8_t* qlog_frame_stream(FILE* f, const uint8_t* first_byte, const uint8_t* bytes_max)
 {
     uint64_t stream_id;
@@ -121,30 +148,10 @@ const uint8_t* qlog_frame_stream(FILE* f, const uint8_t* first_byte, const uint8
     else {
         size_t extra_bytes = 8;
         bytes += consumed;
-        fprintf(f, ", ");
-        qlog_json_uint(f, "id", stream_id);
-        fprintf(f, ", ");
-        qlog_json_uint(f, "offset", offset);
-        fprintf(f, ", ");
-        qlog_json_uint(f, "length", data_length);
-        fprintf(f, ", ");
-        qlog_json_boolean(f, "fin", fin);
-#if 1
-        /* Bug compatibility with old version */
-        fprintf(f, " ");
-#endif
-
-        if ((*first_byte & 2) == 0) {
-            fprintf(f, ", \"has_length\": false");
-        }
         if (extra_bytes > data_length) {
             extra_bytes = data_length;
         }
-
-        if (extra_bytes > 0) {
-            fprintf(f, ", \"begins_with\": ");
-            qlog_frame_hex_string(f, bytes, bytes_max, extra_bytes);
-        }
+        qlog_frame_stream_fields(f, stream_id, offset, data_length, fin, (*first_byte & 2) != 0, bytes, extra_bytes);
         bytes += data_length;
     }
     return bytes;
@@ -507,6 +514,148 @@ const uint8_t* qlog_frame_observed_address(FILE* f, const uint8_t* bytes, const 
     return bytes;
 }
 
+/* Write the fields of one frame, after its frame type. first_byte points to
+ * the frame type, and bytes to the first byte after the frame type. Return the
+ * pointer where the caller continues to parse, or NULL to stop. */
+static const uint8_t* qlog_frame_body(FILE* f, const uint8_t* first_byte, const uint8_t* bytes,
+    const uint8_t* bytes_max, uint64_t frame_id)
+{
+    if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+        bytes = qlog_frame_stream(f, first_byte, bytes_max);
+    }
+    else {
+        switch (frame_id) {
+        case picoquic_frame_type_padding:
+            while (bytes < bytes_max && *bytes == picoquic_frame_type_padding) {
+                bytes++;
+            }
+            break;
+        case picoquic_frame_type_ping:
+            break;
+        case picoquic_frame_type_ack:
+            bytes = qlog_frame_ack(f, first_byte, bytes_max, 0, 0);
+            break;
+        case picoquic_frame_type_ack_ecn:
+            bytes = qlog_frame_ack(f, first_byte, bytes_max, 0, 1);
+            break;
+        case picoquic_frame_type_path_ack:
+            bytes = qlog_frame_ack(f, first_byte, bytes_max, 1, 0);
+            break;
+        case picoquic_frame_type_path_ack_ecn:
+            bytes = qlog_frame_ack(f, first_byte, bytes_max, 1, 1);
+            break;
+        case picoquic_frame_type_reset_stream:
+            bytes = qlog_frame_reset(f, bytes, bytes_max, 0);
+            break;
+        case picoquic_frame_type_reset_stream_at:
+            bytes = qlog_frame_reset(f, bytes, bytes_max, 1);
+            break;
+        case picoquic_frame_type_connection_close:
+            bytes = qlog_frame_connection_close(f, bytes, bytes_max, 0);
+            break;
+        case picoquic_frame_type_application_close:
+            bytes = qlog_frame_connection_close(f, bytes, bytes_max, 1);
+            break;
+        case picoquic_frame_type_max_data:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "maximum");
+            break;
+        case picoquic_frame_type_max_stream_data:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "maximum");
+            break;
+        case picoquic_frame_type_max_streams_bidir:
+            bytes = qlog_frame_max_streams(f, bytes, bytes_max, 1, 0);
+            break;
+        case picoquic_frame_type_max_streams_unidir:
+            bytes = qlog_frame_max_streams(f, bytes, bytes_max, 0, 0);
+            break;
+        case picoquic_frame_type_data_blocked:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "limit");
+            break;
+        case picoquic_frame_type_stream_data_blocked:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "limit");
+            break;
+        case picoquic_frame_type_streams_blocked_bidir:
+            bytes = qlog_frame_max_streams(f, bytes, bytes_max, 1, 1);
+            break;
+        case picoquic_frame_type_streams_blocked_unidir:
+            bytes = qlog_frame_max_streams(f, bytes, bytes_max, 0, 1);
+            break;
+        case picoquic_frame_type_new_connection_id:
+            bytes = picoquic_frame_new_connection_id(f, bytes, bytes_max, 0);
+            break;
+        case picoquic_frame_type_path_new_connection_id:
+            bytes = picoquic_frame_new_connection_id(f, bytes, bytes_max, 1);
+            break;
+        case picoquic_frame_type_stop_sending:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "error_code");
+            break;
+        case picoquic_frame_type_path_challenge:
+            bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 1);
+            break;
+        case picoquic_frame_type_path_response:
+            bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 0);
+            break;
+        case picoquic_frame_type_crypto_hs:
+            bytes = qlog_frame_crypto_hs(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_new_token:
+            bytes = qlog_frame_new_token(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_retire_connection_id:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "sequence_number");
+            break;
+        case picoquic_frame_type_path_retire_connection_id:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence_number");
+            break;
+        case picoquic_frame_type_handshake_done:
+            break;
+        case picoquic_frame_type_datagram:
+            bytes = qlog_frame_datagram(f, bytes, bytes_max, 0);
+            break;
+        case picoquic_frame_type_datagram_l:
+            bytes = qlog_frame_datagram(f, bytes, bytes_max, 1);
+            break;
+        case picoquic_frame_type_ack_frequency:
+            bytes = qlog_frame_ack_frequency(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_immediate_ack:
+            break;
+        case picoquic_frame_type_time_stamp:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "time_stamp");
+            break;
+        case picoquic_frame_type_path_abandon:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "reason");
+            break;
+        case picoquic_frame_type_path_backup:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
+            break;
+        case picoquic_frame_type_path_available:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
+            break;
+        case picoquic_frame_type_bdp:
+            bytes = qlog_frame_bdp(f, bytes, bytes_max);
+            break;
+        case picoquic_frame_type_max_path_id:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "max_path_id");
+            break;
+        case picoquic_frame_type_paths_blocked:
+            bytes = qlog_frame_one_param(f, bytes, bytes_max, "max_path_id");
+            break;
+        case picoquic_frame_type_path_cid_blocked:
+            bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "next_sequence_number");
+            break;
+        case picoquic_frame_type_observed_address_v4:
+        case picoquic_frame_type_observed_address_v6:
+            bytes = qlog_frame_observed_address(f, bytes, bytes_max, frame_id);
+            break;
+        default:
+            fprintf(f, ", ");
+            qlog_json_uint(f, "unknown_frame_type", frame_id);
+        }
+    }
+    return bytes;
+}
+
 void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int skip_padding)
 {
     int ret = 0;
@@ -529,139 +678,72 @@ void qlog_frames(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, int sk
         fprintf(f, "%s{ \n    \"frame_type\": \"%s\"", comma_if_needed, picoquic_frame_name(frame_id));
         comma_if_needed = ", ";
 
-        if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
-            bytes = qlog_frame_stream(f, first_byte, bytes_max);
-        }
-        else {
-            switch (frame_id) {
-            case picoquic_frame_type_padding:
-                while (bytes < bytes_max && *bytes == picoquic_frame_type_padding) {
-                    bytes++;
-                }
-                break;
-            case picoquic_frame_type_ping:
-                break;
-            case picoquic_frame_type_ack:
-                bytes = qlog_frame_ack(f, first_byte, bytes_max, 0, 0);
-                break;
-            case picoquic_frame_type_ack_ecn:
-                bytes = qlog_frame_ack(f, first_byte, bytes_max, 0, 1);
-                break;
-            case picoquic_frame_type_path_ack:
-                bytes = qlog_frame_ack(f, first_byte, bytes_max, 1, 0);
-                break;
-            case picoquic_frame_type_path_ack_ecn:
-                bytes = qlog_frame_ack(f, first_byte, bytes_max, 1, 1);
-                break;
-            case picoquic_frame_type_reset_stream:
-                bytes = qlog_frame_reset(f, bytes, bytes_max, 0);
-                break;
-            case picoquic_frame_type_reset_stream_at:
-                bytes = qlog_frame_reset(f, bytes, bytes_max, 1);
-                break;
-            case picoquic_frame_type_connection_close:
-                bytes = qlog_frame_connection_close(f, bytes, bytes_max, 0);
-                break;
-            case picoquic_frame_type_application_close:
-                bytes = qlog_frame_connection_close(f, bytes, bytes_max, 1);
-                break;
-            case picoquic_frame_type_max_data:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "maximum");
-                break;
-            case picoquic_frame_type_max_stream_data:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "maximum");
-                break;
-            case picoquic_frame_type_max_streams_bidir:
-                bytes = qlog_frame_max_streams(f, bytes, bytes_max, 1, 0);
-                break;
-            case picoquic_frame_type_max_streams_unidir:
-                bytes = qlog_frame_max_streams(f, bytes, bytes_max, 0, 0);
-                break;
-            case picoquic_frame_type_data_blocked:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "limit");
-                break;
-            case picoquic_frame_type_stream_data_blocked:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "limit");
-                break;
-            case picoquic_frame_type_streams_blocked_bidir:
-                bytes = qlog_frame_max_streams(f, bytes, bytes_max, 1, 1);
-                break;
-            case picoquic_frame_type_streams_blocked_unidir:
-                bytes = qlog_frame_max_streams(f, bytes, bytes_max, 0, 1);
-                break;
-            case picoquic_frame_type_new_connection_id:
-                bytes = picoquic_frame_new_connection_id(f, bytes, bytes_max, 0);
-                break;
-            case picoquic_frame_type_path_new_connection_id:
-                bytes = picoquic_frame_new_connection_id(f, bytes, bytes_max, 1);
-                break;
-            case picoquic_frame_type_stop_sending:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "stream_id", "error_code");
-                break;
-            case picoquic_frame_type_path_challenge:
-                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 1);
-                break;
-            case picoquic_frame_type_path_response:
-                bytes = qlog_frame_path_challenge_response(f, bytes, bytes_max, 0);
-                break;
-            case picoquic_frame_type_crypto_hs:
-                bytes = qlog_frame_crypto_hs(f, bytes, bytes_max);
-                break;
-            case picoquic_frame_type_new_token:
-                bytes = qlog_frame_new_token(f, bytes, bytes_max);
-                break;
-            case picoquic_frame_type_retire_connection_id:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "sequence_number");
-                break;
-            case picoquic_frame_type_path_retire_connection_id:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence_number");
-                break;
-            case picoquic_frame_type_handshake_done:
-                break;
-            case picoquic_frame_type_datagram:
-                bytes = qlog_frame_datagram(f, bytes, bytes_max, 0);
-                break;
-            case picoquic_frame_type_datagram_l:
-                bytes = qlog_frame_datagram(f, bytes, bytes_max, 1);
-                break;
-            case picoquic_frame_type_ack_frequency:
-                bytes = qlog_frame_ack_frequency(f, bytes, bytes_max);
-                break;
-            case picoquic_frame_type_immediate_ack:
-                break;
-            case picoquic_frame_type_time_stamp:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "time_stamp");
-                break;
-            case picoquic_frame_type_path_abandon:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "reason");
-                break;
-            case picoquic_frame_type_path_backup:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
-                break;
-            case picoquic_frame_type_path_available:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "sequence");
-                break;
-            case picoquic_frame_type_bdp:
-                bytes = qlog_frame_bdp(f, bytes, bytes_max);
-                break;
-            case picoquic_frame_type_max_path_id:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "max_path_id");
-                break;
-            case picoquic_frame_type_paths_blocked:
-                bytes = qlog_frame_one_param(f, bytes, bytes_max, "max_path_id");
-                break;
-            case picoquic_frame_type_path_cid_blocked:
-                bytes = qlog_frame_two_params(f, bytes, bytes_max, "path_id", "next_sequence_number");
-                break;
-            case picoquic_frame_type_observed_address_v4:
-            case picoquic_frame_type_observed_address_v6:
-                bytes = qlog_frame_observed_address(f, bytes, bytes_max, frame_id);
-                break;
-            default:
-                fprintf(f, ", ");
-                qlog_json_uint(f, "unknown_frame_type", frame_id);
-            }
-        }
+        bytes = qlog_frame_body(f, first_byte, bytes, bytes_max, frame_id);
         fprintf(f, "}");
     };
+}
+
+/* Write the fields of a STREAM frame record of a binary log. bytes points to
+ * the first byte after the frame type. The log stores the frame header and the
+ * first bytes of the data, normally at most 8. If the frame has no length
+ * field, the log adds one at the end of the header and keeps the frame type.
+ * If the header does not decode, write no fields. */
+static void qlog_binlog_frame_stream(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t frame_id)
+{
+    uint64_t stream_id;
+    uint64_t offset = 0;
+    uint64_t length;
+
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &stream_id)) != NULL &&
+        ((frame_id & 4) == 0 || (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset)) != NULL) &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &length)) != NULL) {
+        size_t sample_length = (size_t)(bytes_max - bytes);
+        if (sample_length > length) {
+            sample_length = (size_t)length;
+        }
+        qlog_frame_stream_fields(f, stream_id, offset, length, (int)(frame_id & 1), (frame_id & 2) != 0,
+            bytes, sample_length);
+    }
+}
+
+/* Write the length of a DATAGRAM frame record of a binary log, for a frame
+ * with a length field. The log stores only the frame type and the length. */
+static void qlog_binlog_frame_datagram(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    uint64_t length;
+
+    if (picoquic_frames_varint_decode(bytes, bytes_max, &length) != NULL) {
+        fprintf(f, ", ");
+        qlog_json_uint(f, "length", length);
+    }
+}
+
+/* Write one frame record of a binary log. The record holds one frame, so the
+ * function does not try to decode another frame from the record. If the
+ * record is empty or its frame type does not decode, the function writes
+ * nothing. Otherwise it writes a comma if frame_count is not 0, writes the
+ * frame, and increments frame_count.
+ * The log does not store all the data of STREAM, CRYPTO and DATAGRAM frames.
+ * STREAM records, and DATAGRAM records with a length field, have their own
+ * parsers. CRYPTO records use the common code, which writes the offset and the
+ * length before it checks the data. */
+void qlog_binlog_frame(FILE* f, const uint8_t* record, const uint8_t* record_end, int* frame_count)
+{
+    uint64_t frame_id;
+    const uint8_t* bytes = picoquic_frames_varint_decode(record, record_end, &frame_id);
+
+    if (bytes != NULL) {
+        fprintf(f, "%s{ \n    \"frame_type\": \"%s\"", (*frame_count != 0) ? ", " : "", picoquic_frame_name(frame_id));
+        if (PICOQUIC_IN_RANGE(frame_id, picoquic_frame_type_stream_range_min, picoquic_frame_type_stream_range_max)) {
+            qlog_binlog_frame_stream(f, bytes, record_end, frame_id);
+        }
+        else if (frame_id == picoquic_frame_type_datagram_l) {
+            qlog_binlog_frame_datagram(f, bytes, record_end);
+        }
+        else {
+            (void)qlog_frame_body(f, record, bytes, record_end, frame_id);
+        }
+        fprintf(f, "}");
+        (*frame_count)++;
+    }
 }
