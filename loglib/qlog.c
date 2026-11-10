@@ -292,6 +292,7 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     uint64_t dcid_length = 0;
     const uint8_t* dcid = NULL;
     uint64_t packet_size = 0;
+    int has_packet_size = 0;
 
     (void)byteread_vint(s, &packet_type);
     (void)byteread_vint(s, &sequence);
@@ -301,7 +302,7 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
         dcid_length = cid_len;
         dcid = qlog_record_bytes(s, &dcid_length);
     }
-    (void)byteread_vint(s, &packet_size);
+    has_packet_size = (byteread_vint(s, &packet_size) == 0);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -312,7 +313,7 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 
     qlog_event_header(f, ctx, delta_time, path_id, "recovery", "packet_lost");
     qlog_fns_packet_lost_data(f, packet_type, sequence, trigger, (size_t)trigger_length,
-        dcid, (size_t)dcid_length, packet_size);
+        dcid, (size_t)dcid_length, has_packet_size, packet_size);
 
     ctx->event_count++;
 

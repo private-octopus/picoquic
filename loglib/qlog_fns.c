@@ -486,8 +486,7 @@ void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t
     ctx->event_count++;
 }
 
-/* Write the data of a packet_dropped event, and close the event. The
- * converter of binary logs in qlog.c also uses it. */
+/* Write the data of a packet_dropped event, and close the event. */
 void qlog_fns_packet_dropped_data(FILE* f, uint64_t ptype, uint64_t packet_size, uint64_t err)
 {
     if (err != PICOQUIC_ERROR_PADDING_PACKET) {
@@ -510,8 +509,7 @@ void qlog_fns_dropped_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoqui
     qlog_fns_packet_dropped_data(ctx->f_txtlog, ph->ptype, packet_size, (uint64_t)err);
 }
 
-/* Write the data of a packet_buffered event, and close the event. The
- * converter of binary logs in qlog.c also uses it. */
+/* Write the data of a packet_buffered event, and close the event. */
 void qlog_fns_packet_buffered_data(FILE* f, uint64_t ptype, const uint8_t* trigger, size_t trigger_length)
 {
     fprintf(f, "\n    \"type\" : \"%s\"", picoquic_packet_type_name(ptype));
@@ -580,11 +578,10 @@ void qlog_fns_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_
         &ph, bytes, length);
 }
 
-/* Write the data of a packet_lost event, and close the event. The
- * converter of binary logs in qlog.c also uses it. */
+/* Write the data of a packet_lost event, and close the event. */
 void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number,
     const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
-    uint64_t packet_size)
+    int has_packet_size, uint64_t packet_size)
 {
     fprintf(f, "\n    \"packet_type\" : \"%s\"", picoquic_packet_type_name(ptype));
     fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence_number);
@@ -599,7 +596,9 @@ void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number
         fprintf(f, ",\n        \"dcid\" : ");
         (void)qlog_frame_hex_string(f, dcid, dcid + dcid_length, dcid_length);
     }
-    fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    if (has_packet_size) {
+        fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
+    }
     fprintf(f, "}}]");
 }
 
@@ -616,7 +615,7 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
     qlog_fns_event_start(ctx, path_x, 0, current_time, "recovery", "packet_lost");
     qlog_fns_packet_lost_data(ctx->f_txtlog, ptype, sequence_number,
         (const uint8_t*)trigger, (trigger == NULL) ? 0 : strlen(trigger),
-        (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, packet_size);
+        (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, 1, packet_size);
 }
 
 /* log negotiated ALPN */
