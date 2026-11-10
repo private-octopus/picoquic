@@ -260,6 +260,25 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
     return 0;
 }
 
+/* Return a pointer to the next *length bytes of the record, and skip them.
+ * If the record has fewer bytes, set *length to 0, skip the rest of the
+ * record, and return NULL. */
+static const uint8_t* qlog_record_bytes(bytestream* s, uint64_t* length)
+{
+    const uint8_t* bytes = NULL;
+
+    if (*length <= bytestream_remain(s)) {
+        bytes = s->data + s->ptr;
+        s->ptr += (size_t)*length;
+    }
+    else {
+        *length = 0;
+        s->ptr = s->size;
+    }
+
+    return bytes;
+}
+
 int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_context_t* ctx = (qlog_context_t*)ptr;
@@ -267,14 +286,23 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t sequence = 0;
-    uint64_t trigger_length;
-    uint64_t packet_size = 0;
+    uint64_t trigger_length = 0;
+    const uint8_t* trigger = NULL;
     uint8_t cid_len = 0;
-    int ret = 0;
+    uint64_t dcid_length = 0;
+    const uint8_t* dcid = NULL;
+    uint64_t packet_size = 0;
+    int has_packet_size = 0;
 
-    ret |= byteread_vint(s, &packet_type);
-    ret |= byteread_vint(s, &sequence);
-    ret |= byteread_vint(s, &trigger_length);
+    (void)byteread_vint(s, &packet_type);
+    (void)byteread_vint(s, &sequence);
+    (void)byteread_vint(s, &trigger_length);
+    trigger = qlog_record_bytes(s, &trigger_length);
+    if (byteread_int8(s, &cid_len) == 0) {
+        dcid_length = cid_len;
+        dcid = qlog_record_bytes(s, &dcid_length);
+    }
+    has_packet_size = (byteread_vint(s, &packet_size) == 0);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -284,25 +312,8 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "recovery", "packet_lost");
-    fprintf(f, "\n    \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
-    fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence);
-    if (trigger_length > 0) {
-        fprintf(f, ",\n    \"trigger\": ");
-        ret |= qlog_chars(f, s, trigger_length);
-    }
-    fprintf(f, ",\n    \"header\": {");
-    fprintf(f, "\n        \"packet_type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
-    fprintf(f, ",\n        \"packet_number\" : %" PRIu64, sequence);
-    ret |= byteread_int8(s, &cid_len);
-    if (ret == 0 && cid_len > 0) {
-        fprintf(f, ",\n        \"dcid\" : ");
-        qlog_string(f, s, cid_len);
-    }
-    ret |= byteread_vint(s, &packet_size);
-    if (ret == 0) {
-        fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
-    }
-    fprintf(f, "}}]");
+    qlog_fns_packet_lost_data(f, packet_type, sequence, trigger, (size_t)trigger_length,
+        dcid, (size_t)dcid_length, has_packet_size, packet_size);
 
     ctx->event_count++;
 
@@ -315,12 +326,8 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     int64_t delta_time = time - ctx->start_time;
     FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
-    uint64_t err_code;
+    uint64_t err_code = 0;
     uint64_t packet_size = 0;
-#if 1
-#else
-    char const* str;
-#endif
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
@@ -335,50 +342,7 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_dropped");
-    if (err_code != PICOQUIC_ERROR_PADDING_PACKET){
-        fprintf(f, "\n    \"packet_type\" : \"%s\",", ptype2str((picoquic_packet_type_enum)packet_type));
-    }
-    fprintf(f, "\n    \"packet_size\" : %" PRIu64, packet_size);
-
-#if 1
-    fprintf(f, ",\n    \"trigger\": \"%s\"", picoquic_error_name(err_code));
-#else
-    switch (err_code) {
-    case PICOQUIC_ERROR_DUPLICATE:
-        str = "dos_prevention";
-        break;
-    case PICOQUIC_ERROR_AEAD_CHECK:
-        str = "payload_decrypt_error";
-        break;
-    case PICOQUIC_ERROR_CNXID_CHECK:
-        str = "unknown_connection_id";
-        break;
-    case PICOQUIC_ERROR_INITIAL_TOO_SHORT:
-        str = "dos_prevention";
-        break;
-    case PICOQUIC_ERROR_CNXID_NOT_AVAILABLE:	
-        str = "unknown_connection_id";
-        break;
-    case PICOQUIC_ERROR_KEY_ROTATION_NOT_READY:
-        str = "key_unavailable";
-        break;
-    case PICOQUIC_ERROR_AEAD_NOT_READY:
-        str = "key_unavailable";
-        break;
-    case PICOQUIC_ERROR_STATELESS_RESET:
-        str = "stateless_reset";
-        break;
-    case PICOQUIC_ERROR_PADDING_PACKET:
-        str = "padding_packet";
-        break;
-    default:
-        str = "protocol_violation";
-        break;
-    }
-    fprintf(f, ",\n    \"trigger\": \"%s\"", str);
-#endif
-
-    fprintf(f, "}]");
+    qlog_fns_packet_dropped_data(f, packet_type, packet_size, err_code);
 
     ctx->event_count++;
 
@@ -392,10 +356,12 @@ int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* p
     FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t trigger_length = 0;
+    const uint8_t* trigger = NULL;
     int ret = 0;
 
     ret |= byteread_vint(s, &packet_type);
     ret |= byteread_vint(s, &trigger_length);
+    trigger = qlog_record_bytes(s, &trigger_length);
 
     if (ctx->event_count != 0) {
         fprintf(f, ",\n");
@@ -405,12 +371,7 @@ int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* p
     }
 
     qlog_event_header(f, ctx, delta_time, path_id, "transport", "packet_buffered");
-
-
-    fprintf(f, "\n    \"type\" : \"%s\"", ptype2str((picoquic_packet_type_enum)packet_type));
-    fprintf(f, ",\n    \"trigger\": ");
-    qlog_chars(f, s, trigger_length);
-    fprintf(f, "}]");
+    qlog_fns_packet_buffered_data(f, packet_type, trigger, (size_t)trigger_length);
 
     ctx->event_count++;
 
