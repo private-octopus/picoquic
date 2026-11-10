@@ -28,6 +28,56 @@ extern "C" {
 #include <stdio.h>
 #include "picoquic.h"
 
+    typedef struct st_qlog_fns_path_context_t {
+        struct st_qlog_fns_path_context_t* next;
+        uint64_t unique_path_id;
+        uint64_t cwin;
+        uint64_t rtt_sample;
+        uint64_t smoothed_rtt;
+        uint64_t rtt_min;
+        uint64_t bytes_in_transit;
+        uint64_t pacing_packet_time;
+        uint64_t cc_state;
+        uint64_t cc_param;
+
+        unsigned int last_bw_estimate_path_limited : 1;
+    } qlog_fns_path_context_t;
+
+
+    typedef struct st_qlog_fns_context_t {
+
+        FILE* f_txtlog;      /*!< The file handle of the opened output file. */
+
+        uint32_t version_number;
+        const char* cid_name; /*!< Name of the connection, default = initial connection id */
+        struct sockaddr_storage addr_peer;
+        struct sockaddr_storage addr_local;
+        uint8_t ecn_sent;
+        uint8_t ecn_received;
+
+
+        uint64_t start_time;  /*!< Timestamp is very first log event reported. */
+        int event_count;
+        int packet_count;
+        int frame_count;
+        picoquic_packet_type_enum packet_type;
+
+        qlog_fns_path_context_t* first_path_ctx;
+
+        unsigned int trace_flow_id : 1;
+        unsigned int key_phase_sent_last : 1;
+        unsigned int key_phase_sent : 1;
+        unsigned int key_phase_received_last : 1;
+        unsigned int key_phase_received : 1;
+        unsigned int spin_bit_sent_last : 1;
+        unsigned int spin_bit_sent : 1;
+
+        int state;
+    } qlog_fns_context_t;
+
+    /* Write the separator and the header of an event, and count the event. */
+    void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, char const* event_class, char const* event_name);
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
     /* Write a text and a number, with the same output as

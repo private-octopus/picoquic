@@ -27,57 +27,11 @@
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
 #include "picoquic_unified_log.h"
+#include "picoquic_qlog_fns.h"
 #ifdef _WINDOWS
 #pragma warning(disable:4204)
 #endif
 #include "picoquic_picotls.h"
-
-typedef struct st_qlog_fns_path_context_t {
-    struct st_qlog_fns_path_context_t* next;
-    uint64_t unique_path_id;
-    uint64_t cwin;
-    uint64_t rtt_sample;
-    uint64_t smoothed_rtt;
-    uint64_t rtt_min;
-    uint64_t bytes_in_transit;
-    uint64_t pacing_packet_time;
-    uint64_t cc_state;
-    uint64_t cc_param;
-
-    unsigned int last_bw_estimate_path_limited : 1;
-} qlog_fns_path_context_t;
-
-
-typedef struct st_qlog_fns_context_t {
-
-    FILE* f_txtlog;      /*!< The file handle of the opened output file. */
-
-    uint32_t version_number;
-    const char* cid_name; /*!< Name of the connection, default = initial connection id */
-    struct sockaddr_storage addr_peer;
-    struct sockaddr_storage addr_local;
-    uint8_t ecn_sent;
-    uint8_t ecn_received;
-
-
-    uint64_t start_time;  /*!< Timestamp is very first log event reported. */
-    int event_count;
-    int packet_count;
-    int frame_count;
-    picoquic_packet_type_enum packet_type;
-
-    qlog_fns_path_context_t* first_path_ctx;
-
-    unsigned int trace_flow_id : 1;
-    unsigned int key_phase_sent_last : 1;
-    unsigned int key_phase_sent : 1;
-    unsigned int key_phase_received_last : 1;
-    unsigned int key_phase_received : 1;
-    unsigned int spin_bit_sent_last : 1;
-    unsigned int spin_bit_sent : 1;
-
-    int state;
-} qlog_fns_context_t;
 
 #define QLOG_DECLARE_CONTEXT(ctx, cnx) qlog_fns_context_t * ctx = (qlog_fns_context_t*)cnx->qlog_ctx
 
