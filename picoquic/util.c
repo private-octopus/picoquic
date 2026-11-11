@@ -520,7 +520,7 @@ uint16_t picoquic_get_addr_port(const struct sockaddr* addr)
 int picoquic_compare_addr(const struct sockaddr* expected, const struct sockaddr* actual)
 {
     int ret = picoquic_compare_ip_addr(expected, actual);
-    if (ret == 0 && (expected->sa_family == AF_INET6 || expected->sa_family)){
+    if (ret == 0 && (expected->sa_family == AF_INET6 || expected->sa_family == AF_INET)){
         uint16_t p_ex = picoquic_get_addr_port(expected);
         uint16_t p_ac = picoquic_get_addr_port(actual);
 

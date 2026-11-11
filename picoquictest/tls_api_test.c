@@ -8292,13 +8292,14 @@ static int retired_cnxid_incoming_path(picoquic_quic_t* quic, picoquic_cnx_t* cn
     struct sockaddr* addr_from, struct sockaddr* addr_to, uint64_t current_time, int* path_id)
 {
     picoquic_packet_header ph;
+    picoquic_tuple_t* tuple;
     int ret = -1;
 
     memset(&ph, 0, sizeof(ph));
     ph.dest_cnx_id = *cid;
     *path_id = -1;
     if (picoquic_cnx_by_id(quic, *cid, &ph.l_cid) == cnx && ph.l_cid != NULL) {
-        ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, 0, current_time, path_id);
+        ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, 0, current_time, path_id, &tuple);
     }
     return ret;
 }

@@ -1929,6 +1929,7 @@ int picoquic_incoming_1rtt(
     struct sockaddr* addr_to,
     int if_index_to,
     int path_is_not_allocated,
+    picoquic_tuple_t* tuple,
     uint64_t current_time)
 {
     int ret = 0;
@@ -1981,8 +1982,9 @@ int picoquic_incoming_1rtt(
 
             /* Check and report SCONE advice */
             picoquic_scone_report(cnx, path_id);
-
-            path_x->first_tuple->if_index = if_index_to;
+            if (tuple != NULL) {
+                tuple->if_index = if_index_to;
+            }
             cnx->is_1rtt_received = 1;
             picoquic_spin_function_table[cnx->spin_policy].spinbit_incoming(cnx, path_x, ph);
             /* Accept the incoming frames */
@@ -1990,6 +1992,15 @@ int picoquic_incoming_1rtt(
                 bytes + ph->offset, ph->payload_length, received_data,
                 ph->epoch, addr_from, addr_to, ph->pn64,
                 path_is_not_allocated, ph->l_cid, current_time);
+
+            /* manage the promotion of paths */
+            if (tuple != path_x->first_tuple && !cnx->client_mode &&
+                path_x->last_non_path_probing_pn == ph->pn64 &&
+                ret == 0 && tuple != NULL) {
+                /* If the server receives a non probing packet on a different tuple than default,
+                 * that tuple should become the new default. */
+                picoquic_promote_tuple_after_nat(path_x, tuple, current_time);
+            }
 
             if (ret == 0) {
                 /* Compute receive bandwidth */
@@ -2129,6 +2140,7 @@ int picoquic_incoming_segment(
     picoquic_stream_data_node_t* decrypted_data = picoquic_stream_data_node_alloc(quic);
     /* saving the value of the input_segment_node_taken, to ensure reentrency. */
     unsigned int saved_input_segment_node_taken = quic->input_segment_node_taken;
+    picoquic_tuple_t* tuple = NULL;
 
     if (decrypted_data == NULL) {
         return -1;
@@ -2143,7 +2155,7 @@ int picoquic_incoming_segment(
     if (ret == 0 && cnx != NULL) {
         if (ph.ptype == picoquic_packet_1rtt_protected) {
             /* Find the arrival path and update its state */
-            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id);
+            ret = picoquic_find_incoming_path(cnx, &ph, addr_from, addr_to, if_index_to, current_time, &path_id, &tuple);
         }
         else {
             path_id = 0;
@@ -2335,7 +2347,7 @@ int picoquic_incoming_segment(
             case picoquic_packet_1rtt_protected:
                 ret = picoquic_incoming_1rtt(cnx, path_id, bytes, decrypted_data,
                     &ph, addr_from, addr_to, if_index_to,
-                    path_is_not_allocated, current_time);
+                    path_is_not_allocated, tuple, current_time);
                 break;
             default:
                 /* Packet type error. Log and ignore */

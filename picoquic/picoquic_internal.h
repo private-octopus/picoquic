@@ -1637,7 +1637,10 @@ uint64_t picoquic_find_avalaible_unique_path_id(picoquic_cnx_t* cnx, uint64_t re
 void picoquic_register_path(picoquic_cnx_t* cnx, picoquic_path_t * path_x);
 int picoquic_find_incoming_path(picoquic_cnx_t* cnx, picoquic_packet_header* ph,
     struct sockaddr* addr_from, struct sockaddr* addr_to, int if_index_to,
-    uint64_t current_time, int* p_path_id);
+    uint64_t current_time, int* p_path_id, picoquic_tuple_t** tuple);
+void picoquic_promote_tuple_to_default(
+    picoquic_path_t* path_x, picoquic_tuple_t* tuple, picoquic_tuple_t* previous_tuple, uint64_t current_time);
+void picoquic_promote_tuple_after_nat(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time);
 /* Prepare packet containing only path control frames. */
 int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple,
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
