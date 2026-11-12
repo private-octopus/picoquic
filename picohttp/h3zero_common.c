@@ -788,6 +788,10 @@ static uint8_t* h3zero_parse_frame_prefix(uint8_t* bytes, uint8_t* bytes_max,
 		bytes = h3zero_get_next_vint(bytes, bytes_max, stream_state, &offset,
 			&stream_state->current_frame_length);
 	}
+	else {
+		/* Until the type is complete, any stored length is stale. */
+		stream_state->current_frame_length = UINT64_MAX;
+	}
 
 	if (stream_state->current_frame_length != UINT64_MAX) {
 		stream_state->current_frame_read = 0;

@@ -1684,6 +1684,131 @@ int h3zero_stream_test(void)
     return ret;
 }
 
+/* Frame types of two bytes or more can be split across packets.
+ */
+
+static uint8_t h3zero_stream_test_split_type1[] = {
+    0x40, 0x5f, 0,
+    h3zero_frame_header, 4,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
+    h3zero_frame_data, 12,
+    H3ZERO_STREAM_TEST2_DATA };
+
+static uint8_t h3zero_stream_test_split_type2[] = {
+    h3zero_frame_header, 4,
+    QPACK_TEST_HEADER_BLOCK_PREFIX, 0xC0 | 25, 0xC0 | 52,
+    0x40, 0x5f, 0,
+    h3zero_frame_data, 12,
+    H3ZERO_STREAM_TEST2_DATA };
+
+static uint8_t h3zero_stream_test_split_wt[] = {
+    0x40, 0x41, 0x00, 'h', 'e', 'l', 'l', 'o' };
+
+static int h3zero_stream_test_split_all(uint8_t* bytes, size_t nb_bytes)
+{
+    int ret = 0;
+
+    for (size_t split = 1; ret == 0 && split < nb_bytes; split++) {
+        uint8_t* bmax[2] = { bytes + split, bytes + nb_bytes };
+
+        ret = h3zero_stream_test_one_split(bytes, nb_bytes, bmax, 2,
+            h3zero_stream_test2_data, sizeof(h3zero_stream_test2_data), 0);
+        if (ret != 0) {
+            DBG_PRINTF("Stream reassembly fails for split: %d\n", (int)split);
+        }
+    }
+    return ret;
+}
+
+static int h3zero_stream_test_split_wt_one(size_t const* splits, size_t nb_splits)
+{
+    int ret = 0;
+    h3zero_data_stream_state_t stream_state;
+    uint8_t data[16];
+    size_t nb_data = 0;
+    size_t start = 0;
+    size_t nb_bytes = sizeof(h3zero_stream_test_split_wt);
+
+    memset(&stream_state, 0, sizeof(h3zero_data_stream_state_t));
+
+    for (size_t i = 0; ret == 0 && i <= nb_splits; i++) {
+        size_t end = (i < nb_splits) ? splits[i] : nb_bytes;
+        size_t p_len = end - start;
+        uint8_t* packet = (uint8_t*)malloc(p_len);
+        uint8_t* p = packet;
+        uint8_t* p_max = packet + p_len;
+
+        if (packet == NULL) {
+            ret = -1;
+            break;
+        }
+        memcpy(packet, h3zero_stream_test_split_wt + start, p_len);
+        while (ret == 0 && p < p_max) {
+            size_t available_data = 0;
+            uint64_t error_found = 0;
+
+            p = h3zero_parse_data_stream(p, p_max, &stream_state, &available_data, &error_found);
+            if (p == NULL) {
+                DBG_PRINTF("Parse error 0x%llx\n", (unsigned long long)error_found);
+                ret = -1;
+            }
+            else if (available_data > 0) {
+                if (nb_data + available_data > sizeof(data)) {
+                    ret = -1;
+                }
+                else {
+                    memcpy(data + nb_data, p, available_data);
+                    nb_data += available_data;
+                    p += available_data;
+                }
+            }
+        }
+        free(packet);
+        start = end;
+    }
+
+    if (ret == 0) {
+        if (!stream_state.is_web_transport || stream_state.control_stream_id != 0) {
+            DBG_PRINTF("%s", "Web transport header not recognized\n");
+            ret = -1;
+        }
+        else if (nb_data != 5 || memcmp(data, "hello", 5) != 0) {
+            DBG_PRINTF("Got %d bytes of web transport data instead of 5\n", (int)nb_data);
+            ret = -1;
+        }
+    }
+
+    h3zero_delete_data_stream_state(&stream_state);
+    return ret;
+}
+
+int h3zero_stream_split_type_test(void)
+{
+    int ret = h3zero_stream_test_split_all(h3zero_stream_test_split_type1, sizeof(h3zero_stream_test_split_type1));
+
+    if (ret == 0) {
+        ret = h3zero_stream_test_split_all(h3zero_stream_test_split_type2, sizeof(h3zero_stream_test_split_type2));
+    }
+
+    for (size_t split = 1; ret == 0 && split < sizeof(h3zero_stream_test_split_wt); split++) {
+        ret = h3zero_stream_test_split_wt_one(&split, 1);
+        if (ret != 0) {
+            DBG_PRINTF("Web transport header fails for split: %d\n", (int)split);
+        }
+    }
+
+    if (ret == 0) {
+        size_t splits[2] = { 1, 2 };
+
+        ret = h3zero_stream_test_split_wt_one(splits, 2);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "Web transport header fails for splits 1, 2\n");
+        }
+    }
+
+    return ret;
+}
+
 /* H3Zero stream fuzz test
  */
 
