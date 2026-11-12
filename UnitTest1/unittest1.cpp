@@ -806,6 +806,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(persistent_congestion)
+        {
+            int ret = persistent_congestion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -3501,6 +3508,13 @@ namespace UnitTest1
         TEST_METHOD(cc_reset_gate)
         {
             int ret = cc_reset_gate_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(cc_persistent_congestion)
+        {
+            int ret = cc_persistent_congestion_test();
 
             Assert::AreEqual(ret, 0);
         }

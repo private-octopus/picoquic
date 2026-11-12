@@ -141,6 +141,15 @@ static void cubic_enter_avoidance(
     cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
 }
 
+/* RFC 9002 7.6.2: collapse to the minimum window, and slow start up to ssthresh. */
+static void cubic_enter_persistent_congestion(picoquic_path_t* path_x, picoquic_cubic_state_t* cubic_state, uint64_t current_time)
+{
+    path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
+    cubic_state->start_of_epoch = current_time;
+    cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+}
+
 /* The recovery state last 1 RTT, during which parameters will be frozen
  */
 static void cubic_enter_recovery(picoquic_cnx_t * cnx,
@@ -170,19 +179,22 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
         /* If things are that bad, fall back to slow start */
 
         cubic_state->alg_state = picoquic_cubic_alg_slow_start;
-        cubic_state->ssthresh = UINT64_MAX;
-        path_x->is_ssthresh_initialized = 0;
+        if (notification == picoquic_congestion_notification_persistent_congestion) {
+            /* A finite ssthresh keeps the bandwidth estimate from undoing the collapse. */
+            cubic_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
+        }
+        else {
+            cubic_state->ssthresh = UINT64_MAX;
+            path_x->is_ssthresh_initialized = 0;
+        }
         cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
         cubic_state->start_of_epoch = current_time;
         cubic_state->W_reno = PICOQUIC_CWIN_MINIMUM;
         path_x->cwin = PICOQUIC_CWIN_MINIMUM;
     }
     else {
-        if (notification == picoquic_congestion_notification_timeout) {
-            path_x->cwin = PICOQUIC_CWIN_MINIMUM;
-            cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
-            cubic_state->start_of_epoch = current_time;
-            cubic_state->alg_state = picoquic_cubic_alg_slow_start;
+        if (notification == picoquic_congestion_notification_persistent_congestion) {
+            cubic_enter_persistent_congestion(path_x, cubic_state, current_time);
         }
         else {
             /* Enter congestion avoidance immediately */
@@ -255,8 +267,10 @@ static void cubic_notify(
             case picoquic_congestion_notification_acknowledgement:
                 switch (cubic_state->alg_state) {
                     case picoquic_cubic_alg_slow_start:
-                        /* Increase cwin based on bandwidth estimation. */
-                        path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+                        if (cubic_state->ssthresh == UINT64_MAX) {
+                            /* Increase cwin based on bandwidth estimation. */
+                            path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+                        }
 
                         if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                             //if (path_x->bytes_in_transit > path_x->cwin) {
@@ -337,6 +351,16 @@ static void cubic_notify(
                             cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
                         }
                         break;
+                }
+                break;
+            case picoquic_congestion_notification_persistent_congestion:
+                /* Not filtered: if the losses of the same ACK entered recovery, keep their ssthresh and only collapse the window. */
+                if (ack_state->lost_packet_number >= cubic_state->recovery_sequence) {
+                    path_x->is_ssthresh_initialized = 1;
+                    cubic_enter_recovery(cnx, path_x, notification, cubic_state, current_time);
+                }
+                else {
+                    cubic_enter_persistent_congestion(path_x, cubic_state, current_time);
                 }
                 break;
             case picoquic_congestion_notification_spurious_repeat:

@@ -2421,6 +2421,12 @@ static void picoquic_bbr_notify(
             /* if loss is PTO, we should start the OnPto processing */
             BBROnEnterRTO(bbr_state, path_x, ack_state->lost_packet_number);
             break;
+        case picoquic_congestion_notification_persistent_congestion:
+            BBRExitLostFeedback(bbr_state, path_x);
+            /* RFC 9002 7.6 maps to the draft's OnEnterRTO, re-armed for one round trip even during PTO recovery. */
+            bbr_state->is_pto_recovery = 0;
+            BBROnEnterRTO(bbr_state, path_x, picoquic_cc_get_sequence_number(path_x->cnx, path_x));
+            break;
         case picoquic_congestion_notification_spurious_repeat:
             /* handling of suspension */
             BBROnSpuriousLoss(bbr_state, path_x, ack_state->lost_packet_number, current_time);

@@ -392,17 +392,11 @@ void picoquic_prague_process_start_ack(picoquic_cnx_t* cnx,
     else {
         path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, ack_state->nb_bytes_acknowledged, 0);
 
-#if 0
-        /* Not reachable: ssthresh is always UINT64_MAX whenever this function runs (it is only
-         * called while alg_state == slow_start, and every assignment of a finite ssthresh --
-         * enter_recovery, the HyStart branch below -- also moves alg_state to
-         * congestion_avoidance in the same breath), so cwin can never reach it. */
-        /* if cnx->cwin exceeds SSTHRESH, exit and go to CA */
+        /* Slow start after persistent congestion ends at ssthresh. */
         if (path_x->cwin >= pr_state->ssthresh) {
             pr_state->alg_state = picoquic_prague_alg_congestion_avoidance;
             picoquic_prague_initialize_era(cnx, path_x, pr_state, current_time);
         }
-#endif
     }
 }
 
@@ -468,6 +462,15 @@ void picoquic_prague_notify(
             break;
         case picoquic_congestion_notification_timeout:
             /* We should not react on PTO */
+            break;
+        case picoquic_congestion_notification_persistent_congestion:
+            /* Not filtered: if the losses of the same ACK entered recovery, keep their ssthresh. */
+            if (pr_state->ssthresh == UINT64_MAX || current_time - pr_state->recovery_stamp > path_x->smoothed_rtt) {
+                picoquic_prague_enter_recovery(cnx, path_x, pr_state, current_time);
+            }
+            picoquic_prague_reset_l3s(cnx, pr_state, path_x);
+            path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+            pr_state->alg_state = picoquic_prague_alg_slow_start;
             break;
         case picoquic_congestion_notification_spurious_repeat:
             /* we should do nothing, since we do not react on PTO */

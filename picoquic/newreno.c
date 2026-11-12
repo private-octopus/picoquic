@@ -56,7 +56,7 @@ static void picoquic_newreno_sim_enter_recovery(
         nr_state->ssthresh = PICOQUIC_CWIN_MINIMUM;
     }
 
-    if (notification == picoquic_congestion_notification_timeout) {
+    if (notification == picoquic_congestion_notification_persistent_congestion) {
         nr_state->cwin = PICOQUIC_CWIN_MINIMUM;
         nr_state->alg_state = picoquic_newreno_alg_slow_start;
     }
@@ -123,6 +123,17 @@ void picoquic_newreno_sim_notify(
         if (nr_state->recovery_sequence <= ack_state->lost_packet_number) {
         /* if (nr_state->recovery_sequence <= ack_state->lost_packet_number) { */
             picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
+        }
+        break;
+    case picoquic_congestion_notification_persistent_congestion:
+        /* Not filtered: if the losses of the same ACK entered recovery, keep their ssthresh and only collapse the window. */
+        if (nr_state->recovery_sequence <= ack_state->lost_packet_number) {
+            picoquic_newreno_sim_enter_recovery(nr_state, cnx, path_x, notification, current_time);
+        }
+        else {
+            nr_state->cwin = PICOQUIC_CWIN_MINIMUM;
+            nr_state->alg_state = picoquic_newreno_alg_slow_start;
+            nr_state->residual_ack = 0;
         }
         break;
     case picoquic_congestion_notification_spurious_repeat:
@@ -240,6 +251,7 @@ static void picoquic_newreno_notify(
         case picoquic_congestion_notification_ecn_ec:
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
+        case picoquic_congestion_notification_persistent_congestion:
             /* TODO fix test cases first. */
             /* packet_trace qlog_trace qlog_trace_auto qlog_trace_only qlog_trace_ecn l4s_reno pacing_update
              * quality_update app_limited_reno multipath_callback multipath_quality  */

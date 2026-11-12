@@ -1246,6 +1246,10 @@ static void picoquic_bbr1_notify(
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
+        case picoquic_congestion_notification_persistent_congestion:
+            /* RFC 9002 7.6 maps to the BBRv1 RTO response: not loss filtered, suspend at the minimum window. */
+            picoquic_bbr1_notify_congestion(bbr1_state, cnx, path_x, current_time, 1);
+            break;
         case picoquic_congestion_notification_spurious_repeat:
             if (bbr1_state->is_suspended) {
                 picoquic_bbr1_suspension_almost_over(bbr1_state, ack_state->lost_packet_number);
