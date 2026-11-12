@@ -724,7 +724,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
     struct sockaddr* addr_to,
     int if_index_to,
     uint64_t current_time,
-    int* p_path_id)
+    int* p_path_id,
+    picoquic_tuple_t** tuple_ptr)
 {
     int ret = 0;
     picoquic_path_t* path_x = NULL;
@@ -807,19 +808,11 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
             * need to be a bit more agressive, i.e., immediately promote the new tuple
             * as the default. In fact, we MUST do that if the CID also changed, otherwise
             * we will stumble on a bug if the packet asks to retire the CID.
-            *
-            * We thus need to distinguish the NAT rebinding case from the non-multipath
-            * path-migration. This is bound to be ambiguous, but we can use a simple heuristic:
-            *
-            * - if multipath is enabled, the old style path migration is supported but
-            *   discouraged. It is mostly there to support "migration to a preferred
-            *   address", and there is no much harm to always treat that as a NAT
-            *   rebinding. Maybe make an exception if the destination address is
-            *   one of the preferred addresses.
-            * - if multipath is not enabled, check whether this looks like a challenge
-            *   for a new address, i.e., it contains a PATH CHALLENGE frame and only
-            *   non-path validating packets. If true, treat it as a path migration challenge.
-            *   else, treat it as a NAT rebinding.
+            * 
+            * We should really look mostly at whether the incoming packet is non probing,
+            * but this requires decodingthe packet -- and testing that its syntax is correct,
+            * not a duplicate, etc.
+            * 
             */
 
             /* Last resort (RFC 9000 9.5): no spare peer CID but same DCID, share the current one so spoofed addresses cannot exhaust CIDs. */
@@ -834,6 +827,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                 (is_cid_shared ? picoquic_share_peer_cnxid_with_tuple(path_x, tuple) :
                     picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, tuple)) == 0) {
                 picoquic_set_tuple_challenge(tuple, current_time, cnx->quic->use_constant_challenges);
+
+#if 1
+                tuple->challenge_required = 1;
+#else
                 if (path_x->first_tuple->p_local_cnxid != NULL &&
                     picoquic_compare_connection_id(&path_x->first_tuple->p_local_cnxid->cnx_id, &ph->dest_cnx_id) != 0 &&
                     cnx->is_multipath_enabled) {
@@ -858,6 +855,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                     /* Treat this a new tuple challenge. */
                     tuple->challenge_required = 1;
                 }
+#endif
             }
             /* TODO: clean up in case of failure. */
         }
@@ -881,6 +879,53 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
     if (path_id >= 0 && ret == 0) {
         cnx->path[path_id]->last_packet_received_at = current_time;
     }
+    *tuple_ptr = tuple;
 
     return ret;
+}
+
+void picoquic_promote_tuple_to_default(
+    picoquic_path_t* path_x, picoquic_tuple_t* tuple, picoquic_tuple_t* previous_tuple, uint64_t current_time)
+{
+    picoquic_tuple_t* old_first = path_x->first_tuple;
+
+    if (tuple != NULL && previous_tuple != NULL) {
+        /* A port-only change keeps CC and RTT (RFC 9000, section 9.4) */
+        int is_new_address = picoquic_compare_ip_addr((struct sockaddr*)&old_first->peer_addr,
+            (struct sockaddr*)&tuple->peer_addr) != 0 ||
+            (old_first->local_addr.ss_family != 0 && tuple->local_addr.ss_family != 0 &&
+                picoquic_compare_ip_addr((struct sockaddr*)&old_first->local_addr,
+                    (struct sockaddr*)&tuple->local_addr) != 0);
+
+        previous_tuple->next_tuple = tuple->next_tuple;
+        tuple->next_tuple = path_x->first_tuple;
+        path_x->first_tuple = tuple;
+        if (tuple->to_preferred_address) {
+            path_x->cnx->remote_parameters.migration_disabled = 0;
+            picoquic_log_app_message(path_x->cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
+        }
+        picoquic_reset_path_mtu(path_x);
+        if (is_new_address) {
+            picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
+        }
+    }
+}
+
+void picoquic_promote_tuple_after_nat(picoquic_path_t* path_x, picoquic_tuple_t* tuple, uint64_t current_time)
+{
+    /* find the previous tuple */
+    picoquic_tuple_t* old_tuple = path_x->first_tuple;
+    picoquic_tuple_t* previous_tuple = path_x->first_tuple;
+    while (previous_tuple != NULL) {
+        if (previous_tuple->next_tuple == tuple) {
+            picoquic_promote_tuple_to_default(path_x, tuple, previous_tuple, current_time);
+            tuple->challenge_verified = 1;
+            /* set a challenge on the old tuple to recover from spoofed addresses */
+            picoquic_set_tuple_challenge(old_tuple, current_time, path_x->cnx->quic->use_constant_challenges);
+            old_tuple->challenge_required = 1;
+            old_tuple->challenge_verified = 0;
+            break;
+        }
+        previous_tuple = previous_tuple->next_tuple;
+    }
 }
