@@ -4238,6 +4238,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_amplification) {
+            int ret = migration_amplification_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_recover) {
+            int ret = migration_spoof_recover_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_return) {
+            int ret = migration_spoof_return_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_retire_old_cid) {
             int ret = migration_retire_old_cid_test();
 

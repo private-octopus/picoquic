@@ -954,6 +954,9 @@ void picoquic_finalize_and_protect_packet_tuple(picoquic_cnx_t* cnx,
             picoquic_queue_for_retransmit(cnx, path_x, packet, length, current_time);
             path_x->last_sent_time = current_time;
             path_x->bytes_sent += length;
+            if (tuple != NULL) {
+                tuple->bytes_sent += length;
+            }
         } else {
             *send_length = 0;
         }
@@ -2103,6 +2106,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
     checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
     packet->pc = pc;
+    send_buffer_max = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
     bytes_max = bytes + send_buffer_max - checksum_overhead;
 
     if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
@@ -2925,7 +2929,10 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     size_t header_length = 0;
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
-    size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    /* An unvalidated peer address limits what can be sent (RFC 9000, section 8.1) */
+    int is_amplification_blocked = picoquic_tuple_amplification_budget(cnx, path_x->first_tuple) < PICOQUIC_MIN_SEGMENT_SIZE;
+    size_t send_buffer_clamped = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
+    size_t send_buffer_min_max = (send_buffer_clamped > path_x->send_mtu) ? path_x->send_mtu : send_buffer_clamped;
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
     uint8_t* bytes_next;
@@ -2979,8 +2986,8 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
      * are queued in the connection context as `cnx->data_repeat_first` when data 
      * frames need to be repeated, and under `cnx->first_misc_frame` when other
      * individual frames need repetition. */
-    if (cnx->first_misc_frame == NULL && 
-        (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet, 
+    if (cnx->first_misc_frame == NULL && !is_amplification_blocked &&
+        (length = picoquic_retransmit_needed(cnx, pc, path_x, current_time, next_wake_time, packet,
         send_buffer_min_max, &header_length)) > 0) {
         /* Check whether it makes sense to add an ACK at the end of the retransmission */
         /* Testing header length for defense in depth -- avoid creating new packet if
@@ -3032,7 +3039,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
             length++;
             length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
             bytes_next = bytes + length;
-        } else if (cnx->cnx_state != picoquic_state_disconnected && path_x->first_tuple->challenge_verified != 0) {
+        } else if (cnx->cnx_state != picoquic_state_disconnected &&
+            (path_x->first_tuple->challenge_verified != 0 ||
+                (path_x->first_tuple->is_nat_rebinding && !is_amplification_blocked))) {
             /* There are no frames yet that would be exempt from pacing control, but if there
              * was they should be sent here. */
 
@@ -3138,7 +3147,7 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     }
 
                     if (length > header_length || pmtu_discovery_needed != picoquic_pmtu_discovery_required ||
-                        send_buffer_max <= path_x->send_mtu) {
+                        send_buffer_clamped <= path_x->send_mtu) {
                         /* No need or no way to do path MTU discovery, just go on with formatting packets */
                         /* If there are not enough local CID published, create and advertise */
                         if (ret == 0) {
@@ -3219,12 +3228,12 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
                     } 
 
                     if (ret == 0 && length <= header_length) {
-                        if (send_buffer_max > path_x->send_mtu
-                            && path_x->cwin > path_x->bytes_in_transit 
+                        if (send_buffer_clamped > path_x->send_mtu
+                            && path_x->cwin > path_x->bytes_in_transit
                             && cnx->quic->cwin_max > path_x->bytes_in_transit
                             && pmtu_discovery_needed != picoquic_pmtu_discovery_not_needed) {
                             /* Since there is no data to send, this is an opportunity to send an MTU probe */
-                            length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_max);
+                            length = picoquic_prepare_mtu_probe(cnx, path_x, header_length, checksum_overhead, bytes, send_buffer_clamped);
                             packet->length = length;
                             packet->send_path = path_x;
                             packet->is_mtu_probe = 1;

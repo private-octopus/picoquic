@@ -4980,6 +4980,7 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
 
             if (found_challenge && !tuple->challenge_verified) {
                 tuple->challenge_verified = 1;
+                tuple->is_address_validated = 1;
                 /* The verified tuple becomes tuple 0 of the path */
                 if (previous_tuple != NULL /* && cnx->client_mode */) {
                     picoquic_promote_tuple_to_default(path_x, tuple, previous_tuple, current_time);

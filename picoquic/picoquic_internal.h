@@ -1011,18 +1011,22 @@ typedef struct st_picoquic_tuple_t {
     /* Manage the publishing of observed addresses */
     int nb_observed_repeat;
     uint64_t observed_time;
+    /* Manage amplification limit */
+    uint64_t bytes_sent;
+    uint64_t bytes_received;
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint64_t challenge_time_first;
-    uint64_t is_nat_rebinding;
     uint8_t challenge_repeat_count;
     /* Flags */
     unsigned int is_backup;
     unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
+    unsigned int is_address_validated : 1; /* stays set after a later re-challenge */
+    unsigned int is_nat_rebinding : 1; /* promoted before validation, may send data within the amplification limit */
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int to_preferred_address : 1;
@@ -1645,6 +1649,9 @@ void picoquic_promote_tuple_after_nat(picoquic_path_t* path_x, picoquic_tuple_t*
 int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple,
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time);
+uint64_t picoquic_tuple_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple);
+size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
+    size_t send_buffer_max, size_t checksum_overhead);
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,

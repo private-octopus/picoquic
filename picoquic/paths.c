@@ -106,12 +106,42 @@ static void picoquic_check_tuple_challenge_expired(picoquic_path_t* path_x, uint
     }
 }
 
+/* Bytes the server may still send to a never validated peer address, at most 3x received (RFC 9000, section 8.1).
+ * Returns UINT64_MAX if the tuple is not subject to the limit. */
+uint64_t picoquic_tuple_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple)
+{
+    uint64_t budget = UINT64_MAX;
+
+    if (!cnx->client_mode && !tuple->challenge_verified && !tuple->is_address_validated) {
+        uint64_t limit = 3 * tuple->bytes_received;
+        budget = (limit > tuple->bytes_sent) ? limit - tuple->bytes_sent : 0;
+    }
+    return budget;
+}
+
+/* Clamp the packet size to the budget; the floor at checksum_overhead leaves no room for frames. */
+size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
+    size_t send_buffer_max, size_t checksum_overhead)
+{
+    uint64_t budget = picoquic_tuple_amplification_budget(cnx, tuple);
+
+    if (budget < send_buffer_max) {
+        send_buffer_max = (budget > checksum_overhead) ? (size_t)budget : checksum_overhead;
+    }
+    return send_buffer_max;
+}
+
 uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     picoquic_tuple_t* tuple,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
     uint64_t current_time, uint64_t* next_wake_time)
 {
+    /* The server pads only if the path received more than it sent, MTU discovery can follow; never above the tuple budget. */
+    uint64_t budget = picoquic_tuple_amplification_budget(cnx, tuple);
+    int is_padding_allowed = (budget >= PICOQUIC_ENFORCED_INITIAL_MTU) &&
+        (cnx->client_mode || (path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received);
+
     if (tuple->challenge_verified == 0 && tuple->challenge_failed == 0) {
         uint64_t next_challenge_time = picoquic_tuple_challenge_time(path_x, tuple, current_time);
 
@@ -132,24 +162,12 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 if (bytes_next > bytes_challenge) {
                     tuple->challenge_time = current_time;
                     tuple->challenge_repeat_count++;
-                    if (!tuple->is_nat_rebinding) {
-                        if (cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received)) {
-                            *is_challenge_padding_needed = 1;
-                        }
-                        else {
-                            /* Sending a full size packet would defeat the amplification limits, so we take
-                             * advantage of the escape clause in RFC 9000, "An endpoint MUST expand datagrams
-                             * that contain a PATH_CHALLENGE frame to at least the smallest allowed maximum
-                             * datagram size of 1200 bytes, unless the anti-amplification limit for the path
-                             * does not permit sending a datagram of this size."
-                             */
-                            *is_challenge_padding_needed = 0;
-                        }
-                    }
-                    else {
-                        /* never pad the packets sent in response to NAT rebinding. */
-                        *is_challenge_padding_needed = 0;
-                    }
+                    *is_challenge_padding_needed |= is_padding_allowed;
+                }
+                else if (budget != UINT64_MAX) {
+                    /* Blocked by the amplification limit: count the challenge as lost, so the tuple eventually fails. */
+                    tuple->challenge_time = current_time;
+                    tuple->challenge_repeat_count++;
                 }
 
                 /* Reset the next challenge time to match the new challenge count */
@@ -172,7 +190,11 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
         if ((bytes_next = picoquic_format_path_response_frame(bytes_response, bytes_max,
             more_data, is_pure_ack, tuple->challenge_response)) > bytes_response) {
             tuple->response_required = 0;
-            *is_challenge_padding_needed |= cnx->client_mode || ((path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received);
+            *is_challenge_padding_needed |= is_padding_allowed;
+        }
+        else if (budget != UINT64_MAX) {
+            /* Blocked by the amplification limit: drop the response, the peer will repeat its challenge. */
+            tuple->response_required = 0;
         }
     }
 
@@ -203,7 +225,8 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     size_t header_length = 0;
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
-    size_t send_buffer_min_max = (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max;
+    size_t send_buffer_min_max = picoquic_clamp_to_amplification_budget(cnx, tuple,
+        (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max, checksum_overhead);
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
     uint8_t* bytes_next;
@@ -757,6 +780,7 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
              */
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
             picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, path_x->first_tuple);
+            tuple = path_x->first_tuple;
         }
         else {
             /* If we cannot create a new path, return an error.
@@ -904,9 +928,9 @@ void picoquic_promote_tuple_to_default(
             path_x->cnx->remote_parameters.migration_disabled = 0;
             picoquic_log_app_message(path_x->cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
         }
-        picoquic_reset_path_mtu(path_x);
         if (is_new_address) {
             picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
+            picoquic_reset_path_mtu(path_x);
         }
     }
 }
@@ -919,7 +943,15 @@ void picoquic_promote_tuple_after_nat(picoquic_path_t* path_x, picoquic_tuple_t*
     while (previous_tuple != NULL) {
         if (previous_tuple->next_tuple == tuple) {
             picoquic_promote_tuple_to_default(path_x, tuple, previous_tuple, current_time);
-            tuple->challenge_verified = 1;
+            if (tuple->is_address_validated) {
+                /* A previously validated address stays verified, so rare spoofed packets cannot throttle the client */
+                tuple->challenge_verified = 1;
+                tuple->challenge_failed = 0;
+                tuple->is_nat_rebinding = 0;
+            }
+            else {
+                tuple->is_nat_rebinding = 1;
+            }
             /* set a challenge on the old tuple to recover from spoofed addresses */
             picoquic_set_tuple_challenge(old_tuple, current_time, path_x->cnx->quic->use_constant_challenges);
             old_tuple->challenge_required = 1;

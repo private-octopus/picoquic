@@ -1994,14 +1994,17 @@ int picoquic_incoming_1rtt(
                 path_is_not_allocated, ph->l_cid, current_time);
 
             /* manage the promotion of paths */
-            if (tuple != path_x->first_tuple && !cnx->client_mode &&
-                path_x->last_non_path_probing_pn == ph->pn64 &&
-                ret == 0 && tuple != NULL) {
-                /* If the server receives a non probing packet on a different tuple than default,
-                 * that tuple should become the new default. */
-                picoquic_promote_tuple_after_nat(path_x, tuple, current_time);
+            if (tuple != NULL) {
+                tuple->bytes_received += (uint64_t)ph->offset + ph->payload_length +
+                    picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
+                if (tuple != path_x->first_tuple && !cnx->client_mode &&
+                    path_x->last_non_path_probing_pn == ph->pn64 &&
+                    ret == 0) {
+                    /* If the server receives a non probing packet on a different tuple than default,
+                     * that tuple should become the new default. */
+                    picoquic_promote_tuple_after_nat(path_x, tuple, current_time);
+                }
             }
-
             if (ret == 0) {
                 /* Compute receive bandwidth */
                 path_x->received += (uint64_t)ph->offset + ph->payload_length +
