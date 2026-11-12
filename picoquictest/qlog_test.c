@@ -626,6 +626,159 @@ int qlog_fns_format_test(void)
     return ret;
 }
 
+#define QLOG_DAMAGED_BINLOG "qlog_damaged_record_test.log"
+#define QLOG_DAMAGED_QLOG "qlog_damaged_record_test.qlog"
+
+static int qlog_damaged_write_record(FILE* F, const picoquic_connection_id_t* cid, uint64_t event_id,
+    const uint8_t* data, size_t length)
+{
+    bytestream_buf stream;
+    bytestream* ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+    uint8_t head[4];
+    int ret = 0;
+
+    ret |= bytewrite_cid(ps, cid);
+    ret |= bytewrite_vint(ps, 10); /* time */
+    ret |= bytewrite_vint(ps, 0); /* path id */
+    ret |= bytewrite_vint(ps, event_id);
+    if (length > 0) {
+        ret |= bytewrite_buffer(ps, data, length);
+    }
+
+    if (ret == 0) {
+        size_t record_length = bytestream_length(ps);
+        head[0] = (uint8_t)(record_length >> 24);
+        head[1] = (uint8_t)(record_length >> 16);
+        head[2] = (uint8_t)(record_length >> 8);
+        head[3] = (uint8_t)record_length;
+        if (fwrite(head, sizeof(head), 1, F) <= 0 ||
+            fwrite(bytestream_data(ps), record_length, 1, F) <= 0) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+/* Convert a binary log with damaged records. The qlog must not hold a
+ * value that the record does not hold. */
+int qlog_damaged_record_test(void)
+{
+    static const char* expected[] = {
+        "[0, \"transport\", \"datagram_received\", {}]",
+        "[0, \"transport\", \"datagram_received\", { \"addr_from\" : {\"ip_v4\": \"10.0.0.1\", \"port_v4\":4433}}]",
+        "        \"dcid\" : \"01020304\"}}]"
+    };
+    static const char* not_expected[] = { "byte_length", "ip_v6", "ecn", "packet_size" };
+    picoquic_connection_id_t cid = { { 1, 2, 3, 4 }, 4 };
+    struct sockaddr_in addr;
+    bytestream_buf stream;
+    bytestream* ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+    char qlog_text[2048];
+    size_t qlog_length = 0;
+    uint16_t flags = 0;
+    uint64_t log_time = 0;
+    FILE* F = picoquic_file_open(QLOG_DAMAGED_BINLOG, "wb");
+    int ret = (F == NULL) ? -1 : 0;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = 4433;
+    ((uint8_t*)&addr.sin_addr)[0] = 10;
+    ((uint8_t*)&addr.sin_addr)[3] = 1;
+
+    if (ret == 0) {
+        /* File header */
+        ret |= bytewrite_int32(ps, FOURCC('q', 'l', 'o', 'g'));
+        ret |= bytewrite_int16(ps, 0);
+        ret |= bytewrite_int16(ps, 1);
+        ret |= bytewrite_int64(ps, 0);
+        if (ret == 0 && fwrite(bytestream_data(ps), bytestream_length(ps), 1, F) <= 0) {
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* New connection */
+        ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+        ret |= bytewrite_int8(ps, 1);
+        ret |= bytewrite_int32(ps, 1);
+        ret |= bytewrite_cid(ps, &cid);
+        if (ret == 0) {
+            ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_new_connection,
+                bytestream_data(ps), bytestream_length(ps));
+        }
+    }
+    if (ret == 0) {
+        /* Datagram record with no data */
+        ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_pdu_recv, NULL, 0);
+    }
+    if (ret == 0) {
+        /* Datagram record that ends after the peer address */
+        ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+        ret |= bytewrite_addr(ps, (struct sockaddr*)&addr);
+        if (ret == 0) {
+            ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_pdu_recv,
+                bytestream_data(ps), bytestream_length(ps));
+        }
+    }
+    if (ret == 0) {
+        /* Lost packet record that ends before the packet size */
+        ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+        ret |= bytewrite_vint(ps, picoquic_packet_1rtt_protected);
+        ret |= bytewrite_vint(ps, 42);
+        ret |= bytewrite_cstr(ps, "timer");
+        ret |= bytewrite_cid(ps, &cid);
+        if (ret == 0) {
+            ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_packet_lost,
+                bytestream_data(ps), bytestream_length(ps));
+        }
+    }
+    if (F != NULL) {
+        F = picoquic_file_close(F);
+    }
+
+    if (ret == 0) {
+        F = picoquic_open_cc_log_file_for_read(QLOG_DAMAGED_BINLOG, &flags, &log_time);
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = qlog_convert(&cid, F, QLOG_DAMAGED_BINLOG, QLOG_DAMAGED_QLOG, NULL, flags);
+            if (ret != 0) {
+                DBG_PRINTF("%s", "Damaged record test, cannot convert the binary log");
+            }
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        F = picoquic_file_open(QLOG_DAMAGED_QLOG, "r");
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            qlog_length = fread(qlog_text, 1, sizeof(qlog_text) - 1, F);
+            qlog_text[qlog_length] = 0;
+            F = picoquic_file_close(F);
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < sizeof(expected) / sizeof(expected[0]); i++) {
+        if (strstr(qlog_text, expected[i]) == NULL) {
+            DBG_PRINTF("Damaged record test, missing: %s", expected[i]);
+            ret = -1;
+        }
+    }
+    for (size_t i = 0; ret == 0 && i < sizeof(not_expected) / sizeof(not_expected[0]); i++) {
+        if (strstr(qlog_text, not_expected[i]) != NULL) {
+            DBG_PRINTF("Damaged record test, unexpected: %s", not_expected[i]);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -664,6 +817,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_fns_format_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_damaged_record_test();
 	}
 
 	return ret;

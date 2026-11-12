@@ -83,37 +83,6 @@ int qlog_chars(FILE* f, bytestream* s, uint64_t l)
     return (error_found) ? -1 : 0;
 }
 
-static void qlog_log_addr(FILE* f, struct sockaddr* addr_peer)
-{
-    if (addr_peer->sa_family == AF_INET) {
-        struct sockaddr_in* s4 = (struct sockaddr_in*)addr_peer;
-        uint8_t* addr = (uint8_t*)&s4->sin_addr;
-
-        fprintf(f, "\"ip_v4\": \"%d.%d.%d.%d\", \"port_v4\":%d",
-            addr[0], addr[1], addr[2], addr[3],
-            s4->sin_port);
-    }
-    else {
-        struct sockaddr_in6* s6 = (struct sockaddr_in6*)addr_peer;
-        uint8_t* addr = (uint8_t*)&s6->sin6_addr;
-
-        fprintf(f, " \"ip_v6\": \"");
-        for (int i = 0; i < 8; i++) {
-            if (i != 0) {
-                fprintf(f, ":");
-            }
-
-            if (addr[2 * i] != 0) {
-                fprintf(f, "%x%02x", addr[2 * i], addr[(2 * i) + 1]);
-            }
-            else {
-                fprintf(f, "%x", addr[(2 * i) + 1]);
-            }
-        }
-        fprintf(f, "\", \"port_v6\" :%d", s6->sin6_port);
-    }
-}
-
 /* Write the transport parameters of a binary log record with the code of
  * qlog_fns.c. If the record has less than tp_length bytes, write the two
  * lengths instead. */
@@ -297,147 +266,37 @@ int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* p
 int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
     struct sockaddr_storage addr_peer = { 0 };
     struct sockaddr_storage addr_local = { 0 };
     uint64_t byte_length = 0;
+    int has_length = 0;
     uint64_t unique_path_id = 0;
-    uint8_t ecn;
-    int log_ecn;
-    int ret_local;
+    uint8_t ecn = 0xff;
 
-    byteread_addr(s, &addr_peer);
-    byteread_vint(s, &byte_length);
-    ret_local = byteread_addr(s, &addr_local);
-    byteread_vint(s, &unique_path_id);
-    byteread_int8(s, &ecn);
-
-    qlog_fns_event_start(ctx, NULL, unique_path_id, time, "transport", (rxtx == 0) ? "datagram_sent" : "datagram_received");
-
-    fprintf(f, " \"byte_length\": %" PRIu64, byte_length);
-
-    if (addr_peer.ss_family != 0 &&
-        picoquic_compare_addr((struct sockaddr*)&addr_peer, (struct sockaddr*) & ctx->addr_peer) != 0) {
-        fprintf(f, ", \"%s\" : {", (rxtx == 0) ? "addr_to" : "addr_from");
-        qlog_log_addr(f, (struct sockaddr*) & addr_peer);
-        fprintf(f, "}");
-        picoquic_store_addr(&ctx->addr_peer, (struct sockaddr*) & addr_peer);
+    /* Do not log an address that could not be read. */
+    if (byteread_addr(s, &addr_peer) != 0) {
+        memset(&addr_peer, 0, sizeof(addr_peer));
     }
-
-    if (ret_local == 0 && addr_local.ss_family != 0 &&
-        picoquic_compare_addr((struct sockaddr*) & addr_local, (struct sockaddr*) & ctx->addr_local) != 0) {
-        fprintf(f, ", \"%s\" : {", (rxtx != 0) ? "addr_to" : "addr_from");
-        qlog_log_addr(f, (struct sockaddr*) & addr_local);
-        fprintf(f, "}");
-        picoquic_store_addr(&ctx->addr_local, (struct sockaddr*) & addr_local);
+    has_length = (byteread_vint(s, &byte_length) == 0);
+    if (byteread_addr(s, &addr_local) != 0) {
+        memset(&addr_local, 0, sizeof(addr_local));
     }
+    (void)byteread_vint(s, &unique_path_id);
+    (void)byteread_int8(s, &ecn);
 
-    if (ecn != 0xff) {
-        if (rxtx) {
-            log_ecn = (ecn != ctx->ecn_received);
-            ctx->ecn_received = ecn;
-        }
-        else {
-            log_ecn = (ecn != ctx->ecn_sent);
-            ctx->ecn_sent = ecn;
-        }
-        if (log_ecn) {
-            char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
-            char const* ecn_s = ecn_strings[ecn & 3];
-            fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
-        }
-    }
+    qlog_fns_datagram(ctx, rxtx, time, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local,
+        has_length, byte_length, unique_path_id, ecn);
 
-    fprintf(f, "}]");
     return 0;
 }
 
 int qlog_packet_start(uint64_t time, uint64_t path_id, uint64_t size, const picoquic_packet_header * ph, int rxtx, void * ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE * f = ctx->f_txtlog;
 
-    if (ph->ptype == picoquic_packet_1rtt_protected && rxtx == 0) {
-        if (ctx->spin_bit_sent && (ctx->spin_bit_sent_last != ph->spin)) {
-            qlog_fns_event_start(ctx, NULL, path_id, time, "transport", "spin_bit_updated");
-            fprintf(f, " \"state\": %s }]", (ph->spin) ? "true" : "false");
-        }
-        ctx->spin_bit_sent = 1;
-        ctx->spin_bit_sent_last = ph->spin;
-    }
-
-    qlog_fns_event_start(ctx, NULL, path_id, time, "transport", (rxtx == 0) ? "packet_sent" : "packet_received");
-    fprintf(f, " \"packet_type\": \"%s\", \"header\": { \"packet_size\": %"PRIu64 , ptype2str(ph->ptype), size);
-
-    if (ph->ptype != picoquic_packet_version_negotiation &&
-        ph->ptype != picoquic_packet_retry) {
-        fprintf(f, ", \"packet_number\": %"PRIu64, ph->pn64);
-    }
-
-    if (ph->ptype != picoquic_packet_1rtt_protected) {
-        if (ctx->version_number != ph->vn) {
-            fprintf(f, ", \"version\": \"%08x\"", ph->vn);
-            ctx->version_number = ph->vn;
-        }
-        if (ph->ptype != picoquic_packet_version_negotiation &&
-            ph->ptype != picoquic_packet_retry &&
-            ph->ptype != picoquic_packet_error) {
-            fprintf(f, ", \"payload_length\": %zu", ph->payload_length);
-        }
-    }
-
-    if (ph->ptype != picoquic_packet_1rtt_protected && ph->srce_cnx_id.id_len > 0) {
-        char scid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-        picoquic_print_connection_id_hexa(scid_name, sizeof(scid_name), &ph->srce_cnx_id);
-        fprintf(f, ", \"scid\": \"%s\"", scid_name);
-    }
-
-    if (ph->dest_cnx_id.id_len > 0) {
-        char dcid_name[2 * PICOQUIC_CONNECTION_ID_MAX_SIZE + 1];
-        picoquic_print_connection_id_hexa(dcid_name, sizeof(dcid_name), &ph->dest_cnx_id);
-        fprintf(f, ", \"dcid\": \"%s\"", dcid_name);
-    }
-
-    if (ph->ptype == picoquic_packet_initial && ph->token_length > 0) {
-        bytestream token;
-        bytestream_ref_init(&token, ph->token_bytes, ph->token_length);
-        fprintf(f, ", \"token\": ");
-        qlog_string(f, &token, ph->token_length);
-    }
-
-    if (ph->ptype == picoquic_packet_1rtt_protected) {
-        int need_key_phase = 0;
-
-        if (rxtx == 0) {
-            need_key_phase = !ctx->key_phase_sent || (ctx->key_phase_sent_last != ph->key_phase);
-            ctx->key_phase_sent = 1;
-            ctx->key_phase_sent_last = ph->key_phase;
-        }
-        else {
-            need_key_phase = !ctx->key_phase_received || (ctx->key_phase_received_last != ph->key_phase);
-            ctx->key_phase_received_last = ph->key_phase;
-            ctx->key_phase_received = 1;
-        }
-        if (need_key_phase) {
-            fprintf(f, ", \"key_phase\": %d", ph->key_phase);
-        }
-    }
-
-    if (ph->quic_bit_is_zero) {
-        fprintf(f, ", \"quic_bit\": 0");
-    }
-
-    ctx->packet_type = ph->ptype;
-
-    if (ctx->packet_type == picoquic_packet_version_negotiation ||
-        ctx->packet_type == picoquic_packet_retry) {
-        fprintf(f, " }");
-    }
-    else {
-        fprintf(f, " }, \"frames\": [");
-    }
-
+    qlog_fns_packet_start(ctx, NULL, path_id, rxtx, time, ph, size);
     ctx->frame_count = 0;
+
     return 0;
 }
 
@@ -486,18 +345,8 @@ int qlog_packet_frame(bytestream * s, void * ptr)
 
 int qlog_packet_end(void * ptr)
 {
-    qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE * f = ctx->f_txtlog;
+    qlog_fns_packet_end(&((qlog_context_t*)ptr)->fns);
 
-    if (ctx->packet_type == picoquic_packet_version_negotiation ||
-        ctx->packet_type == picoquic_packet_retry) {
-        fprintf(f, "}]");
-    }
-    else {
-        fprintf(f, "]}]");
-    }
-
-    ctx->packet_count++; 
     return 0;
 }
 

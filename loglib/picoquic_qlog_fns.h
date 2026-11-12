@@ -78,6 +78,16 @@ extern "C" {
     /* Write the separator and the header of an event, and count the event. */
     void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, char const* event_class, char const* event_name);
+    /* Write a datagram_sent or datagram_received event. The event has no
+     * byte_length if has_length is 0. */
+    void qlog_fns_datagram(qlog_fns_context_t* ctx, int receiving, uint64_t current_time,
+        const struct sockaddr* addr_peer, const struct sockaddr* addr_local,
+        int has_length, uint64_t byte_length, uint64_t unique_path_id, unsigned char ecn);
+    /* Write the start of a packet event. qlog_fns_packet_end() closes the event. */
+    void qlog_fns_packet_start(qlog_fns_context_t* ctx,
+        picoquic_path_t* path_x, uint64_t unique_path_id, int receiving, uint64_t current_time,
+        const struct st_picoquic_packet_header_t* ph, uint64_t byte_length);
+    void qlog_fns_packet_end(qlog_fns_context_t* ctx);
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
     /* Write a text and a number, with the same output as
