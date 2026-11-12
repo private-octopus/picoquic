@@ -793,6 +793,7 @@ int multipath_cid_retire_test(void);
 int multipath_abandon_stash_test(void);
 int multipath_abandon_stash_reverse_test(void);
 int multipath_delete_path_stash_test(void);
+int multipath_flow_frames_ack_test(void);
 int multipath_unique_path_id_test(void);
 int multipath_ack_delay_test(void);
 int multipath_ack_path_stalled_test(void);

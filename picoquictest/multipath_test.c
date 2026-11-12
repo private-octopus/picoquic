@@ -2958,6 +2958,83 @@ int multipath_delete_path_stash_test(void)
     return ret;
 }
 
+/* The ACK of MAX_PATH_ID, PATHS_BLOCKED and PATH_CID_BLOCKED must consume the whole frame.
+ * If the value 25 is left, it is read as RETIRE_CONNECTION_ID, and the CID of path 0 is freed. */
+#define MULTIPATH_FLOW_FRAMES_ACK_VALUE 25
+
+int multipath_flow_frames_ack_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    picoquic_packet_t* packet = NULL;
+    const uint64_t frame_types[3] = { picoquic_frame_type_max_path_id,
+        picoquic_frame_type_paths_blocked, picoquic_frame_type_path_cid_blocked };
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else if ((packet = picoquic_create_packet(quic)) == NULL) {
+        ret = -1;
+    }
+    else {
+        multipath_abandon_stash_config(cnx);
+        packet->ptype = picoquic_packet_1rtt_protected;
+        packet->pc = picoquic_packet_context_application;
+        packet->offset = 0;
+        packet->length = 32;
+    }
+
+    for (int i = 0; ret == 0 && i < 3; i++) {
+        uint8_t* bytes = packet->bytes;
+        uint8_t* bytes_max = packet->bytes + packet->length;
+        picoquic_remote_cnxid_stash_t* stash = NULL;
+
+        cnx->path[0]->sending_path_cid_blocked_frame = 1;
+        /* The frame, then padding. PATH_CID_BLOCKED has the path ID before the value. */
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, frame_types[i])) == NULL ||
+            (frame_types[i] == picoquic_frame_type_path_cid_blocked &&
+                (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0)) == NULL) ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, MULTIPATH_FLOW_FRAMES_ACK_VALUE)) == NULL) {
+            ret = -1;
+        }
+        else {
+            memset(bytes, 0, bytes_max - bytes);
+            picoquic_process_ack_of_frames(cnx, packet, 0);
+            stash = picoquic_find_or_create_remote_cnxid_stash(cnx, 0, 0);
+
+            if (stash == NULL || stash->cnxid_stash_first == NULL ||
+                stash->cnxid_stash_first != cnx->path[0]->first_tuple->p_remote_cnxid) {
+                DBG_PRINTF("ACK of frame 0x%" PRIx64 " removed the CID used by path 0", frame_types[i]);
+                /* The CID was freed. Do not read it when deleting the connection */
+                cnx->path[0]->first_tuple->p_remote_cnxid = NULL;
+                ret = -1;
+            }
+            else if (frame_types[i] == picoquic_frame_type_max_path_id &&
+                cnx->max_path_id_acknowledged != MULTIPATH_FLOW_FRAMES_ACK_VALUE) {
+                DBG_PRINTF("Max path ID acknowledged: %" PRIu64, cnx->max_path_id_acknowledged);
+                ret = -1;
+            }
+            else if (frame_types[i] == picoquic_frame_type_paths_blocked &&
+                cnx->paths_blocked_acknowledged != MULTIPATH_FLOW_FRAMES_ACK_VALUE) {
+                DBG_PRINTF("Paths blocked acknowledged: %" PRIu64, cnx->paths_blocked_acknowledged);
+                ret = -1;
+            }
+            else if (frame_types[i] == picoquic_frame_type_path_cid_blocked &&
+                cnx->path[0]->sending_path_cid_blocked_frame) {
+                DBG_PRINTF("%s", "Path CID blocked frame not marked as acknowledged");
+                ret = -1;
+            }
+        }
+    }
+
+    if (packet != NULL) {
+        picoquic_recycle_packet(quic, packet);
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 /* A new path never gets an ID already used by another path, even when no other ID is allowed. */
 int multipath_unique_path_id_test(void)
 {
