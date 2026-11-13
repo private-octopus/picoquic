@@ -1052,6 +1052,22 @@ typedef struct st_picoquic_tuple_t {
 * Congestion control and spin bit management are path specific.
 * Packet numbering is global, see packet context.
 */
+/* RTT and MTU before the last CC reset, restored if that reset is found spurious */
+typedef struct st_picoquic_path_pre_reset_t {
+    uint64_t smoothed_rtt;
+    uint64_t rtt_variant;
+    uint64_t retransmit_timer;
+    uint64_t rtt_min;
+    uint64_t rtt_max;
+    uint64_t max_spurious_rtt;
+    uint64_t max_reorder_delay;
+    uint64_t max_reorder_gap;
+    size_t send_mtu;
+    size_t send_mtu_max_tried;
+    uint64_t cwin;
+    int is_valid;
+} picoquic_path_pre_reset_t;
+
 typedef struct st_picoquic_path_t {
     struct sockaddr_storage registered_peer_addr;
     picohash_item net_id_hash_item;
@@ -1182,6 +1198,7 @@ typedef struct st_picoquic_path_t {
     void* congestion_alg_state;
     picoquic_pacing_t pacing;
     uint64_t cc_reset_pn; /* Application packets numbered below this were sent before the last CC reset */
+    picoquic_path_pre_reset_t pre_reset;
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
@@ -1682,6 +1699,8 @@ int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 void picoquic_init_path_rtt(picoquic_path_t* path_x);
 void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_spurious_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_restart_path_after_rebinding(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 int picoquic_is_packet_after_cc_reset(picoquic_packet_t* packet);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 

@@ -125,6 +125,9 @@ typedef struct st_picoquic_newreno_sim_state_t {
     uint64_t ssthresh;
     uint64_t recovery_start;
     uint64_t recovery_sequence;
+    uint64_t last_reset_alg_state;
+    uint64_t last_reset_cwin;
+    uint64_t last_reset_ssthresh;
 } picoquic_newreno_sim_state_t;
 
 void picoquic_newreno_sim_reset(picoquic_newreno_sim_state_t* nrss);

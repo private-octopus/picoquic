@@ -60,6 +60,11 @@ typedef struct st_picoquic_fastcc_state_t {
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
     picoquic_min_max_rtt_t rtt_filter;
+    /* State before the last reset, restored if the reset is spurious */
+    picoquic_fastcc_alg_state_t pre_reset_alg_state;
+    uint64_t pre_reset_rtt_min;
+    uint64_t pre_reset_last_rtt_min[FASTCC_NB_PERIOD];
+    int pre_reset_rtt_min_is_trusted;
 } picoquic_fastcc_state_t;
 
 uint64_t picoquic_fastcc_delay_threshold(uint64_t rtt_min)
@@ -73,13 +78,52 @@ uint64_t picoquic_fastcc_delay_threshold(uint64_t rtt_min)
 
 void picoquic_fastcc_reset(picoquic_fastcc_state_t* fastcc_state, picoquic_path_t* path_x, uint64_t current_time)
 {
+    picoquic_fastcc_alg_state_t pre_reset_alg_state = fastcc_state->alg_state;
+    uint64_t pre_reset_rtt_min = fastcc_state->rtt_min;
+    uint64_t pre_reset_last_rtt_min[FASTCC_NB_PERIOD];
+    int pre_reset_rtt_min_is_trusted = fastcc_state->rtt_min_is_trusted;
+
+    memcpy(pre_reset_last_rtt_min, fastcc_state->last_rtt_min, sizeof(pre_reset_last_rtt_min));
     memset(fastcc_state, 0, sizeof(picoquic_fastcc_state_t));
+    fastcc_state->pre_reset_alg_state = pre_reset_alg_state;
+    fastcc_state->pre_reset_rtt_min = pre_reset_rtt_min;
+    memcpy(fastcc_state->pre_reset_last_rtt_min, pre_reset_last_rtt_min, sizeof(pre_reset_last_rtt_min));
+    fastcc_state->pre_reset_rtt_min_is_trusted = pre_reset_rtt_min_is_trusted;
     fastcc_state->alg_state = picoquic_fastcc_initial;
     fastcc_state->rtt_min = path_x->smoothed_rtt;
     fastcc_state->rolling_rtt_min = fastcc_state->rtt_min;
     fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
     fastcc_state->end_of_epoch = current_time + FASTCC_PERIOD;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
+}
+
+/* Back to the address used before a spurious reset: restore the min RTT history and cwin,
+ * then freeze for one RTT so losses of packets sent before the restore are ignored.
+ * The freeze exits to the initial state if that was the pre-reset state, to eval otherwise. */
+static void picoquic_fastcc_reset_spurious(picoquic_cnx_t* cnx, picoquic_fastcc_state_t* fastcc_state,
+    picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_fastcc_alg_state_t pre_reset_alg_state = fastcc_state->pre_reset_alg_state;
+    uint64_t pre_reset_rtt_min = fastcc_state->pre_reset_rtt_min;
+    uint64_t pre_reset_last_rtt_min[FASTCC_NB_PERIOD];
+    int pre_reset_rtt_min_is_trusted = fastcc_state->pre_reset_rtt_min_is_trusted;
+
+    memcpy(pre_reset_last_rtt_min, fastcc_state->pre_reset_last_rtt_min, sizeof(pre_reset_last_rtt_min));
+    picoquic_fastcc_reset(fastcc_state, path_x, current_time);
+    if (path_x->pre_reset.is_valid && pre_reset_rtt_min_is_trusted) {
+        fastcc_state->rtt_min = pre_reset_rtt_min;
+        fastcc_state->rolling_rtt_min = pre_reset_rtt_min;
+        memcpy(fastcc_state->last_rtt_min, pre_reset_last_rtt_min, sizeof(pre_reset_last_rtt_min));
+        fastcc_state->rtt_min_is_trusted = 1;
+        fastcc_state->delay_threshold = picoquic_fastcc_delay_threshold(fastcc_state->rtt_min);
+        if (path_x->pre_reset.cwin > path_x->cwin) {
+            path_x->cwin = path_x->pre_reset.cwin;
+        }
+        fastcc_state->alg_state = picoquic_fastcc_freeze;
+        fastcc_state->end_of_freeze = current_time + fastcc_state->rtt_min;
+        fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+        fastcc_state->last_freeze_was_timeout = (pre_reset_alg_state == picoquic_fastcc_initial);
+    }
 }
 
 void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
@@ -301,6 +345,9 @@ void picoquic_fastcc_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_fastcc_reset(fastcc_state, path_x, current_time);
+            break;
+        case picoquic_congestion_notification_spurious_reset:
+            picoquic_fastcc_reset_spurious(cnx, fastcc_state, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             picoquic_fastcc_seed_cwin(fastcc_state, path_x, ack_state->nb_bytes_acknowledged);
