@@ -353,6 +353,7 @@ int qlog_trace_parallel_test(void);
 int qlog_fns_test(void);
 int qlog_fns_ecn_test(void);
 int qmux_send_test(void);
+int qmux_send_buffer_limit_test(void);
 int qmux_receive_test(void);
 int qmux_send_tp_test(void);
 int qmux_receive_tp_test(void);

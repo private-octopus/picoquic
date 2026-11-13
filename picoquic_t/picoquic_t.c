@@ -494,6 +494,7 @@ static const picoquic_test_def_t test_table[] = {
     { "qlog_fns", qlog_fns_test },
     { "qlog_fns_ecn", qlog_fns_ecn_test },
     { "qmux_send", qmux_send_test },
+    { "qmux_send_buffer_limit", qmux_send_buffer_limit_test },
     { "qmux_receive", qmux_receive_test },
     { "qmux_send_tp", qmux_send_tp_test },
     { "qmux_receive_tp", qmux_receive_tp_test },
