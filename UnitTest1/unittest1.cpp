@@ -4793,6 +4793,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(h3zero_stream_split_type) {
+            int ret = h3zero_stream_split_type_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(h3zero_stream_fuzz) {
             int ret = h3zero_stream_fuzz_test();
 

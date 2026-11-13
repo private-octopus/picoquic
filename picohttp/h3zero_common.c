@@ -781,6 +781,7 @@ static uint8_t* h3zero_parse_frame_prefix(uint8_t* bytes, uint8_t* bytes_max,
 {
 	size_t offset = 0;
 
+	stream_state->current_frame_length = UINT64_MAX;
 	bytes = h3zero_get_next_vint(bytes, bytes_max, stream_state, &offset,
 		&stream_state->current_frame_type);
 

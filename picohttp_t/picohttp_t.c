@@ -142,6 +142,7 @@ static const picoquic_test_def_t test_table[] = {
     { "h3zero_null_sni", h3zero_null_sni_test },
     { "h3zero_qpack_fuzz", h3zero_qpack_fuzz_test },
     { "h3zero_stream_test", h3zero_stream_test },
+    { "h3zero_stream_split_type", h3zero_stream_split_type_test },
     { "h3zero_stream_fuzz", h3zero_stream_fuzz_test },
     { "parse_demo_scenario", parse_demo_scenario_test },
     { "parse_demo_scenario_error", parse_demo_scenario_error_test },
