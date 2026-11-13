@@ -3907,7 +3907,7 @@ void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_li
             l_cid = l_cid->next;
         }
 
-        cnx->next_wake_time = current_time;
+        *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
     } else {
         if (*next_wake_time - local_cnxid_list->local_cnxid_oldest_created > cnx->quic->local_cnxid_ttl) {
