@@ -1827,6 +1827,7 @@ typedef enum {
     picoquic_congestion_notification_acknowledgement,
     picoquic_congestion_notification_repeat,
     picoquic_congestion_notification_timeout,
+    picoquic_congestion_notification_persistent_congestion,
     picoquic_congestion_notification_spurious_repeat,
     picoquic_congestion_notification_rtt_measurement,
     picoquic_congestion_notification_ecn_ec,

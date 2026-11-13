@@ -180,9 +180,9 @@ void picoquic_update_path_rtt_one_way(picoquic_cnx_t* cnx, picoquic_path_t* old_
 void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, int epoch,
     uint64_t send_time, uint64_t current_time, uint64_t ack_delay, uint64_t time_stamp)
 {
-    if (old_path != NULL && (!old_path->rtt_is_initialized || epoch >= 0)) {
+    if (old_path != NULL && (old_path->rtt_init_time == 0 || epoch >= 0)) {
         uint64_t rtt_estimate = 0;
-        int is_first = !old_path->rtt_is_initialized;
+        int is_first = (old_path->rtt_init_time == 0);
         picoquic_packet_context_t* pkt_ctx = NULL;
         if (cnx->is_multipath_enabled) {
             pkt_ctx = &old_path->pkt_ctx;
@@ -256,7 +256,7 @@ void picoquic_update_path_rtt(picoquic_cnx_t* cnx, picoquic_path_t* old_path, in
                 old_path->smoothed_rtt = rtt_estimate;
                 old_path->rtt_variant = rtt_estimate / 2;
                 old_path->rtt_min = old_path->min_rtt_estimate_in_period;
-                old_path->rtt_is_initialized = 1;
+                old_path->rtt_init_time = current_time;
             }
             else {
                 /* use the average of all samples to adjust the average */

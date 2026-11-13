@@ -734,6 +734,9 @@ int picoqmux_prepare_cnx_packets(picoquic_cnx_t * cnx, uint64_t current_time, ui
             size_t record_size_max = (cnx->qmux_remote_max_record_size < PICOQMUX_MAX_RECORD_SIZE_DEFAULT) ?
                 (size_t)cnx->qmux_remote_max_record_size : (size_t)PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
             size_t length = 0;
+            if (record_size_max > max_length) {
+                record_size_max = max_length;
+            }
             if (record_size_max == 0 || max_length < 255) {
                 next_wake_time = current_time;
                 break;

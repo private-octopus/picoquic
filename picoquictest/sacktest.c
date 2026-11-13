@@ -1197,7 +1197,7 @@ int ack_delay_per_path_test(void)
         cnx->cnx_state = picoquic_state_ready;
         for (int i = 0; i < 2; i++) {
             memset(&packet_data, 0, sizeof(packet_data));
-            paths[i]->rtt_is_initialized = 1;
+            paths[i]->rtt_init_time = current_time - 100000;
             paths[i]->rtt_min = 20000;
             paths[i]->smoothed_rtt = 20000;
             /* Decoding the PATH_ACK frame sets the acked path and ack delay, then records the acked packets. */
@@ -1291,5 +1291,359 @@ int ack_old_packets_loss_test(void)
     }
 
     picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Stub CC algorithm counting persistent congestion notifications. */
+static uint64_t persistent_congestion_test_lost_number;
+static int persistent_congestion_test_nb_notify;
+
+static void persistent_congestion_test_notify(picoquic_cnx_t* UNUSED(cnx), picoquic_path_t* UNUSED(path_x),
+    picoquic_congestion_notification_t notification, picoquic_per_ack_state_t* ack_state, uint64_t UNUSED(current_time))
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+    UNREFERENCED_PARAMETER(path_x);
+    UNREFERENCED_PARAMETER(current_time);
+#endif
+    if (notification == picoquic_congestion_notification_persistent_congestion && ack_state != NULL) {
+        persistent_congestion_test_lost_number = ack_state->lost_packet_number;
+        persistent_congestion_test_nb_notify++;
+    }
+}
+
+static picoquic_congestion_algorithm_t persistent_congestion_test_alg = {
+    "persistent_congestion_test", 0xfe, 0, NULL, persistent_congestion_test_notify, NULL, NULL
+};
+
+#define PERSISTENT_CONGESTION_TEST_P 10
+#define PERSISTENT_CONGESTION_TEST_P_SENT 1000000ull
+
+/* Record one ACK frame that advances the highest ack from P, then acks the listed packets. */
+static void persistent_congestion_test_record(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* acked_packet,
+    picoquic_path_t* path_x, int has_previous, const uint64_t* seq, const uint64_t* sent, size_t nb)
+{
+    memset(ack_data, 0, sizeof(picoquic_ack_frame_data_t));
+    ack_data->acked_path = path_x;
+    ack_data->previous_highest_acked = PERSISTENT_CONGESTION_TEST_P;
+    ack_data->is_previous_set = has_previous;
+    for (size_t i = 0; i < nb; i++) {
+        memset(acked_packet, 0, sizeof(picoquic_packet_t));
+        acked_packet->send_path = path_x;
+        acked_packet->sequence_number = seq[i];
+        acked_packet->send_time = sent[i];
+        acked_packet->length = 1200;
+        picoquic_record_ack_packet_data(ack_data, acked_packet);
+    }
+}
+
+/* Record an ack eliciting packet declared lost in the gaps of the ACK frame. */
+static void persistent_congestion_test_lose(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* lost_packet,
+    uint64_t sequence_number, uint64_t send_time)
+{
+    memset(lost_packet, 0, sizeof(picoquic_packet_t));
+    lost_packet->sequence_number = sequence_number;
+    lost_packet->send_time = send_time;
+    lost_packet->is_evaluated = 1;
+    lost_packet->is_ack_eliciting = 1;
+    picoquic_record_lost_in_ack_gaps(ack_data, lost_packet);
+}
+
+/* Queue a pending 1-RTT packet on path 0, as if sent and not yet acked. */
+static int persistent_congestion_test_queue(picoquic_cnx_t* cnx, uint64_t sequence_number, int is_ack_eliciting, uint64_t send_time)
+{
+    int ret = 0;
+    picoquic_packet_t* packet = picoquic_create_packet(cnx->quic);
+
+    if (packet == NULL) {
+        ret = -1;
+    }
+    else {
+        packet->ptype = picoquic_packet_1rtt_protected;
+        packet->pc = picoquic_packet_context_application;
+        packet->sequence_number = sequence_number;
+        packet->length = 40;
+        packet->send_time = send_time;
+        packet->send_path = cnx->path[0];
+        packet->is_evaluated = 1;
+        packet->is_ack_eliciting = is_ack_eliciting;
+        picoquic_queue_for_retransmit(cnx, cnx->path[0], packet, packet->length, send_time);
+    }
+    return ret;
+}
+
+typedef struct st_persistent_congestion_decode_packet_t {
+    uint64_t sequence_number;
+    uint64_t send_time;
+    int is_ack_eliciting;
+    int is_declared_before; /* Declared lost by a PTO before the ACK */
+} persistent_congestion_decode_packet_t;
+
+/* Decode one ACK frame after P = 10, more than 1 s after the packets declared lost before were sent. */
+static int persistent_congestion_decode_test_one(char const* name, const uint8_t* ack_frame, size_t ack_frame_length,
+    const persistent_congestion_decode_packet_t* packets, size_t nb_packets, int notify_expected, uint64_t lost_expected,
+    uint64_t current_time)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+        picoquic_congestion_algorithm_t const* saved_alg = cnx->congestion_alg;
+
+        cnx->congestion_alg = &persistent_congestion_test_alg;
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->remote_parameters.max_ack_delay = 25000;
+        path_x->smoothed_rtt = 20000;
+        path_x->rtt_min = 20000;
+        path_x->rtt_variant = 5000;
+        path_x->rtt_init_time = 500000;
+        pkt_ctx->highest_acknowledged = PERSISTENT_CONGESTION_TEST_P;
+        pkt_ctx->latest_time_acknowledged = PERSISTENT_CONGESTION_TEST_P_SENT;
+        persistent_congestion_test_nb_notify = 0;
+        persistent_congestion_test_lost_number = 0;
+        for (size_t i = 0; ret == 0 && i < nb_packets; i++) {
+            if (persistent_congestion_test_queue(cnx, packets[i].sequence_number, packets[i].is_ack_eliciting,
+                packets[i].send_time) != 0) {
+                ret = -1;
+            }
+            else if (packets[i].is_declared_before) {
+                (void)picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, pkt_ctx->pending_last, 0, 0);
+            }
+        }
+        if (ret == 0) {
+            pkt_ctx->send_sequence = 21;
+            if (picoquic_decode_ack_frame(cnx, ack_frame, ack_frame + ack_frame_length, current_time,
+                picoquic_epoch_1rtt, 0, 0, NULL) != ack_frame + ack_frame_length) {
+                DBG_PRINTF("%s: cannot decode the ACK frame", name);
+                ret = -1;
+            }
+            else if (persistent_congestion_test_nb_notify != notify_expected ||
+                (notify_expected && persistent_congestion_test_lost_number != lost_expected)) {
+                DBG_PRINTF("%s: expected %d notification, got %d, lost number %" PRIu64, name,
+                    notify_expected, persistent_congestion_test_nb_notify, persistent_congestion_test_lost_number);
+                ret = -1;
+            }
+        }
+        /* The stub has no delete function. */
+        cnx->congestion_alg = saved_alg;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* Losses declared by a PTO before the ACK count, a pure ACK does not, and each gap between acked numbers is checked on its own. */
+static int persistent_congestion_decode_test(void)
+{
+    int ret = 0;
+    const uint64_t p_sent = PERSISTENT_CONGESTION_TEST_P_SENT;
+    /* Past the 1 s spurious detection delay, so the packets declared lost before are dequeued at the end of the frame. */
+    const uint64_t n_sent = p_sent + 1500000;
+    const uint8_t ack_13_20[] = { picoquic_frame_type_ack, 20, 0, 1, 0, 5, 0 };
+    const uint8_t ack_11_20[] = { picoquic_frame_type_ack, 20, 0, 1, 0, 7, 0 };
+    const persistent_congestion_decode_packet_t both_before[] = {
+        { 11, p_sent + 10000, 1, 1 }, { 12, p_sent + 300000, 1, 1 }, { 13, n_sent, 1, 0 }, { 20, n_sent + 10000, 1, 0 } };
+    const persistent_congestion_decode_packet_t one_before[] = {
+        { 11, p_sent + 10000, 1, 1 }, { 12, p_sent + 300000, 1, 0 }, { 13, n_sent, 1, 0 }, { 20, n_sent + 10000, 1, 0 } };
+    const persistent_congestion_decode_packet_t pure_ack[] = {
+        { 11, p_sent + 10000, 1, 1 }, { 12, p_sent + 300000, 0, 0 }, { 13, n_sent, 1, 0 }, { 20, n_sent + 10000, 1, 0 } };
+    /* An acked packet between the two losses: no single gap holds two. */
+    const persistent_congestion_decode_packet_t split_gaps[] = {
+        { 12, p_sent + 10000, 1, 1 }, { 13, p_sent + 20000, 1, 0 }, { 15, p_sent + 300000, 1, 1 }, { 20, n_sent, 1, 0 } };
+    /* After a blackhole, the first ACK also acks a packet sent just before it: the losses are between two ranges. */
+    const persistent_congestion_decode_packet_t blackhole[] = {
+        { 11, p_sent + 5000, 1, 0 }, { 13, p_sent + 10000, 1, 1 }, { 14, p_sent + 300000, 1, 1 }, { 20, n_sent, 1, 0 } };
+    struct {
+        char const* name;
+        const uint8_t* ack_frame;
+        size_t ack_frame_length;
+        const persistent_congestion_decode_packet_t* packets;
+        size_t nb_packets;
+        int notify_expected;
+        uint64_t lost_expected;
+    } cases[] = {
+        { "both lost before", ack_13_20, sizeof(ack_13_20), both_before, sizeof(both_before) / sizeof(both_before[0]), 1, 12 },
+        { "one lost before", ack_13_20, sizeof(ack_13_20), one_before, sizeof(one_before) / sizeof(one_before[0]), 1, 12 },
+        { "pure ACK", ack_13_20, sizeof(ack_13_20), pure_ack, sizeof(pure_ack) / sizeof(pure_ack[0]), 0, 0 },
+        { "split gaps", ack_13_20, sizeof(ack_13_20), split_gaps, sizeof(split_gaps) / sizeof(split_gaps[0]), 0, 0 },
+        { "blackhole", ack_11_20, sizeof(ack_11_20), blackhole, sizeof(blackhole) / sizeof(blackhole[0]), 1, 14 }
+    };
+
+    for (size_t c = 0; ret == 0 && c < sizeof(cases) / sizeof(cases[0]); c++) {
+        ret = persistent_congestion_decode_test_one(cases[c].name, cases[c].ack_frame, cases[c].ack_frame_length,
+            cases[c].packets, cases[c].nb_packets, cases[c].notify_expected, cases[c].lost_expected, n_sent + 40000);
+    }
+    return ret;
+}
+
+/* Detection needs two ack eliciting packets lost in the same gap between acked numbers, sent after the RTT
+ * was initialized and spanning more than the RFC 9002 duration: an idle gap between the acked numbers does not count. */
+int persistent_congestion_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_packet_t* acked_packet = (picoquic_packet_t*)calloc(1, sizeof(picoquic_packet_t));
+
+    if (acked_packet == NULL || picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        /* Duration is 3 * (20 + 20 + 25) ms = 195 ms; with rttvar 0.1 ms the 1 ms granularity gives 3 * 46 ms = 138 ms. */
+        const uint64_t p_sent = PERSISTENT_CONGESTION_TEST_P_SENT;
+        const uint64_t first_lost_sent = p_sent + 10000;
+        /* N is sent long after P, so only the span of the lost packets decides. */
+        const uint64_t n_sent = p_sent + 1000000;
+        struct {
+            char const* name;
+            uint64_t rtt_variant;
+            uint64_t first_sample_time;
+            int has_previous;
+            uint64_t nb_lost;
+            uint64_t lost_span;
+            int expected;
+        } cases[] = {
+            { "above duration", 5000, 500000, 1, 2, 195001, 1 },
+            { "equal to duration", 5000, 500000, 1, 2, 195000, 0 },
+            { "single lost packet", 5000, 500000, 1, 1, 300000, 0 },
+            { "lost before RTT init", 5000, first_lost_sent + 1, 1, 2, 300000, 0 },
+            { "no RTT sample", 5000, 0, 1, 2, 300000, 0 },
+            { "highest not advanced", 5000, 500000, 0, 2, 300000, 0 },
+            { "idle gap between P and N", 5000, 500000, 1, 2, 2000, 0 },
+            { "granularity floor", 100, 500000, 1, 2, 138001, 1 },
+            { "below granularity floor", 100, 500000, 1, 2, 138000, 0 }
+        };
+        picoquic_congestion_algorithm_t const* saved_alg = cnx->congestion_alg;
+        picoquic_path_t* path_x = cnx->path[0];
+        picoquic_ack_frame_data_t ack_data;
+        uint64_t lost_number = 0;
+        uint64_t seq = 13;
+
+        cnx->remote_parameters.max_ack_delay = 25000;
+        path_x->smoothed_rtt = 20000;
+        for (size_t c = 0; ret == 0 && c < sizeof(cases) / sizeof(cases[0]); c++) {
+            path_x->rtt_variant = cases[c].rtt_variant;
+            path_x->rtt_init_time = cases[c].first_sample_time;
+            persistent_congestion_test_record(&ack_data, acked_packet, path_x, cases[c].has_previous, &seq, &n_sent, 1);
+            picoquic_record_ack_gap(&ack_data, PERSISTENT_CONGESTION_TEST_P, seq);
+            /* Lost packets 11 and 12, then P itself, outside of the gap. */
+            for (uint64_t i = 0; i < cases[c].nb_lost; i++) {
+                persistent_congestion_test_lose(&ack_data, acked_packet, 11 + i,
+                    (i == 0) ? first_lost_sent : first_lost_sent + cases[c].lost_span);
+            }
+            persistent_congestion_test_lose(&ack_data, acked_packet, PERSISTENT_CONGESTION_TEST_P, first_lost_sent + cases[c].lost_span);
+            if (!ack_data.is_set || ack_data.nb_gaps != cases[c].has_previous ||
+                (ack_data.nb_gaps > 0 && ack_data.gaps[0].nb_lost != cases[c].nb_lost) ||
+                picoquic_is_persistent_congestion(cnx, &ack_data, &lost_number) != cases[c].expected ||
+                (cases[c].expected && lost_number != 12)) {
+                DBG_PRINTF("Case %s: expected %d", cases[c].name, cases[c].expected);
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            /* Gaps are clipped to P, need room for two packets, and at most PICOQUIC_ACK_GAPS_MAX are kept. */
+            persistent_congestion_test_record(&ack_data, acked_packet, path_x, 1, &seq, &n_sent, 1);
+            picoquic_record_ack_gap(&ack_data, 5, 13);
+            picoquic_record_ack_gap(&ack_data, 13, 15);
+            for (uint64_t i = 0; i < PICOQUIC_ACK_GAPS_MAX + 1; i++) {
+                picoquic_record_ack_gap(&ack_data, 20 + 10 * i, 30 + 10 * i);
+            }
+            if (ack_data.nb_gaps != PICOQUIC_ACK_GAPS_MAX || ack_data.gaps[0].below != PERSISTENT_CONGESTION_TEST_P ||
+                ack_data.gaps[0].above != 13 || ack_data.gaps[1].below != 20) {
+                DBG_PRINTF("Gaps: %d recorded, first %" PRIu64 " to %" PRIu64, ack_data.nb_gaps,
+                    ack_data.gaps[0].below, ack_data.gaps[0].above);
+                ret = -1;
+            }
+        }
+
+        if (ret == 0) {
+            /* Two losses split by the ack of 15 do not count; two in the gap above it do. */
+            persistent_congestion_test_record(&ack_data, acked_packet, path_x, 1, &seq, &n_sent, 1);
+            path_x->rtt_variant = 5000;
+            path_x->rtt_init_time = 500000;
+            picoquic_record_ack_gap(&ack_data, 15, 20);
+            picoquic_record_ack_gap(&ack_data, PERSISTENT_CONGESTION_TEST_P, 15);
+            persistent_congestion_test_lose(&ack_data, acked_packet, 12, first_lost_sent);
+            persistent_congestion_test_lose(&ack_data, acked_packet, 17, first_lost_sent + 300000);
+            if (picoquic_is_persistent_congestion(cnx, &ack_data, &lost_number)) {
+                DBG_PRINTF("%s", "Losses split by an acked packet declared persistent congestion");
+                ret = -1;
+            }
+            else {
+                persistent_congestion_test_lose(&ack_data, acked_packet, 16, first_lost_sent + 50000);
+                /* The highest lost packet, not the number just below the acked 20, which may still be in flight. */
+                if (!picoquic_is_persistent_congestion(cnx, &ack_data, &lost_number) || lost_number != 17) {
+                    DBG_PRINTF("Losses 16 and 17: lost number %" PRIu64 ", expected 17", lost_number);
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Packets 11 and 12 are lost when 13 and 20 are acked; a pure ACK at 12, or a short span after which the sender was idle, does not count. */
+        struct {
+            int is_12_ack_eliciting;
+            uint64_t sent_12;
+            int notify_expected;
+        } process_cases[] = {
+            { 1, p_sent + 300000, 1 },
+            { 0, p_sent + 300000, 0 },
+            { 1, p_sent + 12000, 0 }
+        };
+        for (size_t c = 0; ret == 0 && c < sizeof(process_cases) / sizeof(process_cases[0]); c++) {
+            const uint64_t acked_seq[2] = { 13, 20 };
+            const uint64_t sent[2] = { p_sent + 800000, p_sent + 810000 };
+            int notify_expected = process_cases[c].notify_expected;
+            picoquic_packet_context_t* pkt_ctx = &cnx->pkt_ctx[picoquic_packet_context_application];
+
+            cnx->congestion_alg = &persistent_congestion_test_alg;
+            cnx->cnx_state = picoquic_state_ready;
+            path_x->rtt_variant = 5000;
+            path_x->rtt_init_time = 500000;
+            pkt_ctx->highest_acknowledged = 20;
+            pkt_ctx->latest_time_acknowledged = sent[1];
+            persistent_congestion_test_nb_notify = 0;
+            persistent_congestion_test_lost_number = 0;
+            if (persistent_congestion_test_queue(cnx, 11, 1, p_sent + 10000) != 0 ||
+                persistent_congestion_test_queue(cnx, 12, process_cases[c].is_12_ack_eliciting, process_cases[c].sent_12) != 0) {
+                ret = -1;
+            }
+            else {
+                persistent_congestion_test_record(&ack_data, acked_packet, path_x, 1, acked_seq, sent, 2);
+                /* Gaps in decoding order, most recent first. */
+                picoquic_record_ack_gap(&ack_data, 13, 20);
+                picoquic_record_ack_gap(&ack_data, PERSISTENT_CONGESTION_TEST_P, 13);
+                picoquic_process_ack_frame_data(cnx, picoquic_epoch_1rtt, picoquic_packet_context_application,
+                    sent[1] + 30000, 0, &ack_data);
+                if (persistent_congestion_test_nb_notify != notify_expected ||
+                    (notify_expected && persistent_congestion_test_lost_number != 12)) {
+                    DBG_PRINTF("Expected %d notification, got %d, lost number %" PRIu64, notify_expected,
+                        persistent_congestion_test_nb_notify, persistent_congestion_test_lost_number);
+                    ret = -1;
+                }
+                else if (pkt_ctx->pending_first != NULL) {
+                    DBG_PRINTF("%s", "Lost packets are still pending");
+                    ret = -1;
+                }
+            }
+        }
+        cnx->congestion_alg = saved_alg;
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    if (acked_packet != NULL) {
+        free(acked_packet);
+    }
+    if (ret == 0) {
+        ret = persistent_congestion_decode_test();
+    }
     return ret;
 }

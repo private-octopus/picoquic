@@ -155,6 +155,45 @@ int qmux_send_test(void)
     return ret;
 }
 
+int qmux_send_buffer_limit_test(void)
+{
+    const size_t capacity = PICOQMUX_MAX_RECORD_SIZE_DEFAULT / 2;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint8_t payload[2 * PICOQMUX_MAX_RECORD_SIZE_DEFAULT];
+    uint8_t buffer[PICOQMUX_MAX_RECORD_SIZE_DEFAULT / 2 + sizeof(payload)];
+    size_t send_length = 0;
+    int ret = picoquic_test_set_minimal_cnx(&quic, &cnx);
+
+    memset(payload, 0xFF, sizeof(payload));
+    memset(buffer, 0, sizeof(buffer));
+    if (ret == 0) {
+        picoqmux_init(cnx, 1);
+        picoqmux_update_state_on_tp_sent(cnx);
+        picoqmux_update_state_on_tp_received(cnx);
+        qmux_test_simulate_remote(cnx);
+        cnx->qmux_remote_max_record_size = PICOQMUX_MAX_RECORD_SIZE_DEFAULT;
+        ret = picoquic_add_to_stream(cnx, 0, payload, sizeof(payload), 1);
+    }
+    if (ret == 0) {
+        /* Less than one record size should not overrun */
+        ret = picoqmux_prepare_cnx_packets(cnx, 0, buffer, capacity, &send_length);
+        if (send_length == 0 || send_length > capacity) {
+            DBG_PRINTF("Capacity %zu, returned send length %zu", capacity, send_length);
+            ret = -1;
+        }
+        for (size_t i = capacity; i < sizeof(buffer); i++) {
+            if (buffer[i] != 0) {
+                DBG_PRINTF("Capacity %zu, guard overwritten at offset %zu", capacity, i);
+                ret = -1;
+                break;
+            }
+        }
+    }
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
 /* ALPN list function -- need to set one? */
 
 int qmux_test_callback(picoquic_cnx_t* cnx,

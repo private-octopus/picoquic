@@ -1069,8 +1069,9 @@ void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path
 #endif
 
 
+/* Packets declared lost here are recorded in the ACK frame data, for persistent congestion. */
 void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
-    uint64_t current_time)
+    picoquic_ack_frame_data_t* ack_data, uint64_t current_time)
 {
     picoquic_packet_context_t* pkt_ctx = NULL;
     picoquic_packet_t* old_p;
@@ -1105,6 +1106,7 @@ void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path
                 picoquic_dequeue_retransmit_packet(cnx, pkt_ctx, old_p, 1, 0);
             }
             else {
+                picoquic_record_lost_in_ack_gaps(ack_data, old_p);
                 (void)picoquic_process_lost_packet(cnx, pkt_ctx, old_p, is_timer_expired, old_p->pc,
                     path_x, current_time, NULL, 0, &length, &packet_is_pure_ack, &header_length);
             }

@@ -205,3 +205,57 @@ int ackfrq_short_test(void)
 
     return ackfrq_test_one(&spec);
 }
+
+/* Verify that the ack delay computed for the ACK_FREQUENCY frame is never
+ * lower than the min_ack_delay advertised by the peer, even when the
+ * correction for slow return paths applies the PICOQUIC_ACK_DELAY_MAX cap.
+ */
+int ackfrq_min_delay_test(void)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t remote_min_ack_delay = 25000;
+    uint64_t ack_gap = 0;
+    uint64_t ack_delay_max = 0;
+    struct sockaddr_in addr;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, simulated_time, &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(&addr, 0, sizeof(struct sockaddr_in));
+        addr.sin_family = AF_INET;
+        addr.sin_port = 4433;
+        cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&addr, simulated_time, 0, NULL, NULL, 1);
+        if (cnx == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        cnx->is_ack_frequency_negotiated = 1;
+        cnx->path[0]->rtt_min = 20000;
+        cnx->path[0]->smoothed_rtt = 40000;
+        /* ACK transmission time = 115 bytes / 2000 B/s = 57.5 ms */
+        cnx->path[0]->receive_rate_max = 2000;
+
+        picoquic_compute_ack_gap_and_delay(cnx, cnx->path[0]->rtt_min, remote_min_ack_delay,
+            cnx->path[0]->peak_bandwidth_estimate, &ack_gap, &ack_delay_max);
+
+        if (ack_delay_max < remote_min_ack_delay) {
+            DBG_PRINTF("Ack delay max %" PRIu64 " < remote min ack delay %" PRIu64,
+                ack_delay_max, remote_min_ack_delay);
+            ret = -1;
+        }
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    return ret;
+}

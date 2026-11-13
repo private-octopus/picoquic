@@ -322,30 +322,29 @@ void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uin
     }
 
     fprintf(f, "}]");
-    ctx->event_count++;
 }
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
 void qlog_fns_packet_start(qlog_fns_context_t* ctx,
-    picoquic_path_t * path_x, int receiving, uint64_t current_time,
-    struct st_picoquic_packet_header_t* ph, size_t byte_length)
+    picoquic_path_t * path_x, uint64_t unique_path_id, int receiving, uint64_t current_time,
+    const struct st_picoquic_packet_header_t* ph, uint64_t byte_length)
 {
     FILE* f = ctx->f_txtlog;
 
     if (ph->ptype == picoquic_packet_1rtt_protected && receiving == 0) {
         if (ctx->spin_bit_sent && (ctx->spin_bit_sent_last != ph->spin)) {
-            qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", "spin_bit_updated");
+            qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "transport", "spin_bit_updated");
             fprintf(f, " \"state\": %s }]", (ph->spin) ? "true" : "false");
         }
         ctx->spin_bit_sent = 1;
         ctx->spin_bit_sent_last = ph->spin;
     }
 
-    qlog_fns_event_start(ctx, path_x, 0, current_time, "transport", (receiving == 0) ? "packet_sent" : "packet_received");
+    qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "transport", (receiving == 0) ? "packet_sent" : "packet_received");
 
     (void)fputs(" \"packet_type\": \"", f);
     (void)fputs(picoquic_packet_type_name(ph->ptype), f);
-    qlog_fns_text_uint(f, "\", \"header\": { \"packet_size\": ", (uint64_t)byte_length);
+    qlog_fns_text_uint(f, "\", \"header\": { \"packet_size\": ", byte_length);
 
     if (ph->ptype != picoquic_packet_version_negotiation &&
         ph->ptype != picoquic_packet_retry) {
@@ -404,18 +403,6 @@ void qlog_fns_packet_start(qlog_fns_context_t* ctx,
     if (ph->quic_bit_is_zero) {
         fprintf(f, ", \"quic_bit\": 0");
     }
-}
-
-void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
-    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length)
-{
-    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
-    FILE* f = ctx->f_txtlog;
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
-    
-    qlog_fns_packet_start(ctx, path_x, receiving, current_time, ph, byte_length);
 
     ctx->packet_type = ph->ptype;
 
@@ -424,20 +411,46 @@ void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t
         fprintf(f, " }");
     }
     else {
+        fprintf(f, " }, \"frames\": [");
+    }
+}
+
+/* Close the frame list, if the packet has one, and the packet event. */
+void qlog_fns_packet_end(qlog_fns_context_t* ctx)
+{
+    FILE* f = ctx->f_txtlog;
+
+    if (ctx->packet_type == picoquic_packet_version_negotiation ||
+        ctx->packet_type == picoquic_packet_retry) {
+        fprintf(f, "}]");
+    }
+    else {
+        fprintf(f, "]}]");
+    }
+    ctx->packet_count++;
+}
+
+void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
+    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length)
+{
+    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
+
+    qlog_fns_packet_start(ctx, path_x, 0, receiving, current_time, ph, byte_length);
+
+    if (ctx->packet_type != picoquic_packet_version_negotiation &&
+        ctx->packet_type != picoquic_packet_retry) {
         /* packet contains frames, print them */
         const uint8_t* bytes_max = bytes + byte_length;
         bytes += ph->offset;
         if (bytes + ph->payload_length < bytes_max) {
             bytes_max = bytes + ph->payload_length;
         }
-        fprintf(f, " }, \"frames\": [");
-        qlog_frames(f, bytes, bytes_max, ctx->packet_type == picoquic_packet_initial);
-        fprintf(f, "]");
+        qlog_frames(ctx->f_txtlog, bytes, bytes_max, ctx->packet_type == picoquic_packet_initial);
     }
-    /* end of the packet */
-    fprintf(f, "}]");
-    ctx->packet_count++;
-    ctx->event_count++;
+    qlog_fns_packet_end(ctx);
 }
 
 /* Write the data of a packet_dropped event, and close the event. */
