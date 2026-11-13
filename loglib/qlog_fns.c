@@ -430,6 +430,31 @@ void qlog_fns_packet_end(qlog_fns_context_t* ctx)
     ctx->packet_count++;
 }
 
+/* Write the versions that a version negotiation packet proposes. */
+void qlog_fns_proposed_versions(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    int nb_versions = 0;
+
+    fprintf(f, ",\n    \"proposed_versions\": [");
+    while (bytes != NULL && bytes < bytes_max) {
+        if (nb_versions > 0) {
+            fprintf(f, ", ");
+        }
+        bytes = qlog_frame_hex_string(f, bytes, bytes_max, 4);
+        nb_versions++;
+    }
+    fprintf(f, "]");
+}
+
+/* Write the token and the integrity tag of a retry packet. */
+void qlog_fns_retry_token(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
+{
+    if (bytes < bytes_max) {
+        fprintf(f, ",\n    \"retry_token\": ");
+        (void)qlog_frame_hex_string(f, bytes, bytes_max, (uint64_t)(bytes_max - bytes));
+    }
+}
+
 void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
     struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length)
 {
@@ -449,6 +474,12 @@ void qlog_fns_packet(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t
             bytes_max = bytes + ph->payload_length;
         }
         qlog_frames(ctx->f_txtlog, bytes, bytes_max, ctx->packet_type == picoquic_packet_initial);
+    }
+    else if (ctx->packet_type == picoquic_packet_version_negotiation) {
+        qlog_fns_proposed_versions(ctx->f_txtlog, bytes + ph->offset, bytes + byte_length);
+    }
+    else {
+        qlog_fns_retry_token(ctx->f_txtlog, bytes + ph->offset, bytes + byte_length);
     }
     qlog_fns_packet_end(ctx);
 }
