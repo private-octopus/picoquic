@@ -931,6 +931,28 @@ static void c4_enter_resuming(
     c4_era_reset(path_x, c4_state);
 }
 
+/* RFC 9002 7.6: the gap drained the queues of previous pushes, so resume at the nominal rate without a recovery era. */
+static void c4_on_persistent_congestion(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    if (c4_state->nominal_rate > 0 && c4_state->alg_state == c4_initial && path_x->smoothed_rtt > 0) {
+        /* In Initial, nominal_max_rtt is still the RTT at entry, often the initial default: use the measured one. */
+        c4_state->nominal_max_rtt = path_x->smoothed_rtt;
+        c4_state->delay_threshold = c4_delay_threshold(c4_state);
+    }
+    if (c4_state->nominal_rate > 0 && c4_state->nominal_max_rtt > 0) {
+        c4_state->seed_rate = c4_state->nominal_rate;
+        c4_state->seed_cwin = PICOQUIC_BYTES_FROM_RATE(c4_state->nominal_max_rtt, c4_state->nominal_rate);
+        c4_state->backlog_1024 = 0;
+        c4_state->smoothed_drop_rate = 0;
+        c4_state->recent_delay_excess = 0;
+        c4_state->ecn_alpha = 0;
+        c4_enter_resuming(path_x, c4_state);
+        c4_apply_rate_and_cwin(path_x, c4_state);
+    }
+}
+
 static void c4_on_resuming_ack(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -1306,6 +1328,9 @@ void c4_notify(
             break;
         case picoquic_congestion_notification_timeout:
             /* Treat timeout as PTO: no impact on congestion control */
+            break;
+        case picoquic_congestion_notification_persistent_congestion:
+            c4_on_persistent_congestion(path_x, c4_state);
             break;
         case picoquic_congestion_notification_spurious_repeat:
             /* Remove handling of spurious repeat, as it was tied to timeout */

@@ -773,6 +773,11 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
         if (ret == 0) {
             ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, 2 * latency, max_completion_time);
         }
+        /* The 2 seconds blackhole is far longer than the persistent congestion duration of the sender's path. */
+        if (ret == 0 && (test_ctx->cnx_server == NULL || test_ctx->cnx_server->path[0]->nb_persistent_congestion == 0)) {
+            DBG_PRINTF("No persistent congestion detected on the server path, cc %s", ccalgo->congestion_algorithm_id);
+            ret = -1;
+        }
     }
 
     if (test_ctx != NULL) {
@@ -785,7 +790,20 @@ static int blackhole_test_one(picoquic_congestion_algorithm_t* ccalgo, uint64_t 
 
 int blackhole_test(void)
 {
-    int ret = blackhole_test_one(picoquic_bbr_algorithm, 15000000, 0);
+    picoquic_congestion_algorithm_t* ccalgos[] = {
+        picoquic_bbr_algorithm,
+        picoquic_bbr1_algorithm,
+        picoquic_cubic_algorithm,
+        c4_algorithm
+    };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(ccalgos) / sizeof(ccalgos[0]); i++) {
+        if (blackhole_test_one(ccalgos[i], 15000000, 0) != 0) {
+            DBG_PRINTF("Blackhole test fails for <%s>", ccalgos[i]->congestion_algorithm_id);
+            ret = -1;
+        }
+    }
 
     return ret;
 }
@@ -1762,7 +1780,7 @@ int cc_reset_gate_test(void)
         picoquic_set_congestion_algorithm(cnx, picoquic_newreno_algorithm);
         path_x->smoothed_rtt = 50000;
         path_x->rtt_min = 40000;
-        path_x->rtt_is_initialized = 1;
+        path_x->rtt_init_time = 1000;
         path_x->bytes_in_transit = 10000;
         path_x->cwin = 200000;
         path_x->nb_retransmit = 3;
@@ -1771,7 +1789,7 @@ int cc_reset_gate_test(void)
         picoquic_reset_path_congestion(cnx, path_x, simulated_time);
 
         if (path_x->cc_reset_pn != 100 || path_x->smoothed_rtt != PICOQUIC_INITIAL_RTT ||
-            path_x->rtt_min != 0 || path_x->rtt_is_initialized || path_x->bytes_in_transit != 0 ||
+            path_x->rtt_min != 0 || path_x->rtt_init_time != 0 || path_x->bytes_in_transit != 0 ||
             path_x->nb_retransmit != 0 || path_x->cwin != PICOQUIC_CWIN_INITIAL) {
             DBG_PRINTF("Reset state: pn %" PRIu64 ", srtt %" PRIu64 ", cwin %" PRIu64,
                 path_x->cc_reset_pn, path_x->smoothed_rtt, path_x->cwin);
@@ -1806,6 +1824,204 @@ int cc_reset_gate_test(void)
 
     if (cnx != NULL) {
         picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+static void cc_persistent_congestion_notify(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_congestion_notification_t notification, uint64_t lost_packet_number, uint64_t nb_bytes, uint64_t current_time)
+{
+    picoquic_per_ack_state_t ack_state = { 0 };
+
+    ack_state.pc = picoquic_packet_context_application;
+    ack_state.rtt_measurement = path_x->smoothed_rtt;
+    ack_state.lost_packet_number = lost_packet_number;
+    if (notification == picoquic_congestion_notification_acknowledgement) {
+        ack_state.nb_bytes_acknowledged = nb_bytes;
+        ack_state.nb_bytes_delivered_since_packet_sent = nb_bytes;
+    }
+    else {
+        ack_state.nb_bytes_newly_lost = nb_bytes;
+        ack_state.nb_bytes_lost_since_packet_sent = nb_bytes;
+    }
+    cnx->congestion_alg->alg_notify(cnx, path_x, notification, &ack_state, current_time);
+}
+
+#define CC_PC_MIN_WINDOW 0 /* RFC 9002: minimum window, then slow start */
+#define CC_PC_RTO 1 /* draft-ietf-ccwg-bbr OnEnterRTO */
+#define CC_PC_RESUME 2 /* C4: resume at the nominal rate */
+#define CC_PC_C4_RESUMING 5 /* c4_resuming in c4_alg_state_t */
+#define CC_PC_RATE 1250000ull /* 10 Mbps */
+
+/* Persistent congestion sets the minimum window even after the losses of the same ACK entered recovery,
+ * without reducing ssthresh twice, and the next slow start ends at ssthresh. */
+static int cc_persistent_congestion_test_one(picoquic_congestion_algorithm_t* ccalgo, int with_losses,
+    int is_slow_start_checked, int is_ssthresh_observed, int response)
+{
+    int is_rto_response = (response == CC_PC_RTO);
+    int is_resume_response = (response == CC_PC_RESUME);
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t current_time = 1000000;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+        uint64_t cwin_before;
+        uint64_t cwin_expected = PICOQUIC_CWIN_MINIMUM;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
+
+        picoquic_set_congestion_algorithm(cnx, ccalgo);
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->pkt_ctx[picoquic_packet_context_application].send_sequence = 100;
+        path_x->smoothed_rtt = 20000;
+        path_x->rtt_min = 20000;
+        /* The path is cwin limited, so slow start grows the window. */
+        path_x->last_time_acked_data_frame_sent = 1000;
+        path_x->last_cwin_blocked_time = 2000;
+        if (is_resume_response) {
+            /* Measure a nominal rate to resume from. */
+            path_x->bandwidth_estimate = CC_PC_RATE;
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement, 0, 1200, current_time);
+        }
+        cwin_before = path_x->cwin;
+        if (with_losses && is_rto_response) {
+            /* A PTO during the outage already started the RTO recovery, ending when 11 is acked. */
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_timeout, 11, 1200, current_time);
+        }
+        else if (with_losses) {
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_repeat, 11, 1200, current_time);
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_repeat, 12, 1200, current_time);
+        }
+        cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_persistent_congestion, 12, 0, current_time);
+        ccalgo->alg_observe(path_x, &cc_state, &cc_param);
+        if (is_rto_response) {
+            /* draft-ietf-ccwg-bbr OnEnterRTO: cwnd = inflight + 1 packet. */
+            cwin_expected = path_x->bytes_in_transit + path_x->send_mtu;
+        }
+        else if (is_resume_response) {
+            /* The seed is the nominal rate over the nominal max RTT, which C4 reports as its parameter. */
+            cwin_expected = PICOQUIC_BYTES_FROM_RATE(cc_param, CC_PC_RATE);
+        }
+        if (path_x->cwin != cwin_expected ||
+            (is_resume_response && (cc_state != CC_PC_C4_RESUMING || cc_param != path_x->smoothed_rtt)) ||
+            (is_slow_start_checked && cc_state != 0) ||
+            (is_ssthresh_observed && cc_param != cwin_before / 2)) {
+            DBG_PRINTF("Losses %d: cwin %" PRIu64 ", state %" PRIu64 ", param %" PRIu64,
+                with_losses, path_x->cwin, cc_state, cc_param);
+            ret = -1;
+        }
+        if (ret == 0 && is_rto_response) {
+            /* The ACK that revealed the persistent congestion acked 20: recovery must last until the next round trip. */
+            cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged = 20;
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement, 0, 1200, current_time);
+            if (path_x->cwin >= cwin_before) {
+                DBG_PRINTF("Losses %d: cwin %" PRIu64 " restored after the ACK, before %" PRIu64,
+                    with_losses, path_x->cwin, cwin_before);
+                ret = -1;
+            }
+        }
+        if (ret == 0 && is_resume_response) {
+            /* The next ACK keeps the seeded window: no recovery era first. */
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement, 0, 1200, current_time);
+            ccalgo->alg_observe(path_x, &cc_state, &cc_param);
+            if (path_x->cwin != cwin_expected || cc_state != CC_PC_C4_RESUMING) {
+                DBG_PRINTF("Losses %d: after the ACK, cwin %" PRIu64 ", expected %" PRIu64 ", state %" PRIu64,
+                    with_losses, path_x->cwin, cwin_expected, cc_state);
+                ret = -1;
+            }
+        }
+        for (int i = 0; ret == 0 && is_slow_start_checked && cc_state == 0 && i < 64; i++) {
+            current_time += 1000;
+            cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement, 0, 1200, current_time);
+            ccalgo->alg_observe(path_x, &cc_state, &cc_param);
+        }
+        if (ret == 0 && is_slow_start_checked && (cc_state == 0 || path_x->cwin >= cwin_before)) {
+            DBG_PRINTF("Losses %d: slow start ends with state %" PRIu64 ", cwin %" PRIu64 ", before %" PRIu64,
+                with_losses, cc_state, path_x->cwin, cwin_before);
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+/* From a window so small that ssthresh would fall below the minimum, the next ACK must not jump to the bandwidth estimate. */
+static int cc_persistent_congestion_small_window_test_one(picoquic_congestion_algorithm_t* ccalgo)
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    uint64_t current_time = 1000000;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+
+    if (picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time) != 0) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_set_congestion_algorithm(cnx, ccalgo);
+        cnx->cnx_state = picoquic_state_ready;
+        cnx->pkt_ctx[picoquic_packet_context_application].send_sequence = 100;
+        path_x->smoothed_rtt = 20000;
+        path_x->rtt_min = 20000;
+        path_x->last_time_acked_data_frame_sent = 1000;
+        path_x->last_cwin_blocked_time = 2000;
+        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+        /* Half the peak bandwidth times the RTT is 100 kB. */
+        path_x->peak_bandwidth_estimate = 10000000;
+        cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_persistent_congestion, 12, 0, current_time);
+        cc_persistent_congestion_notify(cnx, path_x, picoquic_congestion_notification_acknowledgement, 0, 1200, current_time);
+        if (path_x->cwin >= PICOQUIC_CWIN_INITIAL) {
+            DBG_PRINTF("Small window: cwin %" PRIu64 " after the ACK", path_x->cwin);
+            ret = -1;
+        }
+    }
+
+    picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    return ret;
+}
+
+int cc_persistent_congestion_test(void)
+{
+    struct {
+        picoquic_congestion_algorithm_t* ccalgo;
+        int is_slow_start_checked;
+        int is_ssthresh_observed;
+        int response;
+    } cases[] = {
+        { picoquic_newreno_algorithm, 1, 1, CC_PC_MIN_WINDOW },
+        { picoquic_cubic_algorithm, 1, 0, CC_PC_MIN_WINDOW },
+        { picoquic_dcubic_algorithm, 1, 0, CC_PC_MIN_WINDOW },
+        { picoquic_prague_algorithm, 1, 1, CC_PC_MIN_WINDOW },
+        { picoquic_fastcc_algorithm, 0, 0, CC_PC_MIN_WINDOW },
+        { picoquic_bbr1_algorithm, 0, 0, CC_PC_MIN_WINDOW },
+        { picoquic_bbr_algorithm, 0, 0, CC_PC_RTO },
+        { c4_algorithm, 0, 0, CC_PC_RESUME }
+    };
+    int ret = 0;
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        for (int with_losses = 0; with_losses < 2; with_losses++) {
+            if (cc_persistent_congestion_test_one(cases[i].ccalgo, with_losses,
+                cases[i].is_slow_start_checked, cases[i].is_ssthresh_observed, cases[i].response) != 0) {
+                DBG_PRINTF("Persistent congestion test fails for <%s>, losses %d",
+                    cases[i].ccalgo->congestion_algorithm_id, with_losses);
+                ret = -1;
+            }
+        }
+    }
+    if (cc_persistent_congestion_small_window_test_one(picoquic_cubic_algorithm) != 0 ||
+        cc_persistent_congestion_small_window_test_one(picoquic_dcubic_algorithm) != 0) {
+        DBG_PRINTF("%s", "Persistent congestion small window test fails");
+        ret = -1;
     }
     return ret;
 }

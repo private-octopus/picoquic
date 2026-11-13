@@ -2754,6 +2754,59 @@ picoquic_packet_t* picoquic_check_spurious_retransmission(picoquic_cnx_t* cnx,
     return p;
 }
 
+/* Record the gap between two acked numbers, clipped to the previous highest ack, if it can hold two lost packets. */
+void picoquic_record_ack_gap(picoquic_ack_frame_data_t* ack_data, uint64_t below, uint64_t above)
+{
+    if (ack_data->is_previous_set && ack_data->nb_gaps < PICOQUIC_ACK_GAPS_MAX) {
+        uint64_t gap_below = (below < ack_data->previous_highest_acked) ? ack_data->previous_highest_acked : below;
+
+        if (above > gap_below + 2) {
+            picoquic_ack_gap_t* gap = &ack_data->gaps[ack_data->nb_gaps];
+            memset(gap, 0, sizeof(picoquic_ack_gap_t));
+            gap->below = gap_below;
+            gap->above = above;
+            ack_data->nb_gaps++;
+        }
+    }
+}
+
+/* Record a packet declared lost in the gap that holds it, if it is ack eliciting. */
+void picoquic_record_lost_in_ack_gaps(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* lost_packet)
+{
+    int is_found = 0;
+
+    for (int i = 0; !is_found && i < ack_data->nb_gaps; i++) {
+        picoquic_ack_gap_t* gap = &ack_data->gaps[i];
+
+        if (lost_packet->sequence_number > gap->below && lost_packet->sequence_number < gap->above) {
+            is_found = 1;
+            if (picoquic_is_packet_ack_eliciting(lost_packet)) {
+                if (gap->nb_lost == 0 || lost_packet->send_time < gap->lost_first_sent_time) {
+                    gap->lost_first_sent_time = lost_packet->send_time;
+                }
+                if (gap->nb_lost == 0 || lost_packet->send_time > gap->lost_last_sent_time) {
+                    gap->lost_last_sent_time = lost_packet->send_time;
+                }
+                if (gap->nb_lost == 0 || lost_packet->sequence_number > gap->lost_highest) {
+                    gap->lost_highest = lost_packet->sequence_number;
+                }
+                gap->nb_lost++;
+            }
+        }
+    }
+}
+
+/* Record the packets of the gaps already declared lost, newest first as in the spurious check. */
+static void picoquic_record_retransmitted_in_ack_gaps(picoquic_packet_context_t* pkt_ctx, picoquic_ack_frame_data_t* ack_data)
+{
+    picoquic_packet_t* p = pkt_ctx->retransmitted_newest;
+
+    while (p != NULL && p->sequence_number > ack_data->previous_highest_acked) {
+        picoquic_record_lost_in_ack_gaps(ack_data, p);
+        p = p->packet_next;
+    }
+}
+
 void picoquic_dequeue_old_retransmitted_packets(picoquic_cnx_t* cnx, picoquic_packet_context_t * pkt_ctx)
 {
     picoquic_packet_t* p = pkt_ctx->retransmitted_oldest;
@@ -3088,6 +3141,35 @@ void picoquic_record_ack_packet_data(picoquic_ack_frame_data_t* ack_data, picoqu
     }
 }
 
+/* RFC 9002 7.6.2: in one gap, two ack eliciting packets lost after the RTT was initialized, sent over more than the duration. */
+int picoquic_is_persistent_congestion(picoquic_cnx_t* cnx, picoquic_ack_frame_data_t* ack_data, uint64_t* lost_packet_number)
+{
+    int ret = 0;
+    picoquic_path_t* path_x = ack_data->acked_path;
+
+    if (ack_data->nb_gaps > 0 && path_x->rtt_init_time != 0) {
+        uint64_t rtt_var_term = 4 * path_x->rtt_variant;
+        uint64_t duration;
+
+        if (rtt_var_term < PICOQUIC_TIMER_GRANULARITY) {
+            rtt_var_term = PICOQUIC_TIMER_GRANULARITY;
+        }
+        duration = PICOQUIC_PERSISTENT_CONGESTION_THRESHOLD *
+            (path_x->smoothed_rtt + rtt_var_term + cnx->remote_parameters.max_ack_delay);
+        for (int i = 0; ret == 0 && i < ack_data->nb_gaps; i++) {
+            picoquic_ack_gap_t* gap = &ack_data->gaps[i];
+
+            if (gap->nb_lost >= 2 && gap->lost_first_sent_time > path_x->rtt_init_time &&
+                gap->lost_last_sent_time > gap->lost_first_sent_time + duration) {
+                ret = 1;
+                /* A lost packet, so the CC compares a real loss with its recovery sequence. */
+                *lost_packet_number = gap->lost_highest;
+            }
+        }
+    }
+    return ret;
+}
+
 /* Once an ACK frame is decoded, update the delays, losses and congestion control of the acked path. */
 void picoquic_process_ack_frame_data(picoquic_cnx_t* cnx, int epoch, int pc, uint64_t current_time,
     uint64_t time_stamp, picoquic_ack_frame_data_t* ack_data)
@@ -3096,6 +3178,7 @@ void picoquic_process_ack_frame_data(picoquic_cnx_t* cnx, int epoch, int pc, uin
     uint64_t lost_before_ack = acked_path->total_bytes_lost;
     uint64_t loss_ranges_before_ack = acked_path->nb_loss_ranges_found;
     uint64_t nb_bytes_newly_lost = 0;
+    uint64_t persistent_lost_number = 0;
 
     if (ack_data->is_set) {
         picoquic_update_path_rtt(cnx, acked_path, epoch,
@@ -3113,8 +3196,20 @@ void picoquic_process_ack_frame_data(picoquic_cnx_t* cnx, int epoch, int pc, uin
     if ((ack_data->is_set || ack_data->is_new_ack) &&
         epoch == picoquic_epoch_1rtt && cnx->cnx_state >= picoquic_state_client_ready_start) {
         /* Losses are detected in the number space of the acked path. */
-        picoquic_queue_retransmit_on_ack(cnx, acked_path, current_time);
+        picoquic_queue_retransmit_on_ack(cnx, acked_path, ack_data, current_time);
         nb_bytes_newly_lost = acked_path->total_bytes_lost - lost_before_ack;
+
+        if (picoquic_is_persistent_congestion(cnx, ack_data, &persistent_lost_number)) {
+            acked_path->nb_persistent_congestion++;
+            if (cnx->congestion_alg != NULL) {
+                picoquic_per_ack_state_t ack_state = { 0 };
+                ack_state.pc = pc;
+                ack_state.lost_packet_number = persistent_lost_number;
+                cnx->congestion_alg->alg_notify(cnx, acked_path,
+                    picoquic_congestion_notification_persistent_congestion,
+                    &ack_state, current_time);
+            }
+        }
     }
     if (ack_data->is_set) {
         if (cnx->congestion_alg != NULL && acked_path->rtt_sample > 0) {
@@ -3910,8 +4005,13 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
 
             /* Attempt to update the RTT */
             int is_new_ack = 0;
+            uint64_t previous_highest_acked = pkt_ctx->highest_acknowledged;
             picoquic_packet_t* top_packet = picoquic_find_acked_packet(pkt_ctx, largest, current_time, &is_new_ack);
             picoquic_packet_t* p_retransmitted_previous = pkt_ctx->retransmitted_newest;
+
+            /* The previous highest ack starts the persistent congestion interval. */
+            ack_data.previous_highest_acked = previous_highest_acked;
+            ack_data.is_previous_set = is_new_ack && previous_highest_acked != UINT64_MAX;
 
             if (top_packet != NULL && is_new_ack) {
                 largest_in_path = top_packet->sequence_number;
@@ -3957,6 +4057,11 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                         largest + 1 - range, largest, current_time, p_retransmitted_previous, &ack_data);
                 }
 
+                if (num_block == 0) {
+                    /* Last gap, down to the previous highest ack. */
+                    picoquic_record_ack_gap(&ack_data, ack_data.previous_highest_acked, largest + 1 - range);
+                }
+
                 if (num_block-- == 0)
                     break;
 
@@ -3979,9 +4084,15 @@ const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* byt
                     break;
                 }
 
+                /* Gap between this range and the next one, most recent first. */
+                picoquic_record_ack_gap(&ack_data, largest - block_to_block, largest + 1 - range);
                 largest -= block_to_block;
             } while (bytes != NULL);
 
+            if (bytes != NULL && ack_data.nb_gaps > 0) {
+                /* Recorded before old packets are dequeued: a PTO may have declared them lost during the gap. */
+                picoquic_record_retransmitted_in_ack_gaps(pkt_ctx, &ack_data);
+            }
             picoquic_dequeue_old_retransmitted_packets(cnx, pkt_ctx);
         }
     }
