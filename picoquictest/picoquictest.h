@@ -73,6 +73,7 @@ int sendacktest(void);
 int sendack_loop_test(void);
 int ackfrq_basic_test(void);
 int ackfrq_short_test(void);
+int ackfrq_min_delay_test(void);
 #if 0
 /* The TLS API connect test is only useful when debugging issues step by step */
 int tls_api_connect_test(void);
