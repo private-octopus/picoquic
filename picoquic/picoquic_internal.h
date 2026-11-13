@@ -61,6 +61,8 @@ extern "C" {
 #define PICOQUIC_ACK_DELAY_MAX 10000ull /* 10 ms */
 #define PICOQUIC_ACK_DELAY_MAX_DEFAULT 25000ull /* 25 ms, per protocol spec */
 #define PICOQUIC_ACK_DELAY_MIN 1000ull /* 1 ms */
+#define PICOQUIC_TIMER_GRANULARITY 1000ull /* 1 ms, kGranularity in RFC 9002 */
+#define PICOQUIC_PERSISTENT_CONGESTION_THRESHOLD 3 /* kPersistentCongestionThreshold in RFC 9002 */
 #define PICOQUIC_ACK_DELAY_MIN_MAX_VALUE 0xFFFFFFull /* max value that can be negotiated by peers */
 #define PICOQUIC_RACK_DELAY 10000 /* 10 ms */
 #define PICOQUIC_MAX_ACK_DELAY_MAX_MS 0x4000ull /* 2<14 ms */
@@ -1105,7 +1107,6 @@ typedef struct st_picoquic_path_t {
     unsigned int is_probing_nat : 1; /* When path transmission is scheduled only for NAT probing */
     unsigned int is_lost_feedback_notified : 1; /* Lost feedback has been notified */
     unsigned int is_cca_probing_up : 1; /* congestion control algorithm is seeking more bandwidth */
-    unsigned int rtt_is_initialized : 1; /* RTT was measured at least once. */
     unsigned int sending_path_cid_blocked_frame : 1; /* Sending a path CID blocked, not acked yet. */
     
     /* Management of retransmissions in a path.
@@ -1123,13 +1124,15 @@ typedef struct st_picoquic_path_t {
     uint64_t latest_repeat_loss_packet_number;
     uint64_t nb_timer_losses;
     uint64_t nb_spurious; /* Number of spurious retransmissions for the path */
-                                         
+    uint64_t nb_persistent_congestion; /* Number of persistent congestion events detected on the path */
+
     /* Loss bit data */
     uint64_t nb_losses_reported;
     uint64_t q_square;
     /* Time measurement */
     uint64_t max_ack_delay;
     uint64_t rtt_sample;
+    uint64_t rtt_init_time; /* Time smoothed_rtt was first measured, 0 if not yet */
     uint64_t one_way_delay_sample;
     uint64_t smoothed_rtt;
     uint64_t rtt_variant;
@@ -1583,6 +1586,19 @@ typedef struct st_picoquic_packet_data_t {
     uint64_t last_time_stamp_received;
 } picoquic_packet_data_t;
 
+#define PICOQUIC_ACK_GAPS_MAX 4 /* Most recent gaps of an ACK frame checked for persistent congestion */
+/* Known limit: an outage gap below PICOQUIC_ACK_GAPS_MAX newer gaps is missed; revisit with the timeout notification work. */
+
+/* Gap between two acked packet numbers, above the previous highest ack, and the packets declared lost in it. */
+typedef struct st_picoquic_ack_gap_t {
+    uint64_t below; /* Acked number below the gap, or the previous highest ack */
+    uint64_t above; /* Acked number above the gap */
+    uint64_t nb_lost; /* Ack eliciting packets in the gap declared lost */
+    uint64_t lost_first_sent_time; /* Earliest send time of those lost packets */
+    uint64_t lost_last_sent_time; /* Latest send time of those lost packets */
+    uint64_t lost_highest; /* Highest number of those lost packets */
+} picoquic_ack_gap_t;
+
 /* Data collected while decoding one ACK frame, applied when the frame is fully decoded.
  * An ACK frame acknowledges packets of a single path. */
 typedef struct st_picoquic_ack_frame_data_t {
@@ -1599,6 +1615,10 @@ typedef struct st_picoquic_ack_frame_data_t {
     unsigned int is_set; /* At least one packet sent after the last CC reset was acked */
     unsigned int is_new_ack; /* The largest packet acked by the frame was not acked before */
     uint64_t data_acked;
+    uint64_t previous_highest_acked; /* Highest number acked before this frame */
+    unsigned int is_previous_set; /* The frame advanced a known highest ack */
+    int nb_gaps; /* Gaps recorded, most recent first */
+    picoquic_ack_gap_t gaps[PICOQUIC_ACK_GAPS_MAX];
 } picoquic_ack_frame_data_t;
 
 /* Create a connection context without recomputing initial_aead_dec and
@@ -1669,7 +1689,8 @@ int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx);
  * function. Kept as documentation, not wired in, to avoid refactoring the demote code now. */
 void picoquic_retransmit_demoted_path(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 #endif
-void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_queue_retransmit_on_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_ack_frame_data_t* ack_data, uint64_t current_time);
 void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time, uint64_t * next_wake_time);
 void picoquic_set_tuple_challenge(picoquic_tuple_t* tuple, uint64_t current_time, int use_constant_challenges);
 void picoquic_set_path_challenge(picoquic_cnx_t* cnx, int path_id, uint64_t current_time);
@@ -1941,6 +1962,9 @@ void picoquic_sack_item_record_reset(picoquic_sack_list_t* sack_list, picoquic_s
 size_t picoquic_sack_list_size(picoquic_sack_list_t* first_sack);
 
 void picoquic_record_ack_packet_data(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* acked_packet);
+void picoquic_record_ack_gap(picoquic_ack_frame_data_t* ack_data, uint64_t below, uint64_t above);
+void picoquic_record_lost_in_ack_gaps(picoquic_ack_frame_data_t* ack_data, picoquic_packet_t* lost_packet);
+int picoquic_is_persistent_congestion(picoquic_cnx_t* cnx, picoquic_ack_frame_data_t* ack_data, uint64_t* lost_packet_number);
 void picoquic_process_ack_frame_data(picoquic_cnx_t* cnx, int epoch, int pc, uint64_t current_time,
     uint64_t time_stamp, picoquic_ack_frame_data_t* ack_data);
 
@@ -2105,6 +2129,8 @@ uint8_t* picoquic_format_max_stream_data_frame(picoquic_cnx_t* cnx, picoquic_str
 const uint8_t* picoquic_skip_0len_frame(const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_time_stamp_frame(const uint8_t* bytes, const uint8_t* bytes_max, picoquic_cnx_t* cnx,
     picoquic_packet_data_t* packet_data);
+const uint8_t* picoquic_decode_ack_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t current_time, int epoch, int is_ecn, int has_path_id, picoquic_packet_data_t* packet_data);
 const uint8_t* picoquic_decode_stream_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);
 const uint8_t* picoquic_decode_streams_blocked_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint8_t frame_id);
 const uint8_t* picoquic_decode_stop_sending_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max);

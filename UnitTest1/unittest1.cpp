@@ -806,6 +806,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(persistent_congestion)
+        {
+            int ret = persistent_congestion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(ack_of_ack)
         {
             int ret = ack_of_ack_test();
@@ -823,6 +830,13 @@ namespace UnitTest1
         TEST_METHOD(ackfrq_short)
         {
             int ret = ackfrq_short_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(ackfrq_min_delay)
+        {
+            int ret = ackfrq_min_delay_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -3505,6 +3519,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(cc_persistent_congestion)
+        {
+            int ret = cc_persistent_congestion_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(bbr1)
         {
             int ret = bbr1_test();
@@ -4561,6 +4582,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_flow_frames_ack) {
+            int ret = multipath_flow_frames_ack_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_unique_path_id) {
             int ret = multipath_unique_path_id_test();
 
@@ -4794,6 +4821,12 @@ namespace UnitTest1
 
         TEST_METHOD(h3zero_stream) {
             int ret = h3zero_stream_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(h3zero_stream_split_type) {
+            int ret = h3zero_stream_split_type_test();
 
             Assert::AreEqual(ret, 0);
         }

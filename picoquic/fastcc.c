@@ -218,6 +218,9 @@ void picoquic_fastcc_notify(
                     (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
             }
             break;
+        case picoquic_congestion_notification_persistent_congestion:
+            fastcc_notify_congestion(cnx, path_x, fastcc_state, current_time, 0, 1);
+            break;
         case picoquic_congestion_notification_spurious_repeat:
             if (fastcc_state->nb_cc_events > 0) {
                 fastcc_state->nb_cc_events--;
