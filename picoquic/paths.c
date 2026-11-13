@@ -119,11 +119,23 @@ uint64_t picoquic_tuple_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple
     return budget;
 }
 
-/* Clamp the packet size to the budget; the floor at checksum_overhead leaves no room for frames. */
-size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
-    size_t send_buffer_max, size_t checksum_overhead)
+/* Budget left for data and padding, keeping room for the challenges still to send */
+uint64_t picoquic_tuple_data_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple)
 {
     uint64_t budget = picoquic_tuple_amplification_budget(cnx, tuple);
+
+    if (budget != UINT64_MAX && !tuple->challenge_failed && tuple->challenge_repeat_count < PICOQUIC_CHALLENGE_REPEAT_MAX) {
+        uint64_t reserve = PICOQUIC_CHALLENGE_RESERVE * (uint64_t)(PICOQUIC_CHALLENGE_REPEAT_MAX - tuple->challenge_repeat_count);
+        budget = (budget > reserve) ? budget - reserve : 0;
+    }
+    return budget;
+}
+
+/* Clamp the packet size to the budget; the floor at checksum_overhead leaves no room for frames. */
+size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
+    size_t send_buffer_max, size_t checksum_overhead, int is_data)
+{
+    uint64_t budget = (is_data) ? picoquic_tuple_data_budget(cnx, tuple) : picoquic_tuple_amplification_budget(cnx, tuple);
 
     if (budget < send_buffer_max) {
         send_buffer_max = (budget > checksum_overhead) ? (size_t)budget : checksum_overhead;
@@ -139,7 +151,7 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
 {
     /* The server pads only if the path received more than it sent, MTU discovery can follow; never above the tuple budget. */
     uint64_t budget = picoquic_tuple_amplification_budget(cnx, tuple);
-    int is_padding_allowed = (budget >= PICOQUIC_ENFORCED_INITIAL_MTU) &&
+    int is_padding_allowed = (picoquic_tuple_data_budget(cnx, tuple) >= PICOQUIC_ENFORCED_INITIAL_MTU) &&
         (cnx->client_mode || (path_x->bytes_sent + PICOQUIC_ENFORCED_INITIAL_MTU) <= path_x->received);
 
     if (tuple->challenge_verified == 0 && tuple->challenge_failed == 0) {
@@ -226,7 +238,7 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     size_t send_buffer_min_max = picoquic_clamp_to_amplification_budget(cnx, tuple,
-        (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max, checksum_overhead);
+        (send_buffer_max > path_x->send_mtu) ? path_x->send_mtu : send_buffer_max, checksum_overhead, 0);
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
     uint8_t* bytes_next;
@@ -928,9 +940,9 @@ void picoquic_promote_tuple_to_default(
             path_x->cnx->remote_parameters.migration_disabled = 0;
             picoquic_log_app_message(path_x->cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
         }
+        picoquic_reset_path_mtu(path_x);
         if (is_new_address) {
             picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
-            picoquic_reset_path_mtu(path_x);
         }
     }
 }

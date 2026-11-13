@@ -293,8 +293,6 @@ int migration_test_one(int mtu_drop, int is_new_ip)
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
-    test_ctx->client_addr_2 = test_ctx->client_addr;
-
     if (mtu_drop) {
         /* The MTU drop test is specifically orientated towards verifying retransmissions,
          * which requires simulating losses */
@@ -413,6 +411,11 @@ int migration_controlled_test(void)
 }
 
 int migration_mtu_drop_test(void)
+{
+    return migration_test_one(1, 0);
+}
+
+int migration_mtu_drop_new_ip_test(void)
 {
     return migration_test_one(1, 1);
 }
@@ -600,6 +603,85 @@ int migration_spoof_recover_test(void)
 int migration_spoof_return_test(void)
 {
     return migration_amplification_test_one(1, 1);
+}
+
+/* NAT rebinding during a download, then an outage that loses the first PATH_RESPONSE.
+ * Data sent under the amplification limit must leave room for the challenge repeats. */
+static int migration_rebinding_outage_test_one(uint64_t outage_delay, uint64_t outage_duration, uint8_t cid_id)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x0b, 0, 4, 5, 6, 7, 8}, 8 };
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[2] = cid_id;
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_amplification, sizeof(test_scenario_amplification));
+    }
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        test_ctx->cnx_server->path[0]->bytes_sent < 100000) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0) {
+        /* Rebind the client port, wait until the server promotes the new tuple */
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
+        test_ctx->client_use_nat = 1;
+        nb_rounds = 0;
+        while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&test_ctx->client_addr_natted) != 0) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            nb_rounds++;
+        }
+    }
+    if (ret == 0) {
+        test_ctx->blackhole_start = simulated_time + outage_delay;
+        test_ctx->blackhole_end = test_ctx->blackhole_start + outage_duration;
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+    if (ret == 0 && !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified) {
+        DBG_PRINTF("%s", "New tuple not verified");
+        ret = -1;
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int migration_rebinding_outage_test(void)
+{
+    const uint64_t delays[] = { 2000, 20000, 60000 };
+    const uint64_t durations[] = { 30000, 300000 };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(delays) / sizeof(delays[0]); i++) {
+        for (size_t j = 0; ret == 0 && j < sizeof(durations) / sizeof(durations[0]); j++) {
+            ret = migration_rebinding_outage_test_one(delays[i], durations[j], (uint8_t)(i * 2 + j));
+            if (ret != 0) {
+                DBG_PRINTF("Outage of %" PRIu64 " us after %" PRIu64 " us fails", durations[j], delays[i]);
+            }
+        }
+    }
+    return ret;
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client
@@ -1709,7 +1791,7 @@ int multipath_basic_test(void)
 
 int multipath_fail_test(void)
 {
-    uint64_t max_completion_microsec = 2500000;
+    uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_fail);
 }

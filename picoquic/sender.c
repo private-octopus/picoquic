@@ -2106,7 +2106,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
     checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
     packet->pc = pc;
-    send_buffer_max = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
+    send_buffer_max = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead, 0);
     bytes_max = bytes + send_buffer_max - checksum_overhead;
 
     if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
@@ -2930,8 +2930,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     /* An unvalidated peer address limits what can be sent (RFC 9000, section 8.1) */
-    int is_amplification_blocked = picoquic_tuple_amplification_budget(cnx, path_x->first_tuple) < PICOQUIC_MIN_SEGMENT_SIZE;
-    size_t send_buffer_clamped = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
+    int is_amplification_blocked = picoquic_tuple_data_budget(cnx, path_x->first_tuple) < PICOQUIC_MIN_SEGMENT_SIZE;
+    size_t send_buffer_clamped = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead,
+        !is_amplification_blocked);
     size_t send_buffer_min_max = (send_buffer_clamped > path_x->send_mtu) ? path_x->send_mtu : send_buffer_clamped;
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;

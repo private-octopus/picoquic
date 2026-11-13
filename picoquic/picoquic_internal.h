@@ -37,6 +37,7 @@ extern "C" {
 #endif
 #define PICOQUIC_MIN_SEGMENT_SIZE 256
 #define PICOQUIC_ENFORCED_INITIAL_MTU 1200
+#define PICOQUIC_CHALLENGE_RESERVE 64 /* amplification budget kept for each challenge repeat */
 #define PICOQUIC_ENFORCED_INITIAL_CID_LENGTH 8
 #define PICOQUIC_PRACTICAL_MAX_MTU 1440
 #define PICOQUIC_MIN_STREAM_DATA_FRAGMENT 512
@@ -1670,8 +1671,9 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time);
 uint64_t picoquic_tuple_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple);
+uint64_t picoquic_tuple_data_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple);
 size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
-    size_t send_buffer_max, size_t checksum_overhead);
+    size_t send_buffer_max, size_t checksum_overhead, int is_data);
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,

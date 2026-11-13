@@ -738,6 +738,8 @@ int migration_new_ip_test(void);
 int migration_amplification_test(void);
 int migration_spoof_recover_test(void);
 int migration_spoof_return_test(void);
+int migration_rebinding_outage_test(void);
+int migration_mtu_drop_new_ip_test(void);
 int migration_retire_old_cid_test(void);
 int minicrypto_test(void);
 int minicrypto_is_last_test(void);
