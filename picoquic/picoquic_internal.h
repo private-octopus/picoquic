@@ -1583,6 +1583,7 @@ typedef struct st_picoquic_packet_data_t {
 } picoquic_packet_data_t;
 
 #define PICOQUIC_ACK_GAPS_MAX 4 /* Most recent gaps of an ACK frame checked for persistent congestion */
+/* Known limit: an outage gap below PICOQUIC_ACK_GAPS_MAX newer gaps is missed; revisit with the timeout notification work. */
 
 /* Gap between two acked packet numbers, above the previous highest ack, and the packets declared lost in it. */
 typedef struct st_picoquic_ack_gap_t {
@@ -1591,6 +1592,7 @@ typedef struct st_picoquic_ack_gap_t {
     uint64_t nb_lost; /* Ack eliciting packets in the gap declared lost */
     uint64_t lost_first_sent_time; /* Earliest send time of those lost packets */
     uint64_t lost_last_sent_time; /* Latest send time of those lost packets */
+    uint64_t lost_highest; /* Highest number of those lost packets */
 } picoquic_ack_gap_t;
 
 /* Data collected while decoding one ACK frame, applied when the frame is fully decoded.

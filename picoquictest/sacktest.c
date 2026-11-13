@@ -1473,7 +1473,7 @@ static int persistent_congestion_decode_test(void)
         { "one lost before", ack_13_20, sizeof(ack_13_20), one_before, sizeof(one_before) / sizeof(one_before[0]), 1, 12 },
         { "pure ACK", ack_13_20, sizeof(ack_13_20), pure_ack, sizeof(pure_ack) / sizeof(pure_ack[0]), 0, 0 },
         { "split gaps", ack_13_20, sizeof(ack_13_20), split_gaps, sizeof(split_gaps) / sizeof(split_gaps[0]), 0, 0 },
-        { "blackhole", ack_11_20, sizeof(ack_11_20), blackhole, sizeof(blackhole) / sizeof(blackhole[0]), 1, 19 }
+        { "blackhole", ack_11_20, sizeof(ack_11_20), blackhole, sizeof(blackhole) / sizeof(blackhole[0]), 1, 14 }
     };
 
     for (size_t c = 0; ret == 0 && c < sizeof(cases) / sizeof(cases[0]); c++) {
@@ -1580,8 +1580,9 @@ int persistent_congestion_test(void)
             }
             else {
                 persistent_congestion_test_lose(&ack_data, acked_packet, 16, first_lost_sent + 50000);
-                if (!picoquic_is_persistent_congestion(cnx, &ack_data, &lost_number) || lost_number != 19) {
-                    DBG_PRINTF("Losses 16 and 17: lost number %" PRIu64 ", expected 19", lost_number);
+                /* The highest lost packet, not the number just below the acked 20, which may still be in flight. */
+                if (!picoquic_is_persistent_congestion(cnx, &ack_data, &lost_number) || lost_number != 17) {
+                    DBG_PRINTF("Losses 16 and 17: lost number %" PRIu64 ", expected 17", lost_number);
                     ret = -1;
                 }
             }

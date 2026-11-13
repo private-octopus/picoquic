@@ -2787,6 +2787,9 @@ void picoquic_record_lost_in_ack_gaps(picoquic_ack_frame_data_t* ack_data, picoq
                 if (gap->nb_lost == 0 || lost_packet->send_time > gap->lost_last_sent_time) {
                     gap->lost_last_sent_time = lost_packet->send_time;
                 }
+                if (gap->nb_lost == 0 || lost_packet->sequence_number > gap->lost_highest) {
+                    gap->lost_highest = lost_packet->sequence_number;
+                }
                 gap->nb_lost++;
             }
         }
@@ -3154,7 +3157,8 @@ int picoquic_is_persistent_congestion(picoquic_cnx_t* cnx, picoquic_ack_frame_da
             if (gap->nb_lost >= 2 && gap->lost_first_sent_time > path_x->rtt_init_time &&
                 gap->lost_last_sent_time > gap->lost_first_sent_time + duration) {
                 ret = 1;
-                *lost_packet_number = gap->above - 1;
+                /* A lost packet, so the CC compares a real loss with its recovery sequence. */
+                *lost_packet_number = gap->lost_highest;
             }
         }
     }
