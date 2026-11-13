@@ -827,6 +827,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ackfrq_min_delay)
+        {
+            int ret = ackfrq_min_delay_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(test_sim_link)
         {
             int ret = sim_link_test();

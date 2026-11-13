@@ -226,6 +226,7 @@ static const picoquic_test_def_t test_table[] = {
     { "ack_of_ack", ack_of_ack_test },
     { "ackfrq_basic", ackfrq_basic_test },
     { "ackfrq_short", ackfrq_short_test },
+    { "ackfrq_min_delay", ackfrq_min_delay_test },
     { "sim_link", sim_link_test },
     { "clear_text_aead", cleartext_aead_test },
     { "pn_ctr", pn_ctr_test },

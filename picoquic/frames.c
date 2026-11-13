@@ -3017,6 +3017,11 @@ void picoquic_compute_ack_gap_and_delay(picoquic_cnx_t* cnx, uint64_t rtt, uint6
                 if (*ack_delay_max > PICOQUIC_ACK_DELAY_MAX) {
                     *ack_delay_max = PICOQUIC_ACK_DELAY_MAX;
                 }
+                /* The requested ack delay must never be lower than the
+                 * min_ack_delay advertised by the peer. */
+                if (*ack_delay_max < remote_min_ack_delay) {
+                    *ack_delay_max = remote_min_ack_delay;
+                }
             }
             /* if ack gap smaller than ack time fraction of CWIN, perform correction */
             uint64_t rtt_target = (cnx->path[0]->smoothed_rtt + cnx->path[0]->rtt_min) / 2;
