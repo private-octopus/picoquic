@@ -269,7 +269,6 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     struct sockaddr_storage addr_peer = { 0 };
     struct sockaddr_storage addr_local = { 0 };
     uint64_t byte_length = 0;
-    int has_length = 0;
     uint64_t unique_path_id = 0;
     uint8_t ecn = 0xff;
 
@@ -277,15 +276,15 @@ int qlog_pdu(uint64_t time, int rxtx, bytestream* s, void * ptr)
     if (byteread_addr(s, &addr_peer) != 0) {
         memset(&addr_peer, 0, sizeof(addr_peer));
     }
-    has_length = (byteread_vint(s, &byte_length) == 0);
+    (void)byteread_vint(s, &byte_length);
     if (byteread_addr(s, &addr_local) != 0) {
         memset(&addr_local, 0, sizeof(addr_local));
     }
     (void)byteread_vint(s, &unique_path_id);
     (void)byteread_int8(s, &ecn);
 
-    qlog_fns_datagram(ctx, rxtx, time, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local,
-        has_length, byte_length, unique_path_id, ecn);
+    qlog_fns_pdu(NULL, ctx, rxtx, time, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local,
+        (size_t)byte_length, unique_path_id, ecn);
 
     return 0;
 }

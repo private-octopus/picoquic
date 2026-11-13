@@ -78,11 +78,10 @@ extern "C" {
     /* Write the separator and the header of an event, and count the event. */
     void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, char const* event_class, char const* event_name);
-    /* Write a datagram_sent or datagram_received event. The event has no
-     * byte_length if has_length is 0. */
-    void qlog_fns_datagram(qlog_fns_context_t* ctx, int receiving, uint64_t current_time,
-        const struct sockaddr* addr_peer, const struct sockaddr* addr_local,
-        int has_length, uint64_t byte_length, uint64_t unique_path_id, unsigned char ecn);
+    /* Log arrival or departure of an UDP datagram on a connection */
+    void qlog_fns_pdu(picoquic_cnx_t* cnx, void* log_ctx, int receiving, uint64_t current_time,
+        const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+        uint64_t unique_path_id, unsigned char ecn);
     /* Write the start of a packet event. qlog_fns_packet_end() closes the event. */
     void qlog_fns_packet_start(qlog_fns_context_t* ctx,
         picoquic_path_t* path_x, uint64_t unique_path_id, int receiving, uint64_t current_time,

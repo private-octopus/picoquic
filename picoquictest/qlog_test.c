@@ -660,16 +660,16 @@ static int qlog_damaged_write_record(FILE* F, const picoquic_connection_id_t* ci
     return ret;
 }
 
-/* Convert a binary log with damaged records. The qlog must not hold a
- * value that the record does not hold. */
+/* Convert a binary log with damaged records. The qlog must not hold an
+ * address, an ECN mark or a packet size that the record does not hold. */
 int qlog_damaged_record_test(void)
 {
     static const char* expected[] = {
-        "[0, \"transport\", \"datagram_received\", {}]",
-        "[0, \"transport\", \"datagram_received\", { \"addr_from\" : {\"ip_v4\": \"10.0.0.1\", \"port_v4\":4433}}]",
+        "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0}]",
+        "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0, \"addr_from\" : {\"ip_v4\": \"10.0.0.1\", \"port_v4\":4433}}]",
         "        \"dcid\" : \"01020304\"}}]"
     };
-    static const char* not_expected[] = { "byte_length", "ip_v6", "ecn", "packet_size" };
+    static const char* not_expected[] = { "ip_v6", "ecn", "packet_size" };
     picoquic_connection_id_t cid = { { 1, 2, 3, 4 }, 4 };
     struct sockaddr_in addr;
     bytestream_buf stream;
@@ -709,11 +709,11 @@ int qlog_damaged_record_test(void)
         }
     }
     if (ret == 0) {
-        /* Datagram record with no data */
+        /* PDU record with no data */
         ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_pdu_recv, NULL, 0);
     }
     if (ret == 0) {
-        /* Datagram record that ends after the peer address */
+        /* PDU record that ends after the peer address */
         ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
         ret |= bytewrite_addr(ps, (struct sockaddr*)&addr);
         if (ret == 0) {

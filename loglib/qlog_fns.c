@@ -272,40 +272,37 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
     ctx->event_count++;
 }
 
-/* Write a datagram_sent or datagram_received event. The event has no
- * byte_length if has_length is 0. */
-void qlog_fns_datagram(qlog_fns_context_t* ctx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local,
-    int has_length, uint64_t byte_length, uint64_t unique_path_id, unsigned char ecn)
+/* Log arrival or departure of an UDP datagram on a connection */
+void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uint64_t current_time,
+    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
+    uint64_t unique_path_id, unsigned char ecn)
 {
+    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
     int log_ecn = 0;
-    char const* comma = "";
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(cnx);
+#endif
 
     qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "transport",
         (receiving == 0) ? "datagram_sent" : "datagram_received");
 
-    if (has_length) {
-        qlog_fns_text_uint(f, " \"byte_length\": ", byte_length);
-        comma = ",";
-    }
+    qlog_fns_text_uint(f, " \"byte_length\": ", (uint64_t)packet_length);
 
     if (addr_peer->sa_family != 0 &&
         picoquic_compare_addr(addr_peer, (struct sockaddr*)&ctx->addr_peer) != 0) {
-        fprintf(f, "%s \"%s\" : {", comma, (receiving == 0) ? "addr_to" : "addr_from");
+        fprintf(f, ", \"%s\" : {", (receiving == 0) ? "addr_to" : "addr_from");
         qlog_fns_log_addr(f, addr_peer);
         fprintf(f, "}");
         picoquic_store_addr(&ctx->addr_peer, addr_peer);
-        comma = ",";
     }
 
     if (addr_local->sa_family != 0 &&
         picoquic_compare_addr(addr_local, (struct sockaddr*)&ctx->addr_local) != 0) {
-        fprintf(f, "%s \"%s\" : {", comma, (receiving != 0) ? "addr_to" : "addr_from");
+        fprintf(f, ", \"%s\" : {", (receiving != 0) ? "addr_to" : "addr_from");
         qlog_fns_log_addr(f, addr_local);
         fprintf(f, "}");
         picoquic_store_addr(&ctx->addr_local, addr_local);
-        comma = ",";
     }
 
     if (ecn != 0xff) {
@@ -320,24 +317,11 @@ void qlog_fns_datagram(qlog_fns_context_t* ctx, int receiving, uint64_t current_
         if (log_ecn) {
             char const* ecn_strings[4] = { "Not-ECT", "ECT(1)", "ECT(0)", "CE" };
             char const* ecn_s = ecn_strings[ecn & 3];
-            fprintf(f, "%s \"ecn\" : \"%s\"", comma, ecn_s);
+            fprintf(f, ", \"ecn\" : \"%s\"", ecn_s);
         }
     }
 
     fprintf(f, "}]");
-}
-
-/* Log arrival or departure of an UDP datagram on a connection */
-void qlog_fns_pdu(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, int receiving, uint64_t current_time,
-    const struct sockaddr* addr_peer, const struct sockaddr* addr_local, size_t packet_length,
-    uint64_t unique_path_id, unsigned char ecn)
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(cnx);
-#endif
-
-    qlog_fns_datagram((qlog_fns_context_t*)log_ctx, receiving, current_time, addr_peer, addr_local,
-        1, (uint64_t)packet_length, unique_path_id, ecn);
 }
 
 /* Log a decrypted packet - receiving = 1 if arrival, = 0 if sending */
