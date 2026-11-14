@@ -87,6 +87,9 @@ extern "C" {
         picoquic_path_t* path_x, uint64_t unique_path_id, int receiving, uint64_t current_time,
         const struct st_picoquic_packet_header_t* ph, uint64_t byte_length);
     void qlog_fns_packet_end(qlog_fns_context_t* ctx);
+    /* Write the content of a version negotiation packet or of a retry packet. */
+    void qlog_fns_proposed_versions(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
+    void qlog_fns_retry_token(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
     /* Write a text and a number, with the same output as

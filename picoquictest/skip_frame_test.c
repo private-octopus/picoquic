@@ -3460,7 +3460,9 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     picoquic_packet_header ph;
     static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
     static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
-    static const uint8_t retry_token_bytes[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    /* A token of 8 bytes and an integrity tag of 16 bytes. */
+    static const uint8_t retry_content[] = { 1, 2, 3, 4, 5, 6, 7, 8,
+        0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf };
     static const uint8_t fake_ticket_bytes[] = { 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7 };
 
     memset(&addr_peer4, 0, sizeof(addr_peer4));
@@ -3515,8 +3517,8 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     memset(&ph, 0, sizeof(ph));
     ph.ptype = picoquic_packet_retry;
     ph.dest_cnx_id = *dcid;
-    ph.payload_length = sizeof(retry_token_bytes);
-    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_token_bytes, sizeof(retry_token_bytes));
+    ph.payload_length = sizeof(retry_content);
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_content, sizeof(retry_content));
 
     picoquic_log_flush(cnx);
 }

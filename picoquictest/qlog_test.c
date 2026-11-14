@@ -157,7 +157,6 @@ int qlog_auto_test(void)
 
 #define QLOG_ERROR_FILE "qlog_error_test.txt"
 
-int qlog_string(FILE* f, bytestream* s, uint64_t l);
 int qlog_chars(FILE* f, bytestream* s, uint64_t l);
 
 int qlog_error_string(FILE* F)
@@ -167,25 +166,12 @@ int qlog_error_string(FILE* F)
 	uint8_t char_data[] = {
 		'\"', '\\', 0xFF, ' ', 'z', 127
 	};
-	uint8_t data[16];
-	bs.data = data;
-	bs.size = sizeof(data) - 1;
+
+	bs.data = char_data;
+	bs.size = sizeof(char_data);
 	bs.ptr = 0;
-	memset(bs.data, 'x', sizeof(data) - 1);
-	bs.data[sizeof(data) - 1] = 0;
-
-	if (qlog_string(F, &bs, 2 * sizeof(data)) == 0) {
+	if (qlog_chars(F, &bs, 2 * bs.size) == 0) {
 		ret = -1;
-	}
-
-	if (ret == 0) {
-		fprintf(F, "\n");
-		bs.data = char_data;
-		bs.size = sizeof(char_data);
-		bs.ptr = 0;
-		if (qlog_chars(F, &bs, 2 * bs.size) == 0) {
-			ret = -1;
-		}
 	}
 
 	if (ret == 0) {
@@ -779,6 +765,50 @@ int qlog_damaged_record_test(void)
     return ret;
 }
 
+#define QLOG_PACKET_CONTENT_FILE "qlog_fns_packet_content_test.txt"
+void qlog_fns_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
+    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length);
+static int qlog_quic_fallback_check_file(char const* fname, char const** expected, size_t nb_expected);
+
+/* The qlog must hold the proposed versions and the retry token of received packets. */
+int qlog_fns_packet_content_test(void)
+{
+    static const char* expected[] = {
+        "\"proposed_versions\": [\"00000001\", \"ff00001d\"]}]",
+        "\"proposed_versions\": [\"00000001\", \"ff00001d\", \"... coding error!\"]}]",
+        "\"retry_token\": \"a1a2a3a4a5a6a7a8\"}]",
+        "\"packet_size\": 16 }}]"
+    };
+    static const uint8_t content[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d, 0xa1 };
+    /* A token of 8 bytes and an integrity tag of 16 bytes. */
+    static const uint8_t retry_content[] = {
+        0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8,
+        0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf
+    };
+    qlog_fns_context_t ctx = { 0 };
+    picoquic_packet_header ph = { 0 };
+    int ret = 0;
+
+    ctx.f_txtlog = picoquic_file_open(QLOG_PACKET_CONTENT_FILE, "w");
+    if (ctx.f_txtlog == NULL) {
+        ret = -1;
+    }
+    else {
+        ph.ptype = picoquic_packet_version_negotiation;
+        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, content, 8);
+        /* The last version has only 1 byte. */
+        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, content, 9);
+        ph.ptype = picoquic_packet_retry;
+        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, retry_content, sizeof(retry_content));
+        /* The packet has only the integrity tag. */
+        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, retry_content + 8, 16);
+        ctx.f_txtlog = picoquic_file_close(ctx.f_txtlog);
+        ret = qlog_quic_fallback_check_file(QLOG_PACKET_CONTENT_FILE, expected, sizeof(expected) / sizeof(expected[0]));
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -821,6 +851,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_damaged_record_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_fns_packet_content_test();
 	}
 
 	return ret;

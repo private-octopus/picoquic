@@ -47,25 +47,6 @@ typedef struct qlog_context_st {
     unsigned int app_limited : 1;
 } qlog_context_t;
 
-int qlog_string(FILE* f, bytestream* s, uint64_t l)
-{
-    uint64_t x;
-    int error_found = (s->ptr + (size_t)l > s->size);
-
-    fprintf(f, "\"");
-
-    for (x = 0; x < l && s->ptr < s->size; x++) {
-        fprintf(f, "%02x", s->data[s->ptr++]);
-    }
-
-    if (error_found) {
-        fprintf(f, "... coding error!");
-    }
-
-    fprintf(f, "\"");
-    return (error_found) ? -1 : 0;
-}
-
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
 {
     int error_found = (s->ptr + (size_t)l > s->size);
@@ -299,46 +280,20 @@ int qlog_packet_start(uint64_t time, uint64_t path_id, uint64_t size, const pico
     return 0;
 }
 
-int qlog_proposed_versions(FILE* f, bytestream* s)
-{
-    int nb_versions = 0;
-    fprintf(f, ",\n    \"proposed_versions\": [");
-
-    while (bytestream_remain(s) > 0) {
-        if (nb_versions > 0) {
-            fprintf(f, ", ");
-        }
-        qlog_string(f, s, 4);
-        nb_versions++;
-    }
-    fprintf(f, "]");
-    return 0;
-}
-
-int qlog_retry_token(FILE* f, bytestream* s)
-{
-    size_t l = bytestream_remain(s);
-
-    if (l > 0) {
-        fprintf(f, ",\n    \"retry_token\": ");
-        qlog_string(f, s, l);
-    }
-    return 0;
-}
-
 int qlog_packet_frame(bytestream * s, void * ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
     FILE * f = ctx->f_txtlog;
 
     if (ctx->packet_type == picoquic_packet_version_negotiation) {
-        return qlog_proposed_versions(f, s);
+        qlog_fns_proposed_versions(f, s->data + s->ptr, s->data + s->size);
     }
     else if (ctx->packet_type == picoquic_packet_retry) {
-        return qlog_retry_token(f, s);
+        qlog_fns_retry_token(f, s->data + s->ptr, s->data + s->size);
     }
-
-    qlog_binlog_frame(f, s->data + s->ptr, s->data + s->size, &ctx->frame_count);
+    else {
+        qlog_binlog_frame(f, s->data + s->ptr, s->data + s->size, &ctx->frame_count);
+    }
     return 0;
 }
 

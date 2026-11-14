@@ -221,5 +221,5 @@
 [0, "info", "message", { "message": "extra event test message #1"}],
 [0, "transport", "packet_sent", { "packet_type": "version_negotiation", "header": { "packet_size": 8, "dcid": "01020304" },
     "proposed_versions": ["00000001", "ff00001d"]}],
-[0, "transport", "packet_sent", { "packet_type": "retry", "header": { "packet_size": 8, "dcid": "01020304" },
+[0, "transport", "packet_sent", { "packet_type": "retry", "header": { "packet_size": 24, "dcid": "01020304" },
     "retry_token": "0102030405060708"}]]}]}
