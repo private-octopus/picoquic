@@ -446,12 +446,15 @@ void qlog_fns_proposed_versions(FILE* f, const uint8_t* bytes, const uint8_t* by
     fprintf(f, "]");
 }
 
-/* Write the token and the integrity tag of a retry packet. */
+/* Write the token of a retry packet. The integrity tag follows the token. */
 void qlog_fns_retry_token(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max)
 {
-    if (bytes < bytes_max) {
+    size_t tag_length = 16;
+    size_t length = (bytes < bytes_max) ? (size_t)(bytes_max - bytes) : 0;
+
+    if (length > tag_length) {
         fprintf(f, ",\n    \"retry_token\": ");
-        (void)qlog_frame_hex_string(f, bytes, bytes_max, (uint64_t)(bytes_max - bytes));
+        (void)qlog_frame_hex_string(f, bytes, bytes_max, length - tag_length);
     }
 }
 
