@@ -415,9 +415,273 @@ int migration_mtu_drop_test(void)
     return migration_test_one(1, 0);
 }
 
+int migration_mtu_drop_new_ip_test(void)
+{
+    return migration_test_one(1, 1);
+}
+
 int migration_new_ip_test(void)
 {
     return migration_test_one(0, 1);
+}
+
+/* A client spoofs a victim address with a non probing packet, after which the tuple is promoted.
+ * Silent client: the server sends at most 3x the bytes received from the victim, then the tuple fails.
+ * Active client: the server returns to the client address and the transfer completes.
+ * Client back after both challenges failed: the old address is verified again and the transfer completes. */
+static test_api_stream_desc_t test_scenario_amplification[] = {
+    { 4, 0, 257, 1000000 }
+};
+
+static int migration_amplification_test_one(int is_client_silent, int is_client_back)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t end_time;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0xa3, 0x5f, 4, 5, 6, 7, 8}, 8 };
+    struct sockaddr_in victim_addr;
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    size_t length = 0;
+    uint64_t bytes_from_victim = 0;
+    uint64_t bytes_to_victim = 0;
+    picoquic_tuple_t* victim_tuple = NULL;
+    picoquic_tuple_t* client_tuple = NULL;
+    int is_victim_failed = 0;
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[3] += (uint8_t)(is_client_silent + is_client_back);
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_amplification, sizeof(test_scenario_amplification));
+    }
+    /* Let the download start, so the server has data to send. */
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        test_ctx->cnx_server->path[0]->bytes_sent < 100000) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        ret = -1;
+    }
+    /* Build a non probing packet at the client, and deliver it from the victim address. */
+    if (ret == 0) {
+        int if_index = 0;
+        uint8_t ping = picoquic_frame_type_ping;
+
+        victim_addr = test_ctx->client_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        victim_addr.sin_port += 23;
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+        if (ret == 0) {
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+                &addr_to, &addr_from, &if_index, NULL);
+        }
+        if (ret == 0 && length == 0) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            bytes_from_victim = length;
+            ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)&victim_addr,
+                (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+        }
+        if (ret == 0) {
+            victim_tuple = test_ctx->cnx_server->path[0]->first_tuple;
+            client_tuple = victim_tuple->next_tuple;
+            if (picoquic_compare_addr((struct sockaddr*)&victim_tuple->peer_addr, (struct sockaddr*)&victim_addr) != 0) {
+                DBG_PRINTF("%s", "Spoofed tuple was not promoted");
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0 && !is_client_silent) {
+        /* The client keeps running from its own address. */
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        if (ret == 0) {
+            ret = tls_api_one_scenario_verify(test_ctx);
+        }
+        if (ret == 0 && (picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&test_ctx->client_addr) != 0 || !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified)) {
+            DBG_PRINTF("%s", "Server did not return to the client address");
+            ret = -1;
+        }
+    }
+    /* The client stays silent: run the server alone, nothing is delivered. */
+    end_time = simulated_time + 10000000;
+    nb_rounds = 0;
+    while (ret == 0 && is_client_silent && simulated_time < end_time && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        !(is_client_back && client_tuple->challenge_failed)) {
+        int if_index = 0;
+        picoquic_cnx_t* last_cnx = NULL;
+        uint64_t next_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+
+        if (next_time > simulated_time) {
+            simulated_time = next_time;
+        }
+        ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer, sizeof(buffer), &length,
+            &addr_to, &addr_from, &if_index, NULL, &last_cnx, NULL);
+        if (ret == 0 && length > 0 &&
+            picoquic_compare_addr((struct sockaddr*)&addr_to, (struct sockaddr*)&victim_addr) == 0) {
+            bytes_to_victim += length;
+        }
+        if (picoquic_get_first_cnx(test_ctx->qserver) == NULL) {
+            /* The server connection was deleted after its timeout */
+            test_ctx->cnx_server = NULL;
+        }
+        else if (victim_tuple->challenge_failed) {
+            is_victim_failed = 1;
+        }
+        nb_rounds++;
+    }
+    if (ret == 0 && is_client_silent) {
+        if (bytes_to_victim == 0 || bytes_to_victim > 3 * bytes_from_victim) {
+            DBG_PRINTF("Sent %" PRIu64 " bytes to victim, received %" PRIu64, bytes_to_victim, bytes_from_victim);
+            ret = -1;
+        }
+        else if (!is_victim_failed) {
+            DBG_PRINTF("%s", "Spoofed tuple did not fail");
+            ret = -1;
+        }
+    }
+    if (ret == 0 && is_client_back) {
+        /* The client sends a non probing packet from its old address, after its challenge failed. */
+        int if_index = 0;
+        uint8_t ping = picoquic_frame_type_ping;
+
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+        if (ret == 0) {
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+                &addr_to, &addr_from, &if_index, NULL);
+        }
+        if (ret == 0 && length == 0) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)&test_ctx->client_addr,
+                (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+        }
+        if (ret == 0 && (test_ctx->cnx_server->path[0]->first_tuple != client_tuple ||
+            !client_tuple->challenge_verified || client_tuple->challenge_failed)) {
+            DBG_PRINTF("%s", "Old address not restored as verified");
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        }
+        if (ret == 0) {
+            ret = tls_api_one_scenario_verify(test_ctx);
+        }
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int migration_amplification_test(void)
+{
+    return migration_amplification_test_one(1, 0);
+}
+
+int migration_spoof_recover_test(void)
+{
+    return migration_amplification_test_one(0, 0);
+}
+
+int migration_spoof_return_test(void)
+{
+    return migration_amplification_test_one(1, 1);
+}
+
+/* NAT rebinding during a download, then an outage that loses the first PATH_RESPONSE.
+ * Data sent under the amplification limit must leave room for the challenge repeats. */
+static int migration_rebinding_outage_test_one(uint64_t outage_delay, uint64_t outage_duration, uint8_t cid_id)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0x0b, 0, 4, 5, 6, 7, 8}, 8 };
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[2] = cid_id;
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_amplification, sizeof(test_scenario_amplification));
+    }
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        test_ctx->cnx_server->path[0]->bytes_sent < 100000) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0) {
+        /* Rebind the client port, wait until the server promotes the new tuple */
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_port += 17;
+        test_ctx->client_use_nat = 1;
+        nb_rounds = 0;
+        while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+            picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&test_ctx->client_addr_natted) != 0) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            nb_rounds++;
+        }
+    }
+    if (ret == 0) {
+        test_ctx->blackhole_start = simulated_time + outage_delay;
+        test_ctx->blackhole_end = test_ctx->blackhole_start + outage_duration;
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+    if (ret == 0 && !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified) {
+        DBG_PRINTF("%s", "New tuple not verified");
+        ret = -1;
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int migration_rebinding_outage_test(void)
+{
+    const uint64_t delays[] = { 2000, 20000, 60000 };
+    const uint64_t durations[] = { 30000, 300000 };
+    int ret = 0;
+
+    for (size_t i = 0; ret == 0 && i < sizeof(delays) / sizeof(delays[0]); i++) {
+        for (size_t j = 0; ret == 0 && j < sizeof(durations) / sizeof(durations[0]); j++) {
+            ret = migration_rebinding_outage_test_one(delays[i], durations[j], (uint8_t)(i * 2 + j));
+            if (ret != 0) {
+                DBG_PRINTF("Outage of %" PRIu64 " us after %" PRIu64 " us fails", durations[j], delays[i]);
+            }
+        }
+    }
+    return ret;
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client

@@ -3997,6 +3997,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             /* Do not require verification for default path */
             cnx->path[0]->first_tuple->p_local_cnxid = cnxid0;
             cnx->path[0]->first_tuple->challenge_verified = 1;
+            cnx->path[0]->first_tuple->is_address_validated = 1;
 
             cnx->datagram_priority = cnx->quic->default_datagram_priority;
             cnx->high_priority_stream_id = UINT64_MAX;

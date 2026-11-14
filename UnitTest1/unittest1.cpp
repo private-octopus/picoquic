@@ -4253,8 +4253,38 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_mtu_drop_new_ip) {
+            int ret = migration_mtu_drop_new_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_new_ip) {
             int ret = migration_new_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_amplification) {
+            int ret = migration_amplification_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_recover) {
+            int ret = migration_spoof_recover_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_return) {
+            int ret = migration_spoof_return_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_rebinding_outage) {
+            int ret = migration_rebinding_outage_test();
 
             Assert::AreEqual(ret, 0);
         }
