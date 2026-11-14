@@ -809,6 +809,93 @@ int qlog_fns_packet_content_test(void)
     return ret;
 }
 
+#define QLOG_CC_UPDATE_BINLOG "cc5a7e01.client.log"
+#define QLOG_CC_UPDATE_QLOG "cc5a7e01.client.qlog"
+#define QLOG_CC_UPDATE_CONVERTED "qlog_cc_update_test.qlog"
+
+static void qlog_cc_update_dump(picoquic_cnx_t* cnx, uint64_t* simulated_time)
+{
+    *simulated_time += 1000;
+    cnx->path[0]->is_cc_data_updated = 1;
+    picoquic_log_cc_dump(cnx, *simulated_time);
+}
+
+/* Log the same congestion control updates in a qlog and in a binary log.
+ * The conversion of the binary log must give the same qlog. */
+int qlog_cc_update_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    uint16_t flags = 0;
+    uint64_t log_time = 0;
+    FILE* F = NULL;
+    struct sockaddr_in saddr;
+    const picoquic_connection_id_t initial_cid = {
+        { 0xcc, 0x5a, 0x7e, 1 }, 4
+    };
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL || picoquic_set_binlog(quic, ".") != 0 || picoquic_set_qlog(quic, ".") != 0) {
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+        (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_log_new_connection(cnx);
+        path_x->smoothed_rtt = 20000;
+        path_x->rtt_sample = 20000;
+        path_x->rtt_min = 20000;
+        qlog_cc_update_dump(cnx, &simulated_time);
+        /* No change */
+        qlog_cc_update_dump(cnx, &simulated_time);
+        /* Only the smoothed RTT changes */
+        path_x->smoothed_rtt = 21000;
+        qlog_cc_update_dump(cnx, &simulated_time);
+        /* Only the app limited state changes */
+        path_x->last_bw_estimate_path_limited = 1;
+        qlog_cc_update_dump(cnx, &simulated_time);
+        path_x->bytes_in_transit = 1440;
+        qlog_cc_update_dump(cnx, &simulated_time);
+        picoquic_log_close_connection(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    if (ret == 0) {
+        F = picoquic_open_cc_log_file_for_read(QLOG_CC_UPDATE_BINLOG, &flags, &log_time);
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = qlog_convert(&initial_cid, F, QLOG_CC_UPDATE_BINLOG, QLOG_CC_UPDATE_CONVERTED, NULL, flags);
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_test_compare_text_files(QLOG_CC_UPDATE_QLOG, QLOG_CC_UPDATE_CONVERTED);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "The qlog and the converted binary log are different.");
+        }
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -855,6 +942,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_fns_packet_content_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_cc_update_test();
 	}
 
 	return ret;

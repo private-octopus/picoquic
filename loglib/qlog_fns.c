@@ -865,105 +865,101 @@ void qlog_fns_tls_ticket(picoquic_cnx_t* UNUSED(cnx), void * UNUSED(log_ctx),
 /* log congestion control parameters
 * The congestion control is per path. 
 * We get an event per path id. If multipath is not enabled, only path[0] is logged.
+*
+* cc holds the current values of the path, and path_ctx the stored values.
+* Write the values that changed.
 */
-void qlog_fns_cc_dump_path(picoquic_path_t* path, 
-    qlog_fns_context_t * ctx, qlog_fns_path_context_t * path_ctx,  uint64_t current_time)
+void qlog_fns_cc_update(qlog_fns_context_t* ctx, qlog_fns_path_context_t* path_ctx,
+    picoquic_path_t* path_x, uint64_t unique_path_id, uint64_t current_time,
+    const qlog_fns_path_context_t* cc, uint64_t send_mtu)
 {
     FILE* f = ctx->f_txtlog;
-    uint64_t cc_state = 0;
-    uint64_t cc_param = 0;
     /* TODO: manage the path_ctx values! Create new paths? */
 
-    if (path->cnx->congestion_alg != NULL &&
-        path->congestion_alg_state != NULL) {
-        path->cnx->congestion_alg->alg_observe(path, &cc_state, &cc_param);
-    }
-
-    if (cc_state != path_ctx->cc_state) {
-        qlog_fns_event_start(ctx, path, 0, current_time, "recovery", "congestion_state_updated");
+    if (cc->cc_state != path_ctx->cc_state) {
+        qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "recovery", "congestion_state_updated");
         fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
-            path_ctx->cc_state, cc_state, cc_param);
-        path_ctx->cc_state = cc_state;
-        path_ctx->cc_param = cc_param;
+            path_ctx->cc_state, cc->cc_state, cc->cc_param);
+        path_ctx->cc_state = cc->cc_state;
+        path_ctx->cc_param = cc->cc_param;
     }
     else {
-        path_ctx->cc_param = cc_param;
+        path_ctx->cc_param = cc->cc_param;
     }
 
-    if (path->cwin != path_ctx->cwin ||
-        path->rtt_sample != path_ctx->rtt_sample ||
+    if (cc->cwin != path_ctx->cwin ||
+        cc->rtt_sample != path_ctx->rtt_sample ||
 #if 1
         /* Bug compatibility with first implementation */
 #else
-        path->smoothed_rtt != path_ctx->smoothed_rtt ||
+        cc->smoothed_rtt != path_ctx->smoothed_rtt ||
 #endif
-            path->rtt_min != path_ctx->rtt_min || 
-            path->bytes_in_transit != path_ctx->bytes_in_transit ||
-            path->pacing.packet_time_microsec != path_ctx->pacing_packet_time
+            cc->rtt_min != path_ctx->rtt_min ||
+            cc->bytes_in_transit != path_ctx->bytes_in_transit ||
+            cc->pacing_packet_time != path_ctx->pacing_packet_time
 #if 1
         /* Bug compatibility with first implementation */
 #else
         ||
-            path->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited
+            cc->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited
 #endif
         ) {
         /* Something changed. Report the event. */
         char* comma = "";
 
-        qlog_fns_event_start(ctx, path, 0, current_time, "recovery", "metrics_updated");
+        qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "recovery", "metrics_updated");
 
-        if (path->cwin != path_ctx->cwin) {
+        if (cc->cwin != path_ctx->cwin) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"cwnd\": ", path->cwin);
-            path_ctx->cwin = path->cwin;
+            qlog_fns_text_uint(f, "\"cwnd\": ", cc->cwin);
+            path_ctx->cwin = cc->cwin;
             comma = ",";
         }
 
-        if (path->pacing.packet_time_microsec != path_ctx->pacing_packet_time && path->pacing.packet_time_microsec > 0) {
-            double bps = ((double)path->send_mtu * 8) * 1000000.0 / path->pacing.packet_time_microsec;
+        if (cc->pacing_packet_time != path_ctx->pacing_packet_time && cc->pacing_packet_time > 0) {
+            double bps = ((double)send_mtu * 8) * 1000000.0 / cc->pacing_packet_time;
             uint64_t bits_per_second = (uint64_t)bps;
             (void)fputs(comma, f);
             qlog_fns_text_uint(f, "\"pacing_rate\": ", bits_per_second);
-            path_ctx->pacing_packet_time = path->pacing.packet_time_microsec;
+            path_ctx->pacing_packet_time = cc->pacing_packet_time;
             comma = ",";
         }
 
-        if (path->bytes_in_transit != path_ctx->bytes_in_transit) {
+        if (cc->bytes_in_transit != path_ctx->bytes_in_transit) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"bytes_in_flight\": ", path->bytes_in_transit);
-            path_ctx->bytes_in_transit = path->bytes_in_transit;
+            qlog_fns_text_uint(f, "\"bytes_in_flight\": ", cc->bytes_in_transit);
+            path_ctx->bytes_in_transit = cc->bytes_in_transit;
             comma = ",";
         }
 
-        if (path->smoothed_rtt != path_ctx->smoothed_rtt) {
+        if (cc->smoothed_rtt != path_ctx->smoothed_rtt) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"smoothed_rtt\": ", path->smoothed_rtt);
+            qlog_fns_text_uint(f, "\"smoothed_rtt\": ", cc->smoothed_rtt);
             comma = ",";
         }
 
-        if (path->rtt_min != path_ctx->rtt_min) {
+        if (cc->rtt_min != path_ctx->rtt_min) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"min_rtt\": ", path->rtt_min);
-            path_ctx->rtt_min = path->rtt_min;
+            qlog_fns_text_uint(f, "\"min_rtt\": ", cc->rtt_min);
+            path_ctx->rtt_min = cc->rtt_min;
             comma = ",";
         }
 
-        if (path->rtt_sample != path_ctx->rtt_sample) {
+        if (cc->rtt_sample != path_ctx->rtt_sample) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"latest_rtt\": ", path->rtt_sample);
-            path_ctx->rtt_sample = path->rtt_sample;
+            qlog_fns_text_uint(f, "\"latest_rtt\": ", cc->rtt_sample);
+            path_ctx->rtt_sample = cc->rtt_sample;
             comma = ",";
         }
 
-        if (path->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited) {
+        if (cc->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited) {
             (void)fputs(comma, f);
-            qlog_fns_text_uint(f, "\"app_limited\": ", path->last_bw_estimate_path_limited);
-            path_ctx->last_bw_estimate_path_limited = path->last_bw_estimate_path_limited;
+            qlog_fns_text_uint(f, "\"app_limited\": ", cc->last_bw_estimate_path_limited);
+            path_ctx->last_bw_estimate_path_limited = cc->last_bw_estimate_path_limited;
             /* comma = ","; (not useful since last block of function) */
         }
 
         fprintf(f, "}]");
-        ctx->event_count++;
     }
 }
 
@@ -973,7 +969,21 @@ void qlog_fns_cc_dump(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_
 
     qlog_fns_path_context_t* path_ctx = qlog_fns_get_path_context(ctx, cnx, path_x->unique_path_id);
     if (path_ctx != NULL) {
-        qlog_fns_cc_dump_path(path_x, ctx, path_ctx, current_time);
+        qlog_fns_path_context_t cc = { 0 };
+
+        if (path_x->cnx->congestion_alg != NULL &&
+            path_x->congestion_alg_state != NULL) {
+            path_x->cnx->congestion_alg->alg_observe(path_x, &cc.cc_state, &cc.cc_param);
+        }
+        cc.cwin = path_x->cwin;
+        cc.rtt_sample = path_x->rtt_sample;
+        cc.smoothed_rtt = path_x->smoothed_rtt;
+        cc.rtt_min = path_x->rtt_min;
+        cc.bytes_in_transit = path_x->bytes_in_transit;
+        cc.pacing_packet_time = path_x->pacing.packet_time_microsec;
+        cc.last_bw_estimate_path_limited = path_x->last_bw_estimate_path_limited;
+
+        qlog_fns_cc_update(ctx, path_ctx, path_x, 0, current_time, &cc, path_x->send_mtu);
     }
 }
 

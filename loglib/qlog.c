@@ -35,16 +35,7 @@
 typedef struct qlog_context_st {
     qlog_fns_context_t fns;
 
-    uint64_t cwin;
-    uint64_t rtt_sample;
-    uint64_t SRTT;
-    uint64_t RTT_min;
-    uint64_t bytes_in_transit;
-    uint64_t pacing_packet_time;
-    uint64_t cc_state;
-    uint64_t cc_param;
-
-    unsigned int app_limited : 1;
+    qlog_fns_path_context_t path_ctx;
 } qlog_context_t;
 
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
@@ -339,7 +330,6 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     uint64_t bytes_in_transit = 0;
     uint64_t app_limited = 0;
     qlog_context_t* ctx = (qlog_context_t*)ptr;
-    FILE* f = ctx->fns.f_txtlog;
 
     ret |= byteread_vint(s, &sequence);
     ret |= byteread_vint(s, &packet_rcvd);
@@ -370,70 +360,20 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     /* Not checking the app limited return, because it is not present in old bin logs */
     (void) byteread_vint(s, &app_limited);
 
-    if (ret == 0 && cc_state != ctx->cc_state) {
-        qlog_fns_event_start(&ctx->fns, NULL, path_id, time, "recovery", "congestion_state_updated");
-        fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
-            ctx->cc_state, cc_state, cc_param);
-        ctx->cc_state = cc_state;
-        ctx->cc_param = cc_param;
-    }
-    else if (ret == 0) {
-        ctx->cc_param = cc_param;
-    }
+    if (ret == 0) {
+        qlog_fns_path_context_t cc = { 0 };
 
-    if (ret == 0 &&
-        (cwin != ctx->cwin || rtt_sample != ctx->rtt_sample || SRTT != ctx->SRTT ||
-            RTT_min != ctx->RTT_min || bytes_in_transit != ctx->bytes_in_transit || 
-            pacing_packet_time != ctx->pacing_packet_time)) {
-        /* Something changed. Report the event. */
-        char* comma = "";
+        cc.cwin = cwin;
+        cc.rtt_sample = rtt_sample;
+        cc.smoothed_rtt = SRTT;
+        cc.rtt_min = RTT_min;
+        cc.bytes_in_transit = bytes_in_transit;
+        cc.pacing_packet_time = pacing_packet_time;
+        cc.cc_state = cc_state;
+        cc.cc_param = cc_param;
+        cc.last_bw_estimate_path_limited = (app_limited != 0);
 
-        qlog_fns_event_start(&ctx->fns, NULL, path_id, time, "recovery", "metrics_updated");
-
-        if (cwin != ctx->cwin) {
-            fprintf(f, "%s\"cwnd\": %" PRIu64, comma, cwin);
-            ctx->cwin = cwin;
-            comma = ",";
-        }
-
-        if (pacing_packet_time != ctx->pacing_packet_time && pacing_packet_time > 0) {
-            double bps = ((double)Send_MTU * 8) * 1000000.0 / pacing_packet_time;
-            uint64_t bits_per_second = (uint64_t)bps;
-            fprintf(f, "%s\"pacing_rate\": %" PRIu64, comma, bits_per_second);
-            ctx->pacing_packet_time = pacing_packet_time;
-            comma = ",";
-        }
-
-        if (bytes_in_transit != ctx->bytes_in_transit) {
-            fprintf(f, "%s\"bytes_in_flight\": %" PRIu64, comma, bytes_in_transit);
-            ctx->bytes_in_transit = bytes_in_transit;
-            comma = ",";
-        }
-
-        if (SRTT != ctx->SRTT) {
-            fprintf(f, "%s\"smoothed_rtt\": %" PRIu64, comma, SRTT);
-            comma = ",";
-        }
-
-        if (RTT_min != ctx->RTT_min) {
-            fprintf(f, "%s\"min_rtt\": %" PRIu64, comma, RTT_min);
-            ctx->RTT_min = RTT_min;
-            comma = ",";
-        }
-
-        if (rtt_sample != ctx->rtt_sample) {
-            fprintf(f, "%s\"latest_rtt\": %" PRIu64, comma, rtt_sample);
-            ctx->rtt_sample = rtt_sample;
-            comma = ",";
-        }
-
-        if (app_limited != ctx->app_limited) {
-            fprintf(f, "%s\"app_limited\": %" PRIu64, comma, app_limited);
-            ctx->app_limited = (app_limited != 0);
-            /* comma = ","; (not useful since last block of function) */
-        }
-
-        fprintf(f, "}]");
+        qlog_fns_cc_update(&ctx->fns, &ctx->path_ctx, NULL, path_id, time, &cc, Send_MTU);
     }
 
     return ret;
@@ -488,12 +428,12 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
     memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
     memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
 
-    qlog->cwin = 0;
-    qlog->bytes_in_transit = 0;
-    qlog->SRTT = PICOQUIC_INITIAL_RTT;
-    qlog->RTT_min = 0;
-    qlog->rtt_sample = 0;
-    qlog->pacing_packet_time = 1;
+    qlog->path_ctx.cwin = 0;
+    qlog->path_ctx.bytes_in_transit = 0;
+    qlog->path_ctx.smoothed_rtt = PICOQUIC_INITIAL_RTT;
+    qlog->path_ctx.rtt_min = 0;
+    qlog->path_ctx.rtt_sample = 0;
+    qlog->path_ctx.pacing_packet_time = 1;
 
     ctx->key_phase_sent_last = 0;
     ctx->key_phase_sent = 0;
