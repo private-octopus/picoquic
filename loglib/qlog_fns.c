@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include "picoquic.h"
 #include "picoquic_internal.h"
 #include "picoquic_utils.h"
@@ -242,6 +243,8 @@ void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint
 
     ctx->event_count++;
 }
+
+
 
 /* Log an event relating to a specific connection */
 void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, va_list vargs)
@@ -977,6 +980,22 @@ void qlog_fns_cc_dump(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_
     }
 }
 
+/* Utility: get the start time in ISO format with microsecond precision */
+char* qlog_fns_get_iso_time(uint64_t current_time, char* buffer, size_t buffer_size)
+{
+    char buff[20];
+    time_t seconds = (time_t)(current_time / 1000000);
+    uint64_t microseconds = current_time % 1000000;
+#ifdef _WINDOWS
+    struct tm tm;
+    gmtime_s(&tm, &seconds);
+#else
+    struct tm tm = *gmtime(&seconds);
+#endif
+    strftime(buff, 20, "%Y-%m-%d %H:%M:%S", &tm);
+    picoquic_sprintf(buffer, buffer_size, NULL, "%s.%06" PRIu64 "Z", buff, microseconds);
+    return buffer;
+}
 
 /* log the start of a connection */
 int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t length,
@@ -990,6 +1009,7 @@ int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t lengt
     }
     else
     {
+        /* TODO: align with file name structure suggested in draft. */
         if (cnx->quic->use_unique_log_names) {
             sprintf_ret = picoquic_sprintf(log_filename, length, NULL, "%s%s%s.%x.%s.qlog",
                 dir_name, PICOQUIC_FILE_SEPARATOR, cid_name, cnx->log_unique,
@@ -1008,11 +1028,54 @@ int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t lengt
     return ret;
 }
 
-void qlog_fns_start_connection_log(picoquic_cnx_t* cnx, void* log_ctx, char const * cid_name)
+void qlog_fns_trace_header(FILE *f, char const* cid_name, char* mode, uint64_t start_time)
 {
-    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
-    FILE* f = ctx->f_txtlog;
+    /* Should be:
+    * {
+    * "file_schema":"urn:ietf:params:qlog:file:contained",
+    * "serialization_format":"application/qlog+json" Media Type",
+    * "title":"picoquic-client qlog",
+    * "description":"picoquic-client qlog id=bcf430a96dea748900342f73b82dbef66fa8f0e9",
+    * "traces":[ 
+    * "trace"{
+    * "title": "Name of this particular trace (short)",
+    * "description": "Description for this trace (long)",
+    * "common_fields": {
+    *    "odcid": "abcde1234",
+    *    "time_format": "relative_to_epoch",
+    *    "reference_time": {
+    *        "clock_type": "system",
+    *        "epoch": "1970-01-01T00:00:00.000Z"
+    *     } 
+    * },
+    * "vantage_point": {
+    *    "name": "backend-67",
+    *    "type": "server"
+    * },
+    * "event_schemas": ["urn:ietf:params:qlog:events:quic"],
+    * "events": [
+    * 
+    * Then, print the events as a comma separated list,
+    *        "... the events..."
+    * And finally close the file:
+    *    ]}
+    * }
+    */
+    char time_buf[64];
 
+    fprintf(f, "{\n\"file_schema\":\"urn:ietf:params:qlog:file:contained\",");
+    fprintf(f, "\"serialization_format\":\"application/qlog+json\",");
+    fprintf(f, "\"title\":\"picoquic-%s qlog\",", mode);
+    fprintf(f, "\"description\":\"picoquic-%s qlog id=%s\",", mode, cid_name);
+    fprintf(f, "\"traces\":[\n{");
+    fprintf(f, "\"title\":\"picoquic-%s qlog\",", mode);
+    fprintf(f, "\"description\":\"picoquic-%s qlog id=%s\",", mode, cid_name);
+    fprintf(f, "\"common_fields\":{\"odcid\":\"%s\",\"time_format\":\"relative_to_epoch\",\"reference_time\":{\"clock_type\":\"system\",\"epoch\":\"%s\"}},",
+        cid_name, qlog_fns_get_iso_time(start_time, time_buf, sizeof(time_buf)));
+    fprintf(f, "\"vantage_point\":{\"name\":\"backend-67\",\"type\":\"%s\"},", mode);
+    fprintf(f, "\"event_schemas\":[\"urn:ietf:params:qlog:events:quic\"],");
+    fprintf(f, "\"events\":[");
+#if 0
     fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
     fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
         cnx->client_mode ? "client" : "server");
@@ -1027,6 +1090,16 @@ void qlog_fns_start_connection_log(picoquic_cnx_t* cnx, void* log_ctx, char cons
     fprintf(f, "\"common_fields\": { \"protocol_type\": \"QUIC_HTTP3\", \"reference_time\": \"%"PRIu64"\"},\n",
         cnx->start_time);
     fprintf(f, "\"events\": [");
+#endif
+}
+
+void qlog_fns_start_connection_log(picoquic_cnx_t* cnx, void* log_ctx, char const* cid_name)
+{
+    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
+    FILE* f = ctx->f_txtlog;
+    int client_mode = cnx->client_mode;
+    char* mode = (client_mode) ? "client" : "server";
+    qlog_fns_trace_header(f, cid_name, mode, ctx->start_time);
     ctx->state = 1;
 }
 

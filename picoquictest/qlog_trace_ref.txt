@@ -1,9 +1,6 @@
-{ "qlog_version": "draft-00", "title": "picoquic", "traces": [
-{ "vantage_point": { "name": "backend-67", "type": "server" },
-"title": "picoquic", "description": "0102030405060708","event_fields": ["relative_time", "category", "event", "data"],
-"configuration": {"time_units": "us"},
-"common_fields": { "protocol_type": "QUIC_HTTP3", "reference_time": "11001"},
-"events": [
+{
+"file_schema":"urn:ietf:params:qlog:file:contained","serialization_format":"application/qlog+json","title":"picoquic-server qlog","description":"picoquic-server qlog id=0102030405060708","traces":[
+{"title":"picoquic-server qlog","description":"picoquic-server qlog id=0102030405060708","common_fields":{"odcid":"0102030405060708","time_format":"relative_to_epoch","reference_time":{"clock_type":"system","epoch":"1970-01-01 00:00:00.011001Z"}},"vantage_point":{"name":"backend-67","type":"server"},"event_schemas":["urn:ietf:params:qlog:events:quic"],"events":[
 [0, "transport", "datagram_received", { "byte_length": 1252, "addr_from" : {"ip_v4": "10.0.0.2", "port_v4":1234}, "addr_to" : {"ip_v4": "10.0.0.1", "port_v4":4321}}],
 [0, "transport", "packet_received", { "packet_type": "initial", "header": { "packet_size": 329, "packet_number": 0, "version": "50435130", "payload_length": 283, "scid": "0203040506070809", "dcid": "0102030405060708" }, "frames": [{ 
     "frame_type": "crypto", "offset": 0, "length": 279}]}],
