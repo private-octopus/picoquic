@@ -809,6 +809,141 @@ int qlog_fns_packet_content_test(void)
     return ret;
 }
 
+#define QLOG_CC_UPDATE_BINLOG "cc5a7e01.client.log"
+#define QLOG_CC_UPDATE_QLOG "cc5a7e01.client.qlog"
+#define QLOG_CC_UPDATE_CONVERTED "qlog_cc_update_test.qlog"
+
+static void qlog_cc_update_dump(picoquic_cnx_t* cnx, int path_index, uint64_t* simulated_time)
+{
+    *simulated_time += 1000;
+    cnx->path[path_index]->is_cc_data_updated = 1;
+    picoquic_log_cc_dump(cnx, *simulated_time);
+}
+
+/* Log the same congestion control updates of two paths in a qlog and in a
+ * binary log. The conversion of the binary log must give the same qlog. */
+int qlog_cc_update_test(void)
+{
+    int ret = 0;
+    picoquic_quic_t* quic = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    uint64_t simulated_time = 0;
+    uint16_t flags = 0;
+    uint64_t log_time = 0;
+    FILE* F = NULL;
+    struct sockaddr_in saddr;
+    const picoquic_connection_id_t initial_cid = {
+        { 0xcc, 0x5a, 0x7e, 1 }, 4
+    };
+
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+
+    quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, NULL, NULL, simulated_time,
+        &simulated_time, NULL, NULL, 0);
+
+    if (quic == NULL || picoquic_set_binlog(quic, ".") != 0 || picoquic_set_qlog(quic, ".") != 0) {
+        ret = -1;
+    }
+    else if ((cnx = picoquic_create_cnx(quic, initial_cid, picoquic_null_connection_id,
+        (struct sockaddr*)&saddr, simulated_time, 0, "test-sni", "test-alpn", 1)) == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Log the path ID in the two logs. */
+        cnx->is_multipath_enabled = 1;
+        cnx->local_parameters.initial_max_path_id = 1;
+        if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 1) < 0) {
+            DBG_PRINTF("%s", "Cannot create the second path.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        picoquic_path_t* path_x = cnx->path[0];
+
+        picoquic_log_new_connection(cnx);
+        path_x->smoothed_rtt = 20000;
+        path_x->rtt_sample = 20000;
+        path_x->rtt_min = 20000;
+        cnx->path[1]->smoothed_rtt = 30000;
+        cnx->path[1]->rtt_sample = 30000;
+        cnx->path[1]->rtt_min = 30000;
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        /* No change */
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        /* Only the smoothed RTT changes */
+        path_x->smoothed_rtt = 21000;
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        /* Only the app limited state changes */
+        path_x->last_bw_estimate_path_limited = 1;
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        /* First update of the other path, then no change on the first path */
+        qlog_cc_update_dump(cnx, 1, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        path_x->bytes_in_transit = 1440;
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        picoquic_log_close_connection(cnx);
+    }
+
+    if (quic != NULL) {
+        picoquic_free(quic);
+    }
+
+    if (ret == 0) {
+        F = picoquic_open_cc_log_file_for_read(QLOG_CC_UPDATE_BINLOG, &flags, &log_time);
+        if (F == NULL) {
+            ret = -1;
+        }
+        else {
+            ret = qlog_convert(&initial_cid, F, QLOG_CC_UPDATE_BINLOG, QLOG_CC_UPDATE_CONVERTED, NULL, flags);
+            F = picoquic_file_close(F);
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_test_compare_text_files(QLOG_CC_UPDATE_QLOG, QLOG_CC_UPDATE_CONVERTED);
+        if (ret != 0) {
+            DBG_PRINTF("%s", "The qlog and the converted binary log are different.");
+        }
+    }
+
+    return ret;
+}
+
+#define QLOG_PATH_CONTEXT_LIMIT_FILE "qlog_path_context_limit_test.txt"
+
+/* Without a connection, the number of path contexts must stay within the limit. */
+int qlog_path_context_limit_test(void)
+{
+    qlog_fns_context_t ctx = { 0 };
+    qlog_fns_path_context_t cc = { 0 };
+    int nb_ctx = 0;
+    int ret = 0;
+
+    ctx.f_txtlog = picoquic_file_open(QLOG_PATH_CONTEXT_LIMIT_FILE, "w");
+    if (ctx.f_txtlog == NULL) {
+        ret = -1;
+    }
+    else {
+        for (uint64_t path_id = 0; path_id < 2 * QLOG_FNS_MAX_PATH_CONTEXTS; path_id++) {
+            qlog_fns_cc_update(&ctx, NULL, path_id, 0, &cc, 1500);
+        }
+        for (qlog_fns_path_context_t* path_ctx = ctx.first_path_ctx; path_ctx != NULL; path_ctx = path_ctx->next) {
+            nb_ctx++;
+        }
+        if (nb_ctx != QLOG_FNS_MAX_PATH_CONTEXTS || ctx.first_path_ctx->unique_path_id != QLOG_FNS_MAX_PATH_CONTEXTS) {
+            DBG_PRINTF("Path context limit test, %d contexts", nb_ctx);
+            ret = -1;
+        }
+        qlog_fns_delete_path_contexts(&ctx);
+        ctx.f_txtlog = picoquic_file_close(ctx.f_txtlog);
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -855,6 +990,14 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_fns_packet_content_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_cc_update_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_path_context_limit_test();
 	}
 
 	return ret;
