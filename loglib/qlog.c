@@ -34,8 +34,6 @@
 
 typedef struct qlog_context_st {
     qlog_fns_context_t fns;
-
-    qlog_fns_path_context_t path_ctx;
 } qlog_context_t;
 
 int qlog_chars(FILE* f, bytestream* s, uint64_t l)
@@ -373,7 +371,7 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
         cc.cc_param = cc_param;
         cc.last_bw_estimate_path_limited = (app_limited != 0);
 
-        qlog_fns_cc_update(&ctx->fns, &ctx->path_ctx, NULL, path_id, time, &cc, Send_MTU);
+        qlog_fns_cc_update(&ctx->fns, NULL, path_id, time, &cc, Send_MTU);
     }
 
     return ret;
@@ -428,12 +426,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
     memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
     memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
 
-    qlog->path_ctx.cwin = 0;
-    qlog->path_ctx.bytes_in_transit = 0;
-    qlog->path_ctx.smoothed_rtt = PICOQUIC_INITIAL_RTT;
-    qlog->path_ctx.rtt_min = 0;
-    qlog->path_ctx.rtt_sample = 0;
-    qlog->path_ctx.pacing_packet_time = 1;
+    qlog_fns_delete_path_contexts(ctx);
 
     ctx->key_phase_sent_last = 0;
     ctx->key_phase_sent = 0;
@@ -526,6 +519,7 @@ int qlog_convert(const picoquic_connection_id_t* cid, FILE* f_binlog, const char
         if (qlog.fns.state == 1) {
             qlog_connection_end(0, &qlog);
         }
+        qlog_fns_delete_path_contexts(&qlog.fns);
 
         picoquic_file_close(f_txtlog);
     }

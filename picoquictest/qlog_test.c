@@ -813,15 +813,15 @@ int qlog_fns_packet_content_test(void)
 #define QLOG_CC_UPDATE_QLOG "cc5a7e01.client.qlog"
 #define QLOG_CC_UPDATE_CONVERTED "qlog_cc_update_test.qlog"
 
-static void qlog_cc_update_dump(picoquic_cnx_t* cnx, uint64_t* simulated_time)
+static void qlog_cc_update_dump(picoquic_cnx_t* cnx, int path_index, uint64_t* simulated_time)
 {
     *simulated_time += 1000;
-    cnx->path[0]->is_cc_data_updated = 1;
+    cnx->path[path_index]->is_cc_data_updated = 1;
     picoquic_log_cc_dump(cnx, *simulated_time);
 }
 
-/* Log the same congestion control updates in a qlog and in a binary log.
- * The conversion of the binary log must give the same qlog. */
+/* Log the same congestion control updates of two paths in a qlog and in a
+ * binary log. The conversion of the binary log must give the same qlog. */
 int qlog_cc_update_test(void)
 {
     int ret = 0;
@@ -851,23 +851,39 @@ int qlog_cc_update_test(void)
         ret = -1;
     }
     else {
+        /* Log the path ID in the two logs. */
+        cnx->is_multipath_enabled = 1;
+        cnx->local_parameters.initial_max_path_id = 1;
+        if (picoquic_create_path(cnx, simulated_time, NULL, (struct sockaddr*)&saddr, 0, 1) < 0) {
+            DBG_PRINTF("%s", "Cannot create the second path.");
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
         picoquic_path_t* path_x = cnx->path[0];
 
         picoquic_log_new_connection(cnx);
         path_x->smoothed_rtt = 20000;
         path_x->rtt_sample = 20000;
         path_x->rtt_min = 20000;
-        qlog_cc_update_dump(cnx, &simulated_time);
+        cnx->path[1]->smoothed_rtt = 30000;
+        cnx->path[1]->rtt_sample = 30000;
+        cnx->path[1]->rtt_min = 30000;
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
         /* No change */
-        qlog_cc_update_dump(cnx, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
         /* Only the smoothed RTT changes */
         path_x->smoothed_rtt = 21000;
-        qlog_cc_update_dump(cnx, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
         /* Only the app limited state changes */
         path_x->last_bw_estimate_path_limited = 1;
-        qlog_cc_update_dump(cnx, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
+        /* First update of the other path, then no change on the first path */
+        qlog_cc_update_dump(cnx, 1, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
         path_x->bytes_in_transit = 1440;
-        qlog_cc_update_dump(cnx, &simulated_time);
+        qlog_cc_update_dump(cnx, 0, &simulated_time);
         picoquic_log_close_connection(cnx);
     }
 
