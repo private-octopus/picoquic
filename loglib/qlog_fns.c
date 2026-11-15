@@ -112,7 +112,15 @@ qlog_fns_path_context_t* qlog_fns_get_path_context(qlog_fns_context_t* ctx, pico
         nb_ctx++;
     }
 
-    if (cnx != NULL && nb_ctx > cnx->nb_paths) {
+    if (cnx == NULL) {
+        if (nb_ctx > QLOG_FNS_MAX_PATH_CONTEXTS) {
+            /* No connection to trim the list: delete the oldest context */
+            qlog_fns_path_context_t* oldest_ctx = ctx->first_path_ctx;
+            ctx->first_path_ctx = oldest_ctx->next;
+            free(oldest_ctx);
+        }
+    }
+    else if (nb_ctx > cnx->nb_paths) {
         /* Too many paths, try to trim the list */
         qlog_fns_trim_path_contexts(ctx, cnx, path_ctx);
     }

@@ -28,6 +28,9 @@ extern "C" {
 #include <stdio.h>
 #include "picoquic.h"
 
+    /* Largest number of path contexts when there is no connection to trim them. */
+#define QLOG_FNS_MAX_PATH_CONTEXTS 64
+
     typedef struct st_qlog_fns_path_context_t {
         struct st_qlog_fns_path_context_t* next;
         uint64_t unique_path_id;
@@ -92,7 +95,7 @@ extern "C" {
     void qlog_fns_retry_token(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
     /* Write the congestion control events of a path: the values of cc that
      * differ from the values in the context of the path. If cnx is NULL,
-     * the path contexts are not trimmed. */
+     * the function keeps at most QLOG_FNS_MAX_PATH_CONTEXTS path contexts. */
     void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t unique_path_id,
         uint64_t current_time, const qlog_fns_path_context_t* cc, uint64_t send_mtu);
     /* Free the path contexts. */

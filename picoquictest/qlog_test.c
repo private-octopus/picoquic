@@ -912,6 +912,38 @@ int qlog_cc_update_test(void)
     return ret;
 }
 
+#define QLOG_PATH_CONTEXT_LIMIT_FILE "qlog_path_context_limit_test.txt"
+
+/* Without a connection, the number of path contexts must stay within the limit. */
+int qlog_path_context_limit_test(void)
+{
+    qlog_fns_context_t ctx = { 0 };
+    qlog_fns_path_context_t cc = { 0 };
+    int nb_ctx = 0;
+    int ret = 0;
+
+    ctx.f_txtlog = picoquic_file_open(QLOG_PATH_CONTEXT_LIMIT_FILE, "w");
+    if (ctx.f_txtlog == NULL) {
+        ret = -1;
+    }
+    else {
+        for (uint64_t path_id = 0; path_id < 2 * QLOG_FNS_MAX_PATH_CONTEXTS; path_id++) {
+            qlog_fns_cc_update(&ctx, NULL, path_id, 0, &cc, 1500);
+        }
+        for (qlog_fns_path_context_t* path_ctx = ctx.first_path_ctx; path_ctx != NULL; path_ctx = path_ctx->next) {
+            nb_ctx++;
+        }
+        if (nb_ctx != QLOG_FNS_MAX_PATH_CONTEXTS || ctx.first_path_ctx->unique_path_id != QLOG_FNS_MAX_PATH_CONTEXTS) {
+            DBG_PRINTF("Path context limit test, %d contexts", nb_ctx);
+            ret = -1;
+        }
+        qlog_fns_delete_path_contexts(&ctx);
+        ctx.f_txtlog = picoquic_file_close(ctx.f_txtlog);
+    }
+
+    return ret;
+}
+
 int qlog_error_test(void)
 {
 	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
@@ -962,6 +994,10 @@ int qlog_error_test(void)
 
 	if (ret == 0) {
 		ret = qlog_cc_update_test();
+	}
+
+	if (ret == 0) {
+		ret = qlog_path_context_limit_test();
 	}
 
 	return ret;
