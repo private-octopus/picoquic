@@ -242,6 +242,20 @@ void qlog_fns_text_int(FILE* f, const char* text, int64_t value)
     }
 }
 
+void qlog_fns_timestamp(FILE* f, const char* text, int64_t t_stamp)
+{
+    int64_t micros = t_stamp % 1000;
+    char buf[5];
+    qlog_fns_text_int(f, text, t_stamp / 1000);
+    buf[0] = '.';
+    for (int i = 0; i < 3; i++) {
+        buf[3 - i] = (char)('0' + (micros % 10));
+        micros /= 10;
+    }
+    buf[4] = 0;
+    fputs(buf, f);
+}
+
 /* Helper: write the event header */
 
 void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
@@ -260,12 +274,12 @@ void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint
 #ifdef QLOGv2
     /* expecting the new format, e.g.:
     * {
-    *     "time": 1553986553572,
+    *     "time": 1553986553.572,
     *     "name": "quic:packet_received",
     *     "data": { ... }
     * },
     */
-    qlog_fns_text_int(f, "{\"time\":", delta_time);
+    qlog_fns_timestamp(f, "{\"time\":", delta_time);
     fputs(",\"name\":\"", f);
     fputs(event_class, f);
     fputc(':', f);
@@ -1052,9 +1066,10 @@ char* qlog_fns_get_iso_time(uint64_t current_time, char* buffer, size_t buffer_s
     struct tm tm;
     gmtime_s(&tm, &seconds);
 #else
-    struct tm tm = *gmtime(&seconds);
+    struct tm;
+    gmtime_r(&seconds, &tm);
 #endif
-    strftime(buff, 20, "%Y-%m-%d %H:%M:%S", &tm);
+    strftime(buff, 20, "%Y-%m-%dT%H:%M:%S", &tm);
     picoquic_sprintf(buffer, buffer_size, NULL, "%s.%06" PRIu64 "Z", buff, microseconds);
     return buffer;
 }
@@ -1090,7 +1105,7 @@ int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t lengt
     return ret;
 }
 
-void qlog_fns_trace_header(FILE *f, char const* cid_name, char* mode, uint64_t start_time)
+void qlog_fns_trace_header(FILE *f, char const* cid_name, const char* mode, uint64_t start_time)
 {
 #ifdef QLOGv2
     char time_buf[64];
