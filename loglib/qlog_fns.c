@@ -933,9 +933,10 @@ void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t u
 
     if (path_ctx != NULL) {
         if (cc->cc_state != path_ctx->cc_state) {
-            qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "recovery", "congestion_state_updated");
-            fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64 "}]",
+            qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, QLOG_CLASS("quic", "recovery"), "congestion_state_updated");
+            fprintf(f, "\"old\": \"%" PRIu64 "\",\"new\": \"%" PRIu64 "\",\"cc_param\": %" PRIu64,
                 path_ctx->cc_state, cc->cc_state, cc->cc_param);
+            qlog_fns_event_end(f);
             path_ctx->cc_state = cc->cc_state;
             path_ctx->cc_param = cc->cc_param;
         }
@@ -950,20 +951,20 @@ void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t u
 #else
             cc->smoothed_rtt != path_ctx->smoothed_rtt ||
 #endif
-                cc->rtt_min != path_ctx->rtt_min ||
-                cc->bytes_in_transit != path_ctx->bytes_in_transit ||
-                cc->pacing_packet_time != path_ctx->pacing_packet_time
+            cc->rtt_min != path_ctx->rtt_min ||
+            cc->bytes_in_transit != path_ctx->bytes_in_transit ||
+            cc->pacing_packet_time != path_ctx->pacing_packet_time
 #if 1
             /* Bug compatibility with first implementation */
 #else
             ||
-                cc->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited
+            cc->last_bw_estimate_path_limited != path_ctx->last_bw_estimate_path_limited
 #endif
             ) {
             /* Something changed. Report the event. */
             char* comma = "";
 
-            qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, "recovery", "metrics_updated");
+            qlog_fns_event_start(ctx, NULL, unique_path_id, current_time, QLOG_CLASS("quic", "recovery"), "metrics_updated");
 
             if (cc->cwin != path_ctx->cwin) {
                 (void)fputs(comma, f);
@@ -1015,12 +1016,13 @@ void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t u
                 /* comma = ","; (not useful since last block of function) */
             }
 
-        qlog_fns_event_end(f);
-        ctx->event_count++;
+            qlog_fns_event_end(f);
+            ctx->event_count++;
+        }
     }
 }
 
-void qlog_fns_cc_dump(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_path_t* path_x, uint64_t current_time)
+void qlog_fns_cc_dump(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, uint64_t current_time)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     qlog_fns_path_context_t cc = { 0 };
