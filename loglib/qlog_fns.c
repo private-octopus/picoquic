@@ -316,10 +316,12 @@ void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const
 {
     FILE* f = ctx->f_txtlog;
 
-    qlog_fns_event_start(ctx, NULL, 0, current_time, "info", "message");
+    qlog_fns_event_start(ctx, NULL, 0, current_time,
+        QLOG_CLASS("loglevel", "info"), QLOG_CLASS("info", "message"));
     fprintf(f, " \"message\": \"");
     qlog_fns_char_content(f, message, message_len);
-    fprintf(f, "\"}]");
+    fputc('"', f);
+    qlog_fns_event_end(f);
 }
 
 /* Log an event relating to a specific connection */
@@ -330,8 +332,6 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
     char message_text[2048];
     size_t message_len;
 
-    qlog_fns_event_start(ctx, NULL, 0, picoquic_get_quic_time(cnx->quic),
-        QLOG_CLASS("loglevel", "info"), QLOG_CLASS("info","message"));
 #ifdef _WINDOWS
     size_t written = vsnprintf_s(message_text, sizeof(message_text),
         _TRUNCATE, fmt, vargs);
@@ -702,7 +702,7 @@ void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int is
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, NULL, 0, current_time, "transport", "parameters_set");
+    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), "parameters_set");
 
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
     if (sni_len > 0) {
@@ -924,7 +924,7 @@ void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int i
     uint8_t* params, size_t param_length)
 {
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, NULL, 0, current_time, "transport", "parameters_set");
+    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), "parameters_set");
 
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
 
@@ -932,7 +932,8 @@ void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int i
         qlog_fns_transport_extensions(f, params, param_length);
     }
 
-    fprintf(f, "}]");
+    qlog_fns_event_end(f);
+}
 
 void qlog_fns_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     size_t param_length, uint8_t* params)
