@@ -669,7 +669,7 @@ void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number
     if (has_packet_size) {
         fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
     }
-    fprintf(f, "}}]");
+    fprintf(f, "}");
 }
 
 /* Log packet lost events */
@@ -686,6 +686,7 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
     qlog_fns_packet_lost_data(ctx->f_txtlog, ptype, sequence_number,
         (const uint8_t*)trigger, (trigger == NULL) ? 0 : strlen(trigger),
         (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, 1, packet_size);
+    qlog_fns_event_end(ctx->f_txtlog);
 }
 
 /* log negotiated ALPN */
