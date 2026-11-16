@@ -5,13 +5,12 @@
 {"time":0.000,"name":"quic:packet_received","path_id":0,"data":{ "packet_type": "initial", "header": { "packet_size": 338, "packet_number": 0, "version": "50435130", "payload_length": 292, "scid": "0908070605040302", "dcid": "0807060504030201" }, "frames": [{ 
     "frame_type": "crypto", "offset": 0, "length": 288}]}},
 {"time":0.000,"name":"loglevel:info","path_id":0,"data":{ "message": "ALPN[0] matches default alpn (picoquic-test)"}},
-{"time":0.000,"name":"quic:parameters_set","path_id":0,"data":{
-    "owner": "remote",
+{"time":0.000,"name":"quic:alpn_information","path_id":0,"data":{
     "sni": "test.example.com",
-    "proposed_alpn": ["picoquic-test"],
-    "alpn": "picoquic-test"}},
+    "client_alpns": ["picoquic-test"],
+    "chosen_alpn": "picoquic-test"}},
 {"time":0.000,"name":"quic:parameters_set","path_id":0,"data":{
-    "owner": "remote",
+    "initiator": "remote",
     "initial_max_stream_data_bidi_local" : 2097152,
     "initial_max_data" : 1048576,
     "initial_max_streams_bidi" : 512,
@@ -28,7 +27,7 @@
     "enable_time_stamp" : 3,
     "initial_max_path_id" : 2}},
 {"time":0.000,"name":"quic:parameters_set","path_id":0,"data":{
-    "owner": "local",
+    "initiator": "local",
     "initial_max_stream_data_bidi_local" : 2097152,
     "initial_max_data" : 1048576,
     "initial_max_streams_bidi" : 512,
