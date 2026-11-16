@@ -491,7 +491,7 @@ void qlog_fns_packet_end(qlog_fns_context_t* ctx)
 {
     FILE* f = ctx->f_txtlog;
 
-    if (ctx->packet_type != picoquic_packet_version_negotiation ||
+    if (ctx->packet_type != picoquic_packet_version_negotiation &&
         ctx->packet_type != picoquic_packet_retry) {
         fputc(']', f);
     }
@@ -1067,7 +1067,7 @@ char* qlog_fns_get_iso_time(uint64_t current_time, char* buffer, size_t buffer_s
     struct tm tm;
     gmtime_s(&tm, &seconds);
 #else
-    struct tm;
+    struct tm tm;
     gmtime_r(&seconds, &tm);
 #endif
     strftime(buff, 20, "%Y-%m-%dT%H:%M:%S", &tm);
