@@ -100,6 +100,15 @@ extern "C" {
         uint64_t current_time, const qlog_fns_path_context_t* cc, uint64_t send_mtu);
     /* Free the path contexts. */
     void qlog_fns_delete_path_contexts(qlog_fns_context_t* ctx);
+    /* Write an info message event. */
+    void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const uint8_t* message, size_t message_len);
+    /* Write the ALPN event: the SNI, the proposed ALPN list and the selected ALPN. */
+    void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+        uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+        const ptls_iovec_t* alpn_list, size_t alpn_count);
+    /* Write the transport parameters event. */
+    void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+        uint8_t* params, size_t param_length);
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
     /* Write a text and a number, with the same output as

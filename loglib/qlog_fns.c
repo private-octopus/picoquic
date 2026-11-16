@@ -263,15 +263,25 @@ void qlog_fns_event_start(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint
     ctx->event_count++;
 }
 
+/* Write an info message event. */
+void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const uint8_t* message, size_t message_len)
+{
+    FILE* f = ctx->f_txtlog;
+
+    qlog_fns_event_start(ctx, NULL, 0, current_time, "info", "message");
+    fprintf(f, " \"message\": \"");
+    qlog_fns_char_content(f, message, message_len);
+    fprintf(f, "\"}]");
+}
+
 /* Log an event relating to a specific connection */
 void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, va_list vargs)
 {
     qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
-    FILE* f = ctx->f_txtlog;
+    uint64_t current_time = picoquic_get_quic_time(cnx->quic);
     char message_text[2048];
     size_t message_len;
 
-    qlog_fns_event_start(ctx, NULL, 0, picoquic_get_quic_time(cnx->quic), "info", "message");
 #ifdef _WINDOWS
     size_t written = vsnprintf_s(message_text, sizeof(message_text),
         _TRUNCATE, fmt, vargs);
@@ -286,10 +296,7 @@ void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, 
         message_len = written;
     }
 #endif
-    fprintf(f, " \"message\": \"");
-    qlog_fns_char_content(f, (uint8_t*)message_text, message_len);
-    fprintf(f, "\"}]");
-    ctx->event_count++;
+    qlog_fns_info_message(ctx, current_time, (uint8_t*)message_text, message_len);
 }
 
 /* Log arrival or departure of an UDP datagram on a connection */
@@ -639,14 +646,13 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
         (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, 1, packet_size);
 }
 
-/* log negotiated ALPN */
-void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
+/* Write the ALPN event: the SNI, the proposed ALPN list and the selected ALPN. */
+void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
-    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, NULL, 0, picoquic_get_quic_time(cnx->quic), "transport", "parameters_set");
+    qlog_fns_event_start(ctx, NULL, 0, current_time, "transport", "parameters_set");
 
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
     if (sni_len > 0) {
@@ -672,6 +678,15 @@ void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
     }
 
     fprintf(f, "}]");
+}
+
+/* log negotiated ALPN */
+void qlog_fns_negotiated_alpn(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
+    uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+    const ptls_iovec_t* alpn_list, size_t alpn_count)
+{
+    qlog_fns_alpn_update((qlog_fns_context_t*)log_ctx, picoquic_get_quic_time(cnx->quic), is_local,
+        sni, sni_len, alpn, alpn_len, alpn_list, alpn_count);
 }
 
 /* log transport extension -- either formatted by the loacl peer (is_local=1) or received from remote peer */
@@ -854,20 +869,27 @@ void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length)
     }
 }
 
-void qlog_fns_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
-    size_t param_length, uint8_t* params)
+/* Write the transport parameters event. */
+void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+    uint8_t* params, size_t param_length)
 {
-    qlog_fns_context_t* ctx = (qlog_fns_context_t*)log_ctx;
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, NULL, 0, picoquic_get_quic_time(cnx->quic), "transport", "parameters_set");
+    qlog_fns_event_start(ctx, NULL, 0, current_time, "transport", "parameters_set");
 
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
 
-    qlog_fns_transport_extensions(f, params, param_length);
+    if (param_length > 0) {
+        qlog_fns_transport_extensions(f, params, param_length);
+    }
 
     fprintf(f, "}]");
+}
 
-    ctx->event_count++;
+void qlog_fns_transport_extension(picoquic_cnx_t* cnx, void* log_ctx, int is_local,
+    size_t param_length, uint8_t* params)
+{
+    qlog_fns_param_update((qlog_fns_context_t*)log_ctx, picoquic_get_quic_time(cnx->quic), is_local,
+        params, param_length);
 }
 
 /* log TLS ticket */
