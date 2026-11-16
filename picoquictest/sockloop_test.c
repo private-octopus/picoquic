@@ -2251,7 +2251,7 @@ static int sockloop_qmux_win_server_open(sockloop_qmux_win_server_t* srv, uint16
             PICOQUIC_TEST_FILE_SERVER_CERT) != 0 ||
         picoquic_get_input_path(test_server_key_file, sizeof(test_server_key_file), picoquic_solution_dir,
             PICOQUIC_TEST_FILE_SERVER_KEY) != 0 ||
-        (srv->qmux = picoqmux_create(16, test_server_cert_file, test_server_key_file, NULL,
+        (srv->qmux = picoqmux_create(2, test_server_cert_file, test_server_key_file, NULL,
             PICOQUIC_TEST_ALPN, sockloop_qmux_callback, &srv->spec, NULL, 0, NULL, NULL, NULL, 0)) == NULL ||
         picoquic_packet_loop_open_qmux_sockets(srv->qmux, &srv->sqmux_ctx, &srv->nb_qmux_sockets,
             &srv->max_qmux_sockets, port) != 0) {
