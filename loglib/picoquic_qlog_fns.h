@@ -123,9 +123,18 @@ extern "C" {
     /* Write the data of a packet event after its header, and close the event. */
     void qlog_fns_packet_lost_data(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t path_ide, uint64_t current_time,
         uint64_t ptype, uint64_t sequence_number, const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
+    /* Write a packet_lost, packet_dropped or packet_buffered event. */
+    void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
+        const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
         int has_packet_size, uint64_t packet_size);
-    void qlog_fns_packet_dropped_data(FILE* f, uint64_t ptype, uint64_t packet_size, uint64_t err);
-    void qlog_fns_packet_buffered_data(FILE* f, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
+    void qlog_fns_packet_dropped_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, uint64_t packet_size, uint64_t err);
+    void qlog_fns_packet_buffered_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
+    /* Write the header of the qlog file, and the end of the qlog file. */
+    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time);
+    void qlog_fns_trace_end(FILE* f);
 
 #ifdef __cplusplus
 }
