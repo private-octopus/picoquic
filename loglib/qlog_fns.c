@@ -706,15 +706,20 @@ void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int UN
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(is_local);
 #endif
-    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), 
-        QLOG_CLASS("alpn_information", "parameters_set"));
 
     if (sni_len > 0) {
-        fprintf(f, "\n    \"sni\": ");
-        qlog_fns_chars(f, sni, sni_len);
-        need_comma = 1;
+        uint8_t sni_text[256];
+        memcpy(sni_text, "sni: ", 5);
+        if (sni_len > 250) {
+            sni_len = 259;
+        }
+        memcpy(sni_text + 5, sni, sni_len);
+        sni_text[sni_len + 5] = 0;
+        qlog_fns_info_message(ctx, current_time, sni_text, sni_len + 5);
     }
 
+    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), 
+        QLOG_CLASS("alpn_information", "parameters_set"));
     if (alpn_count > 0) {
         if (need_comma) {
             fputs(",", f);
@@ -729,7 +734,9 @@ void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int UN
             if (i != 0) {
                 fprintf(f, ", ");
             }
+            fprintf(f, "\n        {\"string_value\": ");
             qlog_fns_chars(f, alpn_list[i].base, alpn_list[i].len);
+            fputc('}', f);
         }
         fprintf(f, "]");
         need_comma = 1;
@@ -737,14 +744,16 @@ void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int UN
 
     if (alpn_len > 0) {
         if (need_comma) {
-            fputs(",", f);
+            fputc(',', f);
         }
 #ifdef QLOGv2
-        fprintf(f, "\n    \"chosen_alpn\": ");
+        fprintf(f, "\n    \"chosen_alpn\":{\"string_value\": ");
 #else
         fprintf(f, ",\n    \"alpn\": ");
 #endif
         qlog_fns_chars(f, alpn, alpn_len);
+        fputc('}', f);
+        need_comma = 1;
     }
 
     qlog_fns_event_end(f);

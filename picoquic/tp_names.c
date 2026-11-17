@@ -6,16 +6,16 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
 
     switch (tp_number) {
     case picoquic_tp_original_connection_id:
-        tp_name = "original_connection_id";
+        tp_name = "original_destination_connection_id";
         break;
     case picoquic_tp_idle_timeout:
-        tp_name = "idle_timeout";
+        tp_name = "mac_idle_timeout";
         break;
     case picoquic_tp_stateless_reset_token:
         tp_name = "stateless_reset_token";
         break;
     case picoquic_tp_max_packet_size:
-        tp_name = "max_packet_size";
+        tp_name = "max_udp_payload_size";
         break;
     case picoquic_tp_initial_max_data:
         tp_name = "initial_max_data";
@@ -42,19 +42,19 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
         tp_name = "max_ack_delay";
         break;
     case picoquic_tp_disable_migration:
-        tp_name = "disable_migration";
+        tp_name = "disable_active_migration";
         break;
     case picoquic_tp_server_preferred_address:
-        tp_name = "server_preferred_address";
+        tp_name = "preferred_address";
         break;
     case picoquic_tp_active_connection_id_limit:
         tp_name = "active_connection_id_limit";
         break;
     case picoquic_tp_retry_connection_id:
-        tp_name = "retry_connection_id";
+        tp_name = "retry_souce_connection_id";
         break;
     case picoquic_tp_handshake_connection_id:
-        tp_name = "handshake_connection_id";
+        tp_name = "initial_source_connection_id";
         break;
     case picoquic_tp_max_datagram_frame_size:
         tp_name = "max_datagram_frame_size";
