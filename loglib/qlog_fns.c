@@ -311,6 +311,36 @@ void qlog_fns_event_end(FILE*f)
     (void)fputs("}]", f);
 #endif
 }
+
+
+
+/* helper: write a packet header */
+void qlog_fns_packet_header(FILE* f, uint64_t ptype, uint64_t sequence_number,
+    const uint8_t * dcid, size_t dcid_length)
+{
+    char const* ptype_name = picoquic_packet_type_name(ptype);
+
+    fprintf(f, "\n    \"header\": {");
+    if (strcmp(ptype_name, "unknown") == 0) {
+        fprintf(f, "\n        \"packet_type_bytes\" : %" PRIu64, ptype);
+    }
+    else {
+        fprintf(f, "\n        \"packet_type\" : \"%s\"", ptype_name);
+    }
+    if (ptype == picoquic_packet_initial ||
+        ptype == picoquic_packet_handshake ||
+        ptype == picoquic_packet_0rtt_protected ||
+        ptype == picoquic_packet_1rtt_protected) {
+        fprintf(f, ",\n        \"packet_number\" : %" PRIu64, sequence_number);
+    }
+    if (dcid_length > 0) {
+        fprintf(f, ",\n        \"dcid\" : ");
+        (void)qlog_frame_hex_string(f, dcid, dcid + dcid_length, dcid_length);
+    }
+    fprintf(f, "}");
+}
+
+
 /* Write an info message event. */
 void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const uint8_t* message, size_t message_len)
 {
@@ -323,6 +353,7 @@ void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const
     fputc('"', f);
     qlog_fns_event_end(f);
 }
+
 
 /* Log an event relating to a specific connection */
 void qlog_fns_app_message(picoquic_cnx_t* cnx, void * log_ctx, const char* fmt, va_list vargs)
@@ -656,12 +687,27 @@ void qlog_fns_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_
 }
 
 /* Write the data of a packet_lost event, and close the event. */
-void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number,
+void qlog_fns_packet_lost_data(qlog_fns_context_t* ctx, picoquic_path_t * path_x, uint64_t path_id,
+    uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
     const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
     int has_packet_size, uint64_t packet_size)
 {
+    FILE* f = ctx->f_txtlog;
+    qlog_fns_event_start(ctx, path_x, path_id, current_time, QLOG_CLASS("quic", "recovery"), "packet_lost");
+#ifdef QLOGv2
+    qlog_fns_packet_header(f, ptype, sequence_number, dcid, dcid_length);
+    if (trigger_length > 0) {
+        fprintf(f, ",\n    \"trigger\": ");
+        qlog_fns_chars(f, trigger, trigger_length);
+    }
+    /* There is no "packet size" indication, but we add it just in case */
+    if (has_packet_size) {
+        fprintf(f, ",\n    \"packet_size\" : %" PRIu64, packet_size);
+    }
+#else
     fprintf(f, "\n    \"packet_type\" : \"%s\"", picoquic_packet_type_name(ptype));
     fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence_number);
+
     if (trigger_length > 0) {
         fprintf(f, ",\n    \"trigger\": ");
         qlog_fns_chars(f, trigger, trigger_length);
@@ -677,6 +723,8 @@ void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number
         fprintf(f, ",\n        \"packet_size\" : %" PRIu64, packet_size);
     }
     fprintf(f, "}");
+#endif
+    qlog_fns_event_end(f);
 }
 
 /* Log packet lost events */
@@ -689,11 +737,9 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
     UNREFERENCED_PARAMETER(cnx);
 #endif
 
-    qlog_fns_event_start(ctx, path_x, 0, current_time, QLOG_CLASS("quic", "recovery"), "packet_lost");
-    qlog_fns_packet_lost_data(ctx->f_txtlog, ptype, sequence_number,
+    qlog_fns_packet_lost_data(ctx, path_x, 0, current_time, ptype, sequence_number,
         (const uint8_t*)trigger, (trigger == NULL) ? 0 : strlen(trigger),
         (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, 1, packet_size);
-    qlog_fns_event_end(ctx->f_txtlog);
 }
 
 /* Write the ALPN event: the SNI, the proposed ALPN list and the selected ALPN. */

@@ -115,7 +115,6 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
 int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t sequence = 0;
     uint64_t trigger_length = 0;
@@ -136,8 +135,7 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     }
     has_packet_size = (byteread_vint(s, &packet_size) == 0);
 
-    qlog_fns_event_start(ctx, NULL, path_id, time, "recovery", "packet_lost");
-    qlog_fns_packet_lost_data(f, packet_type, sequence, trigger, (size_t)trigger_length,
+    qlog_fns_packet_lost_data(ctx, NULL, path_id, time, packet_type, sequence, trigger, (size_t)trigger_length,
         dcid, (size_t)dcid_length, has_packet_size, packet_size);
 
     return 0;
