@@ -708,34 +708,63 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
 }
 
 /* Write the ALPN event: the SNI, the proposed ALPN list and the selected ALPN. */
-void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int UNUSED(is_local),
     uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
     const ptls_iovec_t* alpn_list, size_t alpn_count)
 {
     FILE* f = ctx->f_txtlog;
-    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), "parameters_set");
+    int need_comma = 0;
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(is_local);
+#endif
 
-    fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
     if (sni_len > 0) {
-        fprintf(f, ",\n    \"sni\": ");
-        qlog_fns_chars(f, sni, sni_len);
+        uint8_t sni_text[256];
+        memcpy(sni_text, "sni: ", 5);
+        if (sni_len > 250) {
+            sni_len = 259;
+        }
+        memcpy(sni_text + 5, sni, sni_len);
+        sni_text[sni_len + 5] = 0;
+        qlog_fns_info_message(ctx, current_time, sni_text, sni_len + 5);
     }
 
+    qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), 
+        QLOG_CLASS("alpn_information", "parameters_set"));
     if (alpn_count > 0) {
+        if (need_comma) {
+            fputs(",", f);
+        }
+#ifdef QLOGv2
+        fprintf(f, "\n    \"client_alpns\": [");
+#else
         fprintf(f, ",\n    \"proposed_alpn\": [");
+#endif
 
         for (size_t i = 0; i < alpn_count; i++) {
             if (i != 0) {
                 fprintf(f, ", ");
             }
+            fprintf(f, "\n        {\"string_value\": ");
             qlog_fns_chars(f, alpn_list[i].base, alpn_list[i].len);
+            fputc('}', f);
         }
         fprintf(f, "]");
+        need_comma = 1;
     }
 
     if (alpn_len > 0) {
+        if (need_comma) {
+            fputc(',', f);
+        }
+#ifdef QLOGv2
+        fprintf(f, "\n    \"chosen_alpn\":{\"string_value\": ");
+#else
         fprintf(f, ",\n    \"alpn\": ");
+#endif
         qlog_fns_chars(f, alpn, alpn_len);
+        fputc('}', f);
+        need_comma = 1;
     }
 
     qlog_fns_event_end(f);
@@ -936,8 +965,11 @@ void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int i
 {
     FILE* f = ctx->f_txtlog;
     qlog_fns_event_start(ctx, NULL, 0, current_time, QLOG_CLASS("quic", "transport"), "parameters_set");
-
+#ifdef QLOGv2
+    fprintf(f, "\n    \"initiator\": \"%s\"", (is_local) ? "local" : "remote");
+#else
     fprintf(f, "\n    \"owner\": \"%s\"", (is_local) ? "local" : "remote");
+#endif
 
     if (param_length > 0) {
         qlog_fns_transport_extensions(f, params, param_length);
