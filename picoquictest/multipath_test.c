@@ -3470,6 +3470,92 @@ int multipath_idle_rotation_test(void)
     return ret;
 }
 
+/* Run the path cleanup, and check whether the path is demoted. */
+static int multipath_idle_path_check(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, int expect_demoted)
+{
+    int ret = 0;
+    uint64_t next_wake_time = UINT64_MAX;
+
+    picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+    if (path_x->path_is_demoted != (unsigned int)expect_demoted) {
+        DBG_PRINTF("Time %" PRIu64 ", last sent %" PRIu64 ", last received %" PRIu64 ", demoted %d, expected %d",
+            current_time, path_x->latest_sent_time, path_x->last_packet_received_at,
+            path_x->path_is_demoted, expect_demoted);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The idle test of the path cleanup abandons a path only if nothing was sent
+ * and nothing was received on it for the idle timeout. */
+int multipath_idle_path_test(void)
+{
+    uint64_t simulated_time = 0;
+    int path_index = -1;
+    int incoming_index = -1;
+    struct sockaddr_in addr_local;
+    struct sockaddr_in addr_peer;
+    picoquic_packet_header ph;
+    picoquic_tuple_t* tuple = NULL;
+    picoquic_local_cnxid_t* l_cid = NULL;
+    picoquic_path_t* path_x = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        multipath_abandon_stash_config(cnx);
+    }
+
+    multipath_abandon_stash_addr(&addr_local, 1234);
+    multipath_abandon_stash_addr(&addr_peer, 4321);
+    if (ret == 0) {
+        multipath_abandon_stash_refill(cnx, simulated_time);
+        if ((ret = multipath_abandon_stash_frame(cnx, 0, 1, simulated_time)) == 0 &&
+            ((path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local,
+            (struct sockaddr*)&addr_peer, 0, 1)) < 0 ||
+            (l_cid = picoquic_create_local_cnxid(cnx, 1, NULL, simulated_time)) == NULL)) {
+            DBG_PRINTF("%s", "Cannot create the path with ID 1");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        path_x = cnx->path[path_index];
+        path_x->first_tuple->challenge_verified = 1;
+        cnx->idle_timeout = 30000000;
+        /* A packet was sent on the path, and none was received. */
+        simulated_time += 2 * cnx->idle_timeout;
+        path_x->latest_sent_time = simulated_time;
+        ret = multipath_idle_path_check(cnx, path_x, simulated_time, 0);
+    }
+    if (ret == 0) {
+        /* A packet arrives on the path, and none was sent for the idle timeout. */
+        simulated_time += 2 * cnx->idle_timeout;
+        memset(&ph, 0, sizeof(ph));
+        ph.l_cid = l_cid;
+        ph.dest_cnx_id = l_cid->cnx_id;
+        if (picoquic_find_incoming_path(cnx, &ph, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local,
+            0, simulated_time, &incoming_index, &tuple) != 0 || incoming_index != path_index) {
+            DBG_PRINTF("Incoming packet on path index %d, expected %d", incoming_index, path_index);
+            ret = -1;
+        }
+        else {
+            ret = multipath_idle_path_check(cnx, path_x, simulated_time, 0);
+        }
+    }
+    if (ret == 0) {
+        /* Nothing was sent or received for the idle timeout. */
+        simulated_time += 2 * cnx->idle_timeout;
+        ret = multipath_idle_path_check(cnx, path_x, simulated_time, 1);
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /*
  * TODO: Unit test of path selection.
  * The input to path selections include the state of the path,

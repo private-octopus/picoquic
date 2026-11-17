@@ -835,6 +835,7 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_nominal_ack_path", multipath_nominal_ack_path_test },
     { "multipath_srtt_update", multipath_srtt_update_test },
     { "multipath_idle_rotation", multipath_idle_rotation_test },
+    { "multipath_idle_path", multipath_idle_path_test },
     { "monopath_0rtt", monopath_0rtt_test },
     { "monopath_0rtt_loss", monopath_0rtt_loss_test },
     { "get_hash", get_hash_test },
