@@ -19,10 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
-#include <errno.h>
 
 #include "picoquic.h"
 #include "picoquic_internal.h"
@@ -115,7 +112,6 @@ int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
 int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t sequence = 0;
     uint64_t trigger_length = 0;
@@ -136,9 +132,8 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
     }
     has_packet_size = (byteread_vint(s, &packet_size) == 0);
 
-    qlog_fns_event_start(ctx, NULL, path_id, time, "recovery", "packet_lost");
-    qlog_fns_packet_lost_data(f, packet_type, sequence, trigger, (size_t)trigger_length,
-        dcid, (size_t)dcid_length, has_packet_size, packet_size);
+    qlog_fns_packet_lost_event(ctx, NULL, path_id, time, packet_type, sequence,
+        trigger, (size_t)trigger_length, dcid, (size_t)dcid_length, has_packet_size, packet_size);
 
     return 0;
 }
@@ -146,7 +141,6 @@ int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t err_code = 0;
     uint64_t packet_size = 0;
@@ -156,8 +150,7 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
     ret |= byteread_vint(s, &packet_size);
     ret |= byteread_vint(s, &err_code);
 
-    qlog_fns_event_start(ctx, NULL, path_id, time, "transport", "packet_dropped");
-    qlog_fns_packet_dropped_data(f, packet_type, packet_size, err_code);
+    qlog_fns_packet_dropped_event(ctx, NULL, path_id, time, packet_type, packet_size, err_code);
 
     return ret;
 }
@@ -165,7 +158,6 @@ int qlog_packet_dropped(uint64_t time, uint64_t path_id, bytestream* s, void* pt
 int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
     uint64_t packet_type = 0;
     uint64_t trigger_length = 0;
     const uint8_t* trigger = NULL;
@@ -175,8 +167,7 @@ int qlog_packet_buffered(uint64_t time, uint64_t path_id, bytestream* s, void* p
     ret |= byteread_vint(s, &trigger_length);
     trigger = qlog_record_bytes(s, &trigger_length);
 
-    qlog_fns_event_start(ctx, NULL, path_id, time, "transport", "packet_buffered");
-    qlog_fns_packet_buffered_data(f, packet_type, trigger, (size_t)trigger_length);
+    qlog_fns_packet_buffered_event(ctx, NULL, path_id, time, packet_type, trigger, (size_t)trigger_length);
 
     return ret;
 }
@@ -240,13 +231,6 @@ int qlog_packet_end(void * ptr)
 
     return 0;
 }
-
-/* Qlog records evolution of congestion control with events of the form:
-* [559,"transport","packet_sent","DEFAULT",{"packet_type":"handshake","header":{"packet_size":668,"packet_number":0}}],
-* [904,"recovery","metrics_updated","default",{"bytes_in_flight":822}],
-* [45228,"recovery","metrics_updated","default",{"bytes_in_flight":668,"cwnd":12154,"smoothed_rtt":46151,
-*                          "min_rtt":46151,"latest_rtt":46151}],
-*/
 
 int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 {
@@ -344,7 +328,6 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
 #endif
     qlog_context_t* qlog = (qlog_context_t*)ptr;
     qlog_fns_context_t* ctx = &qlog->fns;
-    FILE * f = ctx->f_txtlog;
 
     ctx->start_time = time;
     ctx->packet_count = 0;
@@ -364,19 +347,8 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
     ctx->spin_bit_sent_last = 0;
     ctx->spin_bit_sent = 0;
 
-    fprintf(f, "{ \"qlog_version\": \"draft-00\", \"title\": \"picoquic\", \"traces\": [\n");
-    fprintf(f, "{ \"vantage_point\": { \"name\": \"backend-67\", \"type\": \"%s\" },\n",
-        client_mode?"client":"server");
-
-    fprintf(f, "\"title\": \"picoquic\", \"description\": \"%s\",", ctx->cid_name);
-    if (ctx->trace_flow_id) {
-        fprintf(f, "\"event_fields\": [\"relative_time\", \"path_id\", \"category\", \"event\", \"data\"],\n");
-    } else {
-        fprintf(f, "\"event_fields\": [\"relative_time\", \"category\", \"event\", \"data\"],\n");
-    }
-    fprintf(f, "\"configuration\": {\"time_units\": \"us\"},\n");
-    fprintf(f, "\"common_fields\": { \"protocol_type\": \"QUIC_HTTP3\", \"reference_time\": \"%"PRIu64"\"},\n", ctx->start_time);
-    fprintf(f, "\"events\": [");
+    qlog_fns_trace_header(ctx->f_txtlog, ctx->cid_name, (client_mode) ? "client" : "server",
+        ctx->start_time, ctx->trace_flow_id);
     ctx->state = 1;
     return 0;
 }
@@ -387,9 +359,8 @@ int qlog_connection_end(uint64_t UNUSED(time), void * ptr)
     UNREFERENCED_PARAMETER(time);
 #endif
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE * f = ctx->f_txtlog;
-    fprintf(f, "]}]}\n");
 
+    qlog_fns_trace_end(ctx->f_txtlog);
     ctx->state = 2;
     return 0;
 }
