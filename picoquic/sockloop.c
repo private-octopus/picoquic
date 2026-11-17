@@ -1456,6 +1456,12 @@ int picoquic_packet_loop_open_qmux_sockets(
 
     if (qmux != NULL) {
         *max_qmux_socket = qmux->max_number_connections + 2;
+#ifdef _WINDOWS
+        if (public_port != 0) {
+            /* Listeners need space for AcceptEx socket */
+            *max_qmux_socket += 2;
+        }
+#endif
         *sqmux_ctx = (picoqmux_socket_ctx_t**)malloc(sizeof(picoqmux_socket_ctx_t*) * (*max_qmux_socket));
         if (*sqmux_ctx == NULL) {
             DBG_PRINTF("%s", "Cannot allocate memory for QMUX socket context\n");

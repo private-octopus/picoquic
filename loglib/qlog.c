@@ -31,119 +31,14 @@
 #include "logconvert.h"
 #include "picoquic_qlog_fns.h"
 #include "qlog.h"
+#ifdef _WINDOWS
+#pragma warning(disable:4204)
+#endif
+#include "picoquic_picotls.h"
 
 typedef struct qlog_context_st {
     qlog_fns_context_t fns;
 } qlog_context_t;
-
-int qlog_chars(FILE* f, bytestream* s, uint64_t l)
-{
-    int error_found = (s->ptr + (size_t)l > s->size);
-    size_t actual_len = error_found ? (s->size - s->ptr) : (size_t)l;
-
-    fprintf(f, "\"");
-    qlog_fns_char_content(f, s->data + s->ptr, actual_len);
-    s->ptr += actual_len;
-
-    if (error_found) {
-        fprintf(f, "... coding error!");
-    }
-
-    fprintf(f, "\"");
-    return (error_found) ? -1 : 0;
-}
-
-/* Write the transport parameters of a binary log record with the code of
- * qlog_fns.c. If the record has less than tp_length bytes, write the two
- * lengths instead. */
-int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length)
-{
-    int ret = 0;
-
-    if (tp_length > bytestream_remain(s)) {
-        fprintf(f, ",\n    \"transport_parameter_length\": %zu", tp_length);
-        fprintf(f, ",\n    \"bytes_available\": %zu", bytestream_remain(s));
-        ret = -1;
-    }
-    else {
-        qlog_fns_transport_extensions(f, s->data + s->ptr, tp_length);
-    }
-
-    return ret;
-}
-
-
-int qlog_alpn_update(uint64_t time, bytestream* s, void* ptr)
-{
-    qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
-    uint64_t owner = 0;
-    uint64_t sni_length = 0;
-    uint64_t alpn_length = 0;
-    uint64_t alpn_count = 0;
-    int ret = 0;
-
-    ret |= byteread_vint(s, &owner);
-    ret |= byteread_vint(s, &sni_length);
-    qlog_fns_event_start(ctx, NULL, 0, time, "transport", "parameters_set");
-    fprintf(f, "\n    \"owner\": \"%s\"", (owner) ? "local" : "remote");
-    if (sni_length > 0) {
-        fprintf(f, ",\n    \"sni\": ");
-        ret |= qlog_chars(f, s, sni_length);
-    }
-
-    ret |= byteread_vint(s, &alpn_count);
-    if (ret == 0 && alpn_count > 0) {
-        fprintf(f, ",\n    \"proposed_alpn\": [");
-
-        for (size_t i = 0; i < alpn_count; i++) {
-            uint64_t len;
-            if (i != 0) {
-                fprintf(f, ", ");
-            }
-            ret |= byteread_vint(s, &len);
-            ret |= qlog_chars(f, s, len);
-        }
-        fprintf(f, "]");
-    }
-
-
-    ret |= byteread_vint(s, &alpn_length);
-    if (ret == 0 && alpn_length > 0) {
-        fprintf(f, ",\n    \"alpn\": ");
-        qlog_chars(f, s, alpn_length);
-    }
-
-    fprintf(f, "}]");
-
-    return 0;
-}
-
-
-int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
-{
-    qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
-    uint64_t owner = 0;
-    uint64_t tp_length = 0;
-    int ret = 0;
-
-    ret |= byteread_vint(s, &owner);
-
-    qlog_fns_event_start(ctx, NULL, 0, time, "transport", "parameters_set");
-
-    fprintf(f, "\n    \"owner\": \"%s\"", (owner)?"local":"remote");
-
-    ret |= byteread_vint(s, &tp_length);
-
-    if (ret == 0 && tp_length > 0) {
-        qlog_transport_extensions(f, s, (size_t)tp_length);
-    }
-    
-    fprintf(f, "}]");
-
-    return 0;
-}
 
 /* Return a pointer to the next *length bytes of the record, and skip them.
  * If the record has fewer bytes, set *length to 0, skip the rest of the
@@ -162,6 +57,59 @@ static const uint8_t* qlog_record_bytes(bytestream* s, uint64_t* length)
     }
 
     return bytes;
+}
+
+int qlog_alpn_update(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
+    ptls_iovec_t alpn_list[PICOQUIC_ALPN_NUMBER_MAX];
+    size_t nb_alpn = 0;
+    uint64_t owner = 0;
+    uint64_t sni_length = 0;
+    uint64_t alpn_length = 0;
+    uint64_t alpn_count = 0;
+    uint64_t len = 0;
+    const uint8_t* sni;
+    const uint8_t* alpn;
+    const uint8_t* base;
+
+    (void)byteread_vint(s, &owner);
+    (void)byteread_vint(s, &sni_length);
+    sni = qlog_record_bytes(s, &sni_length);
+
+    (void)byteread_vint(s, &alpn_count);
+    for (uint64_t i = 0; i < alpn_count && byteread_vint(s, &len) == 0; i++) {
+        base = qlog_record_bytes(s, &len);
+        if (base != NULL && nb_alpn < PICOQUIC_ALPN_NUMBER_MAX) {
+            alpn_list[nb_alpn].base = (uint8_t*)base;
+            alpn_list[nb_alpn].len = (size_t)len;
+            nb_alpn++;
+        }
+    }
+
+    (void)byteread_vint(s, &alpn_length);
+    alpn = qlog_record_bytes(s, &alpn_length);
+
+    qlog_fns_alpn_update(ctx, time, owner != 0, sni, (size_t)sni_length, alpn, (size_t)alpn_length,
+        alpn_list, nb_alpn);
+
+    return 0;
+}
+
+int qlog_param_update(uint64_t time, bytestream* s, void* ptr)
+{
+    qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
+    uint64_t owner = 0;
+    uint64_t tp_length = 0;
+    const uint8_t* tp;
+
+    (void)byteread_vint(s, &owner);
+    (void)byteread_vint(s, &tp_length);
+    tp = qlog_record_bytes(s, &tp_length);
+
+    qlog_fns_param_update(ctx, time, owner != 0, (uint8_t*)tp, (size_t)tp_length);
+
+    return 0;
 }
 
 int qlog_packet_lost(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
@@ -379,30 +327,11 @@ int qlog_cc_update(uint64_t time, uint64_t path_id, bytestream* s, void* ptr)
 
 int qlog_info_message(uint64_t time, bytestream* s, void* ptr)
 {
-    int ret = 0;
     qlog_fns_context_t* ctx = &((qlog_context_t*)ptr)->fns;
-    FILE* f = ctx->f_txtlog;
-    uint8_t message[BYTESTREAM_MAX_BUFFER_SIZE];
-    size_t message_length = 0;
 
-    qlog_fns_event_start(ctx, NULL, 0, time, "info", "message");
+    qlog_fns_info_message(ctx, time, bytestream_ptr(s), bytestream_remain(s));
 
-    fprintf(f, " \"message\": \"");
-    message_length = bytestream_remain(s);
-    if (message_length > sizeof(message)) {
-        message_length = sizeof(message);
-    }
-    memcpy(message, bytestream_ptr(s), message_length);
-    for (size_t i = 0; i < message_length; i++) {
-        int c = message[i];
-        if (c < 0x20 || c > 0x7e) {
-            message[i] = '?';
-        }
-    }
-    fwrite(message, message_length, 1, f);
-    fprintf(f, "\"}]");
-
-    return ret;
+    return 0;
 }
 
 int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED(cid), int client_mode,

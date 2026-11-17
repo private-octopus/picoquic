@@ -155,37 +155,6 @@ int qlog_auto_test(void)
 }
 
 
-#define QLOG_ERROR_FILE "qlog_error_test.txt"
-
-int qlog_chars(FILE* f, bytestream* s, uint64_t l);
-
-int qlog_error_string(FILE* F)
-{
-	int ret = 0;
-	bytestream bs = { 0 };
-	uint8_t char_data[] = {
-		'\"', '\\', 0xFF, ' ', 'z', 127
-	};
-
-	bs.data = char_data;
-	bs.size = sizeof(char_data);
-	bs.ptr = 0;
-	if (qlog_chars(F, &bs, 2 * bs.size) == 0) {
-		ret = -1;
-	}
-
-	if (ret == 0) {
-		fprintf(F, "\n");
-		bs.data = char_data;
-		bs.size = sizeof(char_data);
-		bs.ptr = 0;
-		if (qlog_chars(F, &bs, bs.size) != 0) {
-			ret = -1;
-		}
-	}
-	return ret;
-}
-
 /* Test common function for writing a byte string with proper escape for JSON */
 int qlog_fns_chars(FILE* f, const uint8_t* s, uint64_t l);
 #define QLOG_JSON_ESCAPE_FILE "qlol_json_escape_file.txt"
@@ -211,33 +180,6 @@ int qlog_json_escape_test(void)
 		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
 		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
 			DBG_PRINTF("qlog_fns_chars did not escape as %s", expected);
-			ret = -1;
-		}
-		if (F != NULL) {
-			F = picoquic_file_close(F);
-		}
-	}
-
-	if (ret == 0) {
-		bytestream bs = { 0 };
-		bs.data = (uint8_t*)escape_input;
-		bs.size = sizeof(escape_input);
-		bs.ptr = 0;
-
-		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "w");
-		if (F == NULL) {
-			ret = -1;
-		}
-		else {
-			qlog_chars(F, &bs, bs.size);
-			F = picoquic_file_close(F);
-		}
-	}
-
-	if (ret == 0) {
-		F = picoquic_file_open(QLOG_JSON_ESCAPE_FILE, "r");
-		if (F == NULL || fgets(line, sizeof(line), F) == NULL || strcmp(line, expected) != 0) {
-			DBG_PRINTF("qlog_chars did not escape as %s", expected);
 			ret = -1;
 		}
 		if (F != NULL) {
@@ -514,36 +456,6 @@ uint8_t qlog_tp_extension_input[] = {
 	0xab, 0xba, 0xca, 0xda, 0xba
 };
 
-int qlog_transport_extensions(FILE* f, bytestream* s, size_t tp_length);
-int qlog_tp_extension_test(FILE* F)
-{
-	int ret = 0;
-	bytestream bs = { 0 };
-	size_t size_before = ftell(F);
-	size_t size_after = 0;
-	size_t test_len[5] = {
-		sizeof(qlog_tp_extension_input),
-		2 * sizeof(qlog_tp_extension_input),
-		1,
-		2,
-		sizeof(qlog_tp_extension_input) - 1
-	};
-
-	for (int i = 0; i < 5; i++) {
-		fprintf(F, "\n");
-		bs.data = qlog_tp_extension_input;
-		bs.size = sizeof(qlog_tp_extension_input);
-		bs.ptr = 0;
-		qlog_transport_extensions(F, &bs, test_len[i]);
-	}
-
-	size_after = ftell(F);
-	if (size_after < size_before + 32) {
-		ret = -1;
-	}
-	return ret;
-}
-
 #define QLOG_FNS_FORMAT_FILE "qlog_fns_format_test.txt"
 #define QLOG_FNS_FORMAT_REF "qlog_fns_format_ref.txt"
 const uint8_t* qlog_frame_hex_string(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t l);
@@ -646,21 +558,25 @@ static int qlog_damaged_write_record(FILE* F, const picoquic_connection_id_t* ci
     return ret;
 }
 
-/* Convert a binary log with damaged records. The qlog must not hold an
- * address, an ECN mark or a packet size that the record does not hold. */
+/* Convert a binary log with damaged records. The qlog must not hold a field
+ * that the record does not hold, and a message must be valid JSON text. */
 int qlog_damaged_record_test(void)
 {
     static const char* expected[] = {
         "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0}]",
         "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0, \"addr_from\" : {\"ip_v4\": \"10.0.0.1\", \"port_v4\":4433}}]",
-        "        \"dcid\" : \"01020304\"}}]"
+        "        \"dcid\" : \"01020304\"}}]",
+        "\"proposed_alpn\": [\"h3\"]}]",
+        "\"owner\": \"remote\"}]",
+        "\"message\": \"a\\\"b\\\\c\\u0001\"}]"
     };
-    static const char* not_expected[] = { "ip_v6", "ecn", "packet_size" };
+    static const char* not_expected[] = { "ip_v6", "ecn", "packet_size", "\"alpn\"" };
+    static const uint8_t message[] = { 'a', '"', 'b', '\\', 'c', 1 };
     picoquic_connection_id_t cid = { { 1, 2, 3, 4 }, 4 };
     struct sockaddr_in addr;
     bytestream_buf stream;
     bytestream* ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
-    char qlog_text[2048];
+    char qlog_text[4096];
     size_t qlog_length = 0;
     uint16_t flags = 0;
     uint64_t log_time = 0;
@@ -718,6 +634,38 @@ int qlog_damaged_record_test(void)
             ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_packet_lost,
                 bytestream_data(ps), bytestream_length(ps));
         }
+    }
+    if (ret == 0) {
+        /* ALPN record that ends inside the second proposed ALPN */
+        ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+        ret |= bytewrite_vint(ps, 1);
+        ret |= bytewrite_vint(ps, 8);
+        ret |= bytewrite_buffer(ps, "test-sni", 8);
+        ret |= bytewrite_vint(ps, 2);
+        ret |= bytewrite_vint(ps, 2);
+        ret |= bytewrite_buffer(ps, "h3", 2);
+        ret |= bytewrite_vint(ps, 5);
+        ret |= bytewrite_buffer(ps, "hq", 2);
+        if (ret == 0) {
+            ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_alpn_update,
+                bytestream_data(ps), bytestream_length(ps));
+        }
+    }
+    if (ret == 0) {
+        /* Transport parameters record that ends inside the parameters */
+        ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
+        ret |= bytewrite_vint(ps, 0);
+        ret |= bytewrite_vint(ps, 100);
+        ret |= bytewrite_vint(ps, picoquic_tp_ack_delay_exponent);
+        ret |= bytewrite_vint(ps, 1);
+        if (ret == 0) {
+            ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_param_update,
+                bytestream_data(ps), bytestream_length(ps));
+        }
+    }
+    if (ret == 0) {
+        /* Info message with characters that JSON must escape */
+        ret = qlog_damaged_write_record(F, &cid, picoquic_log_event_info_message, message, sizeof(message));
     }
     if (F != NULL) {
         F = picoquic_file_close(F);
@@ -820,7 +768,7 @@ static void qlog_cc_update_dump(picoquic_cnx_t* cnx, int path_index, uint64_t* s
     picoquic_log_cc_dump(cnx, *simulated_time);
 }
 
-/* Log the same congestion control updates of two paths in a qlog and in a
+/* Log the same events of a connection with two paths in a qlog and in a
  * binary log. The conversion of the binary log must give the same qlog. */
 int qlog_cc_update_test(void)
 {
@@ -835,6 +783,9 @@ int qlog_cc_update_test(void)
     const picoquic_connection_id_t initial_cid = {
         { 0xcc, 0x5a, 0x7e, 1 }, 4
     };
+    static uint8_t h3[] = { 'h', '3' };
+    static uint8_t hq[] = { 'h', 'q' };
+    picoquic_iovec_t alpn_list[2] = { { h3, sizeof(h3) }, { hq, sizeof(hq) } };
 
     memset(&saddr, 0, sizeof(saddr));
     saddr.sin_family = AF_INET;
@@ -864,6 +815,12 @@ int qlog_cc_update_test(void)
         picoquic_path_t* path_x = cnx->path[0];
 
         picoquic_log_new_connection(cnx);
+        /* Events of the connection: ALPN, transport parameters, message */
+        picoquic_log_negotiated_alpn(cnx, 1, (const uint8_t*)"test-sni", 8, (const uint8_t*)"hq", 2,
+            (const ptls_iovec_t*)alpn_list, 2);
+        picoquic_log_transport_extension(cnx, 1, sizeof(qlog_tp_extension_input), qlog_tp_extension_input);
+        picoquic_log_transport_extension(cnx, 0, sizeof(qlog_tp_extension_input) - 1, qlog_tp_extension_input);
+        picoquic_log_app_message(cnx, "%s", "a\"b\\c\n");
         path_x->smoothed_rtt = 20000;
         path_x->rtt_sample = 20000;
         path_x->rtt_min = 20000;
@@ -946,27 +903,7 @@ int qlog_path_context_limit_test(void)
 
 int qlog_error_test(void)
 {
-	FILE* F = picoquic_file_open(QLOG_ERROR_FILE, "w");
-	int ret = (F == NULL) ? -1 : 0;
-
-	if (ret == 0) {
-		fprintf(F, "\n");
-		ret = qlog_error_string(F);
-		fprintf(F, "\n");
-	}
-
-	if (ret == 0) {
-		ret = qlog_tp_extension_test(F);
-		fprintf(F, "\n");
-	}
-
-	if (F != NULL) {
-		F = picoquic_file_close(F);
-	}
-
-	if (ret == 0) {
-		ret = qlog_fns_pref_addr_test();
-	}
+	int ret = qlog_fns_pref_addr_test();
 
 	if (ret == 0) {
 		ret = qlog_fns_vnego_test();
