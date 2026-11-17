@@ -2112,7 +2112,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
         if (!cnx->path[path_index_current]->path_is_demoted){
             if (cnx->path[path_index_current]->first_tuple->challenge_failed ||
                 (path_index_current > 0 && cnx->path[path_index_current]->first_tuple->challenge_verified &&
-                    current_time - cnx->path[path_index_current]->latest_sent_time >= cnx->idle_timeout)) {
+                    current_time - cnx->path[path_index_current]->latest_sent_time >= cnx->idle_timeout &&
+                    current_time - cnx->path[path_index_current]->last_packet_received_at >= cnx->idle_timeout)) {
                 picoquic_demote_path(cnx, path_index_current, current_time, 0);
             }
         }

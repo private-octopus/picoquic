@@ -4606,6 +4606,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_idle_path) {
+            int ret = multipath_idle_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(config_option_letters) {
             int ret = config_option_letters_test();
 

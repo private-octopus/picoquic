@@ -805,6 +805,7 @@ int multipath_ack_path_stalled_test(void);
 int multipath_nominal_ack_path_test(void);
 int multipath_srtt_update_test(void);
 int multipath_idle_rotation_test(void);
+int multipath_idle_path_test(void);
 int token_reuse_api_test(void);
 int token_reuse_cap_test(void);
 int get_hash_test(void);
