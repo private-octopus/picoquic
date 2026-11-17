@@ -130,8 +130,7 @@ extern "C" {
     void qlog_fns_packet_buffered_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
     /* Write the header of the qlog file, and the end of the qlog file. */
-    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time,
-        int trace_flow_id);
+    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time);
     void qlog_fns_trace_end(FILE* f);
 
 #ifdef __cplusplus

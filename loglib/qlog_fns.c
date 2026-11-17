@@ -570,7 +570,7 @@ void qlog_fns_packet_dropped_event(qlog_fns_context_t* ctx, picoquic_path_t* pat
 {
     FILE* f = ctx->f_txtlog;
 
-    qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "transport", "packet_dropped");
+    qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, QLOG_CLASS("quic","transport"), "packet_dropped");
     if (err != PICOQUIC_ERROR_PADDING_PACKET) {
         fprintf(f, "\n    \"packet_type\" : \"%s\",", picoquic_packet_type_name(ptype));
     }
@@ -671,7 +671,7 @@ void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x
 {
     FILE* f = ctx->f_txtlog;
 
-    qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, "recovery", "packet_lost");
+    qlog_fns_event_start(ctx, path_x, unique_path_id, current_time, QLOG_CLASS("quic","recovery"), "packet_lost");
     fprintf(f, "\n    \"packet_type\" : \"%s\"", picoquic_packet_type_name(ptype));
     fprintf(f, ",\n    \"packet_number\" : %" PRIu64, sequence_number);
     if (trigger_length > 0) {
@@ -1139,8 +1139,7 @@ int qlog_fns_set_file_name(picoquic_cnx_t* cnx, char* log_filename, size_t lengt
 }
 
 /* Write the header of the qlog file, up to the start of the list of events. */
-void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time,
-    int trace_flow_id)
+void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time)
 {
 #ifdef QLOGv2
     char time_buf[64];
@@ -1213,6 +1212,12 @@ void qlog_fns_new_connection(picoquic_cnx_t* cnx, void* log_param, void** log_ct
     *log_ctx = ctx;
     cnx->quic->current_number_of_open_logs++;
     qlog_fns_start_connection_log(cnx, ctx, cid_name);
+}
+
+/* Write the end of the list of events and the end of the qlog file. */
+void qlog_fns_trace_end(FILE* f)
+{
+    fprintf(f, "]}]}\n");
 }
 
 /* log the end of a connection */

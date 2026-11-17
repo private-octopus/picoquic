@@ -348,7 +348,7 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
     ctx->spin_bit_sent = 0;
 
     qlog_fns_trace_header(ctx->f_txtlog, ctx->cid_name, (client_mode) ? "client" : "server",
-        ctx->start_time, ctx->trace_flow_id);
+        ctx->start_time);
     ctx->state = 1;
     return 0;
 }
