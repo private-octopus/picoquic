@@ -342,13 +342,11 @@
 {"time":100.971,"name":"quic:metrics_updated","path_id":1,"data":{"pacing_rate": 6784452,"bytes_in_flight": 0,"smoothed_rtt": 22633,"latest_rtt": 22707}},
 {"time":100.971,"name":"loglevel:info","path_id":0,"data":{ "message": "Abandon path, unique_id 1, reason 0"}},
 {"time":100.971,"name":"quic:packet_lost","path_id":1,"data":{
-    "packet_type" : "1RTT",
-    "packet_number" : 12345,
-    "trigger": "test",
     "header": {
         "packet_type" : "1RTT",
-        "packet_number" : 12345,
-        "packet_size" : 1234}}},
+        "packet_number" : 12345},
+    "trigger": "test",
+    "packet_size" : 1234}},
 {"time":100.971,"name":"quic:spin_bit_updated","path_id":0,"data":{ "state": false}},
 {"time":100.971,"name":"quic:packet_sent","path_id":0,"data":{ "packet_type": "1RTT", "header": { "packet_size": 39, "packet_number": 18, "dcid": "0908070605040302" }, "frames": [{ 
     "frame_type": "path_abandon", "path_id": 1, "reason": 0}, { 
