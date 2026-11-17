@@ -695,7 +695,7 @@ void qlog_fns_outgoing_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_
 }
 
 /* Write the data of a packet_lost event, and close the event. */
-void qlog_fns_packet_lost_data(qlog_fns_context_t* ctx, picoquic_path_t * path_x, uint64_t path_id,
+void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t * path_x, uint64_t path_id,
     uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
     const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
     int has_packet_size, uint64_t packet_size)
@@ -745,7 +745,7 @@ void qlog_fns_packet_lost(picoquic_cnx_t* UNUSED(cnx), void* log_ctx, picoquic_p
     UNREFERENCED_PARAMETER(cnx);
 #endif
 
-    qlog_fns_packet_lost_data(ctx, path_x, 0, current_time, ptype, sequence_number,
+    qlog_fns_packet_lost_event(ctx, path_x, 0, current_time, ptype, sequence_number,
         (const uint8_t*)trigger, (trigger == NULL) ? 0 : strlen(trigger),
         (dcid == NULL) ? NULL : dcid->id, (dcid == NULL) ? 0 : dcid->id_len, 1, packet_size);
 }

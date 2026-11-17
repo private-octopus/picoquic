@@ -120,9 +120,13 @@ extern "C" {
     /* Write each transport parameter as a field of the current event. The
      * caller checks that tp holds tp_length bytes. */
     void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
+#if 0
     /* Write the data of a packet event after its header, and close the event. */
     void qlog_fns_packet_lost_data(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t path_ide, uint64_t current_time,
-        uint64_t ptype, uint64_t sequence_number, const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
+        uint64_t ptype, uint64_t sequence_number, const uint8_t* trigger, size_t trigger_length,
+        const uint8_t* dcid, size_t dcid_length,
+        int has_packet_size, uint64_t packet_size);
+#endif
     /* Write a packet_lost, packet_dropped or packet_buffered event. */
     void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
