@@ -9,7 +9,7 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
         tp_name = "original_destination_connection_id";
         break;
     case picoquic_tp_idle_timeout:
-        tp_name = "mac_idle_timeout";
+        tp_name = "max_idle_timeout";
         break;
     case picoquic_tp_stateless_reset_token:
         tp_name = "stateless_reset_token";

@@ -334,10 +334,6 @@ int qlog_connection_start(uint64_t time, const picoquic_connection_id_t * UNUSED
     ctx->event_count = 0;
     ctx->version_number = 0;
 
-
-    memset(&ctx->addr_peer, 0, sizeof(struct sockaddr_storage));
-    memset(&ctx->addr_local, 0, sizeof(struct sockaddr_storage));
-
     qlog_fns_delete_path_contexts(ctx);
 
     ctx->key_phase_sent_last = 0;

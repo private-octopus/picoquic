@@ -33,7 +33,7 @@
     immediate_ack
     time_stamp: 1024
     path_abandon, path_id: 1, reason: 0
-    path_abandon, path_id: 1, reason: 17
+    path_abandon, path_id: 1, reason: 62
     path_backup, path_id: 0, sequence: 15
     path_available, path_id: 0, sequence: 15
     max_path_id, max_path_id: 17
