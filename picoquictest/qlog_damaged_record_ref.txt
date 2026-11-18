@@ -1,0 +1,19 @@
+{
+"file_schema":"urn:ietf:params:qlog:file:contained","serialization_format":"application/qlog+json","title":"picoquic-client qlog","description":"picoquic-client qlog id=01020304","traces":[
+{"title":"picoquic-client qlog","description":"picoquic-client qlog id=01020304","common_fields":{"odcid":"01020304","time_format":"relative_to_epoch","reference_time":{"clock_type":"system","epoch":"1970-01-01T00:00:00.000010Z"}},"vantage_point":{"name":"backend-67","type":"client"},"event_schemas":["urn:ietf:params:qlog:events:quic-14","urn:ietf:params:qlog:events:loglevel" ],"events":[
+{"time":0.000,"name":"quic:udp_datagrams_received","data":{ "raw": [{"length": 0}]}},
+{"time":0.000,"name":"quic:tuple_assigned","data":{ "tuple_id": "8e83c4d4", "tuple_remote": {"address_v4": {"ip": "10.0.0.1", "port": 4433}}}},
+{"time":0.000,"name":"quic:udp_datagrams_received","tuple":"8e83c4d4","data":{ "raw": [{"length": 0}]}},
+{"time":0.000,"name":"quic:packet_lost","data":{
+    "header": {
+        "packet_type" : "1RTT",
+        "packet_number" : 42,
+        "dcid" : "01020304"},
+    "trigger": "timer"}},
+{"time":0.000,"name":"loglevel:info","data":{ "message": "sni: test-sni"}},
+{"time":0.000,"name":"quic:alpn_information","data":{
+    "client_alpns": [
+        {"string_value": "h3"}]}},
+{"time":0.000,"name":"quic:parameters_set","data":{
+    "initiator": "remote"}},
+{"time":0.000,"name":"loglevel:info","data":{ "message": "a\"b\\c\u0001"}}]}]}
