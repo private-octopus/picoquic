@@ -224,19 +224,26 @@ const uint8_t* qlog_frame_ack(FILE* f, const uint8_t* bytes, const uint8_t* byte
     return bytes;
 }
 
-/* Write the error of a frame: the mapped name, and the code if the name is unknown. */
+/* Write the error of a frame: the mapped name, the TLS alert for a crypto error,
+ * and the code if the name is unknown. */
 static void qlog_frame_error(FILE* f, uint64_t error_code, int app_error)
 {
     char const* name = "unknown";
 
-    if (!app_error) {
-        int is_internal = (error_code >= PICOQUIC_ERROR_CLASS && error_code < PICOQUIC_ERROR_CLASS + 0x100);
-        name = picoquic_error_name((is_internal) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : error_code);
+    if (!app_error && error_code >= PICOQUIC_TRANSPORT_CRYPTO_ERROR(0) &&
+        error_code <= PICOQUIC_TRANSPORT_CRYPTO_ERROR(0xff)) {
+        fprintf(f, "\"error\": \"crypto_error_0x%03" PRIx64 "\"", error_code);
     }
-    qlog_json_str(f, "error", name);
-    if (strcmp(name, "unknown") == 0) {
-        fprintf(f, ", ");
-        qlog_json_uint(f, "error_code", error_code);
+    else {
+        if (!app_error) {
+            int is_internal = (error_code >= PICOQUIC_ERROR_CLASS && error_code < PICOQUIC_ERROR_CLASS + 0x100);
+            name = picoquic_error_name((is_internal) ? PICOQUIC_TRANSPORT_INTERNAL_ERROR : error_code);
+        }
+        qlog_json_str(f, "error", name);
+        if (strcmp(name, "unknown") == 0) {
+            fprintf(f, ", ");
+            qlog_json_uint(f, "error_code", error_code);
+        }
     }
 }
 

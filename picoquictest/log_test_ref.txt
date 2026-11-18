@@ -2,6 +2,7 @@
     reset_stream 17, Error 0x00000001, Offset 0x1.
     connection_close, Error 0xcfff, Reason length 9
         Reason: 123456789
+    connection_close, Error 0x0178, Reason length 0
     application_close, Error 0x0000, Reason length 0
     application_close, Error 0x0404, Reason length 4
         Reason: test

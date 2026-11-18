@@ -5,6 +5,8 @@
     "frame_type": "reset_stream", "stream_id": 17, "error": "unknown", "error_code": 1, "final_size": 1}},
 { "test": "connection_close", "frame": { 
     "frame_type": "connection_close", "error_space": "transport", "error": "unknown", "error_code": 53247, "reason": "123456789"}},
+{ "test": "connection_close_crypto", "frame": { 
+    "frame_type": "connection_close", "error_space": "transport", "error": "crypto_error_0x178"}},
 { "test": "application_close", "frame": { 
     "frame_type": "connection_close", "error_space": "application", "error": "unknown", "error_code": 0}},
 { "test": "application_close", "frame": { 

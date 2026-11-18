@@ -52,6 +52,13 @@ static uint8_t test_type_connection_close[] = {
     '1', '2', '3', '4', '5', '6', '7', '8', '9'
 };
 
+/* TLS alert 120, no_application_protocol */
+static uint8_t test_type_connection_close_crypto[] = {
+    picoquic_frame_type_connection_close,
+    0x41, 0x78, 0,
+    0
+};
+
 static uint8_t test_type_application_close[] = {
     picoquic_frame_type_application_close,
     0,
@@ -380,6 +387,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0, 0, 0, 0),
     TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3, 0, 0, 3),
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 1, 0, 3, 0, 0, 3),
+    TEST_SKIP_ITEM("connection_close_crypto", test_type_connection_close_crypto, 1, 0, 3, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 1, 0, 3, 0, 0, 2),
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 1, 0, 3, 0, 0, 2),
 

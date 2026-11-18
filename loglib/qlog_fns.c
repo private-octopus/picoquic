@@ -1137,6 +1137,7 @@ void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t u
             if (cc->smoothed_rtt != path_ctx->smoothed_rtt) {
                 (void)fputs(comma, f);
                 qlog_fns_timestamp(f, "\"smoothed_rtt\": ", (int64_t)cc->smoothed_rtt);
+                path_ctx->smoothed_rtt = cc->smoothed_rtt;
                 comma = ",";
             }
 

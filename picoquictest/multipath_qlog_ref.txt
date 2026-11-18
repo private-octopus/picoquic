@@ -126,13 +126,13 @@
     "frame_type": "ack_frequency", "sequence_number": 0, "packet_tolerance": 2, "max_ack_delay": 5260, "reordering_threshold": 0}, { 
     "frame_type": "handshake_done"}, { 
     "frame_type": "padding"}]}},
-{"time":22.454,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 2211,"smoothed_rtt": 21.216}},
+{"time":22.454,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 2211}},
 {"time":22.454,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":23.454,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 3, "dcid": "0908070605040302" }, "raw": {"length": 39}, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 2931}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 125, "acked_ranges": [[0, 0]]}, { 
     "frame_type": "padding"}]}},
-{"time":23.454,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 2266,"smoothed_rtt": 21.216}},
+{"time":23.454,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 2266}},
 {"time":23.454,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":23.605,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":23.605,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 1, "dcid": "0a09080706050403" }, "raw": {"length": 1440}, "frames": [{ 
@@ -148,7 +148,7 @@
     "frame_type": "time_stamp", "time_stamp": 2956}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[0, 2]]}, { 
     "frame_type": "padding"}]}},
-{"time":23.648,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1605,"smoothed_rtt": 21.395}},
+{"time":23.648,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1605}},
 {"time":23.648,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":24.005,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":24.005,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 3, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -165,15 +165,15 @@
     "frame_type": "time_stamp", "time_stamp": 5341}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[0, 4]]}, { 
     "frame_type": "stream", "stream_id": 4, "offset": 0, "fin": false, "has_length": false, "raw": {"length": 1402, "data": "0001020304050607"}}]}},
-{"time":42.732,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1605,"smoothed_rtt": 21.596}},
+{"time":42.732,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1605}},
 {"time":42.732,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":42.732,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 6, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 1402, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "7a7b7c7d7e7f8081"}}]}},
-{"time":42.732,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 3045,"smoothed_rtt": 21.596}},
+{"time":42.732,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 3045}},
 {"time":42.732,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":43.272,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 7, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 2812, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "fcfdfeff00010203"}}]}},
-{"time":43.272,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 4485,"smoothed_rtt": 21.596}},
+{"time":43.272,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 4485}},
 {"time":43.272,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":43.498,"name":"quic:tuple_assigned","path_id":1,"data":{ "tuple_id": "ab975430", "tuple_remote": {"address_v4": {"ip": "10.0.0.2", "port": 58116}}, "tuple_local": {"address_v4": {"ip": "10.0.0.1", "port": 57616}}}},
 {"time":43.498,"name":"quic:udp_datagrams_received","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1252}]}},
@@ -194,23 +194,23 @@
 {"time":43.540,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"pacing_rate": 7173100,"bytes_in_flight": 4375,"smoothed_rtt": 21.407,"min_rtt": 20.086,"latest_rtt": 20.086}},
 {"time":44.878,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 8, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 4222, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "7e7f808182838485"}}]}},
-{"time":44.878,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5815,"smoothed_rtt": 21.407}},
+{"time":44.878,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5815}},
 {"time":44.878,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":46.483,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 9, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 5632, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "0001020304050607"}}]}},
-{"time":46.483,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 7255,"smoothed_rtt": 21.407}},
+{"time":46.483,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 7255}},
 {"time":46.483,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":48.089,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 10, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 7042, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "8283848586878889"}}]}},
-{"time":48.089,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 8695,"smoothed_rtt": 21.407}},
+{"time":48.089,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 8695}},
 {"time":48.089,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":49.695,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 11, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 8452, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "0405060708090a0b"}}]}},
-{"time":49.695,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 10135,"smoothed_rtt": 21.407}},
+{"time":49.695,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 10135}},
 {"time":49.695,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":51.300,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 12, "dcid": "0908070605040302" }, "raw": {"length": 154}, "frames": [{ 
     "frame_type": "stream", "stream_id": 4, "offset": 9862, "fin": true, "raw": {"length": 138, "data": "868788898a8b8c8d"}}]}},
-{"time":51.300,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 10305,"smoothed_rtt": 21.407}},
+{"time":51.300,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 10305}},
 {"time":51.300,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 170}]}},
 {"time":63.926,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":63.926,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 6, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -227,7 +227,7 @@
 {"time":65.500,"name":"quic:packet_sent","path_id":1,"data":{ "header": { "packet_type": "1RTT", "packet_number": 1, "dcid": "1108070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "ping"}, { 
     "frame_type": "padding"}]}},
-{"time":65.500,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 2692,"smoothed_rtt": 22.002}},
+{"time":65.500,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 2692}},
 {"time":65.500,"name":"quic:udp_datagrams_sent","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1440}]}},
 {"time":66.228,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":66.228,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 7, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -246,7 +246,7 @@
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 138, "acked_ranges": [[1, 7]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 0, "acked_ranges": [[0, 2]]}, { 
     "frame_type": "padding"}]}},
-{"time":67.336,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5985,"smoothed_rtt": 21.577}},
+{"time":67.336,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5985}},
 {"time":67.336,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":68.530,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":68.530,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 8, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -270,38 +270,38 @@
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[1, 10]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 541, "acked_ranges": [[0, 2]]}, { 
     "frame_type": "stream", "stream_id": 8, "offset": 0, "fin": false, "has_length": false, "raw": {"length": 1395, "data": "0001020304050607"}}]}},
-{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1665,"smoothed_rtt": 21.579}},
+{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 1665}},
 {"time":71.664,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":71.664,"name":"quic:packet_sent","path_id":1,"data":{ "header": { "packet_type": "1RTT", "packet_number": 2, "dcid": "1108070605040302" }, "raw": {"length": 1236}, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 8958}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[1, 10]]}, { 
     "frame_type": "path_ack", "path_id": 1, "ack_delay": 541, "acked_ranges": [[0, 2]]}, { 
     "frame_type": "stream", "stream_id": 8, "offset": 1395, "fin": false, "has_length": false, "raw": {"length": 1205, "data": "737475767778797a"}}]}},
-{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 2692,"smoothed_rtt": 22.093}},
+{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 2692}},
 {"time":71.664,"name":"quic:udp_datagrams_sent","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1252}]}},
 {"time":71.664,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 15, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 2600, "fin": false, "has_length": false, "raw": {"length": 1410, "data": "28292a2b2c2d2e2f"}}]}},
-{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 3105,"smoothed_rtt": 21.579}},
+{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 3105}},
 {"time":71.664,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":71.664,"name":"quic:packet_sent","path_id":1,"data":{ "header": { "packet_type": "1RTT", "packet_number": 3, "dcid": "1108070605040302" }, "raw": {"length": 1236}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 4010, "fin": false, "has_length": false, "raw": {"length": 1222, "data": "aaabacadaeafb0b1"}}]}},
-{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 3944,"smoothed_rtt": 22.093}},
+{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 3944}},
 {"time":71.664,"name":"quic:udp_datagrams_sent","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1252}]}},
 {"time":71.664,"name":"quic:packet_sent","path_id":1,"data":{ "header": { "packet_type": "1RTT", "packet_number": 4, "dcid": "1108070605040302" }, "raw": {"length": 1236}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 5232, "fin": false, "has_length": false, "raw": {"length": 1222, "data": "7071727374757677"}}]}},
-{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 5196,"smoothed_rtt": 22.093}},
+{"time":71.664,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 5196}},
 {"time":71.664,"name":"quic:udp_datagrams_sent","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1252}]}},
 {"time":72.204,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 16, "dcid": "0908070605040302" }, "raw": {"length": 1424}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 6454, "fin": false, "has_length": false, "raw": {"length": 1409, "data": "363738393a3b3c3d"}}]}},
-{"time":72.204,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 4545,"smoothed_rtt": 21.579}},
+{"time":72.204,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 4545}},
 {"time":72.204,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 1440}]}},
 {"time":73.008,"name":"quic:packet_sent","path_id":1,"data":{ "header": { "packet_type": "1RTT", "packet_number": 5, "dcid": "1108070605040302" }, "raw": {"length": 1236}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 7863, "fin": false, "has_length": false, "raw": {"length": 1222, "data": "b7b8b9babbbcbdbe"}}]}},
-{"time":73.008,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 6448,"smoothed_rtt": 22.093}},
+{"time":73.008,"name":"quic:recovery_metrics_updated","path_id":1,"data":{"bytes_in_flight": 6448}},
 {"time":73.008,"name":"quic:udp_datagrams_sent","path_id":1,"tuple":"ab975430","data":{ "raw": [{"length": 1252}]}},
 {"time":73.822,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 17, "dcid": "0908070605040302" }, "raw": {"length": 932}, "frames": [{ 
     "frame_type": "stream", "stream_id": 8, "offset": 9085, "fin": true, "raw": {"length": 915, "data": "7d7e7f8081828384"}}]}},
-{"time":73.822,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5493,"smoothed_rtt": 21.579}},
+{"time":73.822,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 5493}},
 {"time":73.822,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 948}]}},
 {"time":76.738,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":76.738,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 11, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -353,7 +353,7 @@
 {"time":100.971,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 18, "dcid": "0908070605040302" }, "raw": {"length": 39}, "frames": [{ 
     "frame_type": "path_abandon", "path_id": 1, "error": "no_error"}, { 
     "frame_type": "padding"}]}},
-{"time":100.971,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 55,"smoothed_rtt": 21.529}},
+{"time":100.971,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 55}},
 {"time":100.971,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":121.057,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":121.057,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 16, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -364,7 +364,7 @@
     "frame_type": "time_stamp", "time_stamp": 15132}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[8, 16]]}, { 
     "frame_type": "padding"}]}},
-{"time":121.057,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 110,"smoothed_rtt": 21.529}},
+{"time":121.057,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 110}},
 {"time":121.057,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":126.317,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":126.317,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 17, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -390,7 +390,7 @@
     "frame_type": "time_stamp", "time_stamp": 31106}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 0, "acked_ranges": [[8, 18]]}, { 
     "frame_type": "padding"}]}},
-{"time":248.854,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 55,"smoothed_rtt": 21.191}},
+{"time":248.854,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 55}},
 {"time":248.854,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":293.000,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 270}]}},
 {"time":293.000,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 19, "dcid": "0a09080706050403" }, "raw": {"length": 270}, "frames": [{ 
@@ -403,7 +403,7 @@
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 5, "retire_prior_to": 0, "connection_id": "2608070605040302", "stateless_reset_token": "8305b341d3a2a1014f4461e91249557a"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 6, "retire_prior_to": 0, "connection_id": "2708070605040302", "stateless_reset_token": "82866b14f1bddf751f4b21435c1d4798"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 7, "retire_prior_to": 0, "connection_id": "2808070605040302", "stateless_reset_token": "3136eac1cba8d0f2cee4455bf90a6672"}]}},
-{"time":293.000,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 0,"smoothed_rtt": 21.191}},
+{"time":293.000,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 0}},
 {"time":293.000,"name":"quic:spin_bit_updated","path_id":0,"data":{ "state": true}},
 {"time":293.000,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 22, "dcid": "0908070605040302" }, "raw": {"length": 251}, "frames": [{ 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 0, "retire_prior_to": 0, "connection_id": "2209080706050403", "stateless_reset_token": "628b228bf7398599810f8c512e939fdc"}, { 
@@ -414,13 +414,13 @@
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 5, "retire_prior_to": 0, "connection_id": "2709080706050403", "stateless_reset_token": "2a886b6792afb1b3a3f321bc07cb9888"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 6, "retire_prior_to": 0, "connection_id": "2809080706050403", "stateless_reset_token": "559e44b00cae21a6c0dfa947caef991f"}, { 
     "frame_type": "path_new_connection_id", "path_id": 3, "sequence_number": 7, "retire_prior_to": 0, "connection_id": "2909080706050403", "stateless_reset_token": "a64ef1c6eb4e75bea3e9431905ac9676"}]}},
-{"time":293.000,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 267,"smoothed_rtt": 21.191}},
+{"time":293.000,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 267}},
 {"time":293.000,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 267}]}},
 {"time":298.500,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 23, "dcid": "0908070605040302" }, "raw": {"length": 39}, "frames": [{ 
     "frame_type": "time_stamp", "time_stamp": 37312}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 687, "acked_ranges": [[8, 19]]}, { 
     "frame_type": "padding"}]}},
-{"time":298.500,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 322,"smoothed_rtt": 21.191}},
+{"time":298.500,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 322}},
 {"time":298.500,"name":"quic:udp_datagrams_sent","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":313.256,"name":"quic:udp_datagrams_received","path_id":0,"tuple":"94bc8459","data":{ "raw": [{"length": 55}]}},
 {"time":313.256,"name":"quic:packet_received","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 20, "dcid": "0a09080706050403" }, "raw": {"length": 55}, "frames": [{ 
@@ -433,7 +433,7 @@
     "frame_type": "time_stamp", "time_stamp": 45246}, { 
     "frame_type": "path_ack", "path_id": 0, "ack_delay": 5303, "acked_ranges": [[20, 23]]}, { 
     "frame_type": "connection_close", "error_space": "application", "error": "unknown", "error_code": 0}]}},
-{"time":361.005,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 0,"smoothed_rtt": 21.074}},
+{"time":361.005,"name":"quic:recovery_metrics_updated","path_id":0,"data":{"bytes_in_flight": 0}},
 {"time":361.005,"name":"quic:spin_bit_updated","path_id":0,"data":{ "state": false}},
 {"time":361.005,"name":"quic:packet_sent","path_id":0,"data":{ "header": { "packet_type": "1RTT", "packet_number": 24, "dcid": "0908070605040302" }, "raw": {"length": 15}, "frames": [{ 
     "frame_type": "connection_close", "error_space": "transport", "error": "no_error"}]}},
