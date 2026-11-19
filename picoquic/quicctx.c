@@ -3728,12 +3728,10 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
     picoquic_local_cnxid_t* previous = NULL;
 
     picoquic_clear_local_cnxid_references(cnx, l_cid);
-    if (l_cid->cnx_id.id_len > 0) {
-        /* Remove the registration in hash tables */
-        if (l_cid->registered_cnx != NULL) {
-            picohash_item* item = &l_cid->hash_item;
-            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
-        }
+    /* A registered key must leave the table before its owner is freed. */
+    if (l_cid->registered_cnx != NULL) {
+        picohash_item* item = &l_cid->hash_item;
+        picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
         l_cid->registered_cnx = NULL;
     }
 
