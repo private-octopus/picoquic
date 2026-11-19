@@ -3035,6 +3035,41 @@ int multipath_flow_frames_ack_test(void)
     return ret;
 }
 
+/* A lost MAX_PATH_ID frame with the last value sent is repeated until the peer acknowledges it. */
+int multipath_max_path_id_repeat_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    uint8_t frame[16];
+    int more_data = 0;
+    int no_need_to_repeat = 0;
+    int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+    uint8_t* bytes_next = picoquic_format_max_path_id_frame(frame, frame + sizeof(frame), 3, &more_data);
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    /* The frame with the value 3 is lost, first before the ACK of that value, then after it. */
+    for (int acked = 0; ret == 0 && acked < 2; acked++) {
+        cnx->max_path_id_local = 3;
+        cnx->max_path_id_acknowledged = 2 + acked;
+        if (picoquic_check_frame_needs_repeat(cnx, frame, bytes_next - frame, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            no_need_to_repeat != acked) {
+            DBG_PRINTF("MAX_PATH_ID 3, acked %" PRIu64 ": no need to repeat is %d",
+                cnx->max_path_id_acknowledged, no_need_to_repeat);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* A new path never gets an ID already used by another path, even when no other ID is allowed. */
 int multipath_unique_path_id_test(void)
 {

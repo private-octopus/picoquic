@@ -6087,7 +6087,7 @@ int picoquic_max_path_id_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* 
     else {
         /* check whether this is the last frame sent, and whether we already
          * have received an ack */
-        if (max_path_id <= cnx->max_path_id_local || max_path_id <= cnx->max_path_id_acknowledged){
+        if (max_path_id < cnx->max_path_id_local || max_path_id <= cnx->max_path_id_acknowledged){
             *no_need_to_repeat = 1;
         }
     }
