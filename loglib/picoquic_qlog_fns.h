@@ -42,6 +42,9 @@ extern "C" {
         uint64_t pacing_packet_time;
         uint64_t cc_state;
         uint64_t cc_param;
+        struct sockaddr_storage addr_peer;
+        struct sockaddr_storage addr_local;
+        uint32_t tuple_hash;
 
         unsigned int last_bw_estimate_path_limited : 1;
     } qlog_fns_path_context_t;
@@ -53,8 +56,6 @@ extern "C" {
 
         uint32_t version_number;
         const char* cid_name; /*!< Name of the connection, default = initial connection id */
-        struct sockaddr_storage addr_peer;
-        struct sockaddr_storage addr_local;
         uint8_t ecn_sent;
         uint8_t ecn_received;
 

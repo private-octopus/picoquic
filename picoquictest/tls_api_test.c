@@ -10649,6 +10649,25 @@ void qlog_trace_cid_fn(picoquic_quic_t* UNUSED(quic), picoquic_connection_id_t c
     }
 }
 
+/* Send the server a packet that fails decryption, to test the "packet dropped" log,
+ * and a packet with an unknown CID, to test the logging of quic-level events in the
+ * qlog of the first connection. */
+static void qlog_trace_add_bad_packets(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t simulated_time)
+{
+    picoquic_tuple_t* tuple = test_ctx->cnx_server->path[0]->first_tuple;
+    uint8_t p[256];
+
+    memset(p, 0, sizeof(p));
+    p[0] |= 64;
+    memcpy(p + 1, tuple->p_local_cnxid->cnx_id.id, tuple->p_local_cnxid->cnx_id.id_len);
+    (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*)&tuple->peer_addr,
+        (struct sockaddr*)&tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+
+    memset(p + 1, 0xee, tuple->p_local_cnxid->cnx_id.id_len);
+    (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*)&tuple->peer_addr,
+        (struct sockaddr*)&tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+}
+
 int qlog_trace_test_one(uint8_t recv_ecn, int parallel)
 {
     uint64_t simulated_time = 0;
@@ -10707,15 +10726,8 @@ int qlog_trace_test_one(uint8_t recv_ecn, int parallel)
             test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00010a04, 0, 20000, 2000000);
     }
 
-    /* Add a gratuitous bad packet to test "packet dropped" log */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
-        uint8_t p[256];
-
-        memset(p, 0, sizeof(p));
-        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
-        p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
-            (struct sockaddr*) & test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        qlog_trace_add_bad_packets(test_ctx, simulated_time);
     }
 
     /* Free the resource, which will close the log file.
@@ -10820,15 +10832,8 @@ int qlog_fns_test_one(uint8_t recv_ecn)
             test_scenario_q2_and_r2, sizeof(test_scenario_q2_and_r2), 0, 0x00010a04, 0, 20000, 2000000);
     }
 
-    /* Add a gratuitous bad packet to test "packet dropped" log */
     if (ret == 0 && test_ctx->cnx_server != NULL) {
-        uint8_t p[256];
-
-        memset(p, 0, sizeof(p));
-        memcpy(p + 1, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id, test_ctx->cnx_server->path[0]->first_tuple->p_local_cnxid->cnx_id.id_len);
-        p[0] |= 64;
-        (void)picoquic_incoming_packet(test_ctx->qserver, p, sizeof(p), (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
-            (struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->local_addr, 0, test_ctx->recv_ecn_server, simulated_time);
+        qlog_trace_add_bad_packets(test_ctx, simulated_time);
     }
 
     /* Free the resource, which will close the log file.

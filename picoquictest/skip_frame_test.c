@@ -52,6 +52,13 @@ static uint8_t test_type_connection_close[] = {
     '1', '2', '3', '4', '5', '6', '7', '8', '9'
 };
 
+/* TLS alert 120, no_application_protocol */
+static uint8_t test_type_connection_close_crypto[] = {
+    picoquic_frame_type_connection_close,
+    0x41, 0x78, 0,
+    0
+};
+
 static uint8_t test_type_application_close[] = {
     picoquic_frame_type_application_close,
     0,
@@ -240,7 +247,7 @@ static uint8_t test_frame_type_path_abandon_1[] = {
     (uint8_t)(0x40 | (picoquic_frame_type_path_abandon >> 8)),
     (uint8_t)(picoquic_frame_type_path_abandon & 0xFF),
     0x01,
-    0x11 /* Some new error */
+    PICOQUIC_TRANSPORT_APPLICATION_ABANDON
 };
 
 static uint8_t test_frame_type_path_backup[] = {
@@ -380,6 +387,7 @@ test_skip_frames_t test_skip_list[] = {
     TEST_SKIP_ITEM("padding", test_frame_type_padding, 1, 0, 0, 0, 0, 0),
     TEST_SKIP_ITEM("reset_stream", test_frame_type_reset_stream, 0, 0, 3, 0, 0, 3),
     TEST_SKIP_ITEM("connection_close", test_type_connection_close, 1, 0, 3, 0, 0, 3),
+    TEST_SKIP_ITEM("connection_close_crypto", test_type_connection_close_crypto, 1, 0, 3, 0, 0, 3),
     TEST_SKIP_ITEM("application_close", test_type_application_close, 1, 0, 3, 0, 0, 2),
     TEST_SKIP_ITEM("application_close", test_type_application_close_reason, 1, 0, 3, 0, 0, 2),
 
@@ -3460,6 +3468,8 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     picoquic_packet_header ph;
     static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
     static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
+    /* The last version has only 1 byte. */
+    static const uint8_t vn_versions_truncated[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d, 0xa1 };
     /* A token of 8 bytes and an integrity tag of 16 bytes. */
     static const uint8_t retry_content[] = { 1, 2, 3, 4, 5, 6, 7, 8,
         0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf };
@@ -3519,6 +3529,19 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     ph.dest_cnx_id = *dcid;
     ph.payload_length = sizeof(retry_content);
     binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_content, sizeof(retry_content));
+
+    memset(&ph, 0, sizeof(ph));
+    ph.ptype = picoquic_packet_version_negotiation;
+    ph.dest_cnx_id = *dcid;
+    ph.payload_length = sizeof(vn_versions_truncated);
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, vn_versions_truncated, sizeof(vn_versions_truncated));
+
+    /* A retry packet with only the integrity tag. */
+    memset(&ph, 0, sizeof(ph));
+    ph.ptype = picoquic_packet_retry;
+    ph.dest_cnx_id = *dcid;
+    ph.payload_length = sizeof(retry_content) - 8;
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_content + 8, sizeof(retry_content) - 8);
 
     picoquic_log_flush(cnx);
 }
