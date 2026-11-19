@@ -15600,26 +15600,32 @@ static size_t wrong_addr_fill_initial(picoquic_cnx_t* cnx, picoquic_connection_i
     return send_length;
 }
 
-static size_t wrong_addr_fill_retry(picoquic_quic_t* qserver, picoquic_cnx_t* cnx, picoquic_connection_id_t* scid, uint8_t* buffer, size_t buffer_size)
+static size_t wrong_addr_fill_retry_ex(picoquic_quic_t* qserver, picoquic_cnx_t* cnx, picoquic_connection_id_t* scid,
+    size_t token_length, uint8_t* buffer, size_t buffer_size)
 {
     size_t byte_index = 0;
     size_t pn_offset = 0;
     size_t pn_length = 0;
-    uint8_t token[32];
+    uint8_t token[PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1];
     void* integrity_aead = picoquic_find_retry_protection_context(qserver, cnx->version_index, 1);
 
-    if (integrity_aead != NULL) {
-        memset(token, 0x2e, sizeof(token));
+    if (integrity_aead != NULL && token_length <= sizeof(token)) {
+        memset(token, 0x2e, token_length);
         byte_index = picoquic_create_long_header(picoquic_packet_retry,
             &cnx->path[0]->first_tuple->p_local_cnxid->cnx_id, scid, 0,
             picoquic_supported_versions[cnx->version_index].version, cnx->version_index,
-            0, sizeof(token), token, buffer, &pn_offset, &pn_length);
-        memcpy(buffer + byte_index, token, sizeof(token));
-        byte_index += sizeof(token);
+            0, token_length, token, buffer, &pn_offset, &pn_length);
+        memcpy(buffer + byte_index, token, token_length);
+        byte_index += token_length;
         byte_index = picoquic_encode_retry_protection(integrity_aead, buffer, buffer_size, byte_index, &cnx->initial_cnxid);
     }
 
     return byte_index;
+}
+
+static size_t wrong_addr_fill_retry(picoquic_quic_t* qserver, picoquic_cnx_t* cnx, picoquic_connection_id_t* scid, uint8_t* buffer, size_t buffer_size)
+{
+    return wrong_addr_fill_retry_ex(qserver, cnx, scid, 32, buffer, buffer_size);
 }
 
 /* Returns 1 if the client state shows no trace of the forged packet */
@@ -15744,4 +15750,128 @@ int wrong_source_addr_vn_test(void)
 int wrong_source_addr_retry_test(void)
 {
     return wrong_source_addr_test(wrong_addr_retry);
+}
+
+/* The client must ignore Retry packets carrying tokens larger than PICOQUIC_NEW_TOKEN_MAX_LENGTH */
+static int retry_token_length_test_one(size_t token_length)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t fake_scid = { { 0x70, 0x6b, 0x23, 0x20, 0x70, 0x6b, 0x23, 0x20 }, 8 };
+    picoquic_connection_id_t icid = picoquic_null_connection_id;
+    uint8_t packet[PICOQUIC_ENFORCED_INITIAL_MTU];
+    size_t packet_length = 0;
+    int was_active = 0;
+    int is_too_long = (token_length > PICOQUIC_NEW_TOKEN_MAX_LENGTH);
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+    if (ret == 0 && test_ctx->cnx_client->cnx_state != picoquic_state_client_init_sent) {
+        DBG_PRINTF("After one round, client state = %d", (int)test_ctx->cnx_client->cnx_state);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        icid = test_ctx->cnx_client->initial_cnxid;
+        packet_length = wrong_addr_fill_retry_ex(test_ctx->qserver, test_ctx->cnx_client, &fake_scid,
+            token_length, packet, sizeof(packet));
+        if (packet_length == 0) {
+            DBG_PRINTF("Cannot build retry with token length %zu", token_length);
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        ret = picoquic_incoming_packet(test_ctx->qclient, packet, packet_length,
+            (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&test_ctx->client_addr, 0, 0, simulated_time);
+    }
+
+    if (ret == 0) {
+        if (is_too_long) {
+            if (!wrong_addr_client_unchanged(test_ctx->cnx_client, &icid)) {
+                DBG_PRINTF("Retry with token length %zu was accepted", token_length);
+                ret = -1;
+            }
+            else {
+                /* The rejected Retry shall not prevent the handshake with the real server */
+                ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+                if (ret == 0) {
+                    ret = wait_client_connection_ready(test_ctx, &simulated_time);
+                }
+                if (ret == 0 && (!TEST_CLIENT_READY || test_ctx->cnx_server == NULL || !TEST_SERVER_READY)) {
+                    DBG_PRINTF("Connection failed, client state: %d", (int)test_ctx->cnx_client->cnx_state);
+                    ret = -1;
+                }
+            }
+        }
+        else if (test_ctx->cnx_client->retry_token_length != token_length ||
+            test_ctx->cnx_client->original_cnxid.id_len == 0) {
+            DBG_PRINTF("Retry with token length %zu was rejected, stored %u", token_length,
+                (unsigned int)test_ctx->cnx_client->retry_token_length);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
+}
+
+int retry_token_length_test(void)
+{
+    int ret = retry_token_length_test_one(PICOQUIC_NEW_TOKEN_MAX_LENGTH);
+
+    if (ret == 0) {
+        ret = retry_token_length_test_one(PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1);
+    }
+
+    return ret;
+}
+
+/* The client must not send a stored token larger than PICOQUIC_NEW_TOKEN_MAX_LENGTH */
+int stored_token_length_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint8_t token[PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1];
+    int was_active = 0;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0);
+
+    /* Simulates an oversized token loaded from a token file */
+    if (ret == 0) {
+        memset(token, 0x5a, sizeof(token));
+        ret = picoquic_store_token(test_ctx->qclient, PICOQUIC_TEST_SNI, (uint16_t)strlen(PICOQUIC_TEST_SNI),
+            NULL, 0, token, (uint16_t)sizeof(token));
+    }
+
+    if (ret == 0) {
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+    }
+    if (ret == 0 && (test_ctx->cnx_client->cnx_state != picoquic_state_client_init_sent ||
+        test_ctx->cnx_client->retry_token_length != 0 || test_ctx->cnx_client->retry_token != NULL)) {
+        DBG_PRINTF("Client state %d, token length %u", (int)test_ctx->cnx_client->cnx_state,
+            (unsigned int)test_ctx->cnx_client->retry_token_length);
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, NULL, 0, &simulated_time);
+        if (ret == 0) {
+            ret = wait_client_connection_ready(test_ctx, &simulated_time);
+        }
+        if (ret == 0 && (!TEST_CLIENT_READY || test_ctx->cnx_server == NULL || !TEST_SERVER_READY)) {
+            DBG_PRINTF("Connection failed, client state: %d", (int)test_ctx->cnx_client->cnx_state);
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+
+    return ret;
 }

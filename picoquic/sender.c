@@ -1652,6 +1652,13 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (cnx->retry_token_length == 0 && cnx->sni != NULL) {
             (void)picoquic_get_token(cnx->quic, cnx->sni, (uint16_t)strlen(cnx->sni),
                 NULL, 0, &cnx->retry_token, &cnx->retry_token_length, 1);
+            if (cnx->retry_token_length > PICOQUIC_NEW_TOKEN_MAX_LENGTH) {
+                /* A token loaded from a file may exceed the limit: send the Initial without it. */
+                picoquic_log_app_message(cnx, "Stored token ignored: too long (%u)", (unsigned int)cnx->retry_token_length);
+                free(cnx->retry_token);
+                cnx->retry_token = NULL;
+                cnx->retry_token_length = 0;
+            }
         }
         break;
     case picoquic_state_client_init_sent:

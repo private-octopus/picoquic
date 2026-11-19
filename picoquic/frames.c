@@ -1057,7 +1057,12 @@ const uint8_t* picoquic_decode_new_token_frame(picoquic_cnx_t* cnx, const uint8_
             picoquic_frame_type_new_token, "Only server can send tokens");
         bytes = NULL;
     }
-    else  if (addr_to != NULL && cnx->sni != NULL){
+    else if (length > PICOQUIC_NEW_TOKEN_MAX_LENGTH) {
+        picoquic_connection_error_ex(cnx, PICOQUIC_TRANSPORT_INTERNAL_ERROR,
+            picoquic_frame_type_new_token, "Token too long");
+        bytes = NULL;
+    }
+    else if (addr_to != NULL && cnx->sni != NULL){
         uint8_t * ip_addr;
         uint8_t ip_addr_length;
         picoquic_get_ip_addr(addr_to, &ip_addr, &ip_addr_length);
