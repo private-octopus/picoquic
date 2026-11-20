@@ -2243,7 +2243,12 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
                         picoquic_find_or_create_remote_cnxid_stash(cnx,
                             cnx->path[path_index]->unique_path_id, 0);
                     if (remote_cnxid_stash != NULL) {
-                        cnx->path[path_index]->first_tuple->p_remote_cnxid = NULL;
+                        /* Every tuple of the path may point to a CID in the stash */
+                        picoquic_tuple_t* tuple = cnx->path[path_index]->first_tuple;
+                        while (tuple != NULL) {
+                            tuple->p_remote_cnxid = NULL;
+                            tuple = tuple->next_tuple;
+                        }
                         picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
                     }
                     else {
