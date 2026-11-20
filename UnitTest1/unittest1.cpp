@@ -1211,6 +1211,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(retry_token_length)
+        {
+            int ret = retry_token_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stored_token_length)
+        {
+            int ret = stored_token_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();

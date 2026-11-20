@@ -1585,7 +1585,11 @@ int picoquic_incoming_retry(
         if (ret == 0) {
             token_length = data_length - byte_index;
 
-            if (token_length > 0) {
+            if (token_length > PICOQUIC_NEW_TOKEN_MAX_LENGTH) {
+                ret = PICOQUIC_ERROR_UNEXPECTED_PACKET;
+                picoquic_log_app_message(cnx, "Retry packet rejected: token too long (%zu)", token_length);
+            }
+            else if (token_length > 0) {
                 token = malloc(token_length);
                 if (token == NULL) {
                     ret = PICOQUIC_ERROR_MEMORY;

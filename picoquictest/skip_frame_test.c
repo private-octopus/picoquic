@@ -554,6 +554,12 @@ static uint8_t test_frame_type_bad_new_token[] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 };
 
+/* Token one byte longer than PICOQUIC_NEW_TOKEN_MAX_LENGTH, with a 2-byte varint length */
+static uint8_t test_frame_type_new_token_too_long[3 + PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1] = {
+    picoquic_frame_type_new_token,
+    (uint8_t)(0x40 | ((PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1) >> 8)), (uint8_t)((PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1) & 0xFF)
+};
+
 /* Length 2^32+3 is truncated to 3 if cast to size_t on 32-bit builds */
 static uint8_t test_frame_type_bad_new_token_32[] = {
     picoquic_frame_type_new_token,
@@ -696,6 +702,7 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_new_token_32", test_frame_type_bad_new_token_32, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("new_token_too_long", test_frame_type_new_token_too_long, 0, 0, 3, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_first_range", test_frame_type_bad_ack_first_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_gaps", test_frame_type_bad_ack_gaps, 1, 0, 3, ERR_F, 0),

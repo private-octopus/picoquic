@@ -98,6 +98,8 @@ int test_version_negotiation_spoof(void);
 int wrong_source_addr_initial_test(void);
 int wrong_source_addr_vn_test(void);
 int wrong_source_addr_retry_test(void);
+int retry_token_length_test(void);
+int stored_token_length_test(void);
 int transport_param_test(void);
 int tls_api_sni_test(void);
 int tls_api_alpn_test(void);
