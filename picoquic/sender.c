@@ -2292,6 +2292,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
             else {
                 bytes = bytes_next;
                 cnx->max_path_id_local = new_max_path_id;
+                *is_pure_ack = 0;
             }
         }
         /* If the number of local lists is lower than the max number of paths,
