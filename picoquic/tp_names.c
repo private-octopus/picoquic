@@ -51,7 +51,7 @@ char const* picoquic_tp_name(picoquic_tp_enum tp_number)
         tp_name = "active_connection_id_limit";
         break;
     case picoquic_tp_retry_connection_id:
-        tp_name = "retry_souce_connection_id";
+        tp_name = "retry_source_connection_id";
         break;
     case picoquic_tp_handshake_connection_id:
         tp_name = "initial_source_connection_id";

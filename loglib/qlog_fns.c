@@ -797,7 +797,7 @@ void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int UN
         uint8_t sni_text[256];
         memcpy(sni_text, "sni: ", 5);
         if (sni_len > 250) {
-            sni_len = 259;
+            sni_len = 250;
         }
         memcpy(sni_text + 5, sni, sni_len);
         sni_text[sni_len + 5] = 0;
@@ -1163,7 +1163,6 @@ void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t u
             }
 
             qlog_fns_event_end(f);
-            ctx->event_count++;
         }
     }
 }
