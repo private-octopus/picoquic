@@ -15832,6 +15832,36 @@ int retry_token_length_test(void)
     return ret;
 }
 
+/* An Initial must not exceed the caller's send buffer. Keep the allocation
+ * exact so AddressSanitizer catches a write beyond send_buffer_max. */
+int send_buffer_bounds_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    uint8_t send_buffer[PICOQUIC_ENFORCED_INITIAL_MTU];
+    size_t send_length = 0;
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+    int if_index = 0;
+    int ret = tls_api_init_ctx(&test_ctx, 0, PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN,
+        &simulated_time, NULL, NULL, 0, 0, 0);
+
+    if (ret == 0) {
+        ret = picoquic_prepare_packet(test_ctx->cnx_client, simulated_time,
+            send_buffer, PICOQUIC_ENFORCED_INITIAL_MTU, &send_length,
+            &addr_to, &addr_from, &if_index);
+    }
+
+    if (ret == 0 && send_length != PICOQUIC_ENFORCED_INITIAL_MTU) {
+        DBG_PRINTF("Unexpected Initial length %zu with a 1200-byte send buffer", send_length);
+        ret = -1;
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
 /* The client must not send a stored token larger than PICOQUIC_NEW_TOKEN_MAX_LENGTH */
 int stored_token_length_test(void)
 {

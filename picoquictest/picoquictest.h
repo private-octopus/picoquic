@@ -100,6 +100,7 @@ int wrong_source_addr_vn_test(void);
 int wrong_source_addr_retry_test(void);
 int retry_token_length_test(void);
 int stored_token_length_test(void);
+int send_buffer_bounds_test(void);
 int transport_param_test(void);
 int tls_api_sni_test(void);
 int tls_api_alpn_test(void);

@@ -268,6 +268,7 @@ static const picoquic_test_def_t test_table[] = {
     { "wrong_source_addr_retry", wrong_source_addr_retry_test },
     { "retry_token_length", retry_token_length_test },
     { "stored_token_length", stored_token_length_test },
+    { "send_buffer_bounds", send_buffer_bounds_test },
     { "first_loss", tls_api_client_first_loss_test },
     { "second_loss", tls_api_client_second_loss_test },
     { "SH_loss", tls_api_server_first_loss_test },

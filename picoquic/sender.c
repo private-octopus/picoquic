@@ -3695,7 +3695,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 picoquic_packet_t* packet = NULL;
 
                 if (coalesced_packet_size > 0) {
-                    packet_max = path_x->send_mtu;
+                    /* Keep the caller's remaining buffer limit while enforcing the path MTU. */
+                    if (packet_max > path_x->send_mtu) {
+                        packet_max = path_x->send_mtu;
+                    }
 
                     if (packet_max < coalesced_packet_size + PICOQUIC_MIN_SEGMENT_SIZE) {
                         break;

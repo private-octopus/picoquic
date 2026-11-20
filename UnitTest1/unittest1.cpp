@@ -1225,6 +1225,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(send_buffer_bounds)
+        {
+            int ret = send_buffer_bounds_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();
