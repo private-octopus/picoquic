@@ -42,6 +42,9 @@ extern "C" {
         uint64_t pacing_packet_time;
         uint64_t cc_state;
         uint64_t cc_param;
+        struct sockaddr_storage addr_peer;
+        struct sockaddr_storage addr_local;
+        uint32_t tuple_hash;
 
         unsigned int last_bw_estimate_path_limited : 1;
     } qlog_fns_path_context_t;
@@ -53,8 +56,6 @@ extern "C" {
 
         uint32_t version_number;
         const char* cid_name; /*!< Name of the connection, default = initial connection id */
-        struct sockaddr_storage addr_peer;
-        struct sockaddr_storage addr_local;
         uint8_t ecn_sent;
         uint8_t ecn_received;
 
@@ -120,6 +121,13 @@ extern "C" {
     /* Write each transport parameter as a field of the current event. The
      * caller checks that tp holds tp_length bytes. */
     void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
+#if 0
+    /* Write the data of a packet event after its header, and close the event. */
+    void qlog_fns_packet_lost_data(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t path_ide, uint64_t current_time,
+        uint64_t ptype, uint64_t sequence_number, const uint8_t* trigger, size_t trigger_length,
+        const uint8_t* dcid, size_t dcid_length,
+        int has_packet_size, uint64_t packet_size);
+#endif
     /* Write a packet_lost, packet_dropped or packet_buffered event. */
     void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
@@ -130,8 +138,7 @@ extern "C" {
     void qlog_fns_packet_buffered_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
         uint64_t current_time, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
     /* Write the header of the qlog file, and the end of the qlog file. */
-    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time,
-        int trace_flow_id);
+    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time);
     void qlog_fns_trace_end(FILE* f);
 
 #ifdef __cplusplus

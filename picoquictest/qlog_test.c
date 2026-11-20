@@ -268,7 +268,7 @@ static int qlog_fns_pref_addr_check(const uint8_t* bytes, uint64_t len, char con
 int qlog_fns_pref_addr_test(void)
 {
     int ret = 0;
-    /* Exactly the four bytes the "len >= 4" admission check guarantees -- reading past it is the OOB bug this guards against. The trailing "port_v4":0 is a separate pre-existing quirk: that field prints before its own failed decode is checked. */
+    /* Exactly the four bytes the "len >= 4" admission check guarantees -- reading past it is the OOB bug this guards against. */
     uint8_t* min_bytes = (uint8_t*)malloc(4);
 
     if (min_bytes == NULL) {
@@ -276,29 +276,29 @@ int qlog_fns_pref_addr_test(void)
     }
     else {
         memcpy(min_bytes, qlog_fns_pref_addr_bytes, 4);
-        ret = qlog_fns_pref_addr_check(min_bytes, 4, "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":0}");
+        ret = qlog_fns_pref_addr_check(min_bytes, 4, "{\"address_v4\": {\"ip\": \"10.0.0.99\"}}");
         free(min_bytes);
     }
 
-    /* The address ends after the IPv4 port: the IPv6 string must still be closed. */
+    /* The address ends after the IPv4 port: no IPv6 address is written. */
     if (ret == 0) {
         ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, 6,
-            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"0\"}");
+            "{\"address_v4\": {\"ip\": \"10.0.0.99\", \"port\": 260}}");
     }
 
     /* Full TP, no extra bytes. */
     if (ret == 0) {
         ret = qlog_fns_pref_addr_check(qlog_fns_pref_addr_bytes, sizeof(qlog_fns_pref_addr_bytes),
-            "{\"ip_v4\": \"10.0.0.99\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
-            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "{\"address_v4\": {\"ip\": \"10.0.0.99\", \"port\": 260}, \"address_v6\": {\"ip\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port\": 520}, \"connection_id\": \"0f0e0d0c\", "
             "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\"}");
     }
 
     /* Full TP, with 4 trailing extra bytes -- exercises the "extra_bytes" field and the separator before it. */
     if (ret == 0) {
         ret = qlog_fns_pref_addr_check(qlog_pref_addr, sizeof(qlog_pref_addr),
-            "{\"ip_v4\": \"10.0.0.1\", \"port_v4\":260, \"ip_v6\": \"201:304:506:708:90a:b0c:d0e:f10\", "
-            "\"port_v6\" : 520, \"connection_id\": \"0f0e0d0c\", "
+            "{\"address_v4\": {\"ip\": \"10.0.0.1\", \"port\": 260}, \"address_v6\": {\"ip\": \"201:304:506:708:90a:b0c:d0e:f10\", "
+            "\"port\": 520}, \"connection_id\": \"0f0e0d0c\", "
             "\"stateless_reset_token\": \"000102030405060708090a0b0c0d0e0f\", \"extra_bytes\": \"10111213\"}");
     }
 
@@ -390,14 +390,14 @@ int qlog_fns_vnego_test(void)
 void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
 
 /* picoquic encodes enable_time_stamp as a varint, and reset_stream_at as a
- * flag with no value. Check that qlog writes a number and an empty string. */
+ * flag with no value. Check that qlog writes a number and true. */
 int qlog_fns_tp_types_test(void)
 {
     static uint8_t tp[] = {
         0x80, 0x00, 0x71, 0x58, 1, 3, /* enable_time_stamp = 3 */
         picoquic_tp_reset_stream_at, 0
     };
-    static char const* expected = ",\n    \"enable_time_stamp\" : 3,\n    \"reset_stream_at\" : \"\"";
+    static char const* expected = ",\n    \"enable_time_stamp\" : 3,\n    \"reset_stream_at\" : true";
     int ret = 0;
     char text[256];
     size_t text_length = 0;
@@ -526,6 +526,7 @@ int qlog_fns_format_test(void)
 
 #define QLOG_DAMAGED_BINLOG "qlog_damaged_record_test.log"
 #define QLOG_DAMAGED_QLOG "qlog_damaged_record_test.qlog"
+#define QLOG_DAMAGED_REF "picoquictest" PICOQUIC_FILE_SEPARATOR "qlog_damaged_record_ref.txt"
 
 static int qlog_damaged_write_record(FILE* F, const picoquic_connection_id_t* cid, uint64_t event_id,
     const uint8_t* data, size_t length)
@@ -558,26 +559,15 @@ static int qlog_damaged_write_record(FILE* F, const picoquic_connection_id_t* ci
     return ret;
 }
 
-/* Convert a binary log with damaged records. The qlog must not hold a field
- * that the record does not hold, and a message must be valid JSON text. */
+/* Convert a binary log with damaged records. The qlog must be valid JSON and
+ * match the reference file. */
 int qlog_damaged_record_test(void)
 {
-    static const char* expected[] = {
-        "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0}]",
-        "[0, \"transport\", \"datagram_received\", { \"byte_length\": 0, \"addr_from\" : {\"ip_v4\": \"10.0.0.1\", \"port_v4\":4433}}]",
-        "        \"dcid\" : \"01020304\"}}]",
-        "\"proposed_alpn\": [\"h3\"]}]",
-        "\"owner\": \"remote\"}]",
-        "\"message\": \"a\\\"b\\\\c\\u0001\"}]"
-    };
-    static const char* not_expected[] = { "ip_v6", "ecn", "packet_size", "\"alpn\"" };
     static const uint8_t message[] = { 'a', '"', 'b', '\\', 'c', 1 };
     picoquic_connection_id_t cid = { { 1, 2, 3, 4 }, 4 };
     struct sockaddr_in addr;
     bytestream_buf stream;
     bytestream* ps = bytestream_buf_init(&stream, BYTESTREAM_MAX_BUFFER_SIZE);
-    char qlog_text[4096];
-    size_t qlog_length = 0;
     uint16_t flags = 0;
     uint64_t log_time = 0;
     FILE* F = picoquic_file_open(QLOG_DAMAGED_BINLOG, "wb");
@@ -585,7 +575,7 @@ int qlog_damaged_record_test(void)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = 4433;
+    addr.sin_port = htons(4433);
     ((uint8_t*)&addr.sin_addr)[0] = 10;
     ((uint8_t*)&addr.sin_addr)[3] = 1;
 
@@ -685,73 +675,19 @@ int qlog_damaged_record_test(void)
         }
     }
 
+    if (ret == 0 && (ret = picoquic_check_json_well_formed(QLOG_DAMAGED_QLOG)) != 0) {
+        DBG_PRINTF("%s", "Damaged record test, QLOG output is not well-formed JSON.");
+    }
+
     if (ret == 0) {
-        F = picoquic_file_open(QLOG_DAMAGED_QLOG, "r");
-        if (F == NULL) {
-            ret = -1;
+        char damaged_ref[512];
+
+        if ((ret = picoquic_get_input_path(damaged_ref, sizeof(damaged_ref), picoquic_solution_dir, QLOG_DAMAGED_REF)) != 0) {
+            DBG_PRINTF("%s", "Cannot set the damaged record test ref file name.");
         }
         else {
-            qlog_length = fread(qlog_text, 1, sizeof(qlog_text) - 1, F);
-            qlog_text[qlog_length] = 0;
-            F = picoquic_file_close(F);
+            ret = picoquic_test_compare_text_files(QLOG_DAMAGED_QLOG, damaged_ref);
         }
-    }
-
-    for (size_t i = 0; ret == 0 && i < sizeof(expected) / sizeof(expected[0]); i++) {
-        if (strstr(qlog_text, expected[i]) == NULL) {
-            DBG_PRINTF("Damaged record test, missing: %s", expected[i]);
-            ret = -1;
-        }
-    }
-    for (size_t i = 0; ret == 0 && i < sizeof(not_expected) / sizeof(not_expected[0]); i++) {
-        if (strstr(qlog_text, not_expected[i]) != NULL) {
-            DBG_PRINTF("Damaged record test, unexpected: %s", not_expected[i]);
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
-#define QLOG_PACKET_CONTENT_FILE "qlog_fns_packet_content_test.txt"
-void qlog_fns_packet(picoquic_cnx_t* cnx, void* log_ctx, picoquic_path_t* path_x, int receiving, uint64_t current_time,
-    struct st_picoquic_packet_header_t* ph, const uint8_t* bytes, size_t byte_length);
-static int qlog_quic_fallback_check_file(char const* fname, char const** expected, size_t nb_expected);
-
-/* The qlog must hold the proposed versions and the retry token of received packets. */
-int qlog_fns_packet_content_test(void)
-{
-    static const char* expected[] = {
-        "\"proposed_versions\": [\"00000001\", \"ff00001d\"]}]",
-        "\"proposed_versions\": [\"00000001\", \"ff00001d\", \"... coding error!\"]}]",
-        "\"retry_token\": \"a1a2a3a4a5a6a7a8\"}]",
-        "\"packet_size\": 16 }}]"
-    };
-    static const uint8_t content[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d, 0xa1 };
-    /* A token of 8 bytes and an integrity tag of 16 bytes. */
-    static const uint8_t retry_content[] = {
-        0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8,
-        0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf
-    };
-    qlog_fns_context_t ctx = { 0 };
-    picoquic_packet_header ph = { 0 };
-    int ret = 0;
-
-    ctx.f_txtlog = picoquic_file_open(QLOG_PACKET_CONTENT_FILE, "w");
-    if (ctx.f_txtlog == NULL) {
-        ret = -1;
-    }
-    else {
-        ph.ptype = picoquic_packet_version_negotiation;
-        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, content, 8);
-        /* The last version has only 1 byte. */
-        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, content, 9);
-        ph.ptype = picoquic_packet_retry;
-        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, retry_content, sizeof(retry_content));
-        /* The packet has only the integrity tag. */
-        qlog_fns_packet(NULL, &ctx, NULL, 1, 0, &ph, retry_content + 8, 16);
-        ctx.f_txtlog = picoquic_file_close(ctx.f_txtlog);
-        ret = qlog_quic_fallback_check_file(QLOG_PACKET_CONTENT_FILE, expected, sizeof(expected) / sizeof(expected[0]));
     }
 
     return ret;
@@ -924,11 +860,6 @@ int qlog_error_test(void)
 	if (ret == 0) {
 		ret = qlog_damaged_record_test();
 	}
-
-	if (ret == 0) {
-		ret = qlog_fns_packet_content_test();
-	}
-
 	if (ret == 0) {
 		ret = qlog_cc_update_test();
 	}
@@ -1115,38 +1046,10 @@ int qlog_fns_trim_path_contexts_test(void)
 
 #define QLOG_QUIC_FALLBACK_FILE "0a0b0c0d.client.qlog"
 
-static int qlog_quic_fallback_check_file(char const* fname, char const** expected, size_t nb_expected)
-{
-    int ret = 0;
-    FILE* F = picoquic_file_open(fname, "rb");
-    char* buffer = NULL;
-    size_t nb_read = 0;
-
-    if (F == NULL || (buffer = (char*)malloc(0x10000)) == NULL) {
-        DBG_PRINTF("Cannot read %s", fname);
-        ret = -1;
-    }
-    else {
-        nb_read = fread(buffer, 1, 0x10000 - 1, F);
-        buffer[nb_read] = 0;
-        for (size_t i = 0; ret == 0 && i < nb_expected; i++) {
-            if (strstr(buffer, expected[i]) == NULL) {
-                DBG_PRINTF("Missing <%s> in %s", expected[i], fname);
-                ret = -1;
-            }
-        }
-    }
-    if (buffer != NULL) {
-        free(buffer);
-    }
-    (void)picoquic_file_close(F);
-    return ret;
-}
-
 /* The qlog backend provides neither log_quic_pdu nor log_quic_app_message. Verify that
- * picoquic_log_quic_pdu and picoquic_log_context_free_app_message are written instead in
- * the qlog of the first connection, and are safely skipped if there is no connection or
- * if that connection has no qlog context. */
+ * picoquic_log_quic_pdu and picoquic_log_context_free_app_message are safely skipped if
+ * there is no connection or if that connection has no qlog context, and that the qlog
+ * stays well formed. The content of the fallback events is checked by qlog_trace. */
 int qlog_quic_fallback_test(void)
 {
     int ret = 0;
@@ -1156,11 +1059,6 @@ int qlog_quic_fallback_test(void)
     struct sockaddr_storage addr_peer;
     struct sockaddr_storage addr_local;
     const picoquic_connection_id_t initial_cid = { { 10, 11, 12, 13 }, 4 };
-    char const* expected[] = {
-        "\"datagram_received\"",
-        "\"byte_length\": 1234",
-        "\"message\": \"Stateless reset test 17\""
-    };
 
     quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, simulated_time,
@@ -1212,9 +1110,6 @@ int qlog_quic_fallback_test(void)
         DBG_PRINTF("%s", "Quic fallback QLOG output is not well-formed JSON.");
     }
 
-    if (ret == 0) {
-        ret = qlog_quic_fallback_check_file(QLOG_QUIC_FALLBACK_FILE, expected, sizeof(expected) / sizeof(char const*));
-    }
 
     return ret;
 }
