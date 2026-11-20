@@ -1013,18 +1013,22 @@ typedef struct st_picoquic_tuple_t {
     /* Manage the publishing of observed addresses */
     int nb_observed_repeat;
     uint64_t observed_time;
+    /* Manage amplification limit */
+    uint64_t bytes_sent;
+    uint64_t bytes_received;
     /* Challenge used for this path */
     uint64_t challenge_response;
     uint64_t challenge[PICOQUIC_CHALLENGE_REPEAT_MAX];
     uint64_t challenge_time;
     uint64_t demotion_time;
     uint64_t challenge_time_first;
-    uint64_t is_nat_rebinding;
     uint8_t challenge_repeat_count;
     /* Flags */
     unsigned int is_backup;
     unsigned int challenge_required : 1;
     unsigned int challenge_verified : 1;
+    unsigned int is_address_validated : 1; /* stays set after a later re-challenge */
+    unsigned int is_nat_rebinding : 1; /* promoted before validation, may send data within the amplification limit */
     unsigned int challenge_failed : 1;
     unsigned int response_required : 1;
     unsigned int to_preferred_address : 1;
@@ -1050,6 +1054,22 @@ typedef struct st_picoquic_tuple_t {
 * Congestion control and spin bit management are path specific.
 * Packet numbering is global, see packet context.
 */
+/* RTT and MTU before the last CC reset, restored if that reset is found spurious */
+typedef struct st_picoquic_path_pre_reset_t {
+    uint64_t smoothed_rtt;
+    uint64_t rtt_variant;
+    uint64_t retransmit_timer;
+    uint64_t rtt_min;
+    uint64_t rtt_max;
+    uint64_t max_spurious_rtt;
+    uint64_t max_reorder_delay;
+    uint64_t max_reorder_gap;
+    size_t send_mtu;
+    size_t send_mtu_max_tried;
+    uint64_t cwin;
+    int is_valid;
+} picoquic_path_pre_reset_t;
+
 typedef struct st_picoquic_path_t {
     struct sockaddr_storage registered_peer_addr;
     picohash_item net_id_hash_item;
@@ -1181,6 +1201,7 @@ typedef struct st_picoquic_path_t {
     void* congestion_alg_state;
     picoquic_pacing_t pacing;
     uint64_t cc_reset_pn; /* Application packets numbered below this were sent before the last CC reset */
+    picoquic_path_pre_reset_t pre_reset;
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;
@@ -1665,6 +1686,9 @@ void picoquic_promote_tuple_after_nat(picoquic_path_t* path_x, picoquic_tuple_t*
 int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* path_x, picoquic_tuple_t* tuple,
     picoquic_packet_t* packet, uint64_t current_time, uint8_t* send_buffer, size_t send_buffer_max, size_t* send_length,
     uint64_t* next_wake_time);
+uint64_t picoquic_tuple_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple);
+size_t picoquic_clamp_to_amplification_budget(picoquic_cnx_t* cnx, picoquic_tuple_t* tuple,
+    size_t send_buffer_max, size_t checksum_overhead);
 uint8_t* picoquic_prepare_path_challenge_frames(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
     uint8_t* bytes_next, uint8_t* bytes_max,
     int* more_data, int* is_pure_ack, int* is_challenge_padding_needed,
@@ -1696,6 +1720,8 @@ int picoquic_share_peer_cnxid_with_tuple(picoquic_path_t* path_x, picoquic_tuple
 void picoquic_reset_path_mtu(picoquic_path_t* path_x);
 void picoquic_init_path_rtt(picoquic_path_t* path_x);
 void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_spurious_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
+void picoquic_restart_path_after_rebinding(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time);
 int picoquic_is_packet_after_cc_reset(picoquic_packet_t* packet);
 int picoquic_get_path_id_from_unique(picoquic_cnx_t* cnx, uint64_t unique_path_id);
 

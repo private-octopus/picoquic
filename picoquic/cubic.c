@@ -48,11 +48,21 @@ typedef struct st_picoquic_cubic_state_t {
     double W_reno;
     uint64_t ssthresh;
     picoquic_min_max_rtt_t rtt_filter;
+    /* State before the last reset, restored if the reset is spurious */
+    picoquic_cubic_alg_state_t pre_reset_alg_state;
+    uint64_t pre_reset_ssthresh;
+    double pre_reset_W_last_max;
 } picoquic_cubic_state_t;
 
 static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* path_x, uint64_t current_time) {
-    memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
+    picoquic_cubic_alg_state_t pre_reset_alg_state = cubic_state->alg_state;
+    uint64_t pre_reset_ssthresh = cubic_state->ssthresh;
+    double pre_reset_W_last_max = cubic_state->W_last_max;
+
     memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+    cubic_state->pre_reset_alg_state = pre_reset_alg_state;
+    cubic_state->pre_reset_ssthresh = pre_reset_ssthresh;
+    cubic_state->pre_reset_W_last_max = pre_reset_W_last_max;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     cubic_state->alg_state = picoquic_cubic_alg_slow_start;
     cubic_state->ssthresh = UINT64_MAX;
@@ -76,6 +86,7 @@ static void cubic_init(picoquic_path_t* path_x, char const* UNUSED(option_string
 #endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
+        memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
         cubic_reset(cubic_state, path_x, current_time);
     }
 }
@@ -243,6 +254,35 @@ static void cubic_correct_spurious(picoquic_path_t* path_x,
             path_x->cwin = cubic_state->previous_cwin;
             cubic_state->W_reno = (double)cubic_state->previous_cwin;
         }
+    }
+}
+
+/* Back to the address used before a spurious reset. Slow start resumes at the old cwin and ssthresh;
+ * congestion avoidance restarts the curve at the old cwin, as if it was the plateau W_max.
+ * In both cases, losses of packets sent before the restore are ignored. */
+static void cubic_reset_spurious(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
+    picoquic_cubic_state_t* cubic_state, uint64_t current_time)
+{
+    picoquic_cubic_alg_state_t pre_reset_alg_state = cubic_state->pre_reset_alg_state;
+    uint64_t pre_reset_ssthresh = cubic_state->pre_reset_ssthresh;
+    double pre_reset_W_last_max = cubic_state->pre_reset_W_last_max;
+
+    cubic_reset(cubic_state, path_x, current_time);
+    if (path_x->pre_reset.is_valid && path_x->pre_reset.cwin > PICOQUIC_CWIN_INITIAL) {
+        path_x->cwin = path_x->pre_reset.cwin;
+        cubic_state->ssthresh = pre_reset_ssthresh;
+        cubic_state->W_reno = (double)path_x->cwin;
+        if (pre_reset_alg_state != picoquic_cubic_alg_slow_start) {
+            cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+            cubic_state->W_last_max = pre_reset_W_last_max;
+            cubic_enter_avoidance(cubic_state, current_time);
+            cubic_state->K = 0;
+        }
+        path_x->is_ssthresh_initialized = (cubic_state->ssthresh != UINT64_MAX);
+        cubic_state->previous_alg_state = cubic_state->alg_state;
+        cubic_state->previous_ssthresh = cubic_state->ssthresh;
+        cubic_state->previous_cwin = path_x->cwin;
+        cubic_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
     }
 }
 
@@ -434,6 +474,9 @@ static void cubic_notify(
              */
             case picoquic_congestion_notification_reset:
                 cubic_reset(cubic_state, path_x, current_time);
+                break;
+            case picoquic_congestion_notification_spurious_reset:
+                cubic_reset_spurious(cnx, path_x, cubic_state, current_time);
                 break;
             default:
                 break;

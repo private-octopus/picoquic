@@ -4273,6 +4273,120 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_amplification) {
+            int ret = migration_amplification_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_recover) {
+            int ret = migration_spoof_recover_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_spoof_return) {
+            int ret = migration_spoof_return_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_newreno) {
+            int ret = spurious_reset_newreno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_cubic) {
+            int ret = spurious_reset_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_dcubic) {
+            int ret = spurious_reset_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_fastcc) {
+            int ret = spurious_reset_fastcc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_bbr1) {
+            int ret = spurious_reset_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_bbr) {
+            int ret = spurious_reset_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_c4) {
+            int ret = spurious_reset_c4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_chained) {
+            int ret = spurious_reset_chained_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_genuine) {
+            int ret = spurious_reset_genuine_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_newreno) {
+            int ret = spurious_startup_newreno_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_cubic) {
+            int ret = spurious_startup_cubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_dcubic) {
+            int ret = spurious_startup_dcubic_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_fastcc) {
+            int ret = spurious_startup_fastcc_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_bbr1) {
+            int ret = spurious_startup_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_bbr) {
+            int ret = spurious_startup_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_startup_c4) {
+            int ret = spurious_startup_c4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_retire_old_cid) {
             int ret = migration_retire_old_cid_test();
 

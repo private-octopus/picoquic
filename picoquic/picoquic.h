@@ -1834,6 +1834,7 @@ typedef enum {
     picoquic_congestion_notification_cwin_blocked,
     picoquic_congestion_notification_seed_cwin,
     picoquic_congestion_notification_reset,
+    picoquic_congestion_notification_spurious_reset,
     picoquic_congestion_notification_lost_feedback, /* notification of lost feedback */
     picoquic_congestion_notification_restart_from_idle /* notification before ack-eliciting restart from idle */
 } picoquic_congestion_notification_t;

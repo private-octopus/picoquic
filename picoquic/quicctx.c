@@ -3082,14 +3082,13 @@ void picoquic_init_path_rtt(picoquic_path_t* path_x)
     path_x->max_reorder_gap = 0;
 }
 
-/* Reset congestion control and RTT after migrating to a new address (RFC 9000, section 9.4) */
-void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+/* Restart from new packets only: packets in transit no longer count for CC, RTT or bandwidth */
+static void picoquic_restart_path_counters(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     picoquic_packet_context_t* pkt_ctx = (cnx->is_multipath_enabled) ?
         &path_x->pkt_ctx : &cnx->pkt_ctx[picoquic_packet_context_application];
 
     path_x->cc_reset_pn = pkt_ctx->send_sequence;
-    picoquic_init_path_rtt(path_x);
     path_x->nb_retransmit = 0;
     path_x->bytes_in_transit = 0;
     path_x->bandwidth_estimate = 0;
@@ -3100,14 +3099,76 @@ void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x
     path_x->max_sample_delivered = 0;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     picoquic_pacing_init(&path_x->pacing, current_time);
+}
+
+static void picoquic_notify_path_reset(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time,
+    picoquic_congestion_notification_t notification)
+{
     if (cnx->congestion_alg != NULL) {
         picoquic_per_ack_state_t ack_state = { 0 };
-        cnx->congestion_alg->alg_notify(cnx, path_x, picoquic_congestion_notification_reset,
-            &ack_state, current_time);
+        cnx->congestion_alg->alg_notify(cnx, path_x, notification, &ack_state, current_time);
     }
+}
+
+/* Reset congestion control and RTT after migrating to a new address (RFC 9000, section 9.4) */
+void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    /* Keep the older snapshot if no RTT was measured since the previous reset */
+    if (path_x->rtt_is_initialized) {
+        path_x->pre_reset.smoothed_rtt = path_x->smoothed_rtt;
+        path_x->pre_reset.rtt_variant = path_x->rtt_variant;
+        path_x->pre_reset.retransmit_timer = path_x->retransmit_timer;
+        path_x->pre_reset.rtt_min = path_x->rtt_min;
+        path_x->pre_reset.rtt_max = path_x->rtt_max;
+        path_x->pre_reset.max_spurious_rtt = path_x->max_spurious_rtt;
+        path_x->pre_reset.max_reorder_delay = path_x->max_reorder_delay;
+        path_x->pre_reset.max_reorder_gap = path_x->max_reorder_gap;
+        path_x->pre_reset.send_mtu = path_x->send_mtu;
+        path_x->pre_reset.send_mtu_max_tried = path_x->send_mtu_max_tried;
+        path_x->pre_reset.cwin = path_x->cwin;
+        path_x->pre_reset.is_valid = 1;
+    }
+    picoquic_init_path_rtt(path_x);
+    picoquic_restart_path_counters(cnx, path_x, current_time);
+    picoquic_notify_path_reset(cnx, path_x, current_time, picoquic_congestion_notification_reset);
     picoquic_log_app_message(cnx, "Reset congestion control on path %" PRIu64 " after migration, from packet %" PRIu64,
         path_x->unique_path_id, path_x->cc_reset_pn);
 }
+
+/* Return to the address used before a spurious NAT rebinding: restore RTT and MTU, restart bandwidth measurements */
+void picoquic_spurious_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_init_path_rtt(path_x);
+    if (path_x->pre_reset.is_valid) {
+        path_x->smoothed_rtt = path_x->pre_reset.smoothed_rtt;
+        path_x->rtt_variant = path_x->pre_reset.rtt_variant;
+        path_x->retransmit_timer = path_x->pre_reset.retransmit_timer;
+        path_x->rtt_min = path_x->pre_reset.rtt_min;
+        path_x->rtt_max = path_x->pre_reset.rtt_max;
+        path_x->max_spurious_rtt = path_x->pre_reset.max_spurious_rtt;
+        path_x->max_reorder_delay = path_x->pre_reset.max_reorder_delay;
+        path_x->max_reorder_gap = path_x->pre_reset.max_reorder_gap;
+        path_x->send_mtu = path_x->pre_reset.send_mtu;
+        path_x->send_mtu_max_tried = path_x->pre_reset.send_mtu_max_tried;
+        path_x->rtt_is_initialized = 1;
+    }
+    /* The CC reads path_x->pre_reset while processing the notification */
+    picoquic_restart_path_counters(cnx, path_x, current_time);
+    picoquic_notify_path_reset(cnx, path_x, current_time, picoquic_congestion_notification_spurious_reset);
+    path_x->pre_reset.is_valid = 0;
+    picoquic_log_app_message(cnx, "Spurious congestion control reset on path %" PRIu64 " after NAT rebinding, from packet %" PRIu64,
+        path_x->unique_path_id, path_x->cc_reset_pn);
+}
+
+/* From one unverified address to another: restart RTT and counters, keep the CC state and the pre-reset snapshots */
+void picoquic_restart_path_after_rebinding(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_init_path_rtt(path_x);
+    picoquic_restart_path_counters(cnx, path_x, current_time);
+    picoquic_log_app_message(cnx, "Restart path %" PRIu64 " counters after second NAT rebinding, from packet %" PRIu64,
+        path_x->unique_path_id, path_x->cc_reset_pn);
+}
+
 
 /* Packets sent before the last CC reset of their path do not count for congestion control or RTT */
 int picoquic_is_packet_after_cc_reset(picoquic_packet_t* packet)
@@ -3996,6 +4057,7 @@ picoquic_cnx_t* picoquic_create_cnx_internal(picoquic_quic_t* quic,
             /* Do not require verification for default path */
             cnx->path[0]->first_tuple->p_local_cnxid = cnxid0;
             cnx->path[0]->first_tuple->challenge_verified = 1;
+            cnx->path[0]->first_tuple->is_address_validated = 1;
 
             cnx->datagram_priority = cnx->quic->default_datagram_priority;
             cnx->high_priority_stream_id = UINT64_MAX;

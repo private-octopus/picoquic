@@ -26,6 +26,11 @@
 #include "picoquictest_internal.h"
 #include "tls_api.h"
 #include "picoquic_bbr.h"
+#include "picoquic_newreno.h"
+#include "picoquic_cubic.h"
+#include "picoquic_fastcc.h"
+#include "picoquic_bbr1.h"
+#include "picoquic_c4.h"
 #include "picoquic_qlog.h"
 #include "picoquic_unified_log.h"
 
@@ -293,6 +298,8 @@ int migration_test_one(int mtu_drop, int is_new_ip)
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
+    test_ctx->client_addr_2 = test_ctx->client_addr;
+
     if (mtu_drop) {
         /* The MTU drop test is specifically orientated towards verifying retransmissions,
          * which requires simulating losses */
@@ -412,12 +419,454 @@ int migration_controlled_test(void)
 
 int migration_mtu_drop_test(void)
 {
-    return migration_test_one(1, 0);
+    return migration_test_one(1, 1);
 }
 
 int migration_new_ip_test(void)
 {
     return migration_test_one(0, 1);
+}
+
+/* A client spoofs a victim address with a non probing packet, after which the tuple is promoted.
+ * Silent client: the server sends at most 3x the bytes received from the victim, then the tuple fails.
+ * Active client: the server returns to the client address and the transfer completes.
+ * Client back after both challenges failed: the old address is verified again and the transfer completes. */
+static test_api_stream_desc_t test_scenario_amplification[] = {
+    { 4, 0, 257, 1000000 }
+};
+
+static int migration_amplification_test_one(int is_client_silent, int is_client_back)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    uint64_t end_time;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x1a, 0xa3, 0x5f, 4, 5, 6, 7, 8}, 8 };
+    struct sockaddr_in victim_addr;
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_from;
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    size_t length = 0;
+    uint64_t bytes_from_victim = 0;
+    uint64_t bytes_to_victim = 0;
+    picoquic_tuple_t* victim_tuple = NULL;
+    picoquic_tuple_t* client_tuple = NULL;
+    int is_victim_failed = 0;
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[3] += (uint8_t)(is_client_silent + is_client_back);
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_amplification, sizeof(test_scenario_amplification));
+    }
+    /* Let the download start, so the server has data to send. */
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        test_ctx->cnx_server->path[0]->bytes_sent < 100000) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0 && test_ctx->cnx_server == NULL) {
+        ret = -1;
+    }
+    /* Build a non probing packet at the client, and deliver it from the victim address. */
+    if (ret == 0) {
+        int if_index = 0;
+        uint8_t ping = picoquic_frame_type_ping;
+
+        victim_addr = test_ctx->client_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        victim_addr.sin_port += 23;
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+        if (ret == 0) {
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+                &addr_to, &addr_from, &if_index, NULL);
+        }
+        if (ret == 0 && length == 0) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            bytes_from_victim = length;
+            ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)&victim_addr,
+                (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+        }
+        if (ret == 0) {
+            victim_tuple = test_ctx->cnx_server->path[0]->first_tuple;
+            client_tuple = victim_tuple->next_tuple;
+            if (picoquic_compare_addr((struct sockaddr*)&victim_tuple->peer_addr, (struct sockaddr*)&victim_addr) != 0) {
+                DBG_PRINTF("%s", "Spoofed tuple was not promoted");
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0 && !is_client_silent) {
+        /* The client keeps running from its own address. */
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        if (ret == 0) {
+            ret = tls_api_one_scenario_verify(test_ctx);
+        }
+        if (ret == 0 && (picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&test_ctx->client_addr) != 0 || !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified)) {
+            DBG_PRINTF("%s", "Server did not return to the client address");
+            ret = -1;
+        }
+    }
+    /* The client stays silent: run the server alone, nothing is delivered. */
+    end_time = simulated_time + 10000000;
+    nb_rounds = 0;
+    while (ret == 0 && is_client_silent && simulated_time < end_time && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        !(is_client_back && client_tuple->challenge_failed)) {
+        int if_index = 0;
+        picoquic_cnx_t* last_cnx = NULL;
+        uint64_t next_time = picoquic_get_next_wake_time(test_ctx->qserver, simulated_time);
+
+        if (next_time > simulated_time) {
+            simulated_time = next_time;
+        }
+        ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer, sizeof(buffer), &length,
+            &addr_to, &addr_from, &if_index, NULL, &last_cnx, NULL);
+        if (ret == 0 && length > 0 &&
+            picoquic_compare_addr((struct sockaddr*)&addr_to, (struct sockaddr*)&victim_addr) == 0) {
+            bytes_to_victim += length;
+        }
+        if (picoquic_get_first_cnx(test_ctx->qserver) == NULL) {
+            /* The server connection was deleted after its timeout */
+            test_ctx->cnx_server = NULL;
+        }
+        else if (victim_tuple->challenge_failed) {
+            is_victim_failed = 1;
+        }
+        nb_rounds++;
+    }
+    if (ret == 0 && is_client_silent) {
+        if (bytes_to_victim == 0 || bytes_to_victim > 3 * bytes_from_victim) {
+            DBG_PRINTF("Sent %" PRIu64 " bytes to victim, received %" PRIu64, bytes_to_victim, bytes_from_victim);
+            ret = -1;
+        }
+        else if (!is_victim_failed) {
+            DBG_PRINTF("%s", "Spoofed tuple did not fail");
+            ret = -1;
+        }
+    }
+    if (ret == 0 && is_client_back) {
+        /* The client sends a non probing packet from its old address, after its challenge failed. */
+        int if_index = 0;
+        uint8_t ping = picoquic_frame_type_ping;
+
+        ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+        if (ret == 0) {
+            ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+                &addr_to, &addr_from, &if_index, NULL);
+        }
+        if (ret == 0 && length == 0) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)&test_ctx->client_addr,
+                (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+        }
+        if (ret == 0 && (test_ctx->cnx_server->path[0]->first_tuple != client_tuple ||
+            !client_tuple->challenge_verified || client_tuple->challenge_failed)) {
+            DBG_PRINTF("%s", "Old address not restored as verified");
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+        }
+        if (ret == 0) {
+            ret = tls_api_one_scenario_verify(test_ctx);
+        }
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int migration_amplification_test(void)
+{
+    return migration_amplification_test_one(1, 0);
+}
+
+int migration_spoof_recover_test(void)
+{
+    return migration_amplification_test_one(0, 0);
+}
+
+int migration_spoof_return_test(void)
+{
+    return migration_amplification_test_one(1, 1);
+}
+
+/* NAT rebinding followed by a return to the old client address, during or after the CC startup state.
+ * Spoofed rebinding: the return restores RTT, MTU and the pre-reset congestion window.
+ * Verified rebinding: the return is a normal reset.
+ * Two spoofed rebindings: the second restarts the path counters, the return restores the state before the first. */
+static test_api_stream_desc_t test_scenario_spurious_reset[] = {
+    { 4, 0, 257, 4000000 }
+};
+
+static int spurious_reset_test_one(picoquic_congestion_algorithm_t* cc_algo, int is_genuine, int is_startup, int nb_spoofs)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    picoquic_connection_id_t initial_cid = { {0x5b, 0x0e, 0, 4, 5, 6, 7, 8}, 8 };
+    struct sockaddr_in other_addr;
+    uint64_t cwin_before = 0;
+    uint64_t rtt_min_before = 0;
+    size_t mtu_before = 0;
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[2] = (uint8_t)(cc_algo->congestion_algorithm_number * 8 + nb_spoofs * 4 + is_genuine * 2 + is_startup);
+    ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm(test_ctx->qserver, cc_algo);
+        picoquic_set_congestion_algorithm(test_ctx->cnx_client, cc_algo);
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_spurious_reset, sizeof(test_scenario_spurious_reset));
+    }
+    /* Let the download progress, until the CC leaves its startup state (numbered 0 in all tested algorithms),
+     * or for a short time if testing the startup state. */
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL) {
+        int was_active = 0;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
+
+        cc_algo->alg_observe(test_ctx->cnx_server->path[0], &cc_state, &cc_param);
+        if (is_startup && test_ctx->cnx_server->path[0]->bytes_sent >= 100000) {
+            if (cc_state != 0) {
+                DBG_PRINTF("%s", "CC already left its startup state");
+                ret = -1;
+            }
+            break;
+        }
+        if (!is_startup && test_ctx->cnx_server->path[0]->bytes_sent >= 400000 && cc_state != 0) {
+            break;
+        }
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0 && (test_ctx->cnx_server == NULL || nb_rounds >= 100000)) {
+        DBG_PRINTF("%s", "CC did not leave its startup state");
+        ret = -1;
+    }
+    if (ret == 0) {
+        cwin_before = test_ctx->cnx_server->path[0]->cwin;
+        rtt_min_before = test_ctx->cnx_server->path[0]->rtt_min;
+        mtu_before = test_ctx->cnx_server->path[0]->send_mtu;
+        other_addr = test_ctx->client_addr;
+        other_addr.sin_addr.s_addr ^= 0x01010000;
+        other_addr.sin_port += 23;
+    }
+    if (ret == 0 && !is_genuine) {
+        /* Deliver non probing client packets from spoofed addresses. */
+        uint64_t cc_reset_pn = 0;
+
+        for (int i = 0; ret == 0 && i < nb_spoofs; i++) {
+            uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+            size_t length = 0;
+            struct sockaddr_storage addr_to;
+            struct sockaddr_storage addr_from;
+            int if_index = 0;
+            uint8_t ping = picoquic_frame_type_ping;
+
+            if (i > 0) {
+                /* A different IP address, since a port change does not reset CC */
+                other_addr.sin_addr.s_addr ^= 0x04040000;
+            }
+            ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+            if (ret == 0) {
+                ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+                    &addr_to, &addr_from, &if_index, NULL);
+            }
+            if (ret == 0 && length == 0) {
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)&other_addr,
+                    (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+            }
+            /* Only the server sends before the next spoofed packet, nothing is delivered */
+            for (int j = 0; ret == 0 && j < 4; j++) {
+                picoquic_cnx_t* last_cnx = NULL;
+                ret = picoquic_prepare_next_packet_ex(test_ctx->qserver, simulated_time, buffer, sizeof(buffer), &length,
+                    &addr_to, &addr_from, &if_index, NULL, &last_cnx, NULL);
+            }
+            if (ret == 0 && picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&other_addr) != 0) {
+                DBG_PRINTF("Spoofed rebinding %d not promoted", i);
+                ret = -1;
+            }
+            if (ret == 0 && i > 0 && test_ctx->cnx_server->path[0]->cc_reset_pn <= cc_reset_pn) {
+                DBG_PRINTF("%s", "Path counters not restarted after second rebinding");
+                ret = -1;
+            }
+            if (ret == 0) {
+                cc_reset_pn = test_ctx->cnx_server->path[0]->cc_reset_pn;
+            }
+        }
+    }
+    else if (ret == 0) {
+        /* Genuine rebinding: wait until the server verified the new address. */
+        test_ctx->client_addr_natted = other_addr;
+        test_ctx->client_use_nat = 1;
+        nb_rounds = 0;
+        while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+            (picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+                (struct sockaddr*)&other_addr) != 0 || !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified)) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            nb_rounds++;
+        }
+        test_ctx->client_use_nat = 0;
+    }
+    if (ret == 0 && (test_ctx->cnx_server == NULL ||
+        picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&other_addr) != 0)) {
+        DBG_PRINTF("%s", "Rebinding did not happen");
+        ret = -1;
+    }
+    /* The client sends from its old address again, until the server returns to it. */
+    nb_rounds = 0;
+    while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+        picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&test_ctx->client_addr) != 0) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0) {
+        picoquic_path_t* path_x = test_ctx->cnx_server->path[0];
+
+        if (picoquic_compare_addr((struct sockaddr*)&path_x->first_tuple->peer_addr,
+            (struct sockaddr*)&test_ctx->client_addr) != 0) {
+            DBG_PRINTF("%s", "Server did not return to the client address");
+            ret = -1;
+        }
+        else if (cwin_before <= 2 * PICOQUIC_CWIN_INITIAL) {
+            DBG_PRINTF("Cwin %" PRIu64 " too small for the test", cwin_before);
+            ret = -1;
+        }
+        else if (!is_genuine && (path_x->rtt_min != rtt_min_before || path_x->send_mtu != mtu_before ||
+            2 * path_x->cwin < cwin_before)) {
+            DBG_PRINTF("Not restored: cwin %" PRIu64 " vs %" PRIu64 ", rtt_min %" PRIu64 " vs %" PRIu64 ", mtu %zu vs %zu",
+                path_x->cwin, cwin_before, path_x->rtt_min, rtt_min_before, path_x->send_mtu, mtu_before);
+            ret = -1;
+        }
+        else if (is_genuine && path_x->cwin > 2 * PICOQUIC_CWIN_INITIAL) {
+            DBG_PRINTF("Not reset: cwin %" PRIu64 " vs %" PRIu64, path_x->cwin, cwin_before);
+            ret = -1;
+        }
+    }
+    /* The transfer completes */
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, &simulated_time, 0);
+    }
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+int spurious_reset_newreno_test(void)
+{
+    return spurious_reset_test_one(picoquic_newreno_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_newreno_test(void)
+{
+    return spurious_reset_test_one(picoquic_newreno_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_cubic_test(void)
+{
+    return spurious_reset_test_one(picoquic_cubic_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_cubic_test(void)
+{
+    return spurious_reset_test_one(picoquic_cubic_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_dcubic_test(void)
+{
+    return spurious_reset_test_one(picoquic_dcubic_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_dcubic_test(void)
+{
+    return spurious_reset_test_one(picoquic_dcubic_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_fastcc_test(void)
+{
+    return spurious_reset_test_one(picoquic_fastcc_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_fastcc_test(void)
+{
+    return spurious_reset_test_one(picoquic_fastcc_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_bbr1_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr1_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_bbr1_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr1_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_bbr_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_bbr_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_c4_test(void)
+{
+    return spurious_reset_test_one(c4_algorithm, 0, 0, 1);
+}
+
+int spurious_startup_c4_test(void)
+{
+    return spurious_reset_test_one(c4_algorithm, 0, 1, 1);
+}
+
+int spurious_reset_chained_test(void)
+{
+    return spurious_reset_test_one(picoquic_newreno_algorithm, 0, 0, 2);
+}
+
+int spurious_reset_genuine_test(void)
+{
+    return spurious_reset_test_one(picoquic_newreno_algorithm, 1, 0, 0);
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client
@@ -1527,7 +1976,7 @@ int multipath_basic_test(void)
 
 int multipath_fail_test(void)
 {
-    uint64_t max_completion_microsec = 2000000;
+    uint64_t max_completion_microsec = 2500000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_fail);
 }

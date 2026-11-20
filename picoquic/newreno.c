@@ -35,11 +35,43 @@
 
 void picoquic_newreno_sim_reset(picoquic_newreno_sim_state_t * nrss)
 {
+    /* remember the pre-reset value to handle spurious reset */
+    uint64_t alg_state = nrss->alg_state;
+    uint64_t ssthresh = nrss->ssthresh;
+    uint64_t cwin = nrss->cwin;
     /* Initialize the state of the congestion control algorithm */
     memset(nrss, 0, sizeof(picoquic_newreno_sim_state_t));
     nrss->alg_state = picoquic_newreno_alg_slow_start;
     nrss->ssthresh = UINT64_MAX;
     nrss->cwin = PICOQUIC_CWIN_INITIAL;
+    nrss->last_reset_alg_state = alg_state;
+    nrss->last_reset_cwin = cwin;
+    nrss->last_reset_ssthresh = ssthresh;
+}
+
+static void picoquic_newreno_reset_spurious(
+    picoquic_newreno_sim_state_t* nrss,
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x)
+{
+    /* restore the pre-reset values */
+    picoquic_newreno_alg_state_t alg_state = (picoquic_newreno_alg_state_t)nrss->last_reset_alg_state;
+    uint64_t cwin = nrss->last_reset_cwin;
+    uint64_t ssthresh = nrss->last_reset_ssthresh;
+    memset(nrss, 0, sizeof(picoquic_newreno_sim_state_t));
+    if (cwin == 0) {
+        /* No state saved before the reset */
+        nrss->alg_state = picoquic_newreno_alg_slow_start;
+        nrss->ssthresh = UINT64_MAX;
+        nrss->cwin = PICOQUIC_CWIN_INITIAL;
+    }
+    else {
+        nrss->alg_state = alg_state;
+        nrss->ssthresh = ssthresh;
+        nrss->cwin = cwin;
+    }
+    /* Ignore losses of packets sent before the restore; recovery_start stays 0 so spurious repeats cannot inflate cwin */
+    nrss->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
 }
 
 /* The recovery state last 1 RTT, during which parameters will be frozen
@@ -167,6 +199,9 @@ void picoquic_newreno_sim_notify(
     case picoquic_congestion_notification_reset:
         picoquic_newreno_sim_reset(nr_state);
         break;
+    case picoquic_congestion_notification_spurious_reset:
+        picoquic_newreno_reset_spurious(nr_state, cnx, path_x);
+        break;
     case picoquic_congestion_notification_seed_cwin:
         picoquic_newreno_sim_seed_cwin(nr_state, ack_state->nb_bytes_acknowledged);
         break;
@@ -187,7 +222,7 @@ typedef struct st_picoquic_newreno_state_t {
 
 static void picoquic_newreno_reset(picoquic_newreno_state_t* nr_state, picoquic_path_t* path_x)
 {
-    memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
+    memset(&nr_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
     picoquic_newreno_sim_reset(&nr_state->nrss);
     path_x->cwin = nr_state->nrss.cwin;
 }
@@ -202,6 +237,7 @@ static void picoquic_newreno_init(picoquic_path_t* path_x, char const* UNUSED(op
 #endif
 
     if (nr_state != NULL) {
+        memset(nr_state, 0, sizeof(picoquic_newreno_state_t));
         picoquic_newreno_reset(nr_state, path_x);
         path_x->congestion_alg_state = nr_state;
     }
@@ -290,6 +326,12 @@ static void picoquic_newreno_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_newreno_reset(nr_state, path_x);
+            break;
+        case picoquic_congestion_notification_spurious_reset:
+            memset(&nr_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
+            picoquic_newreno_sim_notify(&nr_state->nrss, cnx, path_x, notification, ack_state, current_time);
+            path_x->cwin = nr_state->nrss.cwin;
+            path_x->is_ssthresh_initialized = (nr_state->nrss.ssthresh != UINT64_MAX);
             break;
         default:
             /* ignore */

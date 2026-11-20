@@ -296,6 +296,13 @@ typedef struct st_picoquic_bbr1_state_t {
     unsigned int is_suspended;
     unsigned int is_suspension_nearly_over : 1; /* Suspension likely over, waiting for ACK before repeating data. */
 
+    /* Model before the last reset, restored if the reset is spurious */
+    picoquic_bbr1_alg_state_t pre_reset_state;
+    uint64_t pre_reset_btl_bw_filter[BBR1_BTL_BW_FILTER_LENGTH];
+    uint64_t pre_reset_btl_bw;
+    uint64_t pre_reset_full_bw;
+    uint64_t pre_reset_rt_prop;
+    int pre_reset_filled_pipe;
 } picoquic_bbr1_state_t;
 
 void BBR1ltbwSampling(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, uint64_t current_time);
@@ -450,7 +457,24 @@ static void picoquic_bbr1_set_options(picoquic_bbr1_state_t* bbr1_state)
 
 static void picoquic_bbr1_reset(picoquic_bbr1_state_t* bbr1_state, picoquic_path_t* path_x, uint64_t current_time)
 {
+    const char* option_string = bbr1_state->option_string;
+    picoquic_bbr1_alg_state_t pre_reset_state = bbr1_state->state;
+    uint64_t pre_reset_btl_bw_filter[BBR1_BTL_BW_FILTER_LENGTH];
+    uint64_t pre_reset_btl_bw = bbr1_state->btl_bw;
+    uint64_t pre_reset_full_bw = bbr1_state->full_bw;
+    uint64_t pre_reset_rt_prop = bbr1_state->rt_prop;
+    int pre_reset_filled_pipe = bbr1_state->filled_pipe;
+
+    memcpy(pre_reset_btl_bw_filter, bbr1_state->btl_bw_filter, sizeof(pre_reset_btl_bw_filter));
     memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
+    /* The options survive the reset */
+    bbr1_state->option_string = option_string;
+    bbr1_state->pre_reset_state = pre_reset_state;
+    memcpy(bbr1_state->pre_reset_btl_bw_filter, pre_reset_btl_bw_filter, sizeof(pre_reset_btl_bw_filter));
+    bbr1_state->pre_reset_btl_bw = pre_reset_btl_bw;
+    bbr1_state->pre_reset_full_bw = pre_reset_full_bw;
+    bbr1_state->pre_reset_rt_prop = pre_reset_rt_prop;
+    bbr1_state->pre_reset_filled_pipe = pre_reset_filled_pipe;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     bbr1_state->rt_prop = UINT64_MAX; 
     picoquic_bbr1_set_options(bbr1_state);
@@ -475,6 +499,7 @@ static void picoquic_bbr1_init(picoquic_path_t* path_x, char const* option_strin
 
     path_x->congestion_alg_state = (void*)bbr1_state;
     if (bbr1_state != NULL) {
+        memset(bbr1_state, 0, sizeof(picoquic_bbr1_state_t));
         bbr1_state->option_string = option_string;
         picoquic_bbr1_reset(bbr1_state, path_x, current_time);
     }
@@ -1215,6 +1240,46 @@ void picoquic_bbr1_suspension_exit(
 
 
 
+/* Back to the address used before a spurious reset: restore rt_prop and cwin. If the pipe
+ * was filled, also restore the bandwidth filter and resume in probe BW from the current time.
+ * Losses of packets sent before the restore are ignored. */
+static void picoquic_bbr1_reset_spurious(picoquic_bbr1_state_t* bbr1_state, picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x, uint64_t current_time)
+{
+    picoquic_bbr1_alg_state_t pre_reset_state = bbr1_state->pre_reset_state;
+    uint64_t pre_reset_btl_bw_filter[BBR1_BTL_BW_FILTER_LENGTH];
+    uint64_t pre_reset_btl_bw = bbr1_state->pre_reset_btl_bw;
+    uint64_t pre_reset_full_bw = bbr1_state->pre_reset_full_bw;
+    uint64_t pre_reset_rt_prop = bbr1_state->pre_reset_rt_prop;
+    int pre_reset_filled_pipe = bbr1_state->pre_reset_filled_pipe;
+
+    memcpy(pre_reset_btl_bw_filter, bbr1_state->pre_reset_btl_bw_filter, sizeof(pre_reset_btl_bw_filter));
+    picoquic_bbr1_reset(bbr1_state, path_x, current_time);
+    if (path_x->pre_reset.is_valid && pre_reset_rt_prop != UINT64_MAX && pre_reset_rt_prop > 0) {
+        bbr1_state->rt_prop = pre_reset_rt_prop;
+        bbr1_state->rt_prop_stamp = current_time;
+        if (pre_reset_filled_pipe && pre_reset_state != picoquic_bbr1_alg_startup &&
+            pre_reset_state != picoquic_bbr1_alg_startup_long_rtt) {
+            memcpy(bbr1_state->btl_bw_filter, pre_reset_btl_bw_filter, sizeof(pre_reset_btl_bw_filter));
+            bbr1_state->btl_bw = pre_reset_btl_bw;
+            bbr1_state->full_bw = pre_reset_full_bw;
+            bbr1_state->filled_pipe = 1;
+            path_x->is_ssthresh_initialized = 1;
+            BBR1EnterProbeBW(bbr1_state, path_x, current_time);
+        }
+        BBR1SetSendQuantum(bbr1_state, path_x);
+        BBR1UpdateTargetCwnd(bbr1_state);
+        if (path_x->pre_reset.cwin > path_x->cwin) {
+            path_x->cwin = path_x->pre_reset.cwin;
+        }
+        BBR1SetPacingRate(bbr1_state);
+        if (bbr1_state->pacing_rate > 0) {
+            picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
+        }
+        bbr1_state->congestion_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+    }
+}
+
 /*
  * In order to implement BBR1, we map generic congestion notification
  * signals to the corresponding BBR1 actions.
@@ -1318,6 +1383,9 @@ static void picoquic_bbr1_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_bbr1_reset(bbr1_state, path_x, current_time);
+            break;
+        case picoquic_congestion_notification_spurious_reset:
+            picoquic_bbr1_reset_spurious(bbr1_state, cnx, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             if (bbr1_state->state == picoquic_bbr1_alg_startup_long_rtt) {
