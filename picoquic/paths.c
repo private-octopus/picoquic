@@ -281,13 +281,18 @@ int picoquic_prepare_path_control_packet(picoquic_cnx_t* cnx, picoquic_path_t* p
     }
 
     if (ret == 0 && length > header_length) {
-        /* Ensure that all packets are properly padded before being sent. */
+        /* Ensure that all packets are properly padded before being sent, but only
+        * if the amplification budget allows it.
+         */
+        uint64_t budget = picoquic_tuple_data_budget(cnx, tuple);
 
-        if (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU) {
-            length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
-        }
-        else {
-            length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+        if (budget != UINT64_MAX && PICOQUIC_ENFORCED_INITIAL_MTU < budget + length) {
+            if (is_challenge_padding_needed && length < PICOQUIC_ENFORCED_INITIAL_MTU) {
+                length = picoquic_pad_to_target_length(bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+            }
+            else {
+                length = picoquic_pad_to_policy(cnx, bytes, length, (uint32_t)(send_buffer_min_max - checksum_overhead));
+            }
         }
     }
     else {
