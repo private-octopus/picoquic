@@ -777,6 +777,7 @@ int multipath_break1_test(void);
 int multipath_socket_error_test(void);
 int multipath_socket0_error_test(void);
 int multipath_abandon_test(void);
+int multipath_nat_abandon_test(void);
 int multipath_abandon_last_test(void);
 int multipath_abandon_last_by_peer_test(void);
 int multipath_last_path_validation_fails_test(void);

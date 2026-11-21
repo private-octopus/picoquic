@@ -4440,6 +4440,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_nat_abandon) {
+            int ret = multipath_nat_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_abandon_last) {
             int ret = multipath_abandon_last_test();
 

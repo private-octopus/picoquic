@@ -635,6 +635,7 @@ typedef enum {
     multipath_test_break_both,
     multipath_test_drop_first_c2s,
     multipath_test_drop_first_s2c,
+    multipath_test_nat_abandon,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -1161,7 +1162,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
         test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both ||
-        test_id == multipath_test_drop_first_c2s || test_id == multipath_test_drop_first_s2c)) {
+        test_id == multipath_test_drop_first_c2s || test_id == multipath_test_drop_first_s2c ||
+        test_id == multipath_test_nat_abandon)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
          * For the tunnel scenario, do the same but kill both links.
@@ -1180,13 +1182,26 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             if (test_id == multipath_test_renew) {
                 ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
             }
-            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
+            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
+                test_id == multipath_test_nat_abandon) {
                 /* Change the client address */
                 test_ctx->client_addr_natted = test_ctx->client_addr;
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
                 if (test_id == multipath_test_nat_challenge) {
                     test_ctx->cnx_client->path[0]->first_tuple->challenge_required = 1;
+                }
+                else if (test_id == multipath_test_nat_abandon) {
+                    /* Abandon path 0 while the server still has a tuple for the old address */
+                    ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 100000);
+                    if (ret == 0 && (test_ctx->cnx_server->path[0]->first_tuple->next_tuple == NULL ||
+                        test_ctx->cnx_server->path[0]->first_tuple->next_tuple->p_remote_cnxid == NULL)) {
+                        DBG_PRINTF("%s", "No second tuple with a peer CID on server path 0.\n");
+                        ret = -1;
+                    }
+                    if (ret == 0) {
+                        ret = picoquic_abandon_path(test_ctx->cnx_client, 0, 0, simulated_time);
+                    }
                 }
             }
             else if (test_id == multipath_test_abandon) {
@@ -1255,7 +1270,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
     /* In the "abandon" scenario, allow for a bit more than 1 second of delay for clearing of paths */
-    if (ret == 0 && test_id == multipath_test_abandon) {
+    if (ret == 0 && (test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
         uint64_t timeout = 1100000;
 
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
@@ -1386,7 +1401,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 || test_id == multipath_test_abandon)) {
+    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
+        test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -1661,6 +1677,14 @@ int multipath_abandon_test(void)
     uint64_t max_completion_microsec = 3800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_abandon);
+}
+
+/* NAT rebinding on path 0, then the client abandons path 0. */
+int multipath_nat_abandon_test(void)
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat_abandon);
 }
 
 /* 
