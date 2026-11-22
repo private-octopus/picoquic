@@ -925,6 +925,15 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
     return ret;
 }
 
+/* Is this the tuple that was the default when the last CC snapshot was taken? */
+static int picoquic_is_pre_reset_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
+{
+    return path_x->pre_reset.is_valid &&
+        picoquic_compare_addr((struct sockaddr*)&path_x->pre_reset.peer_addr, (struct sockaddr*)&tuple->peer_addr) == 0 &&
+        (path_x->pre_reset.local_addr.ss_family == 0 || tuple->local_addr.ss_family == 0 ||
+            picoquic_compare_addr((struct sockaddr*)&path_x->pre_reset.local_addr, (struct sockaddr*)&tuple->local_addr) == 0);
+}
+
 void picoquic_promote_tuple_to_default(
     picoquic_path_t* path_x, picoquic_tuple_t* tuple, picoquic_tuple_t* previous_tuple, uint64_t current_time)
 {
@@ -945,18 +954,23 @@ void picoquic_promote_tuple_to_default(
             path_x->cnx->remote_parameters.migration_disabled = 0;
             picoquic_log_app_message(path_x->cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
         }
-        if (is_new_address && old_first->is_nat_rebinding && tuple->is_address_validated) {
+        if (is_new_address && old_first->is_nat_rebinding && tuple->is_address_validated &&
+            picoquic_is_pre_reset_tuple(path_x, tuple)) {
             /* Back from an unverified NAT rebinding: the previous reset was spurious, restores RTT and MTU */
             picoquic_spurious_path_congestion(path_x->cnx, path_x, current_time);
         }
         else {
             if (is_new_address) {
-                if (old_first->is_nat_rebinding) {
+                if (old_first->is_nat_rebinding && !tuple->is_address_validated) {
                     /* From one unverified address to another: CC was already reset, keep its pre-reset state */
                     picoquic_restart_path_after_rebinding(path_x->cnx, path_x, current_time);
                 }
                 else {
                     picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
+                    if (path_x->pre_reset.is_valid) {
+                        picoquic_store_addr(&path_x->pre_reset.peer_addr, (struct sockaddr*)&old_first->peer_addr);
+                        picoquic_store_addr(&path_x->pre_reset.local_addr, (struct sockaddr*)&old_first->local_addr);
+                    }
                 }
             }
             /* A port change can also lower the MTU; reset after the CC snapshot of send_mtu */

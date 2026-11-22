@@ -3118,8 +3118,12 @@ static void picoquic_notify_path_reset(picoquic_cnx_t* cnx, picoquic_path_t* pat
 /* Reset congestion control and RTT after migrating to a new address (RFC 9000, section 9.4) */
 void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
-    /* Keep the older snapshot if no RTT was measured since the previous reset */
-    if (path_x->rtt_init_time > 0) {
+    uint64_t highest_acknowledged = (cnx->is_multipath_enabled) ? path_x->pkt_ctx.highest_acknowledged :
+        cnx->pkt_ctx[picoquic_packet_context_application].highest_acknowledged;
+
+    /* Snapshot only after an ACK of a packet sent since the last restart, so repeated rebindings cannot keep the CC blind */
+    path_x->pre_reset.is_valid = 0;
+    if (path_x->rtt_init_time > 0 && highest_acknowledged != UINT64_MAX && highest_acknowledged >= path_x->cc_reset_pn) {
         path_x->pre_reset.smoothed_rtt = path_x->smoothed_rtt;
         path_x->pre_reset.rtt_variant = path_x->rtt_variant;
         path_x->pre_reset.retransmit_timer = path_x->retransmit_timer;

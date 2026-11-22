@@ -857,6 +857,15 @@ static int spurious_reset_test_one(picoquic_congestion_algorithm_t* cc_algo, int
             DBG_PRINTF("Not reset: cwin %" PRIu64 " vs %" PRIu64, path_x->cwin, cwin_before);
             ret = -1;
         }
+        else if (path_x->pacing.packet_time_nanosec <= 1) {
+            /* picoquic_pacing_init leaves 1 ns per packet, i.e., no pacing */
+            DBG_PRINTF("%s", "Not paced after the return");
+            ret = -1;
+        }
+        else if ((path_x->cwin / path_x->send_mtu) * path_x->pacing.packet_time_nanosec > 4000 * path_x->smoothed_rtt) {
+            DBG_PRINTF("Paced too slowly after the return, %" PRIu64 " ns per packet", path_x->pacing.packet_time_nanosec);
+            ret = -1;
+        }
     }
     /* The transfer completes */
     if (ret == 0) {
@@ -949,6 +958,265 @@ int spurious_reset_chained_test(void)
 int spurious_reset_genuine_test(void)
 {
     return spurious_reset_test_one(picoquic_newreno_algorithm, 1, 0, 0);
+}
+
+/* Deliver to the server a new non probing client packet, as if sent from addr_from. */
+static int spurious_inject_client_packet(picoquic_test_tls_api_ctx_t* test_ctx, struct sockaddr_in* addr_from, uint64_t simulated_time)
+{
+    uint8_t buffer[PICOQUIC_MAX_PACKET_SIZE];
+    size_t length = 0;
+    struct sockaddr_storage addr_to;
+    struct sockaddr_storage addr_local;
+    int if_index = 0;
+    uint8_t ping = picoquic_frame_type_ping;
+    int ret = picoquic_queue_misc_frame(test_ctx->cnx_client, &ping, 1, 0, picoquic_packet_context_application);
+
+    if (ret == 0) {
+        ret = picoquic_prepare_packet_ex(test_ctx->cnx_client, simulated_time, buffer, sizeof(buffer), &length,
+            &addr_to, &addr_local, &if_index, NULL);
+    }
+    if (ret == 0 && length == 0) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        ret = picoquic_incoming_packet(test_ctx->qserver, buffer, length, (struct sockaddr*)addr_from,
+            (struct sockaddr*)&test_ctx->server_addr, 0, 0, simulated_time);
+    }
+    return ret;
+}
+
+static int spurious_is_default_tuple(picoquic_test_tls_api_ctx_t* test_ctx, struct sockaddr_in* addr)
+{
+    return test_ctx->cnx_server != NULL &&
+        picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr, (struct sockaddr*)addr) == 0;
+}
+
+/* Start a download and run it until the server CC leaves its startup state. */
+static int spurious_start_download(picoquic_test_tls_api_ctx_t** p_test_ctx, picoquic_congestion_algorithm_t* cc_algo,
+    uint64_t* simulated_time, uint8_t cid_id)
+{
+    uint64_t loss_mask = 0;
+    picoquic_connection_id_t initial_cid = { {0x5b, 0x0f, 0, 4, 5, 6, 7, 8}, 8 };
+    int nb_rounds = 0;
+    int ret;
+
+    initial_cid.id[2] = cid_id;
+    ret = tls_api_init_ctx_ex(p_test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
+    if (ret == 0 && *p_test_ctx == NULL) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_set_default_congestion_algorithm((*p_test_ctx)->qserver, cc_algo);
+        picoquic_set_congestion_algorithm((*p_test_ctx)->cnx_client, cc_algo);
+        ret = tls_api_connection_loop(*p_test_ctx, &loss_mask, 0, simulated_time);
+    }
+    if (ret == 0) {
+        ret = test_api_init_send_recv_scenario(*p_test_ctx, test_scenario_spurious_reset, sizeof(test_scenario_spurious_reset));
+    }
+    while (ret == 0 && nb_rounds < 100000 && (*p_test_ctx)->cnx_server != NULL) {
+        int was_active = 0;
+        uint64_t cc_state = 0;
+        uint64_t cc_param = 0;
+
+        cc_algo->alg_observe((*p_test_ctx)->cnx_server->path[0], &cc_state, &cc_param);
+        if ((*p_test_ctx)->cnx_server->path[0]->bytes_sent >= 400000 && cc_state != 0) {
+            break;
+        }
+        ret = tls_api_one_sim_round(*p_test_ctx, simulated_time, 0, &was_active);
+        nb_rounds++;
+    }
+    if (ret == 0 && ((*p_test_ctx)->cnx_server == NULL || nb_rounds >= 100000)) {
+        DBG_PRINTF("%s", "CC did not leave its startup state");
+        ret = -1;
+    }
+    return ret;
+}
+
+static int spurious_finish_download(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, int ret)
+{
+    uint64_t loss_mask = 0;
+
+    if (ret == 0) {
+        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
+    }
+    if (ret == 0) {
+        ret = tls_api_one_scenario_verify(test_ctx);
+    }
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+    }
+    return ret;
+}
+
+/* Spoof and return twice, faster than the RTT: only the first return restores the CC,
+ * because no packet sent after that restore was acknowledged before the second spoof. */
+int spurious_reset_repeat_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in victim_addr;
+    uint64_t cwin_before = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, 1);
+
+    if (ret == 0) {
+        cwin_before = test_ctx->cnx_server->path[0]->cwin;
+        victim_addr = test_ctx->client_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        for (int i = 0; ret == 0 && i < 2; i++) {
+            victim_addr.sin_port += 23;
+            victim_addr.sin_addr.s_addr ^= (i == 0) ? 0 : 0x04040000;
+            ret = spurious_inject_client_packet(test_ctx, &victim_addr, simulated_time);
+            if (ret == 0 && !spurious_is_default_tuple(test_ctx, &victim_addr)) {
+                DBG_PRINTF("Spoof %d not promoted", i);
+                ret = -1;
+            }
+            if (ret == 0 && i > 0 && test_ctx->cnx_server->path[0]->pre_reset.is_valid) {
+                DBG_PRINTF("%s", "Snapshot taken without feedback since the restore");
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = spurious_inject_client_packet(test_ctx, &test_ctx->client_addr, simulated_time);
+            }
+            if (ret == 0 && !spurious_is_default_tuple(test_ctx, &test_ctx->client_addr)) {
+                DBG_PRINTF("Return %d not promoted", i);
+                ret = -1;
+            }
+            if (ret == 0 && i == 0 && 2 * test_ctx->cnx_server->path[0]->cwin < cwin_before) {
+                DBG_PRINTF("First return not restored, cwin %" PRIu64 " vs %" PRIu64, test_ctx->cnx_server->path[0]->cwin, cwin_before);
+                ret = -1;
+            }
+            if (ret == 0 && i > 0 && test_ctx->cnx_server->path[0]->cwin > 2 * PICOQUIC_CWIN_INITIAL) {
+                DBG_PRINTF("Second return restored, cwin %" PRIu64, test_ctx->cnx_server->path[0]->cwin);
+                ret = -1;
+            }
+        }
+    }
+    return spurious_finish_download(test_ctx, &simulated_time, ret);
+}
+
+/* After a verified rebinding, the old client address is still a validated tuple. A spoof followed by
+ * a packet from that old address must reset the CC: the snapshot belongs to the rebound address. */
+int spurious_reset_other_address_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in victim_addr;
+    int nb_rounds = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, 2);
+
+    if (ret == 0) {
+        /* Verified rebinding to a new IP address */
+        test_ctx->client_addr_natted = test_ctx->client_addr;
+        test_ctx->client_addr_natted.sin_addr.s_addr ^= 0x02020000;
+        test_ctx->client_use_nat = 1;
+        while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL &&
+            (!spurious_is_default_tuple(test_ctx, &test_ctx->client_addr_natted) ||
+                !test_ctx->cnx_server->path[0]->first_tuple->challenge_verified ||
+                test_ctx->cnx_server->pkt_ctx[picoquic_packet_context_application].highest_acknowledged <
+                test_ctx->cnx_server->path[0]->cc_reset_pn)) {
+            int was_active = 0;
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            nb_rounds++;
+        }
+    }
+    if (ret == 0) {
+        /* The old client address must still be a validated tuple of the path */
+        picoquic_tuple_t* tuple = test_ctx->cnx_server->path[0]->first_tuple;
+        while (tuple != NULL && picoquic_compare_addr((struct sockaddr*)&tuple->peer_addr, (struct sockaddr*)&test_ctx->client_addr) != 0) {
+            tuple = tuple->next_tuple;
+        }
+        if (tuple == NULL || !tuple->is_address_validated) {
+            DBG_PRINTF("%s", "Old client address is not a validated tuple");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        victim_addr = test_ctx->client_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        ret = spurious_inject_client_packet(test_ctx, &victim_addr, simulated_time);
+        if (ret == 0 && (!spurious_is_default_tuple(test_ctx, &victim_addr) || !test_ctx->cnx_server->path[0]->pre_reset.is_valid ||
+            test_ctx->cnx_server->path[0]->pre_reset.rtt_min == 0)) {
+            DBG_PRINTF("%s", "Spoof not promoted with a valid snapshot");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = spurious_inject_client_packet(test_ctx, &test_ctx->client_addr, simulated_time);
+        if (ret == 0 && !spurious_is_default_tuple(test_ctx, &test_ctx->client_addr)) {
+            DBG_PRINTF("%s", "Old client address not promoted");
+            ret = -1;
+        }
+        /* A reset leaves no RTT sample, a restore would bring back the snapshot of the rebound address */
+        if (ret == 0 && test_ctx->cnx_server->path[0]->rtt_min != 0) {
+            DBG_PRINTF("Restored on another address, rtt_min %" PRIu64, test_ctx->cnx_server->path[0]->rtt_min);
+            ret = -1;
+        }
+    }
+    return spurious_finish_download(test_ctx, &simulated_time, ret);
+}
+
+/* Cubic restored in slow start with a finite ssthresh, after a timeout: reaching ssthresh
+ * must enter congestion avoidance with a sensible W_max. */
+int spurious_cubic_slow_start_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in victim_addr;
+    uint64_t end_time;
+    uint64_t cwin_max = 0;
+    int nb_rounds = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_cubic_algorithm, &simulated_time, 3);
+
+    if (ret == 0) {
+        /* An outage long enough for a timeout puts cubic back in slow start, with a finite ssthresh */
+        test_ctx->blackhole_start = simulated_time;
+        test_ctx->blackhole_end = simulated_time + 1500000;
+        while (ret == 0 && nb_rounds < 100000 && test_ctx->cnx_server != NULL) {
+            int was_active = 0;
+            uint64_t cc_state = 0;
+            uint64_t cc_param = 0;
+
+            picoquic_cubic_algorithm->alg_observe(test_ctx->cnx_server->path[0], &cc_state, &cc_param);
+            if (simulated_time > test_ctx->blackhole_end && cc_state == 0 && test_ctx->cnx_server->path[0]->is_ssthresh_initialized) {
+                break;
+            }
+            ret = tls_api_one_sim_round(test_ctx, &simulated_time, 0, &was_active);
+            nb_rounds++;
+        }
+        if (ret == 0 && (test_ctx->cnx_server == NULL || nb_rounds >= 100000)) {
+            DBG_PRINTF("%s", "Cubic not in slow start with a finite ssthresh");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        victim_addr = test_ctx->client_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        ret = spurious_inject_client_packet(test_ctx, &victim_addr, simulated_time);
+        if (ret == 0) {
+            ret = spurious_inject_client_packet(test_ctx, &test_ctx->client_addr, simulated_time);
+        }
+        if (ret == 0 && !spurious_is_default_tuple(test_ctx, &test_ctx->client_addr)) {
+            DBG_PRINTF("%s", "Return not promoted");
+            ret = -1;
+        }
+    }
+    /* Watch the window while slow start reaches ssthresh and avoidance starts */
+    end_time = simulated_time + 2000000;
+    nb_rounds = 0;
+    while (ret == 0 && simulated_time < end_time && nb_rounds < 100000 && test_ctx->cnx_server != NULL) {
+        int was_active = 0;
+        ret = tls_api_one_sim_round(test_ctx, &simulated_time, end_time, &was_active);
+        if (test_ctx->cnx_server != NULL && test_ctx->cnx_server->path[0]->cwin > cwin_max) {
+            cwin_max = test_ctx->cnx_server->path[0]->cwin;
+        }
+        nb_rounds++;
+    }
+    if (ret == 0 && cwin_max > 16000000) {
+        DBG_PRINTF("Cubic cwin reached %" PRIu64, cwin_max);
+        ret = -1;
+    }
+    return spurious_finish_download(test_ctx, &simulated_time, ret);
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client

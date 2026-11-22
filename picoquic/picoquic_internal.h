@@ -1069,6 +1069,8 @@ typedef struct st_picoquic_path_pre_reset_t {
     size_t send_mtu;
     size_t send_mtu_max_tried;
     uint64_t cwin;
+    struct sockaddr_storage peer_addr; /* tuple to which the snapshot belongs */
+    struct sockaddr_storage local_addr;
     int is_valid;
 } picoquic_path_pre_reset_t;
 

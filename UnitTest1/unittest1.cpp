@@ -4369,6 +4369,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(spurious_reset_repeat) {
+            int ret = spurious_reset_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_other_address) {
+            int ret = spurious_reset_other_address_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_cubic_slow_start) {
+            int ret = spurious_cubic_slow_start_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(spurious_startup_newreno) {
             int ret = spurious_startup_newreno_test();
 

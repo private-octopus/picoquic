@@ -1276,6 +1276,10 @@ static void picoquic_bbr1_reset_spurious(picoquic_bbr1_state_t* bbr1_state, pico
         if (bbr1_state->pacing_rate > 0) {
             picoquic_update_pacing_rate(path_x, bbr1_state->pacing_rate, bbr1_state->send_quantum);
         }
+        else {
+            /* Startup restore, no bandwidth estimate yet */
+            picoquic_update_pacing_data(path_x, 1);
+        }
         bbr1_state->congestion_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
     }
 }

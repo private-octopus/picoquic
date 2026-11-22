@@ -84,6 +84,7 @@ typedef struct st_picoquic_cubic_state_t {
     /* State before the last reset, restored if the reset is spurious */
     picoquic_cubic_alg_state_t pre_reset_alg_state;
     uint64_t pre_reset_ssthresh;
+    double pre_reset_W_max;
     double pre_reset_W_last_max;
 } picoquic_cubic_state_t;
 
@@ -138,6 +139,7 @@ static void cubic_set_options(picoquic_cubic_state_t* cubic_state)
 static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* path_x, uint64_t current_time) {
     picoquic_cubic_alg_state_t pre_reset_alg_state = cubic_state->alg_state;
     uint64_t pre_reset_ssthresh = cubic_state->ssthresh;
+    double pre_reset_W_max = cubic_state->W_max;
     double pre_reset_W_last_max = cubic_state->W_last_max;
     char const* option_string = cubic_state->option_string;
     memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
@@ -147,6 +149,7 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* pa
     cubic_state->reno_alpha = 1.0;
     cubic_state->pre_reset_alg_state = pre_reset_alg_state;
     cubic_state->pre_reset_ssthresh = pre_reset_ssthresh;
+    cubic_state->pre_reset_W_max = pre_reset_W_max;
     cubic_state->pre_reset_W_last_max = pre_reset_W_last_max;
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
     cubic_state->alg_state = picoquic_cubic_alg_slow_start;
@@ -391,6 +394,7 @@ static void cubic_reset_spurious(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
 {
     picoquic_cubic_alg_state_t pre_reset_alg_state = cubic_state->pre_reset_alg_state;
     uint64_t pre_reset_ssthresh = cubic_state->pre_reset_ssthresh;
+    double pre_reset_W_max = cubic_state->pre_reset_W_max;
     double pre_reset_W_last_max = cubic_state->pre_reset_W_last_max;
 
     cubic_reset(cubic_state, path_x, current_time);
@@ -398,11 +402,15 @@ static void cubic_reset_spurious(picoquic_cnx_t* cnx, picoquic_path_t* path_x,
         path_x->cwin = path_x->pre_reset.cwin;
         cubic_state->ssthresh = pre_reset_ssthresh;
         cubic_state->W_reno = (double)path_x->cwin;
+        cubic_state->W_last_max = pre_reset_W_last_max;
         if (pre_reset_alg_state != picoquic_cubic_alg_slow_start) {
             cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
-            cubic_state->W_last_max = pre_reset_W_last_max;
             cubic_enter_avoidance(cubic_state, current_time);
             cubic_state->K = 0;
+        }
+        else {
+            /* Used when slow start reaches a finite ssthresh */
+            cubic_state->W_max = pre_reset_W_max;
         }
         path_x->is_ssthresh_initialized = (cubic_state->ssthresh != UINT64_MAX);
         cubic_state->previous_alg_state = cubic_state->alg_state;

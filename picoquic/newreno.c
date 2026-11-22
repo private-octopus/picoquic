@@ -59,7 +59,7 @@ static void picoquic_newreno_reset_spurious(
     uint64_t cwin = nrss->last_reset_cwin;
     uint64_t ssthresh = nrss->last_reset_ssthresh;
     memset(nrss, 0, sizeof(picoquic_newreno_sim_state_t));
-    if (cwin == 0) {
+    if (cwin == 0 || !path_x->pre_reset.is_valid) {
         /* No state saved before the reset */
         nrss->alg_state = picoquic_newreno_alg_slow_start;
         nrss->ssthresh = UINT64_MAX;

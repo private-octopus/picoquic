@@ -124,6 +124,7 @@ static void picoquic_fastcc_reset_spurious(picoquic_cnx_t* cnx, picoquic_fastcc_
         fastcc_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
         fastcc_state->last_freeze_was_timeout = (pre_reset_alg_state == picoquic_fastcc_initial);
     }
+    picoquic_update_pacing_data(path_x, 0);
 }
 
 void picoquic_fastcc_seed_cwin(picoquic_fastcc_state_t* fastcc_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
@@ -348,6 +349,7 @@ void picoquic_fastcc_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_fastcc_reset(fastcc_state, path_x, current_time);
+            picoquic_update_pacing_data(path_x, 0);
             break;
         case picoquic_congestion_notification_spurious_reset:
             picoquic_fastcc_reset_spurious(cnx, fastcc_state, path_x, current_time);

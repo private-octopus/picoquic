@@ -1305,12 +1305,16 @@ static void c4_reset_spurious(c4_state_t* c4_state, picoquic_path_t* path_x)
             c4_state->delay_threshold = c4_delay_threshold(c4_state);
             path_x->is_ssthresh_initialized = 1;
             c4_enter_cruise(path_x, c4_state);
+            c4_apply_rate_and_cwin(path_x, c4_state);
         }
-        else if (path_x->pre_reset.cwin > c4_state->initial_cwnd) {
-            c4_state->initial_cwnd = path_x->pre_reset.cwin;
+        else {
+            if (path_x->pre_reset.cwin > c4_state->initial_cwnd) {
+                c4_state->initial_cwnd = path_x->pre_reset.cwin;
+            }
+            path_x->cwin = c4_state->initial_cwnd;
+            picoquic_update_pacing_data(path_x, 1);
         }
     }
-    c4_apply_rate_and_cwin(path_x, c4_state);
 }
 
 /*
