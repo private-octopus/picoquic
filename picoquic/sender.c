@@ -1655,6 +1655,13 @@ int picoquic_prepare_packet_client_init(picoquic_cnx_t* cnx, picoquic_path_t * p
         if (cnx->retry_token_length == 0 && cnx->sni != NULL) {
             (void)picoquic_get_token(cnx->quic, cnx->sni, (uint16_t)strlen(cnx->sni),
                 NULL, 0, &cnx->retry_token, &cnx->retry_token_length, 1);
+            if (cnx->retry_token_length > PICOQUIC_NEW_TOKEN_MAX_LENGTH) {
+                /* A token loaded from a file may exceed the limit: send the Initial without it. */
+                picoquic_log_app_message(cnx, "Stored token ignored: too long (%u)", (unsigned int)cnx->retry_token_length);
+                free(cnx->retry_token);
+                cnx->retry_token = NULL;
+                cnx->retry_token_length = 0;
+            }
         }
         break;
     case picoquic_state_client_init_sent:
@@ -2106,7 +2113,7 @@ int picoquic_prepare_packet_closing(picoquic_cnx_t* cnx, picoquic_path_t * path_
 
     checksum_overhead = picoquic_get_checksum_length(cnx, epoch);
     packet->pc = pc;
-    send_buffer_max = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
+    send_buffer_max = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead, 0);
     bytes_max = bytes + send_buffer_max - checksum_overhead;
 
     if (ret == 0 && cnx->cnx_state == picoquic_state_closing_received) {
@@ -2296,6 +2303,7 @@ uint8_t * picoquic_format_new_local_id_as_needed(picoquic_cnx_t* cnx, uint8_t* b
             else {
                 bytes = bytes_next;
                 cnx->max_path_id_local = new_max_path_id;
+                *is_pure_ack = 0;
             }
         }
         /* If the number of local lists is lower than the max number of paths,
@@ -2930,8 +2938,9 @@ int picoquic_prepare_packet_ready(picoquic_cnx_t* cnx, picoquic_path_t* path_x, 
     size_t length = 0;
     size_t checksum_overhead = picoquic_get_checksum_length(cnx, picoquic_epoch_1rtt);
     /* An unvalidated peer address limits what can be sent (RFC 9000, section 8.1) */
-    int is_amplification_blocked = picoquic_tuple_amplification_budget(cnx, path_x->first_tuple) < PICOQUIC_MIN_SEGMENT_SIZE;
-    size_t send_buffer_clamped = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead);
+    int is_amplification_blocked = picoquic_tuple_data_budget(cnx, path_x->first_tuple) < PICOQUIC_MIN_SEGMENT_SIZE;
+    size_t send_buffer_clamped = picoquic_clamp_to_amplification_budget(cnx, path_x->first_tuple, send_buffer_max, checksum_overhead,
+        !is_amplification_blocked);
     size_t send_buffer_min_max = (send_buffer_clamped > path_x->send_mtu) ? path_x->send_mtu : send_buffer_clamped;
     uint8_t* bytes = packet->bytes;
     uint8_t* bytes_max = bytes + send_buffer_min_max - checksum_overhead;
@@ -3696,7 +3705,10 @@ int picoquic_prepare_packet_ex(picoquic_cnx_t* cnx,
                 picoquic_packet_t* packet = NULL;
 
                 if (coalesced_packet_size > 0) {
-                    packet_max = path_x->send_mtu;
+                    /* Keep the caller's remaining buffer limit while enforcing the path MTU. */
+                    if (packet_max > path_x->send_mtu) {
+                        packet_max = path_x->send_mtu;
+                    }
 
                     if (packet_max < coalesced_packet_size + PICOQUIC_MIN_SEGMENT_SIZE) {
                         break;

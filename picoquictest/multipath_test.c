@@ -298,8 +298,6 @@ int migration_test_one(int mtu_drop, int is_new_ip)
     ret = tls_api_init_ctx_ex(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
         PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, &initial_cid);
 
-    test_ctx->client_addr_2 = test_ctx->client_addr;
-
     if (mtu_drop) {
         /* The MTU drop test is specifically orientated towards verifying retransmissions,
          * which requires simulating losses */
@@ -418,6 +416,11 @@ int migration_controlled_test(void)
 }
 
 int migration_mtu_drop_test(void)
+{
+    return migration_test_one(1, 0);
+}
+
+int migration_mtu_drop_new_ip_test(void)
 {
     return migration_test_one(1, 1);
 }
@@ -1084,6 +1087,7 @@ typedef enum {
     multipath_test_break_both,
     multipath_test_drop_first_c2s,
     multipath_test_drop_first_s2c,
+    multipath_test_nat_abandon,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -1610,7 +1614,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
         test_id == multipath_test_back0 || test_id == multipath_test_back1 || test_id == multipath_test_standup ||
         test_id == multipath_test_abandon || test_id == multipath_test_tunnel || test_id == multipath_test_break_both ||
-        test_id == multipath_test_drop_first_c2s || test_id == multipath_test_drop_first_s2c)) {
+        test_id == multipath_test_drop_first_c2s || test_id == multipath_test_drop_first_s2c ||
+        test_id == multipath_test_nat_abandon)) {
         /* If testing a final link drop before completion, perform a 
          * partial sending loop and then kill the initial link.
          * For the tunnel scenario, do the same but kill both links.
@@ -1629,13 +1634,26 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
             if (test_id == multipath_test_renew) {
                 ret = picoquic_renew_connection_id(test_ctx->cnx_client, 1);
             }
-            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge) {
+            else if (test_id == multipath_test_nat || test_id == multipath_test_nat_challenge ||
+                test_id == multipath_test_nat_abandon) {
                 /* Change the client address */
                 test_ctx->client_addr_natted = test_ctx->client_addr;
                 test_ctx->client_addr_natted.sin_port += 7;
                 test_ctx->client_use_nat = 1;
                 if (test_id == multipath_test_nat_challenge) {
                     test_ctx->cnx_client->path[0]->first_tuple->challenge_required = 1;
+                }
+                else if (test_id == multipath_test_nat_abandon) {
+                    /* Abandon path 0 while the server still has a tuple for the old address */
+                    ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, 100000);
+                    if (ret == 0 && (test_ctx->cnx_server->path[0]->first_tuple->next_tuple == NULL ||
+                        test_ctx->cnx_server->path[0]->first_tuple->next_tuple->p_remote_cnxid == NULL)) {
+                        DBG_PRINTF("%s", "No second tuple with a peer CID on server path 0.\n");
+                        ret = -1;
+                    }
+                    if (ret == 0) {
+                        ret = picoquic_abandon_path(test_ctx->cnx_client, 0, 0, simulated_time);
+                    }
                 }
             }
             else if (test_id == multipath_test_abandon) {
@@ -1704,7 +1722,7 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
     /* In the "abandon" scenario, allow for a bit more than 1 second of delay for clearing of paths */
-    if (ret == 0 && test_id == multipath_test_abandon) {
+    if (ret == 0 && (test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
         uint64_t timeout = 1100000;
 
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
@@ -1835,7 +1853,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
-    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 || test_id == multipath_test_abandon)) {
+    if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
+        test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -1976,7 +1995,7 @@ int multipath_basic_test(void)
 
 int multipath_fail_test(void)
 {
-    uint64_t max_completion_microsec = 2500000;
+    uint64_t max_completion_microsec = 2000000;
 
     return multipath_test_one(max_completion_microsec, multipath_test_fail);
 }
@@ -2110,6 +2129,14 @@ int multipath_abandon_test(void)
     uint64_t max_completion_microsec = 3800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_abandon);
+}
+
+/* NAT rebinding on path 0, then the client abandons path 0. */
+int multipath_nat_abandon_test(void)
+{
+    uint64_t max_completion_microsec = 3800000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_nat_abandon);
 }
 
 /* 
@@ -3484,6 +3511,41 @@ int multipath_flow_frames_ack_test(void)
     return ret;
 }
 
+/* A lost MAX_PATH_ID frame with the last value sent is repeated until the peer acknowledges it. */
+int multipath_max_path_id_repeat_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    uint8_t frame[16];
+    int more_data = 0;
+    int no_need_to_repeat = 0;
+    int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+    uint8_t* bytes_next = picoquic_format_max_path_id_frame(frame, frame + sizeof(frame), 3, &more_data);
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    /* The frame with the value 3 is lost, first before the ACK of that value, then after it. */
+    for (int acked = 0; ret == 0 && acked < 2; acked++) {
+        cnx->max_path_id_local = 3;
+        cnx->max_path_id_acknowledged = 2 + acked;
+        if (picoquic_check_frame_needs_repeat(cnx, frame, bytes_next - frame, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            no_need_to_repeat != acked) {
+            DBG_PRINTF("MAX_PATH_ID 3, acked %" PRIu64 ": no need to repeat is %d",
+                cnx->max_path_id_acknowledged, no_need_to_repeat);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* A new path never gets an ID already used by another path, even when no other ID is allowed. */
 int multipath_unique_path_id_test(void)
 {
@@ -3915,6 +3977,92 @@ int multipath_idle_rotation_test(void)
 
     if (ret == 0) {
         ret = multipath_idle_rotation_test_one(1, 160000, 100000, 257);
+    }
+    return ret;
+}
+
+/* Run the path cleanup, and check whether the path is demoted. */
+static int multipath_idle_path_check(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time, int expect_demoted)
+{
+    int ret = 0;
+    uint64_t next_wake_time = UINT64_MAX;
+
+    picoquic_delete_abandoned_paths(cnx, current_time, &next_wake_time);
+    if (path_x->path_is_demoted != (unsigned int)expect_demoted) {
+        DBG_PRINTF("Time %" PRIu64 ", last sent %" PRIu64 ", last received %" PRIu64 ", demoted %d, expected %d",
+            current_time, path_x->latest_sent_time, path_x->last_packet_received_at,
+            path_x->path_is_demoted, expect_demoted);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+/* The idle test of the path cleanup abandons a path only if nothing was sent
+ * and nothing was received on it for the idle timeout. */
+int multipath_idle_path_test(void)
+{
+    uint64_t simulated_time = 0;
+    int path_index = -1;
+    int incoming_index = -1;
+    struct sockaddr_in addr_local;
+    struct sockaddr_in addr_peer;
+    picoquic_packet_header ph;
+    picoquic_tuple_t* tuple = NULL;
+    picoquic_local_cnxid_t* l_cid = NULL;
+    picoquic_path_t* path_x = NULL;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        multipath_abandon_stash_config(cnx);
+    }
+
+    multipath_abandon_stash_addr(&addr_local, 1234);
+    multipath_abandon_stash_addr(&addr_peer, 4321);
+    if (ret == 0) {
+        multipath_abandon_stash_refill(cnx, simulated_time);
+        if ((ret = multipath_abandon_stash_frame(cnx, 0, 1, simulated_time)) == 0 &&
+            ((path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local,
+            (struct sockaddr*)&addr_peer, 0, 1)) < 0 ||
+            (l_cid = picoquic_create_local_cnxid(cnx, 1, NULL, simulated_time)) == NULL)) {
+            DBG_PRINTF("%s", "Cannot create the path with ID 1");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        path_x = cnx->path[path_index];
+        path_x->first_tuple->challenge_verified = 1;
+        cnx->idle_timeout = 30000000;
+        /* A packet was sent on the path, and none was received. */
+        simulated_time += 2 * cnx->idle_timeout;
+        path_x->latest_sent_time = simulated_time;
+        ret = multipath_idle_path_check(cnx, path_x, simulated_time, 0);
+    }
+    if (ret == 0) {
+        /* A packet arrives on the path, and none was sent for the idle timeout. */
+        simulated_time += 2 * cnx->idle_timeout;
+        memset(&ph, 0, sizeof(ph));
+        ph.l_cid = l_cid;
+        ph.dest_cnx_id = l_cid->cnx_id;
+        if (picoquic_find_incoming_path(cnx, &ph, (struct sockaddr*)&addr_peer, (struct sockaddr*)&addr_local,
+            0, simulated_time, &incoming_index, &tuple) != 0 || incoming_index != path_index) {
+            DBG_PRINTF("Incoming packet on path index %d, expected %d", incoming_index, path_index);
+            ret = -1;
+        }
+        else {
+            ret = multipath_idle_path_check(cnx, path_x, simulated_time, 0);
+        }
+    }
+    if (ret == 0) {
+        /* Nothing was sent or received for the idle timeout. */
+        simulated_time += 2 * cnx->idle_timeout;
+        ret = multipath_idle_path_check(cnx, path_x, simulated_time, 1);
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
     }
     return ret;
 }

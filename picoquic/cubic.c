@@ -27,6 +27,30 @@
 #define PICOQUIC_CUBIC_C 0.4
 #define PICOQUIC_CUBIC_BETA_ECN (7.0 / 8.0)
 #define PICOQUIC_CUBIC_BETA (3.0 / 4.0)
+/* Multiplicative decrease factor of RFC 9438, used when the "R" or "A"
+ * option is set. */
+#define PICOQUIC_CUBIC_BETA_RFC9438 0.7
+/* ABE, Alternative Backoff with ECN (RFC 8511): beta_ecn used in congestion
+ * avoidance when the peer reports ECN-CE marks. RFC 8511 section 3.1 reports
+ * that "CUBIC connections benefit from beta_{ecn} of 0.85". */
+#define PICOQUIC_CUBIC_BETA_ABE 0.85
+
+/*
+ * Options, set with the congestion control option string:
+ *
+ *  R       Standard CUBIC backoff: the window is reduced to 0.7 x cwnd on
+ *          both packet loss and ECN-CE marks.
+ *  A       Enable ABE (RFC 8511). In congestion avoidance, an ECN-CE
+ *          notification reduces the window by beta_ecn = 0.85 instead of
+ *          beta_loss = 0.7. As recommended in RFC 8511 section 4, ABE is
+ *          not applied while in slow start (cwnd < ssthresh).
+ *  E<nn>   Run ABE with a different value of beta_ecn = nn/100, e.g. "E80"
+ *          for 0.8. RFC 8511 recommends 0.85 for CUBIC, but other values
+ *          in the range [0.7, 0.85] can also be tried.
+ *
+ * Without options, the classic picoquic behavior is kept: a single factor of
+ * 7/8 for both loss and ECN-CE.
+ */
 
 typedef enum {
     picoquic_cubic_alg_slow_start = 0,
@@ -48,18 +72,79 @@ typedef struct st_picoquic_cubic_state_t {
     double W_reno;
     uint64_t ssthresh;
     picoquic_min_max_rtt_t rtt_filter;
+    char const* option_string;
+    int is_rfc9438;      /* use the RFC 9438 decrease rules, see "R" option */
+    int is_abe_enabled;  /* use beta_ecn on ECN-CE, see "A" option */
+    double beta_loss;    /* multiplicative decrease on loss */
+    double beta_ecn;     /* multiplicative decrease on ECN-CE */
+    double reno_alpha;   /* additive increase of the Reno-friendly estimate */
+    uint64_t cwin_prior; /* cwin before the last decrease */
+    uint64_t nb_loss_backoff;
+    uint64_t nb_ecn_backoff;
     /* State before the last reset, restored if the reset is spurious */
     picoquic_cubic_alg_state_t pre_reset_alg_state;
     uint64_t pre_reset_ssthresh;
     double pre_reset_W_last_max;
 } picoquic_cubic_state_t;
 
+static void cubic_set_options(picoquic_cubic_state_t* cubic_state)
+{
+    char const* x = cubic_state->option_string;
+
+    cubic_state->beta_loss = PICOQUIC_CUBIC_BETA_ECN;
+    cubic_state->beta_ecn = 0;
+
+    if (x != NULL) {
+        char c;
+        while ((c = *x) != 0) {
+            x++;
+            switch (c) {
+            case 'R':
+                cubic_state->is_rfc9438 = 1;
+                break;
+            case 'A':
+                cubic_state->is_rfc9438 = 1;
+                cubic_state->is_abe_enabled = 1;
+                break;
+            case 'E': {
+                int v = 0;
+                while ((c = *x) >= '0' && c <= '9') {
+                    v = 10 * v + (c - '0');
+                    x++;
+                }
+                if (v > 0 && v < 100) {
+                    cubic_state->is_rfc9438 = 1;
+                    cubic_state->is_abe_enabled = 1;
+                    cubic_state->beta_ecn = ((double)v) / 100.0;
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+    if (cubic_state->is_rfc9438) {
+        cubic_state->beta_loss = PICOQUIC_CUBIC_BETA_RFC9438;
+    }
+    if (!cubic_state->is_abe_enabled) {
+        cubic_state->beta_ecn = cubic_state->beta_loss;
+    }
+    else if (cubic_state->beta_ecn == 0) {
+        cubic_state->beta_ecn = PICOQUIC_CUBIC_BETA_ABE;
+    }
+}
+
 static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* path_x, uint64_t current_time) {
     picoquic_cubic_alg_state_t pre_reset_alg_state = cubic_state->alg_state;
     uint64_t pre_reset_ssthresh = cubic_state->ssthresh;
     double pre_reset_W_last_max = cubic_state->W_last_max;
-
+    char const* option_string = cubic_state->option_string;
+    memset(&cubic_state->rtt_filter, 0, sizeof(picoquic_min_max_rtt_t));
     memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+    cubic_state->option_string = option_string;
+    cubic_set_options(cubic_state);
+    cubic_state->reno_alpha = 1.0;
     cubic_state->pre_reset_alg_state = pre_reset_alg_state;
     cubic_state->pre_reset_ssthresh = pre_reset_ssthresh;
     cubic_state->pre_reset_W_last_max = pre_reset_W_last_max;
@@ -77,16 +162,14 @@ static void cubic_reset(picoquic_cubic_state_t* cubic_state, picoquic_path_t* pa
     cubic_state->recovery_sequence = 0;
 }
 
-static void cubic_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_t current_time)
+static void cubic_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
 {
     /* Initialize the state of the congestion control algorithm */
     picoquic_cubic_state_t* cubic_state = (picoquic_cubic_state_t*)malloc(sizeof(picoquic_cubic_state_t));
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(option_string);
-#endif
     path_x->congestion_alg_state = (void*)cubic_state;
     if (cubic_state != NULL) {
         memset(cubic_state, 0, sizeof(picoquic_cubic_state_t));
+        cubic_state->option_string = option_string;
         cubic_reset(cubic_state, path_x, current_time);
     }
 }
@@ -146,7 +229,7 @@ static void cubic_enter_avoidance(
     picoquic_cubic_state_t* cubic_state,
     uint64_t current_time)
 {
-    cubic_state->K = cubic_root(cubic_state->W_max*(1.0 - PICOQUIC_CUBIC_BETA_ECN) / PICOQUIC_CUBIC_C);
+    cubic_state->K = cubic_root(cubic_state->W_max*(1.0 - cubic_state->beta_loss) / PICOQUIC_CUBIC_C);
     cubic_state->alg_state = picoquic_cubic_alg_congestion_avoidance;
     cubic_state->start_of_epoch = current_time;
     cubic_state->previous_start_of_epoch = cubic_state->start_of_epoch;
@@ -174,18 +257,48 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
     cubic_state->previous_alg_state = cubic_state->alg_state;
     cubic_state->previous_ssthresh = cubic_state->ssthresh;
     cubic_state->previous_cwin = path_x->cwin;
-    /* Update similar to new reno, but different beta */
-    cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
-    /* Apply fast convergence */
-    if (cubic_state->W_max < cubic_state->W_last_max) {
-        cubic_state->W_last_max = cubic_state->W_max;
-        cubic_state->W_max = cubic_state->W_max * PICOQUIC_CUBIC_BETA_ECN;
+    /* Pick the multiplicative decrease factor. With ABE (RFC 8511), ECN-CE
+     * marks get the gentler beta_ecn, but only in congestion avoidance:
+     * RFC 8511 section 4 does not recommend ABE when cwnd < ssthresh. */
+    double beta = cubic_state->beta_loss;
+    if (notification == picoquic_congestion_notification_ecn_ec) {
+        if (cubic_state->is_abe_enabled && cubic_state->alg_state != picoquic_cubic_alg_slow_start) {
+            beta = cubic_state->beta_ecn;
+        }
+        cubic_state->nb_ecn_backoff++;
     }
     else {
-        cubic_state->W_last_max = cubic_state->W_max;
+        cubic_state->nb_loss_backoff++;
+    }
+    double W_epoch;
+    cubic_state->cwin_prior = path_x->cwin;
+    /* Update similar to new reno, but different beta */
+    cubic_state->W_max = (double)path_x->cwin / (double)path_x->send_mtu;
+    if (cubic_state->is_rfc9438) {
+        /* RFC 9438, section 4.6 and 4.7: the window restarts from
+         * cwnd * beta, fast convergence only lowers W_max. */
+        W_epoch = cubic_state->W_max * beta;
+        if (cubic_state->W_max < cubic_state->W_last_max) {
+            cubic_state->W_last_max = cubic_state->W_max;
+            cubic_state->W_max = cubic_state->W_max * (1.0 + beta) / 2.0;
+        }
+        else {
+            cubic_state->W_last_max = cubic_state->W_max;
+        }
+    }
+    else {
+        /* Apply fast convergence */
+        if (cubic_state->W_max < cubic_state->W_last_max) {
+            cubic_state->W_last_max = cubic_state->W_max;
+            cubic_state->W_max = cubic_state->W_max * beta;
+        }
+        else {
+            cubic_state->W_last_max = cubic_state->W_max;
+        }
+        W_epoch = cubic_state->W_max * beta;
     }
     /* Compute the new ssthresh */
-    cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * PICOQUIC_CUBIC_BETA_ECN * (double)path_x->send_mtu);
+    cubic_state->ssthresh = (uint64_t)(W_epoch * (double)path_x->send_mtu);
     if (cubic_state->ssthresh < PICOQUIC_CWIN_MINIMUM) {
         /* If things are that bad, fall back to slow start */
 
@@ -210,10 +323,23 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
         else {
             /* Enter congestion avoidance immediately */
             cubic_enter_avoidance(cubic_state, current_time);
+            if (cubic_state->is_rfc9438) {
+                /* K = cubic_root((W_max - cwnd_epoch)/C), RFC 9438 section 4.2,
+                 * so that W_cubic(0) is the reduced window. */
+                cubic_state->K = cubic_root((cubic_state->W_max - W_epoch) / PICOQUIC_CUBIC_C);
+            }
             /* Compute the initial window for both Reno and Cubic */
             double W_cubic = cubic_W_cubic(cubic_state, current_time);
             uint64_t win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
-            cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+            if (cubic_state->is_rfc9438) {
+                /* RFC 9438 section 4.3: W_est starts at cwnd_epoch and grows
+                 * with alpha_cubic until it reaches the prior cwnd. */
+                cubic_state->W_reno = W_epoch * (double)path_x->send_mtu;
+                cubic_state->reno_alpha = 3.0 * (1.0 - beta) / (1.0 + beta);
+            }
+            else {
+                cubic_state->W_reno = ((double)path_x->cwin) / 2.0;
+            }
 
             /* The formulas that compute "W_cubic" at the beginning of congestion avoidance
             * guarantee that "w_cubic" is larger than "w_reno" even if "fast convergence"
@@ -221,7 +347,7 @@ static void cubic_enter_recovery(picoquic_cnx_t * cnx,
             * (-1 + sqrt(1+4))/2, about 0.618033988749895.
             * Since beta_cubic is set to 3/4, we do not need to compare "w_cubic" and
             * "w_reno" to pick the largest. */
-            path_x->cwin = win_cubic;
+            path_x->cwin = (cubic_state->is_rfc9438) ? (uint64_t)cubic_state->W_reno : win_cubic;
         }
     }
 }
@@ -246,7 +372,7 @@ static void cubic_correct_spurious(picoquic_path_t* path_x,
             cubic_enter_avoidance(cubic_state, cubic_state->previous_start_of_epoch);
             double W_cubic = cubic_W_cubic(cubic_state, current_time);
             cubic_state->W_reno = W_cubic * (double)path_x->send_mtu;
-            cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * PICOQUIC_CUBIC_BETA * (double)path_x->send_mtu);
+            cubic_state->ssthresh = (uint64_t)(cubic_state->W_max * ((cubic_state->is_rfc9438) ? cubic_state->beta_loss : PICOQUIC_CUBIC_BETA) * (double)path_x->send_mtu);
             path_x->cwin = (uint64_t)cubic_state->W_reno;
         }
         else {
@@ -349,7 +475,10 @@ static void cubic_notify(
                             W_cubic = cubic_W_cubic(cubic_state, current_time);
                             win_cubic = (uint64_t)(W_cubic * (double)path_x->send_mtu);
                             /* Also compute the Reno formula */
-                            cubic_state->W_reno += ((double)ack_state->nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
+                            cubic_state->W_reno += cubic_state->reno_alpha * ((double)ack_state->nb_bytes_acknowledged) * ((double)path_x->send_mtu) / cubic_state->W_reno;
+                            if (cubic_state->W_reno >= (double)cubic_state->cwin_prior) {
+                                cubic_state->reno_alpha = 1.0;
+                            }
 
                             /* Pick the largest */
                             if ((double)win_cubic > cubic_state->W_reno) {

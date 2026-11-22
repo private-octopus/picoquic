@@ -2112,7 +2112,8 @@ void picoquic_delete_abandoned_paths(picoquic_cnx_t* cnx, uint64_t current_time,
         if (!cnx->path[path_index_current]->path_is_demoted){
             if (cnx->path[path_index_current]->first_tuple->challenge_failed ||
                 (path_index_current > 0 && cnx->path[path_index_current]->first_tuple->challenge_verified &&
-                    current_time - cnx->path[path_index_current]->latest_sent_time >= cnx->idle_timeout)) {
+                    current_time - cnx->path[path_index_current]->latest_sent_time >= cnx->idle_timeout &&
+                    current_time - cnx->path[path_index_current]->last_packet_received_at >= cnx->idle_timeout)) {
                 picoquic_demote_path(cnx, path_index_current, current_time, 0);
             }
         }
@@ -2242,7 +2243,12 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
                         picoquic_find_or_create_remote_cnxid_stash(cnx,
                             cnx->path[path_index]->unique_path_id, 0);
                     if (remote_cnxid_stash != NULL) {
-                        cnx->path[path_index]->first_tuple->p_remote_cnxid = NULL;
+                        /* Every tuple of the path may point to a CID in the stash */
+                        picoquic_tuple_t* tuple = cnx->path[path_index]->first_tuple;
+                        while (tuple != NULL) {
+                            tuple->p_remote_cnxid = NULL;
+                            tuple = tuple->next_tuple;
+                        }
                         picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
                     }
                     else {
@@ -3788,12 +3794,10 @@ void picoquic_delete_local_cnxid_listed(picoquic_cnx_t* cnx,
     picoquic_local_cnxid_t* previous = NULL;
 
     picoquic_clear_local_cnxid_references(cnx, l_cid);
-    if (l_cid->cnx_id.id_len > 0) {
-        /* Remove the registration in hash tables */
-        if (l_cid->registered_cnx != NULL) {
-            picohash_item* item = &l_cid->hash_item;
-            picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
-        }
+    /* A registered key must leave the table before its owner is freed. */
+    if (l_cid->registered_cnx != NULL) {
+        picohash_item* item = &l_cid->hash_item;
+        picohash_delete_item(cnx->quic->table_cnx_by_id, item, 0);
         l_cid->registered_cnx = NULL;
     }
 
@@ -3968,7 +3972,7 @@ void picoquic_check_local_cnxid_ttl(picoquic_cnx_t* cnx, picoquic_local_cnxid_li
             l_cid = l_cid->next;
         }
 
-        cnx->next_wake_time = current_time;
+        *next_wake_time = current_time;
         SET_LAST_WAKE(cnx->quic, PICOQUIC_QUICCTX);
     } else {
         if (*next_wake_time - local_cnxid_list->local_cnxid_oldest_created > cnx->quic->local_cnxid_ttl) {

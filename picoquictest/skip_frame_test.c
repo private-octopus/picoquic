@@ -554,6 +554,12 @@ static uint8_t test_frame_type_bad_new_token[] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 };
 
+/* Token one byte longer than PICOQUIC_NEW_TOKEN_MAX_LENGTH, with a 2-byte varint length */
+static uint8_t test_frame_type_new_token_too_long[3 + PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1] = {
+    picoquic_frame_type_new_token,
+    (uint8_t)(0x40 | ((PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1) >> 8)), (uint8_t)((PICOQUIC_NEW_TOKEN_MAX_LENGTH + 1) & 0xFF)
+};
+
 /* Length 2^32+3 is truncated to 3 if cast to size_t on 32-bit builds */
 static uint8_t test_frame_type_bad_new_token_32[] = {
     picoquic_frame_type_new_token,
@@ -696,6 +702,7 @@ test_skip_frames_t test_frame_error_list[] = {
     TEST_SKIP_ITEM_OLD("bad_stop_sending2", test_frame_type_bad_stop_sending2, 0, 1, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_new_token", test_frame_type_bad_new_token, 0, 0, 3, ERR_F, 1),
     TEST_SKIP_ITEM_OLD("bad_new_token_32", test_frame_type_bad_new_token_32, 0, 0, 3, ERR_F, 1),
+    TEST_SKIP_ITEM_OLD("new_token_too_long", test_frame_type_new_token_too_long, 0, 0, 3, PICOQUIC_TRANSPORT_INTERNAL_ERROR, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_range", test_frame_type_bad_ack_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_first_range", test_frame_type_bad_ack_first_range, 1, 0, 3, ERR_F, 0),
     TEST_SKIP_ITEM_OLD("bad_ack_gaps", test_frame_type_bad_ack_gaps, 1, 0, 3, ERR_F, 0),
@@ -3460,7 +3467,9 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     picoquic_packet_header ph;
     static const uint8_t alpn_bytes[] = { 't', 'e', 's', 't', '-', 'a', 'l', 'p', 'n' };
     static const uint8_t vn_versions[] = { 0, 0, 0, 1, 0xff, 0, 0, 0x1d };
-    static const uint8_t retry_token_bytes[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    /* A token of 8 bytes and an integrity tag of 16 bytes. */
+    static const uint8_t retry_content[] = { 1, 2, 3, 4, 5, 6, 7, 8,
+        0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf };
     static const uint8_t fake_ticket_bytes[] = { 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7 };
 
     memset(&addr_peer4, 0, sizeof(addr_peer4));
@@ -3515,8 +3524,8 @@ static void binlog_test_extra_events(picoquic_cnx_t* cnx, const picoquic_connect
     memset(&ph, 0, sizeof(ph));
     ph.ptype = picoquic_packet_retry;
     ph.dest_cnx_id = *dcid;
-    ph.payload_length = sizeof(retry_token_bytes);
-    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_token_bytes, sizeof(retry_token_bytes));
+    ph.payload_length = sizeof(retry_content);
+    binlog_packet((FILE*)cnx->log_ctx[0], dcid, 0, 0, current_time, &ph, retry_content, sizeof(retry_content));
 
     picoquic_log_flush(cnx);
 }

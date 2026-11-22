@@ -1211,6 +1211,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(retry_token_length)
+        {
+            int ret = retry_token_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(stored_token_length)
+        {
+            int ret = stored_token_length_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(send_buffer_bounds)
+        {
+            int ret = send_buffer_bounds_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(vn_tp)
         {
             int ret = vn_tp_test();
@@ -3936,6 +3957,11 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+        TEST_METHOD(cubic_abe) {
+            int ret = cubic_abe_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(cc_algo_reset) {
             int ret = cc_algo_reset_test();
 
@@ -4253,6 +4279,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_mtu_drop_new_ip) {
+            int ret = migration_mtu_drop_new_ip_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_new_ip) {
             int ret = migration_new_ip_test();
 
@@ -4273,6 +4305,12 @@ namespace UnitTest1
 
         TEST_METHOD(migration_spoof_return) {
             int ret = migration_spoof_return_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(migration_rebinding_outage) {
+            int ret = migration_rebinding_outage_test();
 
             Assert::AreEqual(ret, 0);
         }
@@ -4528,6 +4566,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_nat_abandon) {
+            int ret = multipath_nat_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_abandon_last) {
             int ret = multipath_abandon_last_test();
 
@@ -4684,6 +4728,12 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_max_path_id_repeat) {
+            int ret = multipath_max_path_id_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_unique_path_id) {
             int ret = multipath_unique_path_id_test();
 
@@ -4716,6 +4766,12 @@ namespace UnitTest1
 
         TEST_METHOD(multipath_idle_rotation) {
             int ret = multipath_idle_rotation_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_idle_path) {
+            int ret = multipath_idle_path_test();
 
             Assert::AreEqual(ret, 0);
         }

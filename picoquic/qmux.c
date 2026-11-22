@@ -242,6 +242,7 @@ void picoqmux_check_idle_timer(picoquic_cnx_t* cnx, uint64_t current_time,
                 cnx->cnx_state = picoquic_state_disconnecting;
                 /* Wake up immediately to process the closing state. */
                 *next_wake_time = current_time;
+                SET_LAST_WAKE(cnx->quic, PICOQUIC_QMUX);
             }
         }
         else {
@@ -1328,12 +1329,14 @@ int picoqmux_prepare_packets(picoquic_cnx_t* cnx, uint64_t current_time, uint8_t
             /* something sent. Notice progress. */
             cnx->latest_progress_time = current_time;
             cnx->next_wake_time = current_time;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
         else if (cnx->idle_timeout > 0) {
             picoqmux_check_idle_timer(cnx, current_time, &cnx->next_wake_time);
         }
         else {
             cnx->next_wake_time = UINT64_MAX;
+            SET_LAST_WAKE(cnx->quic, PICOQUIC_SENDER);
         }
     }
     return ret;

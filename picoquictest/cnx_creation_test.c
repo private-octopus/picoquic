@@ -47,6 +47,17 @@
 #define TEST_CNX_COUNT 7
 #define TEST_CNX_ID(x) {{ x, x, x, x, x, x, x, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} , 8 }
 
+static void create_cnx_unusable_cid_callback(picoquic_quic_t* quic,
+    picoquic_connection_id_t cnx_id_local, picoquic_connection_id_t cnx_id_remote,
+    void* callback_ctx, picoquic_connection_id_t* cnx_id_returned)
+{
+    (void)quic;
+    (void)cnx_id_local;
+    (void)cnx_id_remote;
+    (void)callback_ctx;
+    *cnx_id_returned = picoquic_null_connection_id;
+}
+
 int create_cnx_test(void)
 {
     int ret = 0;
@@ -226,6 +237,34 @@ int create_cnx_test(void)
 
         /* delete QUIC context. */
         if (quic != NULL) {
+            picoquic_free(quic);
+        }
+    }
+
+    /*
+     * A callback may produce a zero-length CID while the engine registers the
+     * embedded key. Its normal deletion must remove that registration.
+     */
+    if (ret == 0) {
+        quic = picoquic_create(8, NULL, NULL, NULL, NULL, NULL, NULL,
+            create_cnx_unusable_cid_callback, NULL, NULL, 0, NULL, NULL, NULL, 0);
+        if (quic == NULL) {
+            ret = -1;
+        }
+        else {
+            picoquic_cnx_t* cnx = picoquic_create_cnx(quic,
+                picoquic_null_connection_id, picoquic_null_connection_id,
+                (struct sockaddr*)&test4[0], 0, 0, NULL, NULL, 1);
+            if (cnx == NULL || quic->cnx_list != cnx ||
+                quic->table_cnx_by_id->count != 1) {
+                ret = -1;
+            }
+            if (cnx != NULL) {
+                picoquic_delete_cnx(cnx);
+            }
+            if (quic->cnx_list != NULL || quic->table_cnx_by_id->count != 0) {
+                ret = -1;
+            }
             picoquic_free(quic);
         }
     }

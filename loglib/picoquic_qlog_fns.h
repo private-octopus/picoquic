@@ -28,6 +28,9 @@ extern "C" {
 #include <stdio.h>
 #include "picoquic.h"
 
+    /* Largest number of path contexts when there is no connection to trim them. */
+#define QLOG_FNS_MAX_PATH_CONTEXTS 64
+
     typedef struct st_qlog_fns_path_context_t {
         struct st_qlog_fns_path_context_t* next;
         uint64_t unique_path_id;
@@ -87,6 +90,25 @@ extern "C" {
         picoquic_path_t* path_x, uint64_t unique_path_id, int receiving, uint64_t current_time,
         const struct st_picoquic_packet_header_t* ph, uint64_t byte_length);
     void qlog_fns_packet_end(qlog_fns_context_t* ctx);
+    /* Write the content of a version negotiation packet or of a retry packet. */
+    void qlog_fns_proposed_versions(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
+    void qlog_fns_retry_token(FILE* f, const uint8_t* bytes, const uint8_t* bytes_max);
+    /* Write the congestion control events of a path: the values of cc that
+     * differ from the values in the context of the path. If cnx is NULL,
+     * the function keeps at most QLOG_FNS_MAX_PATH_CONTEXTS path contexts. */
+    void qlog_fns_cc_update(qlog_fns_context_t* ctx, picoquic_cnx_t* cnx, uint64_t unique_path_id,
+        uint64_t current_time, const qlog_fns_path_context_t* cc, uint64_t send_mtu);
+    /* Free the path contexts. */
+    void qlog_fns_delete_path_contexts(qlog_fns_context_t* ctx);
+    /* Write an info message event. */
+    void qlog_fns_info_message(qlog_fns_context_t* ctx, uint64_t current_time, const uint8_t* message, size_t message_len);
+    /* Write the ALPN event: the SNI, the proposed ALPN list and the selected ALPN. */
+    void qlog_fns_alpn_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+        uint8_t const* sni, size_t sni_len, uint8_t const* alpn, size_t alpn_len,
+        const ptls_iovec_t* alpn_list, size_t alpn_count);
+    /* Write the transport parameters event. */
+    void qlog_fns_param_update(qlog_fns_context_t* ctx, uint64_t current_time, int is_local,
+        uint8_t* params, size_t param_length);
     /* Write bytes as JSON-escaped content, unquoted. */
     void qlog_fns_char_content(FILE* f, const uint8_t* s, uint64_t l);
     /* Write a text and a number, with the same output as
@@ -98,12 +120,19 @@ extern "C" {
     /* Write each transport parameter as a field of the current event. The
      * caller checks that tp holds tp_length bytes. */
     void qlog_fns_transport_extensions(FILE* f, uint8_t* tp, size_t tp_length);
-    /* Write the data of a packet event after its header, and close the event. */
-    void qlog_fns_packet_lost_data(FILE* f, uint64_t ptype, uint64_t sequence_number,
+    /* Write a packet_lost, packet_dropped or packet_buffered event. */
+    void qlog_fns_packet_lost_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, uint64_t sequence_number,
         const uint8_t* trigger, size_t trigger_length, const uint8_t* dcid, size_t dcid_length,
         int has_packet_size, uint64_t packet_size);
-    void qlog_fns_packet_dropped_data(FILE* f, uint64_t ptype, uint64_t packet_size, uint64_t err);
-    void qlog_fns_packet_buffered_data(FILE* f, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
+    void qlog_fns_packet_dropped_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, uint64_t packet_size, uint64_t err);
+    void qlog_fns_packet_buffered_event(qlog_fns_context_t* ctx, picoquic_path_t* path_x, uint64_t unique_path_id,
+        uint64_t current_time, uint64_t ptype, const uint8_t* trigger, size_t trigger_length);
+    /* Write the header of the qlog file, and the end of the qlog file. */
+    void qlog_fns_trace_header(FILE* f, char const* cid_name, const char* mode, uint64_t start_time,
+        int trace_flow_id);
+    void qlog_fns_trace_end(FILE* f);
 
 #ifdef __cplusplus
 }

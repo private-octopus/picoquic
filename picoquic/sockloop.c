@@ -1152,6 +1152,7 @@ int picoquic_sockloop_finish_windows_send(
                 sqmux_sock_ctx->winbuf_w.buf_len = 0;
             }
             else {
+                /* Direct update of cnx_wak_time is OK, as we do not maintain a wae tree for qmux sockets. */
                 sqmux_sock_ctx->cnx->next_wake_time = picoquic_get_quic_time(sqmux_sock_ctx->cnx->quic);
             }
         }
@@ -1455,6 +1456,12 @@ int picoquic_packet_loop_open_qmux_sockets(
 
     if (qmux != NULL) {
         *max_qmux_socket = qmux->max_number_connections + 2;
+#ifdef _WINDOWS
+        if (public_port != 0) {
+            /* Listeners need space for AcceptEx socket */
+            *max_qmux_socket += 2;
+        }
+#endif
         *sqmux_ctx = (picoqmux_socket_ctx_t**)malloc(sizeof(picoqmux_socket_ctx_t*) * (*max_qmux_socket));
         if (*sqmux_ctx == NULL) {
             DBG_PRINTF("%s", "Cannot allocate memory for QMUX socket context\n");
