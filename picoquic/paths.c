@@ -172,6 +172,10 @@ uint8_t* picoquic_prepare_tuple_challenge_frames(picoquic_cnx_t* cnx, picoquic_p
                 bytes_next = picoquic_format_path_challenge_frame(bytes_next, bytes_max, more_data, is_pure_ack,
                     tuple->challenge[tuple->challenge_repeat_count]);
                 if (bytes_next > bytes_challenge) {
+                    if (tuple->challenge_repeat_count == 0) {
+                        /* RFC 9002 section 6.2.2: the initial RTT counts from when challenge 0 is sent */
+                        tuple->challenge_time_first = current_time;
+                    }
                     tuple->challenge_time = current_time;
                     tuple->challenge_repeat_count++;
                     *is_challenge_padding_needed |= is_padding_allowed;
@@ -379,7 +383,10 @@ picoquic_tuple_t* picoquic_check_path_control_needed(picoquic_cnx_t* cnx, picoqu
     picoquic_tuple_t* tuple = path_x->first_tuple;
 
     while (tuple != NULL) {
-        if (tuple->challenge_failed) {
+        if (tuple->p_remote_cnxid == NULL) {
+            /* Nothing can be sent before the peer provides a CID for this path */
+        }
+        else if (tuple->challenge_failed) {
             if (tuple != path_x->first_tuple && current_time > tuple->demotion_time) {
                 cnx->tuple_demotion_needed = 1;
             }
@@ -796,7 +803,8 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
              * destination CID with the matching path ID.
              */
             path_x->first_tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
-            picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, path_x->first_tuple);
+            /* Without a peer CID yet, the path waits for one (RFC 10069 section 3.1) */
+            (void)picoquic_assign_peer_cnxid_to_tuple(cnx, path_x, path_x->first_tuple);
             tuple = path_x->first_tuple;
         }
         else {

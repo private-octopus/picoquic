@@ -1072,7 +1072,8 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  * demoted after a short delay. Calling picoquic_abandon_path() on the last path
  * that is not already marked for demotion returns PICOQUIC_ERROR_PATH_LAST_REMAINING
  * instead of demoting it, since that would eventually leave the connection with no
- * path to send on. The peer abandoning its last path is not affected by this check;
+ * path to send on. A path that still waits for a connection ID from the peer does
+ * not count. The peer abandoning its last path is not affected by this check;
  * it simply results in the connection being closed.
  *
  * Like all user-level networking API, the "probe new path" API assumes that the
@@ -1111,7 +1112,8 @@ void picoquic_set_rejected_version(picoquic_cnx_t* cnx, uint32_t rejected_versio
  *   before creating a new one.
  *
  *   PICOQUIC_ERROR_PATH_LAST_REMAINING: returned by picoquic_abandon_path(). The
- *   target path is the last one not already marked for demotion, so abandoning it
+ *   target path is the last one not already marked for demotion (a path that still
+ *   waits for a connection ID from the peer does not count), so abandoning it
  *   would leave the connection with no path to send on. The application should
  *   close the connection instead, or probe a new path before abandoning this one.
  *

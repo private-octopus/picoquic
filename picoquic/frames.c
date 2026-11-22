@@ -703,6 +703,16 @@ const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, cons
                     transport_error = picoquic_remove_not_before_cid(cnx, unique_path_id, retire_before, current_time);
                 }
             }
+            if (transport_error == 0) {
+                int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+
+                if (path_index >= 0 && !cnx->path[path_index]->path_is_demoted &&
+                    cnx->path[path_index]->first_tuple->p_remote_cnxid == NULL) {
+                    /* The path was created before a peer CID was available */
+                    (void)picoquic_assign_peer_cnxid_to_tuple(cnx, cnx->path[path_index],
+                        cnx->path[path_index]->first_tuple);
+                }
+            }
             if (transport_error != 0) {
                 picoquic_connection_error(cnx, transport_error,
                     (is_mp) ? picoquic_frame_type_path_new_connection_id : picoquic_frame_type_new_connection_id);
@@ -5083,13 +5093,16 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
             picoquic_tuple_t* previous_tuple = NULL;
 
             while (tuple != NULL) {
-                for (int ichal = 0; ichal < PICOQUIC_CHALLENGE_REPEAT_MAX; ichal++) {
-                    if (response == tuple->challenge[ichal]) {
-                        found_challenge = 1;
-                        if (ichal == 0) {
-                            challenge_time = tuple->challenge_time_first;
+                /* Only match challenges already sent or counted as lost, on a tuple that has a peer CID */
+                if (tuple->p_remote_cnxid != NULL) {
+                    for (int ichal = 0; ichal < tuple->challenge_repeat_count; ichal++) {
+                        if (response == tuple->challenge[ichal]) {
+                            found_challenge = 1;
+                            if (ichal == 0) {
+                                challenge_time = tuple->challenge_time_first;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
                 if (found_challenge) {
@@ -5838,7 +5851,8 @@ const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const ui
         int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
         if (path_index >= 0) {
             if (!cnx->path[path_index]->path_is_demoted) {
-                if (picoquic_nb_paths_not_demoted(cnx) <= 1) {
+                if (cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL &&
+                    picoquic_nb_paths_not_demoted(cnx) <= 1) {
                     /* The peer is asking us to abandon our only remaining
                      * path. There would be nothing left to carry on the
                      * connection, so close it instead of demoting the path

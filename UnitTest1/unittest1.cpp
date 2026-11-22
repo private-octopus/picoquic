@@ -4476,6 +4476,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_late_cid) {
+            int ret = multipath_late_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_late_cid_abandon) {
+            int ret = multipath_late_cid_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_late_cid_server_abandon) {
+            int ret = multipath_late_cid_server_abandon_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_abandon_last) {
             int ret = multipath_abandon_last_test();
 
