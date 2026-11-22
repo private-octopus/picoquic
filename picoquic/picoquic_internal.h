@@ -1065,6 +1065,7 @@ typedef struct st_picoquic_path_pre_reset_t {
     uint64_t max_spurious_rtt;
     uint64_t max_reorder_delay;
     uint64_t max_reorder_gap;
+    uint64_t rtt_init_time;
     size_t send_mtu;
     size_t send_mtu_max_tried;
     uint64_t cwin;

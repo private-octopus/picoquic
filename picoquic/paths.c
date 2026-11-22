@@ -945,20 +945,22 @@ void picoquic_promote_tuple_to_default(
             path_x->cnx->remote_parameters.migration_disabled = 0;
             picoquic_log_app_message(path_x->cnx, "Migration to server preferred address successful on path %" PRIu64, path_x->unique_path_id);
         }
-        if (is_new_address) {
-            if (old_first->is_nat_rebinding && tuple->is_address_validated) {
-                /* Back from an unverified NAT rebinding: the previous reset was spurious */
-                picoquic_spurious_path_congestion(path_x->cnx, path_x, current_time);
+        if (is_new_address && old_first->is_nat_rebinding && tuple->is_address_validated) {
+            /* Back from an unverified NAT rebinding: the previous reset was spurious, restores RTT and MTU */
+            picoquic_spurious_path_congestion(path_x->cnx, path_x, current_time);
+        }
+        else {
+            if (is_new_address) {
+                if (old_first->is_nat_rebinding) {
+                    /* From one unverified address to another: CC was already reset, keep its pre-reset state */
+                    picoquic_restart_path_after_rebinding(path_x->cnx, path_x, current_time);
+                }
+                else {
+                    picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
+                }
             }
-            else if (old_first->is_nat_rebinding) {
-                /* From one unverified address to another: CC was already reset, keep its pre-reset state */
-                picoquic_restart_path_after_rebinding(path_x->cnx, path_x, current_time);
-                picoquic_reset_path_mtu(path_x);
-            }
-            else {
-                picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
-                picoquic_reset_path_mtu(path_x);
-            }
+            /* A port change can also lower the MTU; reset after the CC snapshot of send_mtu */
+            picoquic_reset_path_mtu(path_x);
         }
     }
 }

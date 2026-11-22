@@ -3119,7 +3119,7 @@ static void picoquic_notify_path_reset(picoquic_cnx_t* cnx, picoquic_path_t* pat
 void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x, uint64_t current_time)
 {
     /* Keep the older snapshot if no RTT was measured since the previous reset */
-    if (path_x->rtt_is_initialized) {
+    if (path_x->rtt_init_time > 0) {
         path_x->pre_reset.smoothed_rtt = path_x->smoothed_rtt;
         path_x->pre_reset.rtt_variant = path_x->rtt_variant;
         path_x->pre_reset.retransmit_timer = path_x->retransmit_timer;
@@ -3128,6 +3128,7 @@ void picoquic_reset_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* path_x
         path_x->pre_reset.max_spurious_rtt = path_x->max_spurious_rtt;
         path_x->pre_reset.max_reorder_delay = path_x->max_reorder_delay;
         path_x->pre_reset.max_reorder_gap = path_x->max_reorder_gap;
+        path_x->pre_reset.rtt_init_time = path_x->rtt_init_time;
         path_x->pre_reset.send_mtu = path_x->send_mtu;
         path_x->pre_reset.send_mtu_max_tried = path_x->send_mtu_max_tried;
         path_x->pre_reset.cwin = path_x->cwin;
@@ -3153,9 +3154,9 @@ void picoquic_spurious_path_congestion(picoquic_cnx_t* cnx, picoquic_path_t* pat
         path_x->max_spurious_rtt = path_x->pre_reset.max_spurious_rtt;
         path_x->max_reorder_delay = path_x->pre_reset.max_reorder_delay;
         path_x->max_reorder_gap = path_x->pre_reset.max_reorder_gap;
+        path_x->rtt_init_time = path_x->pre_reset.rtt_init_time;
         path_x->send_mtu = path_x->pre_reset.send_mtu;
         path_x->send_mtu_max_tried = path_x->pre_reset.send_mtu_max_tried;
-        path_x->rtt_is_initialized = 1;
     }
     /* The CC reads path_x->pre_reset while processing the notification */
     picoquic_restart_path_counters(cnx, path_x, current_time);
