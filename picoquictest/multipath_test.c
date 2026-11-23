@@ -991,11 +991,11 @@ static int spurious_is_default_tuple(picoquic_test_tls_api_ctx_t* test_ctx, stru
         picoquic_compare_addr((struct sockaddr*)&test_ctx->cnx_server->path[0]->first_tuple->peer_addr, (struct sockaddr*)addr) == 0;
 }
 
-/* Start a download and run it until the server CC leaves its startup state. */
+/* Start a download and run it until the server CC leaves its startup state.
+ * The links keep a pointer to loss_mask, so it must outlive the test context. */
 static int spurious_start_download(picoquic_test_tls_api_ctx_t** p_test_ctx, picoquic_congestion_algorithm_t* cc_algo,
-    uint64_t* simulated_time, uint8_t cid_id)
+    uint64_t* simulated_time, uint64_t* loss_mask, uint8_t cid_id)
 {
-    uint64_t loss_mask = 0;
     picoquic_connection_id_t initial_cid = { {0x5b, 0x0f, 0, 4, 5, 6, 7, 8}, 8 };
     int nb_rounds = 0;
     int ret;
@@ -1009,7 +1009,7 @@ static int spurious_start_download(picoquic_test_tls_api_ctx_t** p_test_ctx, pic
     if (ret == 0) {
         picoquic_set_default_congestion_algorithm((*p_test_ctx)->qserver, cc_algo);
         picoquic_set_congestion_algorithm((*p_test_ctx)->cnx_client, cc_algo);
-        ret = tls_api_connection_loop(*p_test_ctx, &loss_mask, 0, simulated_time);
+        ret = tls_api_connection_loop(*p_test_ctx, loss_mask, 0, simulated_time);
     }
     if (ret == 0) {
         ret = test_api_init_send_recv_scenario(*p_test_ctx, test_scenario_spurious_reset, sizeof(test_scenario_spurious_reset));
@@ -1033,12 +1033,10 @@ static int spurious_start_download(picoquic_test_tls_api_ctx_t** p_test_ctx, pic
     return ret;
 }
 
-static int spurious_finish_download(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, int ret)
+static int spurious_finish_download(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time, uint64_t* loss_mask, int ret)
 {
-    uint64_t loss_mask = 0;
-
     if (ret == 0) {
-        ret = tls_api_data_sending_loop(test_ctx, &loss_mask, simulated_time, 0);
+        ret = tls_api_data_sending_loop(test_ctx, loss_mask, simulated_time, 0);
     }
     if (ret == 0) {
         ret = tls_api_one_scenario_verify(test_ctx);
@@ -1057,7 +1055,8 @@ int spurious_reset_repeat_test(void)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     struct sockaddr_in victim_addr;
     uint64_t cwin_before = 0;
-    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, 1);
+    uint64_t loss_mask = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, &loss_mask, 1);
 
     if (ret == 0) {
         cwin_before = test_ctx->cnx_server->path[0]->cwin;
@@ -1092,7 +1091,7 @@ int spurious_reset_repeat_test(void)
             }
         }
     }
-    return spurious_finish_download(test_ctx, &simulated_time, ret);
+    return spurious_finish_download(test_ctx, &simulated_time, &loss_mask, ret);
 }
 
 /* After a verified rebinding, the old client address is still a validated tuple. A spoof followed by
@@ -1103,7 +1102,8 @@ int spurious_reset_other_address_test(void)
     picoquic_test_tls_api_ctx_t* test_ctx = NULL;
     struct sockaddr_in victim_addr;
     int nb_rounds = 0;
-    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, 2);
+    uint64_t loss_mask = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, &loss_mask, 2);
 
     if (ret == 0) {
         /* Verified rebinding to a new IP address */
@@ -1153,7 +1153,7 @@ int spurious_reset_other_address_test(void)
             ret = -1;
         }
     }
-    return spurious_finish_download(test_ctx, &simulated_time, ret);
+    return spurious_finish_download(test_ctx, &simulated_time, &loss_mask, ret);
 }
 
 /* Cubic restored in slow start with a finite ssthresh, after a timeout: reaching ssthresh
@@ -1166,7 +1166,8 @@ int spurious_cubic_slow_start_test(void)
     uint64_t end_time;
     uint64_t cwin_max = 0;
     int nb_rounds = 0;
-    int ret = spurious_start_download(&test_ctx, picoquic_cubic_algorithm, &simulated_time, 3);
+    uint64_t loss_mask = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_cubic_algorithm, &simulated_time, &loss_mask, 3);
 
     if (ret == 0) {
         /* An outage long enough for a timeout puts cubic back in slow start, with a finite ssthresh */
@@ -1216,7 +1217,7 @@ int spurious_cubic_slow_start_test(void)
         DBG_PRINTF("Cubic cwin reached %" PRIu64, cwin_max);
         ret = -1;
     }
-    return spurious_finish_download(test_ctx, &simulated_time, ret);
+    return spurious_finish_download(test_ctx, &simulated_time, &loss_mask, ret);
 }
 
 /* Non-multipath migration: the client's PATH_RESPONSE is lost, then the client
