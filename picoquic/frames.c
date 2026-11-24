@@ -3651,8 +3651,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     *no_need_to_repeat = 1;
                     break;
                 case picoquic_frame_type_path_abandon:
-                    /* TODO: check whether there is still a need to abandon the path */
-                    *no_need_to_repeat = 0;
+                    (void)picoquic_path_abandon_frame_needs_repeat(cnx, bytes,
+                        p_bytes_max, no_need_to_repeat);
                     break;
                 case picoquic_frame_type_path_backup:
                 case picoquic_frame_type_path_available:
@@ -3679,8 +3679,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     break;
                 case picoquic_frame_type_observed_address_v4:
                 case picoquic_frame_type_observed_address_v6:
-                    /* These frames have a special case processing, tied to path challenge */
-                    ret = 0;
+                    /* Repeated by picoquic_prepare_observed_address_frame on the path the address belongs to */
+                    *no_need_to_repeat = 1;
                     break;
                 default:
                     *no_need_to_repeat = 0;
@@ -3861,6 +3861,10 @@ void picoquic_process_ack_of_frames(picoquic_cnx_t* cnx, picoquic_packet_t* p,
                         break;
                     case picoquic_frame_type_path_cid_blocked:
                         ret = picoquic_process_ack_of_path_cid_blocked_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
+                        byte_index += frame_length;
+                        break;
+                    case picoquic_frame_type_path_abandon:
+                        ret = picoquic_process_ack_of_path_abandon_frame(cnx, &p->bytes[byte_index], p->length - byte_index, &frame_length);
                         byte_index += frame_length;
                         break;
                     case picoquic_frame_type_observed_address_v4:
@@ -5909,6 +5913,53 @@ int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
         picoquic_queue_misc_frame(cnx, buffer, end_bytes - buffer, 0,
             picoquic_packet_context_application) != 0) {
         /* Could not format or could not queue. Internal error. */
+        ret = -1;
+    }
+    return ret;
+}
+
+/* Repeat a lost PATH_ABANDON until acked, even if the peer abandoned the path too */
+int picoquic_path_abandon_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat)
+{
+    uint64_t unique_path_id = 0;
+    uint64_t reason = 0;
+
+    *no_need_to_repeat = 0;
+    if (picoquic_decode_dual_varint_frame(bytes, bytes_max, &unique_path_id, &reason) == NULL) {
+        /* Malformed frame, do not retransmit */
+        *no_need_to_repeat = 1;
+    }
+    else {
+        int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+
+        if (path_index >= 0 && cnx->path[path_index]->path_abandon_acked) {
+            *no_need_to_repeat = 1;
+        }
+    }
+    return 0;
+}
+
+int picoquic_process_ack_of_path_abandon_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed)
+{
+    int ret = 0;
+    uint64_t unique_path_id = 0;
+    uint64_t reason = 0;
+    const uint8_t* bytes_next = picoquic_frames_varint_skip(bytes, bytes + bytes_max);
+
+    if (bytes_next != NULL &&
+        (bytes_next = picoquic_decode_dual_varint_frame(bytes_next, bytes + bytes_max, &unique_path_id, &reason)) != NULL) {
+        int path_index = picoquic_find_path_by_unique_id(cnx, unique_path_id);
+
+        if (path_index >= 0) {
+            cnx->path[path_index]->path_abandon_acked = 1;
+        }
+        *consumed = bytes_next - bytes;
+    }
+    else {
+        /* Internal error -- cannot parse the stored packet */
+        *consumed = bytes_max;
         ret = -1;
     }
     return ret;

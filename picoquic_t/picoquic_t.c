@@ -840,6 +840,8 @@ static const picoquic_test_def_t test_table[] = {
     { "multipath_delete_path_stash", multipath_delete_path_stash_test },
     { "multipath_flow_frames_ack", multipath_flow_frames_ack_test },
     { "multipath_max_path_id_repeat", multipath_max_path_id_repeat_test },
+    { "multipath_abandon_repeat", multipath_abandon_repeat_test },
+    { "multipath_observed_address_repeat", multipath_observed_address_repeat_test },
     { "multipath_unique_path_id", multipath_unique_path_id_test },
     { "multipath_ack_delay", multipath_ack_delay_test },
     { "multipath_ack_path_stalled", multipath_ack_path_stalled_test },

@@ -3358,6 +3358,94 @@ int multipath_max_path_id_repeat_test(void)
     return ret;
 }
 
+/* A lost PATH_ABANDON is repeated until it is acked, even if the peer abandoned the path too (issue #2206). */
+int multipath_abandon_repeat_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    picoquic_packet_t* packet = NULL;
+    int more_data = 0;
+    int no_need_to_repeat = 0;
+    int do_not_detect_spurious = 0;
+    int is_preemptive_needed = 0;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0 || (packet = picoquic_create_packet(quic)) == NULL) {
+        ret = -1;
+    }
+    else {
+        uint8_t* bytes_next = picoquic_format_path_abandon_frame(packet->bytes, packet->bytes + sizeof(packet->bytes),
+            &more_data, cnx->path[0]->unique_path_id, 0);
+
+        multipath_abandon_stash_config(cnx);
+        packet->ptype = picoquic_packet_1rtt_protected;
+        packet->pc = picoquic_packet_context_application;
+        packet->offset = 0;
+        packet->length = bytes_next - packet->bytes;
+    }
+    /* Round 0: no news from the peer, round 1: the peer abandoned the path, round 2: the frame was acked. */
+    for (int round = 0; ret == 0 && round < 3; round++) {
+        cnx->path[0]->path_abandon_received = (round == 1);
+        if (round == 2) {
+            picoquic_process_ack_of_frames(cnx, packet, 0);
+        }
+        if (picoquic_check_frame_needs_repeat(cnx, packet->bytes, packet->length, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            no_need_to_repeat != (round == 2)) {
+            DBG_PRINTF("PATH_ABANDON, round %d: no need to repeat is %d", round, no_need_to_repeat);
+            ret = -1;
+        }
+    }
+
+    if (packet != NULL) {
+        picoquic_recycle_packet(quic, packet);
+    }
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+/* A lost OBSERVED_ADDRESS is not copied, as the copy could be sent on another path (issue #2206). */
+int multipath_observed_address_repeat_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    uint8_t frame[32];
+    uint8_t addr[16] = { 10, 0, 0, 1 };
+    const uint64_t frame_types[2] = { picoquic_frame_type_observed_address_v4, picoquic_frame_type_observed_address_v6 };
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        multipath_abandon_stash_config(cnx);
+        cnx->is_address_discovery_provider = 1;
+    }
+
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        int more_data = 0;
+        int no_need_to_repeat = 0;
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+        uint8_t* bytes_next = picoquic_format_observed_address_frame(frame, frame + sizeof(frame), frame_types[i],
+            1, addr, 4433, &more_data);
+
+        if (picoquic_check_frame_needs_repeat(cnx, frame, bytes_next - frame, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            !no_need_to_repeat) {
+            DBG_PRINTF("OBSERVED_ADDRESS 0x%" PRIx64 ": no need to repeat is %d", frame_types[i], no_need_to_repeat);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* A new path never gets an ID already used by another path, even when no other ID is allowed. */
 int multipath_unique_path_id_test(void)
 {

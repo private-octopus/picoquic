@@ -4638,6 +4638,18 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(multipath_abandon_repeat) {
+            int ret = multipath_abandon_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(multipath_observed_address_repeat) {
+            int ret = multipath_observed_address_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(multipath_unique_path_id) {
             int ret = multipath_unique_path_id_test();
 
