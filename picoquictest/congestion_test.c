@@ -462,7 +462,9 @@ typedef enum {
     bdp_test_option_short,
     bdp_test_option_short_lo,
     bdp_test_option_short_hi,
-    bdp_test_option_bbr1
+    bdp_test_option_bbr1,
+    bdp_test_option_retry,
+    bdp_test_option_loss
 } bdp_test_option_enum;
 
 int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
@@ -547,6 +549,12 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                 case bdp_test_option_reno:
                     max_completion_time = 6750000;
                     break;
+                case bdp_test_option_retry:
+                    picoquic_set_cookie_mode(test_ctx->qserver, 1);
+                    break;
+                case bdp_test_option_loss:
+                    max_completion_time = 7200000;
+                    break;
                 default:
                     break;
                 }
@@ -577,7 +585,17 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
             picoquic_set_transport_parameters(test_ctx->cnx_client, &client_parameters);
             ret = picoquic_set_default_tp(test_ctx->qserver, &server_parameters);
 
-            if (ret == 0) {
+            if (ret == 0 && i == 1 && bdp_test_option == bdp_test_option_loss) {
+                /* Lose the first client datagram, which carries the Initial and the 0-RTT BDP frame */
+                test_ctx->loss_mask_default = 1;
+                if ((ret = picoquic_start_client_cnx(test_ctx->cnx_client)) == 0 &&
+                    (ret = tls_api_connection_loop(test_ctx, &test_ctx->loss_mask_default, buffer_size, &simulated_time)) == 0 &&
+                    (ret = test_api_init_send_recv_scenario(test_ctx, test_scenario_10mb, sizeof(test_scenario_10mb))) == 0 &&
+                    (ret = tls_api_data_sending_loop(test_ctx, &test_ctx->loss_mask_default, &simulated_time, 0)) == 0) {
+                    ret = tls_api_one_scenario_body_verify(test_ctx, &simulated_time, max_completion_time);
+                }
+            }
+            else if (ret == 0) {
                 ret = tls_api_one_scenario_body(test_ctx, &simulated_time, test_scenario_10mb, sizeof(test_scenario_10mb), 0, 0, 0, buffer_size,
                     (i == 0) ? 0 : max_completion_time);
             }
@@ -623,7 +641,9 @@ int bdp_option_test_one(bdp_test_option_enum bdp_test_option)
                         bdp_test_option == bdp_test_option_short_hi ||
                         bdp_test_option == bdp_test_option_short_lo ||
                         bdp_test_option == bdp_test_option_cubic ||
-                        bdp_test_option == bdp_test_option_bbr1) {
+                        bdp_test_option == bdp_test_option_bbr1 ||
+                        bdp_test_option == bdp_test_option_retry ||
+                        bdp_test_option == bdp_test_option_loss) {
                         if (!test_ctx->cnx_server->cwin_notified_from_seed) {
                             DBG_PRINTF("BDP RTT test (bdp test: %d), cnx %d, cwin not seed on server.\n",
                                 bdp_test_option, i);
@@ -731,11 +751,18 @@ int bdp_bbr1_test(void)
     return bdp_option_test_one(bdp_test_option_bbr1);
 }
 
+int bdp_retry_test(void)
+{
+    return bdp_option_test_one(bdp_test_option_retry);
+}
+
+int bdp_zero_rtt_loss_test(void)
+{
+    return bdp_option_test_one(bdp_test_option_loss);
+}
+
 #define BDP_FRAME_TEST_CWIN 100000
 #define BDP_FRAME_TEST_RTT 20000
-
-const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
-    uint64_t current_time, struct sockaddr* addr_from, picoquic_path_t* path_x);
 
 /* Store a client ticket with BDP values for the SNI and ALPN of the connection. */
 static int bdp_frame_test_store_ticket(picoquic_cnx_t* cnx)
@@ -757,8 +784,8 @@ static int bdp_frame_test_store_ticket(picoquic_cnx_t* cnx)
     return ret;
 }
 
-/* The client sends its BDP frame once, not in every 0-RTT packet. */
-int bdp_client_frame_once_test(void)
+/* The client sends its BDP frame in every 0-RTT packet, not just once. */
+int bdp_client_frame_each_test(void)
 {
     uint64_t simulated_time = 0;
     picoquic_cnx_t* cnx = NULL;
@@ -775,7 +802,7 @@ int bdp_client_frame_once_test(void)
         uint8_t* bytes_next = picoquic_format_bdp_frame(cnx, buffer, buffer + sizeof(buffer), cnx->path[0],
             &more_data, &is_pure_ack);
 
-        if ((bytes_next > buffer) != (i == 0)) {
+        if (bytes_next == buffer) {
             DBG_PRINTF("BDP frame %d has %d bytes", i, (int)(bytes_next - buffer));
             ret = -1;
         }

@@ -3918,8 +3918,20 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(bdp_client_frame_once) {
-            int ret = bdp_client_frame_once_test();
+        TEST_METHOD(bdp_retry) {
+            int ret = bdp_retry_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_zero_rtt_loss) {
+            int ret = bdp_zero_rtt_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_client_frame_each) {
+            int ret = bdp_client_frame_each_test();
 
             Assert::AreEqual(ret, 0);
         }

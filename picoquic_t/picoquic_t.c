@@ -659,10 +659,12 @@ static const picoquic_test_def_t test_table[] = {
     { "bdp_cubic", bdp_cubic_test },
 #endif
     { "bdp_bbr1", bdp_bbr1_test },
+    { "bdp_retry", bdp_retry_test },
+    { "bdp_zero_rtt_loss", bdp_zero_rtt_loss_test },
     { "bdp_short", bdp_short_test },
     { "bdp_short_hi", bdp_short_hi_test },
     { "bdp_short_lo", bdp_short_lo_test },
-    { "bdp_client_frame_once", bdp_client_frame_once_test },
+    { "bdp_client_frame_each", bdp_client_frame_each_test },
     { "bdp_client_frame_path", bdp_client_frame_path_test },
     { "cid_length", cid_length_test },
     { "optimistic_ack", optimistic_ack_test },

@@ -6639,8 +6639,8 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
             }
         }
     }
-    else if (!path_x->is_bdp_sent) {
-        /* Client sends bdp back to the server, once; loss recovery repeats it if lost */
+    else {
+        /* Client sends bdp back to the server in every 0-RTT packet, so it survives losses and Retry */
         picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic,
             cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
             picoquic_supported_versions[cnx->version_index].version, 1, 0);
