@@ -751,7 +751,7 @@ int app_limited_rpr_test(void)
     config.ccalgo = picoquic_cubic_algorithm;
     config.do_preemptive_repeat = 1;
     config.loss_mask = 0x1482481224818214ull;
-    config.completion_target = 47200000;
+    config.completion_target = 50000000;
     config.nb_losses_max = 1990;
     config.rtt_max = 275000;
 

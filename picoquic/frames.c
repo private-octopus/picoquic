@@ -3637,7 +3637,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                     if ((bytes = picoquic_parse_ack_frequency_frame(bytes, p_bytes_max,
                         &seq, &packets, &microsec, &ignore_order, &reordering_threshold)) == NULL) {
                         ret = -1;
-                    } else if (seq == cnx->ack_frequency_sequence_local) {
+                    } else if (seq != cnx->ack_frequency_sequence_local) {
+                        /* Only repeat the last frame sent, older ones are obsolete */
                         *no_need_to_repeat = 1;
                     }
                     break;

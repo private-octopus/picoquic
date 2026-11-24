@@ -188,6 +188,7 @@ static const picoquic_test_def_t test_table[] = {
     { "reset_stream_at_needs_repeat", reset_stream_at_needs_repeat_test },
     { "process_ack_of_reset_stream_at", process_ack_of_reset_stream_at_test },
     { "stop_sending_needs_repeat", stop_sending_needs_repeat_test },
+    { "ack_frequency_needs_repeat", ack_frequency_needs_repeat_test },
     { "stream_invalid_id", stream_invalid_id_test },
     { "stream_never_called_apis", stream_never_called_apis_test },
     { "queue_multipath_blocked_frames", queue_multipath_blocked_frames_test },

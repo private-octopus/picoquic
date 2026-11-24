@@ -558,6 +558,13 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(ack_frequency_needs_repeat)
+        {
+            int ret = ack_frequency_needs_repeat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(stream_invalid_id)
         {
             int ret = stream_invalid_id_test();

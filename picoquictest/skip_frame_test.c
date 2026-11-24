@@ -1974,6 +1974,51 @@ int stop_sending_needs_repeat_test(void)
     return ret;
 }
 
+/* Only the last ACK_FREQUENCY frame sent is repeated if lost; older ones are obsolete. */
+int ack_frequency_needs_repeat_test(void)
+{
+    int ret = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+
+    if (picoquic_test_set_minimal_cnx(&quic, &cnx) != 0) {
+        ret = -1;
+    }
+    else {
+        cnx->ack_frequency_sequence_local = 5;
+    }
+
+    for (uint64_t seq = 4; ret == 0 && seq <= 5; seq++) {
+        uint8_t frame[32];
+        uint8_t* bytes = frame;
+        uint8_t* bytes_max = frame + sizeof(frame);
+        int no_need_to_repeat = 0;
+        int do_not_detect_spurious = 0;
+        int is_preemptive_needed = 0;
+
+        /* Type, sequence, ack eliciting threshold, max ack delay, reordering threshold */
+        if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_ack_frequency)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, seq)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 4)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 25000)) == NULL ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, 1)) == NULL) {
+            ret = -1;
+        }
+        else if (picoquic_check_frame_needs_repeat(cnx, frame, bytes - frame, picoquic_packet_1rtt_protected,
+            &no_need_to_repeat, &do_not_detect_spurious, &is_preemptive_needed) != 0 ||
+            no_need_to_repeat != (seq != cnx->ack_frequency_sequence_local)) {
+            DBG_PRINTF("ACK_FREQUENCY seq %" PRIu64 ", last sent %" PRIu64 ": no need to repeat is %d",
+                seq, cnx->ack_frequency_sequence_local, no_need_to_repeat);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /* A CRYPTO frame may only take ownership of the packet buffer if nothing but padding follows it */
 typedef struct st_crypto_is_last_case_t {
     const char* name;

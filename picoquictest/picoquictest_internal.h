@@ -198,11 +198,13 @@ typedef struct st_picoquic_test_tls_api_ctx_t {
     picoquic_cnx_t* cnx_client;
     picoquic_cnx_t* cnx_server;
     int client_use_nat;
+    int client_nat_old_valid; /* Packets to client_addr_natted_old still reach the client */
     int server_use_multiple_addresses;
     int client_use_multiple_addresses;
     int do_bad_coalesce_test;
     struct sockaddr_in client_addr;
     struct sockaddr_in client_addr_natted; /* When simulating NAT (client use NAT) */
+    struct sockaddr_in client_addr_natted_old; /* Previous NAT mapping, valid until the client sends */
     struct sockaddr_in client_addr_relayed; /* When client_use_multiple_addresses, packets to it reach the client */
     struct sockaddr_in client_addr_2; /* for use in multipath tests */
     struct sockaddr_in server_addr;
