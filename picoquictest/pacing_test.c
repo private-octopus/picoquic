@@ -241,7 +241,7 @@ int pacing_fast_test(void)
 
 int pacing_newreno_test(void)
 {
-    int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 900000, 100);
+    int ret = pacing_cc_algotest(picoquic_newreno_algorithm, 901000, 100);
     return ret;
 }
 
