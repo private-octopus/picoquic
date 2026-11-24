@@ -731,6 +731,117 @@ int bdp_bbr1_test(void)
     return bdp_option_test_one(bdp_test_option_bbr1);
 }
 
+#define BDP_FRAME_TEST_CWIN 100000
+#define BDP_FRAME_TEST_RTT 20000
+
+const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t current_time, struct sockaddr* addr_from, picoquic_path_t* path_x);
+
+/* Store a client ticket with BDP values for the SNI and ALPN of the connection. */
+static int bdp_frame_test_store_ticket(picoquic_cnx_t* cnx)
+{
+    int ret = 0;
+    /* Issued at time 0, lifetime 3600 seconds in bytes 15 to 18. */
+    uint8_t ticket[19] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x0e, 0x10 };
+    uint8_t ip_addr[4] = { 10, 0, 0, 1 };
+
+    if (picoquic_store_ticket(cnx->quic, cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
+        picoquic_supported_versions[cnx->version_index].version, ip_addr, (uint8_t)sizeof(ip_addr),
+        ip_addr, (uint8_t)sizeof(ip_addr), ticket, (uint16_t)sizeof(ticket), NULL) != 0) {
+        ret = -1;
+    }
+    else {
+        cnx->quic->p_first_ticket->tp_0rtt[picoquic_tp_0rtt_cwin_remote] = BDP_FRAME_TEST_CWIN;
+        cnx->quic->p_first_ticket->tp_0rtt[picoquic_tp_0rtt_rtt_remote] = BDP_FRAME_TEST_RTT;
+    }
+    return ret;
+}
+
+/* The client sends its BDP frame once, not in every 0-RTT packet. */
+int bdp_client_frame_once_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    if (ret == 0) {
+        ret = bdp_frame_test_store_ticket(cnx);
+    }
+    for (int i = 0; ret == 0 && i < 2; i++) {
+        uint8_t buffer[256];
+        int more_data = 0;
+        int is_pure_ack = 1;
+        uint8_t* bytes_next = picoquic_format_bdp_frame(cnx, buffer, buffer + sizeof(buffer), cnx->path[0],
+            &more_data, &is_pure_ack);
+
+        if ((bytes_next > buffer) != (i == 0)) {
+            DBG_PRINTF("BDP frame %d has %d bytes", i, (int)(bytes_next - buffer));
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
+/* The client keeps the received BDP values in path 0, whatever path the frame arrived on. */
+int bdp_client_frame_path_test(void)
+{
+    uint64_t simulated_time = 0;
+    int path_index = -1;
+    struct sockaddr_in addr_local = { 0 };
+    struct sockaddr_in addr_peer = { 0 };
+    uint8_t ip_addr[4] = { 10, 0, 0, 1 };
+    uint8_t frame[64];
+    uint8_t* bytes = frame;
+    uint8_t* bytes_max = frame + sizeof(frame);
+    picoquic_cnx_t* cnx = NULL;
+    picoquic_quic_t* quic = NULL;
+    int ret = picoquic_test_set_minimal_cnx_with_time(&quic, &cnx, &simulated_time);
+
+    addr_local.sin_family = AF_INET;
+    addr_local.sin_port = htons(1234);
+    addr_peer.sin_family = AF_INET;
+    addr_peer.sin_port = htons(4321);
+    if (ret == 0) {
+        cnx->send_receive_bdp_frame = 1;
+        if ((path_index = picoquic_create_path(cnx, simulated_time, (struct sockaddr*)&addr_local,
+            (struct sockaddr*)&addr_peer, 0, 0)) <= 0) {
+            DBG_PRINTF("%s", "Cannot create the second path");
+            ret = -1;
+        }
+    }
+    /* BDP frame body, type already skipped: lifetime, bytes in flight, min RTT, IP address. */
+    if (ret == 0 &&
+        ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, 3600000000ull)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, BDP_FRAME_TEST_CWIN)) == NULL ||
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, BDP_FRAME_TEST_RTT)) == NULL ||
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, sizeof(ip_addr), ip_addr)) == NULL)) {
+        ret = -1;
+    }
+    if (ret == 0) {
+        if (picoquic_decode_bdp_frame(cnx, frame, bytes, simulated_time, NULL, cnx->path[path_index]) == NULL) {
+            DBG_PRINTF("%s", "Cannot decode the BDP frame");
+            ret = -1;
+        }
+        else if (cnx->path[0]->cwin_remote != BDP_FRAME_TEST_CWIN ||
+            cnx->path[0]->rtt_min_remote != BDP_FRAME_TEST_RTT ||
+            cnx->path[path_index]->cwin_remote != 0) {
+            DBG_PRINTF("BDP CWIN in path 0: %" PRIu64 ", in path %d: %" PRIu64,
+                cnx->path[0]->cwin_remote, path_index, cnx->path[path_index]->cwin_remote);
+            ret = -1;
+        }
+    }
+
+    if (cnx != NULL) {
+        picoquic_test_delete_minimal_cnx(&quic, &cnx);
+    }
+    return ret;
+}
+
 /*
  * The "blackhole" test simulates a link breakage of 2 seconds, during which all packets
  * are lost. The connection is expected to survive the blackhole, and then recover.

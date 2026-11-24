@@ -507,6 +507,8 @@ int bdp_delay_test(void);
 int bdp_short_test(void);
 int bdp_short_hi_test(void);
 int bdp_short_lo_test(void);
+int bdp_client_frame_once_test(void);
+int bdp_client_frame_path_test(void);
 int long_rtt_test(void);
 int high_latency_basic_test(void);
 int high_latency_bbr_test(void);

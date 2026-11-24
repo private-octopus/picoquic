@@ -6579,17 +6579,19 @@ const uint8_t* picoquic_decode_bdp_frame(picoquic_cnx_t* cnx, const uint8_t* byt
         &saved_ip_length, &saved_ip))  != NULL) {
         if (cnx->send_receive_bdp_frame) {
             if (cnx->client_mode) {
-                path_x->cwin_remote = recon_bytes_in_flight;
-                path_x->rtt_min_remote = recon_min_rtt;
-                path_x->ip_client_remote_length = (uint8_t)saved_ip_length;
-                memcpy(path_x->ip_client_remote, saved_ip, path_x->ip_client_remote_length);
-                /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow 
+                /* The ticket is seeded from path 0, even if a repeated frame arrived on another path */
+                picoquic_path_t* path_0 = cnx->path[0];
+                path_0->cwin_remote = recon_bytes_in_flight;
+                path_0->rtt_min_remote = recon_min_rtt;
+                path_0->ip_client_remote_length = (uint8_t)saved_ip_length;
+                memcpy(path_0->ip_client_remote, saved_ip, path_0->ip_client_remote_length);
+                /* Seed ticket from remote BDP values by preserving the flag is_ticket_seed to allow
                  * to reseed ticket from local BDP values if it is not done yet */
                 /* TODO: this has the side effect of storing the local CWIN in the ticket,
                  * even if it is not yet updated. Need to consider side effects. */
-                int is_ticket_seed = path_x->is_ticket_seeded;
-                picoquic_seed_ticket(cnx, path_x);
-                path_x->is_ticket_seeded = is_ticket_seed; 
+                int is_ticket_seed = path_0->is_ticket_seeded;
+                picoquic_seed_ticket(cnx, path_0);
+                path_0->is_ticket_seeded = is_ticket_seed;
             }
             else if (lifetime > current_time) {
                 uint8_t* client_ip;
@@ -6637,8 +6639,8 @@ uint8_t* picoquic_format_bdp_frame(picoquic_cnx_t* cnx, uint8_t* bytes, uint8_t*
             }
         }
     }
-    else {
-        /* Client sends bdp back to the server */
+    else if (!path_x->is_bdp_sent) {
+        /* Client sends bdp back to the server, once; loss recovery repeats it if lost */
         picoquic_stored_ticket_t* stored_ticket = picoquic_get_stored_ticket(cnx->quic,
             cnx->sni, (uint16_t)strlen(cnx->sni), cnx->alpn, (uint16_t)strlen(cnx->alpn),
             picoquic_supported_versions[cnx->version_index].version, 1, 0);

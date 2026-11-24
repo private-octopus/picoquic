@@ -3917,6 +3917,18 @@ namespace UnitTest1
 
             Assert::AreEqual(ret, 0);
         }
+
+        TEST_METHOD(bdp_client_frame_once) {
+            int ret = bdp_client_frame_once_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(bdp_client_frame_path) {
+            int ret = bdp_client_frame_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
         TEST_METHOD(bbr1_seed_startup) {
             int ret = bbr1_seed_startup_test();
 
