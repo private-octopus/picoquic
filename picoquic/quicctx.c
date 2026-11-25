@@ -2602,17 +2602,38 @@ int picoquic_probe_new_tuple(picoquic_cnx_t* cnx, picoquic_path_t* path_x, struc
     struct sockaddr const* addr_local, int if_index, uint64_t current_time, int to_preferred_address)
 {
     int ret;
+    picoquic_tuple_t* existing = NULL;
     PICOQUIC_THREAD_CHECK(cnx->quic);
     ret = picoquic_verify_proposed_tuple(cnx, &addr_peer, &addr_local, &if_index);
 
-    /* TODO: check whether that tuple already exists */
-
-    /* Verify that a CID is available */
     if (ret == 0) {
+        existing = path_x->first_tuple;
+        while (existing != NULL && (picoquic_compare_addr(addr_peer, (struct sockaddr*)&existing->peer_addr) != 0 ||
+            picoquic_compare_addr(addr_local, (struct sockaddr*)&existing->local_addr) != 0)) {
+            existing = existing->next_tuple;
+        }
+    }
+
+    if (existing == path_x->first_tuple && existing != NULL) {
+        /* Probing the addresses of the first tuple restarts the path challenge, unless one is in progress */
+        picoquic_set_path_challenge(cnx, picoquic_find_path_by_unique_id(cnx, path_x->unique_path_id), current_time);
+    }
+    else if (existing != NULL) {
+        /* Probing the addresses of another tuple restarts its challenge, unless one is in progress */
+        if (!existing->challenge_required || existing->challenge_verified || existing->challenge_failed) {
+            picoquic_set_tuple_challenge(existing, current_time, cnx->quic->use_constant_challenges);
+            existing->challenge_required = 1;
+            existing->challenge_verified = 0;
+            existing->challenge_failed = 0;
+        }
+        existing->to_preferred_address |= to_preferred_address;
+    }
+    else if (ret == 0) {
+        /* Verify that a CID is available */
         ret = picoquic_check_cid_for_new_tuple(cnx, path_x->unique_path_id);
     }
 
-    if (ret == 0) {
+    if (ret == 0 && existing == NULL) {
         picoquic_tuple_t * tuple = picoquic_create_tuple(path_x, addr_local, addr_peer, if_index);
         if (tuple == NULL) {
             ret = PICOQUIC_ERROR_MEMORY;
@@ -4380,7 +4401,9 @@ unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx)
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    return cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
+    /* The local CID is NULL after the peer retires it, until a packet arrives on a live CID */
+    return (cnx->path[0]->first_tuple->p_local_cnxid == NULL) ? picoquic_null_connection_id :
+        cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx)
@@ -4398,13 +4421,13 @@ picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx)
 picoquic_connection_id_t picoquic_get_client_cnxid(picoquic_cnx_t* cnx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    return (cnx->client_mode)?cnx->path[0]->first_tuple->p_local_cnxid->cnx_id : cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id;
+    return (cnx->client_mode)? picoquic_get_local_cnxid(cnx) : cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id;
 }
 
 picoquic_connection_id_t picoquic_get_server_cnxid(picoquic_cnx_t* cnx)
 {
     PICOQUIC_THREAD_CHECK(cnx->quic);
-    return (cnx->client_mode) ? cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id : cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
+    return (cnx->client_mode) ? cnx->path[0]->first_tuple->p_remote_cnxid->cnx_id : picoquic_get_local_cnxid(cnx);
 }
 
 picoquic_connection_id_t picoquic_get_logging_cnxid(picoquic_cnx_t* cnx)

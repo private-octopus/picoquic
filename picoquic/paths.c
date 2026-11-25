@@ -915,6 +915,10 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
                 }
             }
         }
+        /* Set the local CID of other tuples on their first packet, so a promoted tuple always has one */
+        if (tuple != NULL && tuple != path_x->first_tuple && tuple->p_local_cnxid == NULL) {
+            tuple->p_local_cnxid = picoquic_find_local_cnxid(cnx, path_x->unique_path_id, &ph->dest_cnx_id);
+        }
     }
     *p_path_id = path_id;
     if (path_id >= 0 && ret == 0) {
