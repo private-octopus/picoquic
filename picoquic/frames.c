@@ -3680,7 +3680,8 @@ int picoquic_check_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
                 case picoquic_frame_type_observed_address_v4:
                 case picoquic_frame_type_observed_address_v6:
                     /* Repeated by picoquic_prepare_observed_address_frame on the path the address belongs to */
-                    *no_need_to_repeat = 1;
+                   *no_need_to_repeat = 1;
+                   *do_not_detect_spurious = 0;
                     break;
                 default:
                     *no_need_to_repeat = 0;
