@@ -1090,6 +1090,7 @@ typedef struct st_picoquic_path_t {
     unsigned int path_is_demoted : 1;
     unsigned int path_abandon_received : 1;
     unsigned int path_abandon_sent : 1;
+    unsigned int path_abandon_acked : 1;
     unsigned int current_spin : 1;
     unsigned int last_bw_estimate_path_limited : 1;
     unsigned int path_cid_rotated : 1;
@@ -2232,6 +2233,10 @@ uint8_t* picoquic_format_path_abandon_frame(uint8_t* bytes, uint8_t* bytes_max, 
     uint64_t path_id, uint64_t reason);
 int picoquic_queue_path_abandon_frame(picoquic_cnx_t* cnx,
     uint64_t unique_path_id, uint64_t reason);
+int picoquic_path_abandon_frame_needs_repeat(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    const uint8_t* bytes_max, int* no_need_to_repeat);
+int picoquic_process_ack_of_path_abandon_frame(picoquic_cnx_t* cnx, const uint8_t* bytes,
+    size_t bytes_max, size_t* consumed);
 const uint8_t* picoquic_decode_new_connection_id_frame(picoquic_cnx_t* cnx, const uint8_t* bytes, const uint8_t* bytes_max, uint64_t current_time, int is_mp);
 const uint8_t* picoquic_decode_path_abandon_frame(const uint8_t* bytes, const uint8_t* bytes_max,
     picoquic_cnx_t* cnx, uint64_t current_time);

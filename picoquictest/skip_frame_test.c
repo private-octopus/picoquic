@@ -1487,10 +1487,7 @@ int frames_repeat_test(void)
                         case picoquic_frame_type_connection_close:
                         case picoquic_frame_type_application_close:
                         case picoquic_frame_type_new_token:
-                        case picoquic_frame_type_path_abandon:
                         case picoquic_frame_type_bdp:
-                        case picoquic_frame_type_observed_address_v4:
-                        case picoquic_frame_type_observed_address_v6:
                             break;
                         default:
                             if (frame_repeat_error_packet(qclient, (struct sockaddr*)&saddr, simulated_time, buffer, len - 1,
@@ -1527,10 +1524,7 @@ int frames_repeat_test(void)
                     case picoquic_frame_type_connection_close:
                     case picoquic_frame_type_application_close:
                     case picoquic_frame_type_new_token:
-                    case picoquic_frame_type_path_abandon:
                     case picoquic_frame_type_bdp:
-                    case picoquic_frame_type_observed_address_v4:
-                    case picoquic_frame_type_observed_address_v6:
                     case picoquic_frame_type_max_streams_bidir:
                     case picoquic_frame_type_max_streams_unidir:
                         break;
