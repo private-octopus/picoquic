@@ -7732,6 +7732,243 @@ int migration_test_scenario(test_api_stream_desc_t * scenario, size_t size_of_sc
     return ret;
 }
 
+/* A tuple gets its local CID from the first packet that reaches it, so promoting it never
+ * leaves path[0] without one, even inside the packet that carries the PATH_RESPONSE. */
+int migration_tuple_local_cid_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+    if (ret == 0) {
+        /* Server: a packet from a new client address creates a tuple, then a PATH_RESPONSE promotes it */
+        picoquic_cnx_t* cnx = test_ctx->cnx_server;
+        struct sockaddr_in new_addr = test_ctx->client_addr;
+        picoquic_packet_header ph;
+        picoquic_tuple_t* tuple = NULL;
+        int path_id = -1;
+
+        memset(&ph, 0, sizeof(ph));
+        ph.dest_cnx_id = cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
+        new_addr.sin_port += 17;
+        ret = picoquic_find_incoming_path(cnx, &ph, (struct sockaddr*)&new_addr, (struct sockaddr*)&test_ctx->server_addr,
+            0, simulated_time, &path_id, &tuple);
+        if (ret == 0 && (path_id != 0 || tuple == NULL || tuple == cnx->path[0]->first_tuple || tuple->p_local_cnxid == NULL)) {
+            DBG_PRINTF("%s", "Server tuple created without a local CID.\n");
+            ret = -1;
+        }
+        if (ret == 0) {
+            uint8_t frame[16];
+            int more_data = 0;
+            int is_pure_ack = 1;
+            uint8_t* bytes_next = picoquic_format_path_response_frame(frame, frame + sizeof(frame), &more_data, &is_pure_ack,
+                tuple->challenge[0]);
+
+            if (bytes_next == frame ||
+                picoquic_decode_frames(cnx, cnx->path[0], frame, (size_t)(bytes_next - frame), NULL, picoquic_epoch_1rtt,
+                    (struct sockaddr*)&new_addr, (struct sockaddr*)&test_ctx->server_addr, 0, 0, NULL, simulated_time) != 0 ||
+                cnx->path[0]->first_tuple != tuple || cnx->path[0]->first_tuple->p_local_cnxid == NULL) {
+                DBG_PRINTF("%s", "Server path[0] has no local CID after the promotion.\n");
+                ret = -1;
+            }
+        }
+    }
+    if (ret == 0) {
+        /* Client: a tuple created by probing gets its local CID from the first packet received on it */
+        picoquic_cnx_t* cnx = test_ctx->cnx_client;
+        struct sockaddr_in new_addr = test_ctx->client_addr;
+        picoquic_packet_header ph;
+        picoquic_tuple_t* tuple = NULL;
+        int path_id = -1;
+
+        new_addr.sin_port += 23;
+        ret = picoquic_probe_new_path(cnx, (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&new_addr, simulated_time);
+        if (ret == 0) {
+            memset(&ph, 0, sizeof(ph));
+            ph.dest_cnx_id = cnx->path[0]->first_tuple->p_local_cnxid->cnx_id;
+            ret = picoquic_find_incoming_path(cnx, &ph, (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&new_addr,
+                0, simulated_time, &path_id, &tuple);
+        }
+        if (ret == 0 && (path_id != 0 || tuple == NULL || tuple == cnx->path[0]->first_tuple || tuple->p_local_cnxid == NULL)) {
+            DBG_PRINTF("%s", "Client tuple has no local CID after receiving a packet.\n");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+/* Find a live local CID of path 0 other than the one used by its first tuple */
+static picoquic_local_cnxid_t* test_find_other_local_cnxid(picoquic_cnx_t* cnx)
+{
+    picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx, 0, 0);
+    picoquic_local_cnxid_t* l_cid = (local_cnxid_list == NULL) ? NULL : local_cnxid_list->local_cnxid_first;
+
+    while (l_cid != NULL && (l_cid == cnx->path[0]->first_tuple->p_local_cnxid || l_cid->is_retired)) {
+        l_cid = l_cid->next;
+    }
+    return l_cid;
+}
+
+/* The peer retires the local CID of path[0] in a packet that arrives on another tuple.
+ * Path[0] has no local CID until a packet reaches it on a live CID, and the CID getters must cope. */
+int retire_path0_local_cid_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+    if (ret == 0) {
+        picoquic_cnx_t* cnx = test_ctx->cnx_server;
+        picoquic_local_cnxid_t* l_cid = test_find_other_local_cnxid(cnx);
+        struct sockaddr_in new_addr = test_ctx->client_addr;
+        picoquic_packet_header ph;
+        picoquic_tuple_t* tuple = NULL;
+        int path_id = -1;
+        uint8_t frame[16];
+        uint8_t* bytes_next = NULL;
+
+        new_addr.sin_port += 17;
+        if (l_cid == NULL) {
+            DBG_PRINTF("%s", "No spare local CID on the server.\n");
+            ret = -1;
+        }
+        else {
+            /* The packet arrives from a new address, on another local CID */
+            memset(&ph, 0, sizeof(ph));
+            ph.dest_cnx_id = l_cid->cnx_id;
+            ret = picoquic_find_incoming_path(cnx, &ph, (struct sockaddr*)&new_addr, (struct sockaddr*)&test_ctx->server_addr,
+                0, simulated_time, &path_id, &tuple);
+        }
+        if (ret == 0) {
+            bytes_next = picoquic_frames_varint_encode(frame, frame + sizeof(frame), picoquic_frame_type_retire_connection_id);
+            bytes_next = picoquic_frames_varint_encode(bytes_next, frame + sizeof(frame), cnx->path[0]->first_tuple->p_local_cnxid->sequence);
+            if (bytes_next == NULL ||
+                picoquic_decode_frames(cnx, cnx->path[0], frame, (size_t)(bytes_next - frame), NULL, picoquic_epoch_1rtt,
+                    (struct sockaddr*)&new_addr, (struct sockaddr*)&test_ctx->server_addr, 0, 0, l_cid, simulated_time) != 0) {
+                DBG_PRINTF("%s", "Could not process the RETIRE_CONNECTION_ID frame.\n");
+                ret = -1;
+            }
+        }
+        if (ret == 0 && cnx->path[0]->first_tuple->p_local_cnxid == NULL) {
+            picoquic_connection_id_t local_cid = picoquic_get_local_cnxid(cnx);
+            picoquic_connection_id_t server_cid = picoquic_get_server_cnxid(cnx);
+
+            if (local_cid.id_len != 0 || server_cid.id_len != 0) {
+                DBG_PRINTF("%s", "The CID getters do not return the null CID.\n");
+                ret = -1;
+            }
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
+static int test_count_tuples(picoquic_path_t* path_x)
+{
+    int nb_tuples = 0;
+
+    for (picoquic_tuple_t* tuple = path_x->first_tuple; tuple != NULL; tuple = tuple->next_tuple) {
+        nb_tuples++;
+    }
+    return nb_tuples;
+}
+
+/* Probing an address pair that already has a tuple restarts its challenge instead of creating a duplicate */
+int probe_same_tuple_test(void)
+{
+    uint64_t simulated_time = 0;
+    uint64_t loss_mask = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    int ret = tls_api_init_ctx_ex2(&test_ctx, PICOQUIC_INTERNAL_TEST_VERSION_1,
+        PICOQUIC_TEST_SNI, PICOQUIC_TEST_ALPN, &simulated_time, NULL, NULL, 0, 0, 0, NULL, 8, 0, 0, 0);
+
+    if (ret == 0 && test_ctx == NULL) {
+        ret = PICOQUIC_ERROR_MEMORY;
+    }
+    if (ret == 0) {
+        ret = tls_api_connection_loop(test_ctx, &loss_mask, 0, &simulated_time);
+    }
+    if (ret == 0) {
+        ret = tls_api_synch_to_empty_loop(test_ctx, &simulated_time, 2048, PICOQUIC_NB_PATH_TARGET, 1);
+    }
+    if (ret == 0) {
+        picoquic_cnx_t* cnx = test_ctx->cnx_client;
+        picoquic_path_t* path_x = cnx->path[0];
+        struct sockaddr_in new_addr = test_ctx->client_addr;
+        picoquic_tuple_t* tuple = NULL;
+        uint64_t challenge_0 = 0;
+
+        new_addr.sin_port += 17;
+        ret = picoquic_probe_new_path(cnx, (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&new_addr, simulated_time);
+        if (ret == 0 && (test_count_tuples(path_x) != 2 || (tuple = path_x->first_tuple->next_tuple) == NULL)) {
+            DBG_PRINTF("%s", "The first probe did not create a tuple.\n");
+            ret = -1;
+        }
+        if (ret == 0) {
+            /* The challenge of that tuple failed, then the application probes the same addresses again */
+            tuple->challenge_failed = 1;
+            challenge_0 = tuple->challenge[0];
+            simulated_time += 1000;
+            ret = picoquic_probe_new_path(cnx, (struct sockaddr*)&test_ctx->server_addr, (struct sockaddr*)&new_addr, simulated_time);
+        }
+        if (ret == 0 && (test_count_tuples(path_x) != 2 || path_x->first_tuple->next_tuple != tuple ||
+            tuple->challenge_failed || !tuple->challenge_required || tuple->challenge_verified ||
+            tuple->challenge_repeat_count != 0 || tuple->challenge[0] == challenge_0)) {
+            DBG_PRINTF("%s", "The second probe did not restart the challenge of the existing tuple.\n");
+            ret = -1;
+        }
+        if (ret == 0) {
+            /* Probing the current peer address without a local address matches the first tuple */
+            ret = picoquic_probe_new_path(cnx, (struct sockaddr*)&test_ctx->server_addr, NULL, simulated_time);
+        }
+        if (ret == 0 && (test_count_tuples(path_x) != 2 || !path_x->first_tuple->challenge_required ||
+            path_x->first_tuple->challenge_verified)) {
+            DBG_PRINTF("%s", "Probing the current addresses did not restart the challenge of the first tuple.\n");
+            ret = -1;
+        }
+    }
+
+    if (test_ctx != NULL) {
+        tls_api_delete_ctx(test_ctx);
+        test_ctx = NULL;
+    }
+
+    return ret;
+}
+
 int migration_test(void)
 {
     return migration_test_scenario(test_scenario_q_and_r, sizeof(test_scenario_q_and_r), 0, 0);

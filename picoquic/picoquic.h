@@ -1331,6 +1331,7 @@ unsigned long picoquic_get_local_if_index(picoquic_cnx_t* cnx);
 int picoquic_set_local_addr(picoquic_cnx_t* cnx, struct sockaddr* addr);
 
 /* Manage connection IDs*/
+/* The local CID of path 0 is the null CID after the peer retires it, until the peer uses another one. */
 picoquic_connection_id_t picoquic_get_local_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_remote_cnxid(picoquic_cnx_t* cnx);
 picoquic_connection_id_t picoquic_get_initial_cnxid(picoquic_cnx_t* cnx);

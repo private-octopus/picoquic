@@ -59,6 +59,10 @@ typedef struct st_picomask_test_ctx_t {
     uint8_t packet_ecn_default;
     uint8_t recv_ecn_client;
     uint8_t recv_ecn_server;
+    /* Second client address, used after a NAT rebinding or a client migration */
+    struct sockaddr_storage alt_client_addr;
+    /* If set, the client NAT maps the client address to alt_client_addr */
+    int is_nat_rebinding;
 } picomask_test_ctx_t;
 
 
@@ -90,6 +94,15 @@ int picomask_test_packet_arrival(picomask_test_ctx_t* pt_ctx, int link_id, int *
             break;
         default:
             ret = -1;
+        }
+
+        if (ret == 0 && pt_ctx->is_nat_rebinding) {
+            if (link_id == 0 && picoquic_compare_addr((struct sockaddr*)&packet->addr_from, (struct sockaddr*)&pt_ctx->addr[0]) == 0) {
+                picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&pt_ctx->alt_client_addr);
+            }
+            else if (link_id == 1 && picoquic_compare_addr((struct sockaddr*)&packet->addr_to, (struct sockaddr*)&pt_ctx->alt_client_addr) == 0) {
+                picoquic_store_addr(&packet->addr_to, (struct sockaddr*)&pt_ctx->addr[0]);
+            }
         }
 
         if (ret == 0) {
@@ -143,7 +156,9 @@ int picomask_test_packet_departure(picomask_test_ctx_t* pt_ctx, int node_id,
                 break;
             case 1:
                 if (picoquic_compare_addr((struct sockaddr*)&packet->addr_to,
-                    (struct sockaddr*)&pt_ctx->addr[0]) == 0) {
+                    (struct sockaddr*)&pt_ctx->addr[0]) == 0 ||
+                    (pt_ctx->alt_client_addr.ss_family != 0 && picoquic_compare_addr((struct sockaddr*)&packet->addr_to,
+                        (struct sockaddr*)&pt_ctx->alt_client_addr) == 0)) {
                     link_id = 1;
                 }
                 else if (picoquic_compare_addr((struct sockaddr*)&packet->addr_to,
@@ -749,6 +764,216 @@ int picomask_udp_test(void)
 
     if (pt_ctx != NULL) {
         /* Clear the context */
+        picomask_test_delete(pt_ctx);
+    }
+    return ret;
+}
+
+/* Establish the client to proxy connection, start the client to target connection,
+ * and wait until the connect-udp stream is available. */
+static int picomask_test_establish(picomask_test_ctx_t* pt_ctx)
+{
+    int ret = picomask_test_cnx_create(pt_ctx, 0);
+
+    if (ret == 0) {
+        picoquic_start_client_cnx(pt_ctx->cnx_to_proxy);
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_ready);
+    }
+    if (ret == 0) {
+        ret = picomask_test_target_cnx_create(pt_ctx);
+    }
+    if (ret == 0) {
+        ret = picomask_test_loop(pt_ctx, picomask_proxy_available);
+    }
+    return ret;
+}
+
+/* Format a DATAGRAM frame for the connect-udp stream: quarter stream ID, context ID 0, then the forwarded packet */
+static uint8_t* picomask_test_format_datagram(uint8_t* bytes, uint8_t* bytes_max, picomask_udp_ctx_t* udp_ctx)
+{
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_datagram);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, udp_ctx->h3_stream->stream_id / 4);
+    bytes = picoquic_frames_varint_encode(bytes, bytes_max, 0);
+    if (bytes != NULL && bytes + 32 <= bytes_max) {
+        memset(bytes, 0x5a, 32);
+        bytes += 32;
+    }
+    else {
+        bytes = NULL;
+    }
+    return bytes;
+}
+
+/* Returns 1 once the proxy has a second, not yet validated tuple for the client */
+static int picomask_new_tuple_pending(picomask_test_ctx_t* pt_ctx)
+{
+    picoquic_cnx_t* cnx_p = picoquic_get_first_cnx(pt_ctx->quic[1]);
+    int ret = picomask_proxy_broken(pt_ctx);
+
+    if (ret == 0 && cnx_p != NULL && cnx_p->path[0]->first_tuple->next_tuple != NULL &&
+        !cnx_p->path[0]->first_tuple->next_tuple->challenge_verified) {
+        ret = 1;
+    }
+    return ret;
+}
+
+/* The client NAT picks a new port while the client talks to the target through the proxy. */
+int picomask_nat_test(void)
+{
+    int ret = 0;
+    picomask_test_ctx_t* pt_ctx = picomask_test_config();
+
+    if (pt_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picomask_test_establish(pt_ctx);
+    }
+    if (ret == 0) {
+        picoquic_store_addr(&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[0]);
+        ((struct sockaddr_in*)&pt_ctx->alt_client_addr)->sin_port = htons(4321);
+        pt_ctx->is_nat_rebinding = 1;
+        ret = picomask_test_loop(pt_ctx, picomask_target_ready);
+    }
+    if (ret == 0) {
+        picoquic_cnx_t* cnx_p = picoquic_get_first_cnx(pt_ctx->quic[1]);
+
+        if (cnx_p == NULL || picoquic_compare_addr((struct sockaddr*)&cnx_p->path[0]->first_tuple->peer_addr,
+            (struct sockaddr*)&pt_ctx->alt_client_addr) != 0) {
+            DBG_PRINTF("%s", "The proxy did not move to the new client address.\n");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = picoquic_close(pt_ctx->cnx_to_target, 0);
+    }
+    if (ret == 0) {
+        ret = picomask_test_loop(pt_ctx, picomask_target_disconnected);
+    }
+    if (pt_ctx != NULL) {
+        picomask_test_delete(pt_ctx);
+    }
+    return ret;
+}
+
+/* The client migrates, and answers the proxy challenge with a packet that carries
+ * PATH_RESPONSE then a DATAGRAM. The proxy promotes the new tuple while decoding
+ * the PATH_RESPONSE, then forwards the datagram on that tuple. */
+int picomask_migration_datagram_test(void)
+{
+    int ret = 0;
+    picomask_test_ctx_t* pt_ctx = picomask_test_config();
+
+    if (pt_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picomask_test_establish(pt_ctx);
+    }
+    if (ret == 0) {
+        picoquic_store_addr(&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[0]);
+        ((struct sockaddr_in*)&pt_ctx->alt_client_addr)->sin_port = htons(4321);
+        ret = picoquic_probe_new_path(pt_ctx->cnx_to_proxy, (struct sockaddr*)&pt_ctx->addr[1],
+            (struct sockaddr*)&pt_ctx->alt_client_addr, pt_ctx->simulated_time);
+    }
+    if (ret == 0) {
+        ret = picomask_test_loop(pt_ctx, picomask_new_tuple_pending);
+    }
+    if (ret == 0) {
+        picoquic_cnx_t* cnx_p = picoquic_get_first_cnx(pt_ctx->quic[1]);
+        picoquic_tuple_t* new_tuple = cnx_p->path[0]->first_tuple->next_tuple;
+        picomask_udp_ctx_t* udp_ctx = picoquic_test_get_udp_ctx(pt_ctx);
+        uint8_t frames[256];
+        uint8_t* bytes = frames;
+        uint8_t* bytes_max = frames + sizeof(frames);
+        int more_data = 0;
+        int is_pure_ack = 1;
+
+        if (udp_ctx == NULL || udp_ctx->h3_stream == NULL) {
+            DBG_PRINTF("%s", "No connect-udp stream.\n");
+            ret = -1;
+        }
+        else {
+            bytes = picoquic_format_path_response_frame(bytes, bytes_max, &more_data, &is_pure_ack, new_tuple->challenge[0]);
+            bytes = picomask_test_format_datagram(bytes, bytes_max, udp_ctx);
+            if (bytes == NULL) {
+                ret = -1;
+            }
+            else {
+                ret = picoquic_decode_frames(cnx_p, cnx_p->path[0], frames, (size_t)(bytes - frames), NULL, picoquic_epoch_1rtt,
+                    (struct sockaddr*)&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[1], 0, 0, NULL, pt_ctx->simulated_time);
+            }
+        }
+        if (ret == 0 && (cnx_p->path[0]->first_tuple != new_tuple || new_tuple->p_local_cnxid == NULL)) {
+            DBG_PRINTF("%s", "The proxy path[0] has no local CID after the migration.\n");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = picomask_test_loop(pt_ctx, picomask_target_ready);
+    }
+    if (pt_ctx != NULL) {
+        picomask_test_delete(pt_ctx);
+    }
+    return ret;
+}
+
+/* The client retires the proxy CID of the default tuple in a packet that arrives from a new
+ * address, and that also carries a DATAGRAM. The proxy forwards it while path[0] has no local CID. */
+int picomask_retire_datagram_test(void)
+{
+    int ret = 0;
+    picomask_test_ctx_t* pt_ctx = picomask_test_config();
+
+    if (pt_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = picomask_test_establish(pt_ctx);
+    }
+    if (ret == 0) {
+        picoquic_cnx_t* cnx_p = picoquic_get_first_cnx(pt_ctx->quic[1]);
+        picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(cnx_p, 0, 0);
+        picoquic_local_cnxid_t* l_cid = (local_cnxid_list == NULL) ? NULL : local_cnxid_list->local_cnxid_first;
+        picomask_udp_ctx_t* udp_ctx = picoquic_test_get_udp_ctx(pt_ctx);
+        picoquic_packet_header ph;
+        picoquic_tuple_t* tuple = NULL;
+        int path_id = -1;
+        uint8_t frames[256];
+        uint8_t* bytes = frames;
+        uint8_t* bytes_max = frames + sizeof(frames);
+
+        while (l_cid != NULL && (l_cid == cnx_p->path[0]->first_tuple->p_local_cnxid || l_cid->is_retired)) {
+            l_cid = l_cid->next;
+        }
+        picoquic_store_addr(&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[0]);
+        ((struct sockaddr_in*)&pt_ctx->alt_client_addr)->sin_port = htons(4321);
+        if (l_cid == NULL || udp_ctx == NULL || udp_ctx->h3_stream == NULL) {
+            DBG_PRINTF("%s", "No spare proxy CID, or no connect-udp stream.\n");
+            ret = -1;
+        }
+        else {
+            /* The packet arrives from a new address, on another proxy CID */
+            memset(&ph, 0, sizeof(ph));
+            ph.dest_cnx_id = l_cid->cnx_id;
+            ret = picoquic_find_incoming_path(cnx_p, &ph, (struct sockaddr*)&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[1],
+                0, pt_ctx->simulated_time, &path_id, &tuple);
+        }
+        if (ret == 0) {
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, picoquic_frame_type_retire_connection_id);
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, cnx_p->path[0]->first_tuple->p_local_cnxid->sequence);
+            bytes = picomask_test_format_datagram(bytes, bytes_max, udp_ctx);
+            if (bytes == NULL) {
+                ret = -1;
+            }
+            else {
+                ret = picoquic_decode_frames(cnx_p, cnx_p->path[0], frames, (size_t)(bytes - frames), NULL, picoquic_epoch_1rtt,
+                    (struct sockaddr*)&pt_ctx->alt_client_addr, (struct sockaddr*)&pt_ctx->addr[1], 0, 0, l_cid, pt_ctx->simulated_time);
+            }
+        }
+    }
+    /* The simulation stops here: the client did not really retire that CID, so it would reject the replacement */
+    if (pt_ctx != NULL) {
         picomask_test_delete(pt_ctx);
     }
     return ret;

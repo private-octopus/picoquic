@@ -498,7 +498,7 @@ int picomask_receive_datagram(picoquic_cnx_t* cnx,
             picoquic_store_addr(&sp->addr_to, (struct sockaddr*)&udp_ctx->target_addr);
             picoquic_store_addr(&sp->addr_local, (struct sockaddr*)&cnx->path[0]->first_tuple->local_addr);
             sp->if_index_local = cnx->path[0]->first_tuple->if_index;
-            sp->cnxid_log64 = picoquic_val64_connection_id(cnx->path[0]->first_tuple->p_local_cnxid->cnx_id);
+            sp->cnxid_log64 = picoquic_val64_connection_id(picoquic_get_local_cnxid(cnx));
             picoquic_queue_stateless_packet(quic, sp);
         }
         /* No action if memory allocation fails, because this indicates congestion. */

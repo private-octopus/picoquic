@@ -2298,6 +2298,27 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(migration_tuple_local_cid)
+        {
+            int ret = migration_tuple_local_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(retire_path0_local_cid)
+        {
+            int ret = retire_path0_local_cid_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(probe_same_tuple)
+        {
+            int ret = probe_same_tuple_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(migration_long)
         {
             int ret = migration_test_long();
@@ -5325,6 +5346,24 @@ namespace UnitTest1
 
         TEST_METHOD(picomask_udp_path) {
             int ret = picomask_udp_path_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_nat) {
+            int ret = picomask_nat_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_migration_datagram) {
+            int ret = picomask_migration_datagram_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(picomask_retire_datagram) {
+            int ret = picomask_retire_datagram_test();
 
             Assert::AreEqual(ret, 0);
         }
