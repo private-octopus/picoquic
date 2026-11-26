@@ -900,6 +900,9 @@ typedef enum {
     multipath_test_drop_first_c2s,
     multipath_test_drop_first_s2c,
     multipath_test_nat_abandon,
+    multipath_test_late_cid,
+    multipath_test_late_cid_abandon,
+    multipath_test_late_cid_server_abandon,
 } multipath_test_enum_t;
 
 #ifdef _WINDOWS
@@ -1243,6 +1246,81 @@ int multipath_test_do_keep_alive(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t
     return ret;
 }
 
+/* Server path 1 waits for a peer CID: it sends nothing, an unsent challenge cannot validate it,
+ * and it does not count as a usable path. Then the client sends its CIDs again, or one side abandons path 1. */
+static int multipath_test_late_cid_check(picoquic_test_tls_api_ctx_t* test_ctx, uint64_t* simulated_time,
+    multipath_test_enum_t test_id)
+{
+    int ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 100000);
+    int path_index = (ret == 0 && test_ctx->cnx_server != NULL) ?
+        picoquic_find_path_by_unique_id(test_ctx->cnx_server, 1) : -1;
+
+    if (ret == 0 && (path_index < 0 ||
+        test_ctx->cnx_server->path[path_index]->first_tuple->p_remote_cnxid != NULL ||
+        test_ctx->cnx_server->path[path_index]->received == 0 ||
+        test_ctx->cnx_server->path[path_index]->bytes_sent != 0)) {
+        DBG_PRINTF("%s", "Server path 1 is not waiting for a peer CID.\n");
+        ret = -1;
+    }
+    if (ret == 0) {
+        picoquic_path_t* path_x = test_ctx->cnx_server->path[path_index];
+        uint8_t frame[16];
+        int more_data = 0;
+        int is_pure_ack = 1;
+        uint8_t* bytes_next = picoquic_format_path_response_frame(frame, frame + sizeof(frame), &more_data, &is_pure_ack,
+            path_x->first_tuple->challenge[0]);
+
+        if (bytes_next == frame ||
+            picoquic_decode_frames(test_ctx->cnx_server, path_x, frame, (size_t)(bytes_next - frame), NULL, picoquic_epoch_1rtt,
+                (struct sockaddr*)&path_x->first_tuple->peer_addr, (struct sockaddr*)&path_x->first_tuple->local_addr,
+                0, 0, NULL, *simulated_time) != 0 ||
+            path_x->first_tuple->challenge_verified) {
+            DBG_PRINTF("%s", "The unsent challenge check failed on server path 1.\n");
+            ret = -1;
+        }
+    }
+    if (ret == 0 &&
+        picoquic_abandon_path(test_ctx->cnx_server, 0, 0, *simulated_time) != PICOQUIC_ERROR_PATH_LAST_REMAINING) {
+        DBG_PRINTF("%s", "Server path 0 could be abandoned while path 1 waits.\n");
+        ret = -1;
+    }
+    if (ret == 0 && (test_id == multipath_test_late_cid_abandon || test_id == multipath_test_late_cid_server_abandon)) {
+        /* Abandoning the waiting path must drop that path, not the connection */
+        picoquic_cnx_t* cnx_x = (test_id == multipath_test_late_cid_abandon) ? test_ctx->cnx_client : test_ctx->cnx_server;
+
+        ret = picoquic_abandon_path(cnx_x, 1, 0, *simulated_time);
+        if (ret == 0) {
+            ret = tls_api_wait_for_timeout(test_ctx, simulated_time, 100000);
+        }
+        if (ret == 0) {
+            /* RFC 10069 section 3.4: the peer MUST answer with its own PATH_ABANDON */
+            int path_index_x = picoquic_find_path_by_unique_id(cnx_x, 1);
+
+            if (path_index_x < 0 || !cnx_x->path[path_index_x]->path_abandon_received) {
+                DBG_PRINTF("%s", "No PATH_ABANDON reply for path 1.\n");
+                ret = -1;
+            }
+        }
+    }
+    else if (ret == 0) {
+        picoquic_local_cnxid_list_t* local_cnxid_list = picoquic_find_or_create_local_cnxid_list(test_ctx->cnx_client, 1, 0);
+        picoquic_local_cnxid_t* l_cid = (local_cnxid_list == NULL) ? NULL : local_cnxid_list->local_cnxid_first;
+
+        while (ret == 0 && l_cid != NULL) {
+            uint8_t frame[256];
+            int more_data = 0;
+            int is_pure_ack = 1;
+            uint8_t* bytes_next = picoquic_format_new_connection_id_frame(test_ctx->cnx_client, local_cnxid_list,
+                frame, frame + sizeof(frame), &more_data, &is_pure_ack, l_cid);
+
+            ret = (bytes_next == frame) ? -1 : picoquic_queue_misc_frame(test_ctx->cnx_client, frame,
+                (size_t)(bytes_next - frame), is_pure_ack, picoquic_packet_context_application);
+            l_cid = l_cid->next;
+        }
+    }
+    return ret;
+}
+
 int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t test_id)
 {
     uint64_t simulated_time = 0;
@@ -1388,14 +1466,46 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
 
+    if (ret == 0 && (test_id == multipath_test_late_cid || test_id == multipath_test_late_cid_abandon ||
+        test_id == multipath_test_late_cid_server_abandon)) {
+        /* The server loses the client CIDs of path 1, as if PATH_NEW_CONNECTION_ID was lost */
+        picoquic_remote_cnxid_stash_t* stash = picoquic_find_or_create_remote_cnxid_stash(test_ctx->cnx_server, 1, 0);
+
+        if (stash == NULL) {
+            DBG_PRINTF("%s", "No CID stash for path 1 on the server.\n");
+            ret = -1;
+        }
+        else {
+            picoquic_delete_remote_cnxid_stash(test_ctx->cnx_server, stash);
+        }
+    }
+
     if (ret == 0) {
         ret = picoquic_probe_new_path(test_ctx->cnx_client, (struct sockaddr*) & test_ctx->server_addr,
             (struct sockaddr*) & test_ctx->client_addr_2, simulated_time);
     }
 
+    if (ret == 0 && (test_id == multipath_test_late_cid || test_id == multipath_test_late_cid_abandon ||
+        test_id == multipath_test_late_cid_server_abandon)) {
+        ret = multipath_test_late_cid_check(test_ctx, &simulated_time, test_id);
+    }
+
     /* Check that the two paths are established */
-    if (ret == 0 && test_id != multipath_test_fail) {
+    if (ret == 0 && test_id != multipath_test_fail && test_id != multipath_test_late_cid_abandon &&
+        test_id != multipath_test_late_cid_server_abandon) {
         ret = wait_multipath_ready(test_ctx, &simulated_time);
+    }
+    if (ret == 0 && test_id == multipath_test_late_cid) {
+        /* The wait for a peer CID must not count in the RTT of path 1 */
+        int path_index = picoquic_find_path_by_unique_id(test_ctx->cnx_server, 1);
+
+        if (path_index < 0 ||
+            test_ctx->cnx_server->path[path_index]->rtt_min == 0 ||
+            test_ctx->cnx_server->path[path_index]->rtt_min > 2 * test_ctx->cnx_server->path[0]->rtt_min) {
+            DBG_PRINTF("Server RTT min, path 1: %" PRIu64 ", path 0: %" PRIu64 "\n",
+                (path_index < 0) ? 0 : test_ctx->cnx_server->path[path_index]->rtt_min, test_ctx->cnx_server->path[0]->rtt_min);
+            ret = -1;
+        }
     }
      if (ret == 0){
         if (test_id == multipath_test_stream_af) {
@@ -1534,7 +1644,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
         }
     }
     /* In the "abandon" scenario, allow for a bit more than 1 second of delay for clearing of paths */
-    if (ret == 0 && (test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
+    if (ret == 0 && (test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon ||
+        test_id == multipath_test_late_cid_abandon || test_id == multipath_test_late_cid_server_abandon)) {
         uint64_t timeout = 1100000;
 
         ret = tls_api_wait_for_timeout(test_ctx, &simulated_time, timeout);
@@ -1666,7 +1777,8 @@ int multipath_test_one(uint64_t max_completion_microsec, multipath_test_enum_t t
     }
 
     if (ret == 0 && (test_id == multipath_test_break1 || test_id == multipath_test_break2 || test_id == multipath_test_break3 ||
-        test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon)) {
+        test_id == multipath_test_abandon || test_id == multipath_test_nat_abandon || test_id == multipath_test_late_cid_abandon ||
+        test_id == multipath_test_late_cid_server_abandon)) {
         if (test_ctx->cnx_server->nb_paths != 1) {
             DBG_PRINTF("After break, %d paths on server connection.\n", test_ctx->cnx_server->nb_paths);
             ret = -1;
@@ -1949,6 +2061,30 @@ int multipath_nat_abandon_test(void)
     uint64_t max_completion_microsec = 3800000;
 
     return  multipath_test_one(max_completion_microsec, multipath_test_nat_abandon);
+}
+
+/* The client opens path 1 before the server has a CID for it. */
+int multipath_late_cid_test(void)
+{
+    uint64_t max_completion_microsec = 1060000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_late_cid);
+}
+
+/* The client abandons path 1 while the server still waits for its CID. */
+int multipath_late_cid_abandon_test(void)
+{
+    uint64_t max_completion_microsec = 1900000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_late_cid_abandon);
+}
+
+/* The server abandons its path 1 while it still waits for the client CID. */
+int multipath_late_cid_server_abandon_test(void)
+{
+    uint64_t max_completion_microsec = 1900000;
+
+    return  multipath_test_one(max_completion_microsec, multipath_test_late_cid_server_abandon);
 }
 
 /* 

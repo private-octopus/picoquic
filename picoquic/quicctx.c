@@ -2251,9 +2251,6 @@ void picoquic_demote_path(picoquic_cnx_t* cnx, int path_index, uint64_t current_
                         }
                         picoquic_delete_remote_cnxid_stash(cnx, remote_cnxid_stash);
                     }
-                    else {
-                        DBG_PRINTF("Cannot abandon path[%d]", cnx->path[path_index]->unique_path_id);
-                    }
                     picoquic_log_app_message(cnx, "Abandon path, unique_id %" PRIu64", reason % " PRIu64,
                         cnx->path[path_index]->unique_path_id, reason);
                     cnx->path[path_index]->path_abandon_sent = 1;
@@ -2746,19 +2743,20 @@ int picoquic_demote_local_cnxid_list(picoquic_cnx_t* cnx, uint64_t unique_path_i
 }
 
 
-/* Count the paths that are not already marked for demotion. A path that
- * was abandoned earlier is still counted in cnx->nb_paths until its
- * demotion timer expires and picoquic_delete_abandoned_paths() physically
- * removes it, so callers that need to know whether a path can safely be
- * demoted -- without eventually leaving the connection with none -- must
- * use this count rather than cnx->nb_paths.
+/* Count the paths that are not already marked for demotion and have a peer
+ * CID. A path that was abandoned earlier is still counted in cnx->nb_paths
+ * until its demotion timer expires and picoquic_delete_abandoned_paths()
+ * physically removes it, so callers that need to know whether a path can
+ * safely be demoted -- without eventually leaving the connection with
+ * none -- must use this count rather than cnx->nb_paths.
  */
 int picoquic_nb_paths_not_demoted(picoquic_cnx_t* cnx)
 {
     int nb_active = 0;
 
     for (int i = 0; i < cnx->nb_paths; i++) {
-        if (!cnx->path[i]->path_is_demoted) {
+        /* A path that still waits for a peer CID cannot carry the connection */
+        if (!cnx->path[i]->path_is_demoted && cnx->path[i]->first_tuple->p_remote_cnxid != NULL) {
             nb_active++;
         }
     }
@@ -2787,11 +2785,12 @@ int picoquic_abandon_path(picoquic_cnx_t* cnx, uint64_t unique_path_id,
         if (path_index >= 0) {
             if (!cnx->path[path_index]->path_is_demoted) {
                 /* Check whether this is the last path not already marked for
-                 * demotion -- checking nb_paths alone is not enough: it would
-                 * let an application abandon every path in turn, eventually
-                 * leaving none.
+                 * demotion that has a peer CID -- checking nb_paths alone is not
+                 * enough: it would let an application abandon every path in turn,
+                 * eventually leaving none.
                  */
-                if (picoquic_nb_paths_not_demoted(cnx) <= 1) {
+                if (cnx->path[path_index]->first_tuple->p_remote_cnxid != NULL &&
+                    picoquic_nb_paths_not_demoted(cnx) <= 1) {
                     /* That would mean leaving no path available. Don't do
                      * that: the application should close the connection
                      * instead, or probe a new path before abandoning this one.
