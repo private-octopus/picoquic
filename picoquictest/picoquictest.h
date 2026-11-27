@@ -247,6 +247,7 @@ int frames_ackof_error_test(void);
 int reset_stream_at_needs_repeat_test(void);
 int process_ack_of_reset_stream_at_test(void);
 int stop_sending_needs_repeat_test(void);
+int ack_frequency_needs_repeat_test(void);
 int stream_invalid_id_test(void);
 int stream_never_called_apis_test(void);
 int queue_multipath_blocked_frames_test(void);

@@ -1765,6 +1765,11 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                             /* Rewrite the address */
                             picoquic_store_addr(&addr_to, (struct sockaddr*) & test_ctx->client_addr);
                         }
+                        else if (test_ctx->client_nat_old_valid && picoquic_compare_addr((struct sockaddr*)&test_ctx->client_addr_natted_old,
+                            (struct sockaddr*)&addr_to) == 0) {
+                            /* The old mapping is still valid */
+                            picoquic_store_addr(&addr_to, (struct sockaddr*)&test_ctx->client_addr);
+                        }
                         else {
                             /* Using wrong address: simulate loss */
                             simulate_loss = 1;
@@ -1778,6 +1783,8 @@ int tls_api_one_sim_round(picoquic_test_tls_api_ctx_t* test_ctx,
                 }
                 else if (target_link == test_ctx->c_to_s_link && test_ctx->client_use_nat) {
                     picoquic_store_addr(&addr_from, (struct sockaddr*) & test_ctx->client_addr_natted);
+                    /* Sending through the new mapping retires the old one */
+                    test_ctx->client_nat_old_valid = 0;
                 }
 
                 if (*simulated_time < test_ctx->blackhole_end && *simulated_time >= test_ctx->blackhole_start) {
@@ -6997,7 +7004,9 @@ int fast_nat_rebinding_test(void)
                     }
                     else
                     {
-                        /* Change the client address */
+                        /* Change the client address; like a real NAT, keep the old mapping until the client sends */
+                        test_ctx->client_addr_natted_old = test_ctx->client_addr_natted;
+                        test_ctx->client_nat_old_valid = 1;
                         test_ctx->client_addr_natted.sin_port += 17;
                         switched = 1;
                         switch_time = simulated_time;
