@@ -1387,6 +1387,8 @@ static void picoquic_bbr1_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_bbr1_reset(bbr1_state, path_x, current_time);
+            /* No bandwidth estimate after the reset, pace from the initial cwin */
+            picoquic_update_pacing_data(path_x, 1);
             break;
         case picoquic_congestion_notification_spurious_reset:
             picoquic_bbr1_reset_spurious(bbr1_state, cnx, path_x, current_time);

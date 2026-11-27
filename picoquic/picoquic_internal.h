@@ -1206,6 +1206,7 @@ typedef struct st_picoquic_path_t {
     picoquic_pacing_t pacing;
     uint64_t cc_reset_pn; /* Application packets numbered below this were sent before the last CC reset */
     picoquic_path_pre_reset_t pre_reset;
+    int is_cc_reset_unverified; /* CC was reset for an address that is not yet validated */
 
     /* MTU safety tracking */
     uint64_t nb_mtu_losses;

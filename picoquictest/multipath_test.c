@@ -960,6 +960,21 @@ int spurious_reset_genuine_test(void)
     return spurious_reset_test_one(picoquic_newreno_algorithm, 1, 0, 0);
 }
 
+int spurious_reset_genuine_bbr1_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr1_algorithm, 1, 0, 0);
+}
+
+int spurious_reset_genuine_bbr_test(void)
+{
+    return spurious_reset_test_one(picoquic_bbr_algorithm, 1, 0, 0);
+}
+
+int spurious_reset_genuine_c4_test(void)
+{
+    return spurious_reset_test_one(c4_algorithm, 1, 0, 0);
+}
+
 /* Deliver to the server a new non probing client packet, as if sent from addr_from. */
 static int spurious_inject_client_packet(picoquic_test_tls_api_ctx_t* test_ctx, struct sockaddr_in* addr_from, uint64_t simulated_time)
 {
@@ -1150,6 +1165,59 @@ int spurious_reset_other_address_test(void)
         /* A reset leaves no RTT sample, a restore would bring back the snapshot of the rebound address */
         if (ret == 0 && test_ctx->cnx_server->path[0]->rtt_min != 0) {
             DBG_PRINTF("Restored on another address, rtt_min %" PRIu64, test_ctx->cnx_server->path[0]->rtt_min);
+            ret = -1;
+        }
+    }
+    return spurious_finish_download(test_ctx, &simulated_time, &loss_mask, ret);
+}
+
+/* IP_A:p1 -> IP_A:p2 -> IP_B:p2 before validation: the port-only change keeps the CC, so the new IP
+ * must reset it. The return to IP_A:p1 then finds the spurious reset, as the snapshot covers all ports of IP_A. */
+int spurious_reset_port_then_address_test(void)
+{
+    uint64_t simulated_time = 0;
+    picoquic_test_tls_api_ctx_t* test_ctx = NULL;
+    struct sockaddr_in port_addr;
+    struct sockaddr_in victim_addr;
+    uint64_t cwin_before = 0;
+    uint64_t loss_mask = 0;
+    int ret = spurious_start_download(&test_ctx, picoquic_newreno_algorithm, &simulated_time, &loss_mask, 4);
+
+    if (ret == 0) {
+        cwin_before = test_ctx->cnx_server->path[0]->cwin;
+        port_addr = test_ctx->client_addr;
+        port_addr.sin_port += 17;
+        ret = spurious_inject_client_packet(test_ctx, &port_addr, simulated_time);
+        if (ret == 0 && (!spurious_is_default_tuple(test_ctx, &port_addr) || test_ctx->cnx_server->path[0]->cwin != cwin_before)) {
+            DBG_PRINTF("%s", "Port-only change not promoted, or CC not kept");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        victim_addr = port_addr;
+        victim_addr.sin_addr.s_addr ^= 0x01010000;
+        ret = spurious_inject_client_packet(test_ctx, &victim_addr, simulated_time);
+        if (ret == 0 && !spurious_is_default_tuple(test_ctx, &victim_addr)) {
+            DBG_PRINTF("%s", "New IP address not promoted");
+            ret = -1;
+        }
+        if (ret == 0 && (test_ctx->cnx_server->path[0]->cwin > 2 * PICOQUIC_CWIN_INITIAL || test_ctx->cnx_server->path[0]->rtt_min != 0)) {
+            DBG_PRINTF("CC not reset for the new IP address, cwin %" PRIu64, test_ctx->cnx_server->path[0]->cwin);
+            ret = -1;
+        }
+        if (ret == 0 && !test_ctx->cnx_server->path[0]->pre_reset.is_valid) {
+            DBG_PRINTF("%s", "No snapshot taken for the new IP address");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        ret = spurious_inject_client_packet(test_ctx, &test_ctx->client_addr, simulated_time);
+        if (ret == 0 && !spurious_is_default_tuple(test_ctx, &test_ctx->client_addr)) {
+            DBG_PRINTF("%s", "Return not promoted");
+            ret = -1;
+        }
+        if (ret == 0 && 2 * test_ctx->cnx_server->path[0]->cwin < cwin_before) {
+            DBG_PRINTF("Return not restored, cwin %" PRIu64 " vs %" PRIu64, test_ctx->cnx_server->path[0]->cwin, cwin_before);
             ret = -1;
         }
     }

@@ -4369,6 +4369,24 @@ namespace UnitTest1
             Assert::AreEqual(ret, 0);
         }
 
+        TEST_METHOD(spurious_reset_genuine_bbr1) {
+            int ret = spurious_reset_genuine_bbr1_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_genuine_bbr) {
+            int ret = spurious_reset_genuine_bbr_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_genuine_c4) {
+            int ret = spurious_reset_genuine_c4_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
         TEST_METHOD(spurious_reset_repeat) {
             int ret = spurious_reset_repeat_test();
 
@@ -4377,6 +4395,12 @@ namespace UnitTest1
 
         TEST_METHOD(spurious_reset_other_address) {
             int ret = spurious_reset_other_address_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(spurious_reset_port_then_address) {
+            int ret = spurious_reset_port_then_address_test();
 
             Assert::AreEqual(ret, 0);
         }

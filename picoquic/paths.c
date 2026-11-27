@@ -928,10 +928,11 @@ int picoquic_find_incoming_path(picoquic_cnx_t* cnx,
 /* Is this the tuple that was the default when the last CC snapshot was taken? */
 static int picoquic_is_pre_reset_tuple(picoquic_path_t* path_x, picoquic_tuple_t* tuple)
 {
+    /* Compare IP addresses only: a port-only change keeps the CC, so the snapshot covers all ports */
     return path_x->pre_reset.is_valid &&
-        picoquic_compare_addr((struct sockaddr*)&path_x->pre_reset.peer_addr, (struct sockaddr*)&tuple->peer_addr) == 0 &&
+        picoquic_compare_ip_addr((struct sockaddr*)&path_x->pre_reset.peer_addr, (struct sockaddr*)&tuple->peer_addr) == 0 &&
         (path_x->pre_reset.local_addr.ss_family == 0 || tuple->local_addr.ss_family == 0 ||
-            picoquic_compare_addr((struct sockaddr*)&path_x->pre_reset.local_addr, (struct sockaddr*)&tuple->local_addr) == 0);
+            picoquic_compare_ip_addr((struct sockaddr*)&path_x->pre_reset.local_addr, (struct sockaddr*)&tuple->local_addr) == 0);
 }
 
 void picoquic_promote_tuple_to_default(
@@ -958,15 +959,17 @@ void picoquic_promote_tuple_to_default(
             picoquic_is_pre_reset_tuple(path_x, tuple)) {
             /* Back from an unverified NAT rebinding: the previous reset was spurious, restores RTT and MTU */
             picoquic_spurious_path_congestion(path_x->cnx, path_x, current_time);
+            path_x->is_cc_reset_unverified = 0;
         }
         else {
             if (is_new_address) {
-                if (path_x->pre_reset.is_valid && !tuple->is_address_validated) {
+                if (path_x->is_cc_reset_unverified && !tuple->is_address_validated) {
                     /* From one unverified address to another: CC was already reset, keep its pre-reset state */
                     picoquic_restart_path_after_rebinding(path_x->cnx, path_x, current_time);
                 }
                 else {
                     picoquic_reset_path_congestion(path_x->cnx, path_x, current_time);
+                    path_x->is_cc_reset_unverified = !tuple->is_address_validated;
                     if (path_x->pre_reset.is_valid) {
                         picoquic_store_addr(&path_x->pre_reset.peer_addr, (struct sockaddr*)&old_first->peer_addr);
                         picoquic_store_addr(&path_x->pre_reset.local_addr, (struct sockaddr*)&old_first->local_addr);

@@ -993,8 +993,8 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
 /* Pacing rate functions */
 static void BBRInitPacingRate(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    /* nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : 1ms); */
-    uint64_t initial_rtt = PICOQUIC_INITIAL_RTT; /* 1ms */
+    /* nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : PICOQUIC_INITIAL_RTT); */
+    uint64_t initial_rtt = PICOQUIC_INITIAL_RTT; /* 250 ms */
     if (path_x->smoothed_rtt != PICOQUIC_INITIAL_RTT || path_x->rtt_variant != 0) {
         initial_rtt = path_x->smoothed_rtt;
     }
@@ -2520,6 +2520,9 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_bbr_reset(bbr_state, path_x, current_time);
+            /* The reset sets the startup pacing rate, apply it to the path */
+            BBRSetSendQuantum(bbr_state, path_x);
+            picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
             break;
         case picoquic_congestion_notification_spurious_reset:
             picoquic_bbr_reset_spurious(bbr_state, path_x, current_time);

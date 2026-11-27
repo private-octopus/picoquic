@@ -1403,6 +1403,8 @@ void c4_notify(
             break;
         case picoquic_congestion_notification_reset:
             c4_reset(c4_state, path_x, c4_state->option_string);
+            /* No rate estimate after the reset, pace from the initial cwin */
+            picoquic_update_pacing_data(path_x, 1);
             break;
         case picoquic_congestion_notification_spurious_reset:
             c4_reset_spurious(c4_state, path_x);
