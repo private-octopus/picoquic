@@ -961,7 +961,7 @@ void picoquic_promote_tuple_to_default(
         }
         else {
             if (is_new_address) {
-                if (old_first->is_nat_rebinding && !tuple->is_address_validated) {
+                if (path_x->pre_reset.is_valid && !tuple->is_address_validated) {
                     /* From one unverified address to another: CC was already reset, keep its pre-reset state */
                     picoquic_restart_path_after_rebinding(path_x->cnx, path_x, current_time);
                 }
