@@ -5107,10 +5107,14 @@ const uint8_t* picoquic_decode_path_response_frame(picoquic_cnx_t* cnx, const ui
             if (found_challenge && !tuple->challenge_verified) {
                 tuple->challenge_verified = 1;
                 tuple->is_address_validated = 1;
+                tuple->is_nat_rebinding = 0;
                 /* The verified tuple becomes tuple 0 of the path */
                 if (previous_tuple != NULL /* && cnx->client_mode */) {
                     picoquic_promote_tuple_to_default(path_x, tuple, previous_tuple, current_time);
                 }
+                /* The validated tuple is now the default: a later return must not restore an older snapshot */
+                path_x->pre_reset.is_valid = 0;
+                path_x->is_cc_reset_unverified = 0;
                 /* After a reset, the challenge round trip is the first RTT sample of the path */
                 if (challenge_time > 0) {
                     picoquic_update_path_rtt(cnx, path_x, -1, challenge_time, current_time, 0, 0);

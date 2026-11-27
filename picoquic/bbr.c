@@ -161,6 +161,17 @@ typedef struct st_bbr_exp {
 #define BBRExpTest(ctx, test) (1)
 #endif
 
+/* Model before the last reset, restored if the reset is spurious */
+typedef struct st_bbr_pre_reset_t {
+    picoquic_bbr_alg_state_t state;
+    uint64_t max_bw;
+    uint64_t MaxBwFilter[BBRMaxBwFilterLen];
+    uint64_t min_rtt;
+    uint64_t full_bw;
+    uint64_t inflight_hi;
+    unsigned int filled_pipe : 1;
+} bbr_pre_reset_t;
+
 typedef struct st_picoquic_bbr_state_t {
     /* Algorithm state: */
     picoquic_bbr_alg_state_t state;
@@ -289,6 +300,7 @@ typedef struct st_picoquic_bbr_state_t {
     /* Control flags for BBR improvements */
     bbr_exp exp_flags;
 #endif
+    bbr_pre_reset_t pre_reset;
 } picoquic_bbr_state_t;
 
 /* BBR v3 assumes that there is state associated with the acknowledgements.
@@ -634,7 +646,18 @@ static void BBROnInit(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, 
 
 static void picoquic_bbr_reset(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
 {
+    bbr_pre_reset_t pre_reset;
+
+    memset(&pre_reset, 0, sizeof(bbr_pre_reset_t));
+    pre_reset.state = bbr_state->state;
+    pre_reset.max_bw = bbr_state->max_bw;
+    memcpy(pre_reset.MaxBwFilter, bbr_state->MaxBwFilter, sizeof(pre_reset.MaxBwFilter));
+    pre_reset.min_rtt = bbr_state->min_rtt;
+    pre_reset.full_bw = bbr_state->full_bw;
+    pre_reset.inflight_hi = bbr_state->inflight_hi;
+    pre_reset.filled_pipe = bbr_state->filled_pipe;
     BBROnInit(bbr_state, path_x, current_time, bbr_state->option_string);
+    bbr_state->pre_reset = pre_reset;
 }
 
 static void picoquic_bbr_init(picoquic_path_t* path_x, char const* option_string, uint64_t current_time)
@@ -970,8 +993,8 @@ static void BBRUpdateMaxInflight(picoquic_bbr_state_t* bbr_state, picoquic_path_
 /* Pacing rate functions */
 static void BBRInitPacingRate(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x)
 {
-    /* nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : 1ms); */
-    uint64_t initial_rtt = PICOQUIC_INITIAL_RTT; /* 1ms */
+    /* nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : PICOQUIC_INITIAL_RTT); */
+    uint64_t initial_rtt = PICOQUIC_INITIAL_RTT; /* 250 ms */
     if (path_x->smoothed_rtt != PICOQUIC_INITIAL_RTT || path_x->rtt_variant != 0) {
         initial_rtt = path_x->smoothed_rtt;
     }
@@ -2392,6 +2415,42 @@ static void picoquic_bbr_notify_ack(
     BBRUpdateOnACK(bbr_state, path_x, &rs, current_time);
 }
 
+/* Back to the address used before a spurious reset: restore min_rtt and cwin. If the pipe was
+ * filled, also restore the bandwidth model and resume in probe BW from the current time.
+ * Packets sent before the restore are excluded by the path's cc_reset_pn. */
+static void picoquic_bbr_reset_spurious(picoquic_bbr_state_t* bbr_state, picoquic_path_t* path_x, uint64_t current_time)
+{
+    bbr_pre_reset_t pre_reset = bbr_state->pre_reset;
+
+    picoquic_bbr_reset(bbr_state, path_x, current_time);
+    if (path_x->pre_reset.is_valid && pre_reset.min_rtt != UINT64_MAX && pre_reset.min_rtt > 0) {
+        bbr_state->min_rtt = pre_reset.min_rtt;
+        bbr_state->min_rtt_stamp = current_time;
+        bbr_state->probe_rtt_min_delay = pre_reset.min_rtt;
+        bbr_state->probe_rtt_min_stamp = current_time;
+        if (pre_reset.filled_pipe && pre_reset.max_bw > 0 && pre_reset.state != picoquic_bbr_alg_startup &&
+            pre_reset.state != picoquic_bbr_alg_startup_long_rtt && pre_reset.state != picoquic_bbr_alg_startup_resume) {
+            bbr_state->max_bw = pre_reset.max_bw;
+            memcpy(bbr_state->MaxBwFilter, pre_reset.MaxBwFilter, sizeof(pre_reset.MaxBwFilter));
+            bbr_state->bw = pre_reset.max_bw;
+            bbr_state->full_bw = pre_reset.full_bw;
+            bbr_state->inflight_hi = pre_reset.inflight_hi;
+            bbr_state->filled_pipe = 1;
+            path_x->is_ssthresh_initialized = 1;
+            BBREnterProbeBW(bbr_state, path_x, current_time);
+            BBRSetPacingRate(bbr_state);
+        }
+        BBRUpdateMaxInflight(bbr_state, path_x);
+        BBRSetSendQuantum(bbr_state, path_x);
+        if (path_x->pre_reset.cwin > path_x->cwin) {
+            path_x->cwin = path_x->pre_reset.cwin;
+        }
+        if (bbr_state->pacing_rate > 0) {
+            picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+        }
+    }
+}
+
 /*
  * In order to implement BBR, we map generic congestion notification
  * signals to the corresponding BBR actions.
@@ -2461,6 +2520,12 @@ static void picoquic_bbr_notify(
             break;
         case picoquic_congestion_notification_reset:
             picoquic_bbr_reset(bbr_state, path_x, current_time);
+            /* The reset sets the startup pacing rate, apply it to the path */
+            BBRSetSendQuantum(bbr_state, path_x);
+            picoquic_update_pacing_rate(path_x, bbr_state->pacing_rate, bbr_state->send_quantum);
+            break;
+        case picoquic_congestion_notification_spurious_reset:
+            picoquic_bbr_reset_spurious(bbr_state, path_x, current_time);
             break;
         case picoquic_congestion_notification_seed_cwin:
             BBRSetBdpSeed(bbr_state, ack_state->nb_bytes_acknowledged);

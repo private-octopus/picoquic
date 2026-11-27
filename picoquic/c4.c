@@ -144,6 +144,12 @@ typedef struct st_c4_state_t {
     unsigned int excess_ce_after_push : 1;
     /* Handling of options. */
     char const* option_string;
+    /* Rate model before the last reset, restored if the reset is spurious */
+    c4_alg_state_t pre_reset_alg_state;
+    uint64_t pre_reset_nominal_rate;
+    uint64_t pre_reset_nominal_max_rtt;
+    uint64_t pre_reset_running_min_rtt;
+    uint64_t pre_reset_recent_maximum_rate;
 } c4_state_t;
 
 static void c4_enter_recovery(
@@ -519,7 +525,18 @@ static void c4_set_options(c4_state_t* c4_state)
 
 void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_string)
 {
+    c4_alg_state_t pre_reset_alg_state = c4_state->alg_state;
+    uint64_t pre_reset_nominal_rate = c4_state->nominal_rate;
+    uint64_t pre_reset_nominal_max_rtt = c4_state->nominal_max_rtt;
+    uint64_t pre_reset_running_min_rtt = c4_state->running_min_rtt;
+    uint64_t pre_reset_recent_maximum_rate = c4_state->recent_maximum_rate;
+
     memset(c4_state, 0, sizeof(c4_state_t));
+    c4_state->pre_reset_alg_state = pre_reset_alg_state;
+    c4_state->pre_reset_nominal_rate = pre_reset_nominal_rate;
+    c4_state->pre_reset_nominal_max_rtt = pre_reset_nominal_max_rtt;
+    c4_state->pre_reset_running_min_rtt = pre_reset_running_min_rtt;
+    c4_state->pre_reset_recent_maximum_rate = pre_reset_recent_maximum_rate;
     c4_state->option_string = option_string;
     c4_state->running_min_rtt = UINT64_MAX;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
@@ -657,6 +674,9 @@ void c4_init(picoquic_path_t* path_x, char const* UNUSED(option_string), uint64_
     
     if (c4_state == NULL) {
         c4_state = (c4_state_t*)malloc(sizeof(c4_state_t));
+        if (c4_state != NULL) {
+            memset(c4_state, 0, sizeof(c4_state_t));
+        }
     }
     
     if (c4_state != NULL){
@@ -1265,6 +1285,38 @@ static void c4_handle_rtt_excess(
     }
 }
 
+/* Back to the address used before a spurious reset. Past the initial phase, restore the rate model
+ * and enter cruise, whose era starts with the next packet. In the initial phase, resume from the old cwin. */
+static void c4_reset_spurious(c4_state_t* c4_state, picoquic_path_t* path_x)
+{
+    c4_alg_state_t pre_reset_alg_state = c4_state->pre_reset_alg_state;
+    uint64_t pre_reset_nominal_rate = c4_state->pre_reset_nominal_rate;
+    uint64_t pre_reset_nominal_max_rtt = c4_state->pre_reset_nominal_max_rtt;
+    uint64_t pre_reset_running_min_rtt = c4_state->pre_reset_running_min_rtt;
+    uint64_t pre_reset_recent_maximum_rate = c4_state->pre_reset_recent_maximum_rate;
+
+    c4_reset(c4_state, path_x, c4_state->option_string);
+    if (path_x->pre_reset.is_valid) {
+        if (pre_reset_alg_state != c4_initial && pre_reset_nominal_rate > 0 && pre_reset_nominal_max_rtt > 0) {
+            c4_state->nominal_rate = pre_reset_nominal_rate;
+            c4_state->nominal_max_rtt = pre_reset_nominal_max_rtt;
+            c4_state->running_min_rtt = pre_reset_running_min_rtt;
+            c4_state->recent_maximum_rate = pre_reset_recent_maximum_rate;
+            c4_state->delay_threshold = c4_delay_threshold(c4_state);
+            path_x->is_ssthresh_initialized = 1;
+            c4_enter_cruise(path_x, c4_state);
+            c4_apply_rate_and_cwin(path_x, c4_state);
+        }
+        else {
+            if (path_x->pre_reset.cwin > c4_state->initial_cwnd) {
+                c4_state->initial_cwnd = path_x->pre_reset.cwin;
+            }
+            path_x->cwin = c4_state->initial_cwnd;
+            picoquic_update_pacing_data(path_x, 1);
+        }
+    }
+}
+
 /*
  * Properly implementing c4 requires managing a number of
  * signals, such as packet losses or acknowledgements. We attempt
@@ -1351,6 +1403,11 @@ void c4_notify(
             break;
         case picoquic_congestion_notification_reset:
             c4_reset(c4_state, path_x, c4_state->option_string);
+            /* No rate estimate after the reset, pace from the initial cwin */
+            picoquic_update_pacing_data(path_x, 1);
+            break;
+        case picoquic_congestion_notification_spurious_reset:
+            c4_reset_spurious(c4_state, path_x);
             break;
         case picoquic_congestion_notification_seed_cwin:
             c4_seed_cwin(path_x, c4_state, ack_state->nb_bytes_acknowledged);
